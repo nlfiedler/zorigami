@@ -1,0 +1,28 @@
+* Zorigami
+** Phase 0
+*** DONE Generate the express application
+**** DONE Remove the ~users~ route
+**** DONE Clean up all of the JavaScript code
+*** DONE Write a README file
+*** TODO Write some basic code and unit tests
+**** TODO Set up mocha and chai for testing
+** Phase 1
+*** TODO Introduce GraphQL backend and schema
+**** TODO Define the schema
+**** TODO Introduce pouchdb and code for reading/writing data
+**** TODO Write a simple resolver
+**** TODO Write a unit test
+*** TODO Decide how snapshots should model changing data and lengthy backups
+In other words, while the backup is occuring, files are changing. The
+snapshot will inevitably not record these changes. As such, a snapshot
+really represents different files at different times. For instance, file A
+was backed up a time T1, and file B was saved later at time T2, but all in
+snapshot S1. The finest granularity is going to be the packfile, so record
+the time the files in that pack were saved as the time that the pack was
+created.
+
+** Phase 2
+*** TODO Write a ReasonML frontend
+**** TODO Add =bs-platform= dependency and =bsconfig.json= file
+**** TODO Write a simple home page that shows something
+*** TODO Document the architecture and data model in the README
