@@ -24,5 +24,8 @@ created.
 ** Phase 2
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
+**** TODO Put front-end code in a directory named =web-src=
+**** TODO Set up =gulp= and =webpack= to build the front-end code
+**** TODO Set up the routing
 **** TODO Write a simple home page that shows something
 *** TODO Document the architecture and data model in the README
