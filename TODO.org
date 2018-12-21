@@ -5,7 +5,13 @@
 **** DONE Clean up all of the JavaScript code
 *** DONE Write a README file
 *** TODO Write some basic code and unit tests
-**** TODO Set up mocha and chai for testing
+**** DONE Generate UUID type 5 of username + hostname
+**** DONE Generate a bucket name using ULID and UUID
+**** DONE Set up mocha and chai for testing
+**** TODO Generate and encrypt/decrypt master keys
+**** TODO Use PBKDF2 to hash the master password
+**** TODO Pack and unpack files
+**** TODO Pack and unpack files encrypted
 ** Phase 1
 *** TODO Introduce GraphQL backend and schema
 **** TODO Define the schema

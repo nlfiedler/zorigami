@@ -4,7 +4,8 @@
   "description": "Node.js online backup application",
   "main": "app.js",
   "scripts": {
-    "start": "node ./bin/www"
+    "start": "node ./bin/www",
+    "test": "NODE_CONFIG_ENV=test mocha"
   },
   "repository": {
     "type": "git",
@@ -23,10 +24,14 @@
     "ejs": "~2.6.1",
     "express": "~4.16.0",
     "http-errors": "~1.7.1",
-    "morgan": "~1.9.0"
+    "morgan": "~1.9.0",
+    "ulid": "^2.3.0",
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
+    "chai": "^4.2.0",
     "gulp": "^4.0.0",
-    "gulp-nodemon": "^2.4.2"
+    "gulp-nodemon": "^2.4.2",
+    "mocha": "^5.2.0"
   }
 }
