@@ -1,5 +1,5 @@
 * Zorigami
-** Phase 0
+** Phase 1
 *** DONE Generate the express application
 **** DONE Remove the ~users~ route
 **** DONE Clean up all of the JavaScript code
@@ -8,14 +8,23 @@
 **** DONE Generate UUID type 5 of username + hostname
 **** DONE Generate a bucket name using ULID and UUID
 **** DONE Set up mocha and chai for testing
-**** TODO Generate and encrypt/decrypt master keys
-**** TODO Use PBKDF2 to hash the master password
+**** DONE Generate and encrypt/decrypt master keys
+**** DONE Use PBKDF2 to hash the master password
 **** TODO Pack and unpack files
+***** TODO Use Node.js =zlib= module for compression
+***** TODO Pipe file data through hasher and output file simultaneously
 **** TODO Pack and unpack files encrypted
-** Phase 1
+***** TODO Use Node.js =crypto= module
+*** TODO Find out what sorts of limits Google Cloud Storage has
+**** Number of buckets?
+**** Number of objects per bucket?
+*** TODO Decide how to handle symbolic and hard links in the future
+**** TODO For now, explicitly ignore links
+** Phase 2
+*** TODO Introduce pouchdb and code for reading/writing data
+**** TODO Store the ~encryption~ record in PouchDB
 *** TODO Introduce GraphQL backend and schema
 **** TODO Define the schema
-**** TODO Introduce pouchdb and code for reading/writing data
 **** TODO Write a simple resolver
 **** TODO Write a unit test
 *** TODO Decide how snapshots should model changing data and lengthy backups
@@ -26,12 +35,36 @@ was backed up a time T1, and file B was saved later at time T2, but all in
 snapshot S1. The finest granularity is going to be the packfile, so record
 the time the files in that pack were saved as the time that the pack was
 created.
+**** During the backup, tree objects will have a ~working~ state
+**** Once a tree is updated with the final results, it is marked as ~complete~
+**** As such, the tree objects may be change during the backup
 
-** Phase 2
+** Phase 3
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
 **** TODO Set up =gulp= and =webpack= to build the front-end code
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
-*** TODO Document the architecture and data model in the README
+*** TODO Update the architecture and data model in =NOTES.md=
+** Phase 4
+*** TODO Write the logic for the "engine"
+**** TODO Produce a ~working~ snapshot of the dataset
+**** TODO Compute the difference from the previous snapshot
+**** TODO Produce and upload pack files containing new/changed files
+***** Splitting large files across packs
+*** TODO Consider how to handle small changes to large files
+**** e.g. using merkle tree of "bytes" to save only changed parts of large files
+**** c.f. perkeep.org design/code for an example of dealing with large files
+- uses Merkle tree of "bytes" schema blobs to represent large files
+- data stored at the leaves of the tree
+- rolling checksum cut points (ala rsync, bup)
+- de-duplication within files and shifting files
+- efficient seeks/pread
+*** TODO Store database in a bucket named after the "computer UUID"
+*** TODO File restoration should apply user/group at time from which file is being restored
+*** TODO Store pack files in Google Cloud Storage
+- https://github.com/googleapis/nodejs-storage/
+** Phase 5
+*** TODO Store pack files in Amazon Glacier (prefer near line version)
+- https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html

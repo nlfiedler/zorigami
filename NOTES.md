@@ -8,7 +8,7 @@
 
 ## Interface
 
-* Web (Node/ReasonML)
+* Web (Node.js/ReasonML)
 * Desktop (Electron)
 * Browse by date/time, then folders, then files (those saved at that date/time)
 * Browse by folder and file, then date/time (unifying all folders/files over all backups)
@@ -16,15 +16,11 @@
 
 ## Design
 
-### Open Questions
+### Initial Setup
 
-* How to manage the user password?
-    - Web backend waits for initial setup via desktop application
-    - Upon startup of desktop app, prompt user for password and configure backend
-* How to handle errors when accessing local files during backup?
-    - Does this even happen?
-    - Fail fast and report?
-* How to handle persistent file upload issues?
+* Backend waits for initial setup via web or desktop
+* Upon startup of desktop app, walk user through setup
+* Offer choice of recovering from backup, or starting anew
 
 ### Password Hashing Advice
 
@@ -40,10 +36,11 @@ For hashing passwords, in order of preference, use with an appropriate cost:
 ### Overview
 
 * Snapshots record what was saved and when
+* Content is stored in what is essentially a hash tree
 * Trees describe what files/folders are in the snapshot
     - Trees are nested, a la git
 * File content is stored in pack files
-    - Large files are spread across multiple pack files
+    - Large files are split across multiple pack files
     - Small files are stored in whole
     - Pack files are used to minimize the number of files stored remotely
 * Pack files are stored remotely
@@ -99,68 +96,74 @@ For hashing passwords, in order of preference, use with an appropriate cost:
 
 ### PouchDB
 
-* config records (one per computer)
-    - managed via web interface
-    - key: computer UUID
+* configuration record
+    - database key: `configuration`
     - host name
     - user name
+    - computer UUID
     - latest snapshot
     - cloud service provider (e.g. `aws`, `gcp`)
     - cloud service region (e.g. `us-west1`)
     - local path to cloud service credentials file
     - time ranges in which to upload snapshots
-    - size of pack files (in MB)
+    - preferred size of pack files (in MB)
     - default ignore file patterns (applies to all datasets)
     - list of datasets:
         + root local path
         + ignore overrides
-* encryption records (one per computer)
-    - key: computer UUID
+* encryption record
+    - database key: `encryption`
     - random salt (16 bytes)
     - random init vector (16 bytes)
     - HMAC-SHA256 of user password and salt
     - encrypted master keys (x2)
 * snapshot records
-    - key: SHA1 of snapshot
+    - key: SHA1 of snapshot (with "sha1-" prefix)
     - SHA1 of previous snapshot (absent if first snapshot)
     - date/time of snapshot
+    - name of remote bucket
     - list of root tree entries (sorted by path)
         + base local path
         + tree SHA1
     - deleted (present if this snapshot is marked for removal)
 * tree records
-    - key: SHA1 of tree data
+    - key: SHA1 of tree data (with "sha1-" prefix)
     - list of entries (sorted by name):
         + mode (also indicates if tree or file, e.g. `drwxr-xr-x`)
-        + uid, gid
+        + user, group (strings)
+        + uid, gid (numbers)
         + ctime, mtime
         + xattrs
         + checksum (SHA1 for tree, SHA256 for file)
         + entry name
+    - c.f. perkeep.org file metadata format for an example
+        + camliType "file" | "directory"
+        + fileName
+        + parts [{blobRef, size}, ...] for file
+        + members [{hash}, ...] for directories
+        + unixGroup (string)
+        + unixGroupId (int)
+        + unixMtime (string)
+        + unixOwner (string)
+        + unixOwnerId (int)
+        + unixPermission (string, e.g. "0644")
     - unreachable (present if this tree is not reachable)
 * file records
-    - key: SHA256 of whole file
+    - key: SHA256 of whole file (with "sha256-" prefix)
     - list of parts
         + remote bucket name
         + pack SHA256
-        + part SHA1 (`null` if whole file)
+        + part SHA1
         + large files will have all chunks listed every time, even if only one part changed
     - unreachable (present if this file is not reachable)
 * pack records
-    - key: SHA256 of pack file
+    - key: SHA256 of pack file (with "sha256-" prefix)
     - map of SHA1 to byte offset
-        + SHA1 of data part
+        + SHA1 of data part (with "sha1-" prefix)
         + byte offset into pack file
     - unreachable (present if this pack is not referenced)
 
 ## Implementation
-
-* Node.js, ReasonML, Electron
-* PouchDB
-* Google Cloud Storage
-    - https://github.com/googleapis/nodejs-storage/
-* Amazon Glacier
-    - https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
 
 ### Procedure
 
@@ -209,47 +212,28 @@ For hashing passwords, in order of preference, use with an appropriate cost:
 #### Building Pack Files
 
 1. Collect all changed files for a given snapshot
-1. Consider using merkle tree of "bytes" to save only changed parts of large files
-    - see perkeep.org design/code for an example of dealing with large files
 1. Split large files into parts smaller than the configured pack size
-1. Use bin packing to spread the files/parts into N pack files, minimizing N
+1. Use bin packing to split the files/parts into N pack files, minimizing N
 1. Assemble each pack file using the N lists of files/parts
 
 #### Backup
 
-* Strategy for recovering from process crash
-    - Build list of changes (trees, files)
-    - Store trees in PouchDB immediately
-    - Store a "pending" snapshot in PouchDB
-    - Store file list in mnesia
-    - As pack files are successfully uploaded, update the files list in mnesia
-    - Upon process restart, check for pending "snapshot"
-        + If present
-            * Read files list from mnesia
-            * Continue creating and uploading pack files
-        + If missing
-            * Start over, building changed trees/files list
-    - Upon completion, remove the "pending" from snapshot record
+1. Generate the tree objects to represent the state of the dataset.
+1. Find the differences from the previous snapshot.
+1. If there are no changes, exit the procedure.
+1. Generate a "working" snapshot to indicate work is ongoing.
+1. Create a new bucket, save name in snapshot record.
+1. Add new/changed files to pack files, upload to cloud.
+1. Add "file" records to track parts and pack files.
+1. Backup the PouchDB database files.
+1. Mark snapshot as "complete" rather than "working" now that *everything* is uploaded.
 
-1. Scan directory tree looking for files that have not already been saved
-    * i.e. their checksum is not in the database
-    * only directories and regular files are considered
-    * mode, ownership changes are ignored (for now)
-1. Create bucket/vault if there are changes to save
-1. For each file, handle splitting and packing
-    * use a rolling hash function to find changed parts
-        - see https://github.com/lemire/rollinghashjava
-        - Rabin-Karp slicing seems the most useful
-        - need to understand how this works for sending only the changed parts (a la `rsync`)
-1. Upload objects/archives
-    * Update database for each affected file after each successful upload
-1. Upload updated PouchDB database
-    * split the file when it gets larger than a typical pack file
-    * use the same large file rolling checksum, splitting technique to conserve space
-        - how to find the other pieces of the database across old backups?
-            + like mercurial; scan backward through time, with periodic full snapshots
-1. For Amazon, probably need to store vault ID in S3 with date/time
-    * otherwise full recovery is difficult if we can't find the latest snapshot
+#### Crash Recovery
+
+If most recent snapshot is in "working" state: 1) Create a bucket if the snapshot
+lacks the "bucket" field. 2) Continue with finding files that are new/changed that
+do not already have a record in the database, adding them to pack files and
+uploading.
 
 #### Restore
 
@@ -260,7 +244,7 @@ For hashing passwords, in order of preference, use with an appropriate cost:
 1. Read data from pack file at given offset and length.
 1. Write the chunk of data to a temporary file.
 1. Repeat this procedure for each SHA256 value.
-1. When finished, close the file and rename to target filename.
+1. When finished, close the file and rename to target filename, apply ownership, modes.
 
 #### Full Recovery
 

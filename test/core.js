@@ -20,4 +20,16 @@ describe('Core Functionality', function () {
       assert.equal(bucket.length, 58)
     })
   })
+
+  describe('master passwords', function () {
+    it('should encrypt and decrypt successfully', function () {
+      const password = 'keyboard cat'
+      const expected = core.generateMasterKeys()
+      const { salt, iv, hmac, encrypted } =
+        core.newMasterEncryptionData(password, expected.master1, expected.master2)
+      const actual = core.decryptMasterKeys(salt, password, iv, encrypted, hmac)
+      assert.equal(expected.master1.compare(actual.master1), 0)
+      assert.equal(expected.master2.compare(actual.master2), 0)
+    })
+  })
 })
