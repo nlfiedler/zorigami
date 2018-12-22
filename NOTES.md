@@ -22,15 +22,6 @@
 * Upon startup of desktop app, walk user through setup
 * Offer choice of recovering from backup, or starting anew
 
-### Password Hashing Advice
-
-from https://pthree.org/2018/05/23/do-not-use-sha256crypt-sha512crypt-theyre-dangerous/
-
-For hashing passwords, in order of preference, use with an appropriate cost:
-
-* Argon2 or scrypt (CPU and RAM hard)
-* bcrypt or PBKDF2 (CPU hard only)
-
 ## Data Format
 
 ### Overview
@@ -276,8 +267,6 @@ uploading.
 1. Generate a random 16 byte initialization vector (IV), to be saved in PouchDB.
 1. Generate 2 random 32-byte "master keys".
 1. Derive encryption key from user provided password and the salt.
-    - see https://github.com/riverrun/pbkdf2_elixir for an example
-    - use no less than 100,000 rounds
 1. Encrypt the master keys with AES/CBC using the the derived key and the IV.
 1. Calculate the HMAC-SHA256 of (IV + encrypted master keys) using the derived key.
 1. Store everything in the PouchDB encryption record.
@@ -285,7 +274,7 @@ uploading.
 **Extracting Master Keys**
 
 1. Retrieve salt from the encryption record.
-1. Derive encryption key from user-supplied password using PBKDF2 and the salt.
+1. Derive encryption key from user-supplied password using scrypt and the salt.
 1. Calculate HMAC-SHA256 of (IV + encrypted master keys) the key.
 1. Verify computed HMAC against HMAC-SHA256 in the encryption record.
 1. Decrypt the encrypted master keys using the derived key.

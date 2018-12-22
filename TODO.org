@@ -10,6 +10,7 @@
 **** DONE Set up mocha and chai for testing
 **** DONE Generate and encrypt/decrypt master keys
 **** DONE Use PBKDF2 to hash the master password
+**** DONE Use scrypt to hash the master password instead of PBKDF2
 **** TODO Pack and unpack files
 ***** TODO Use Node.js =zlib= module for compression
 ***** TODO Pipe file data through hasher and output file simultaneously
