@@ -3,7 +3,10 @@
 //
 const { assert } = require('chai')
 const { describe, it } = require('mocha')
+const crypto = require('crypto')
 const core = require('../lib/core')
+const fs = require('fs')
+const tmp = require('tmp')
 
 describe('Core Functionality', function () {
   describe('unique identifier', function () {
@@ -30,6 +33,27 @@ describe('Core Functionality', function () {
       const actual = core.decryptMasterKeys(salt, password, iv, encrypted, hmac)
       assert.equal(expected.master1.compare(actual.master1), 0)
       assert.equal(expected.master2.compare(actual.master2), 0)
+    })
+  })
+
+  describe('file encryption', function () {
+    it('should encrypt and decrypt files', async function () {
+      const key = Buffer.alloc(32)
+      crypto.randomFillSync(key)
+      const iv = Buffer.alloc(16)
+      crypto.randomFillSync(iv)
+      const infile = './test/fixtures/lorem-ipsum.txt'
+      const encrypted = tmp.fileSync().name
+      await core.encryptFile(infile, encrypted, key, iv)
+      const originalBuf = fs.readFileSync(infile)
+      const encryptBuf = fs.readFileSync(encrypted)
+      assert.notEqual(originalBuf.compare(encryptBuf), 0,
+        'encrypted not equal to original')
+      const decrypted = tmp.fileSync().name
+      await core.decryptFile(encrypted, decrypted, key, iv)
+      const decryptBuf = fs.readFileSync(decrypted)
+      assert.equal(originalBuf.compare(decryptBuf), 0,
+        'original and decrypted match')
     })
   })
 })
