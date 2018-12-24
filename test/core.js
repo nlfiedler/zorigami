@@ -56,4 +56,22 @@ describe('Core Functionality', function () {
         'original and decrypted match')
     })
   })
+
+  describe('pack files', function () {
+    it('should create files', async function () {
+      const parts = [
+        {
+          path: './test/fixtures/lorem-ipsum.txt',
+          offset: 0,
+          length: 3129
+        }
+      ]
+      const packfile = tmp.fileSync().name
+      const results = await core.packParts(parts, packfile)
+      assert.equal(results.hash, 'sha256-20bf4683a3bfd2eac935a16cf0745759718971a5f12fe29befa39ae0a22ac6c8')
+      assert.equal(results.offsets.size, 1)
+      assert.isTrue(results.offsets.has('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'))
+      assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
+    })
+  })
 })

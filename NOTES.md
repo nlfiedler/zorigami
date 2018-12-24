@@ -77,7 +77,7 @@
         1. Write chunk to pack
         1. Write chunk to data hasher
         1. Write chunk to pack hasher
-    1. Save data hasher value to sha1/byte-offset map
+    1. Save data hasher value to sha1/index map
         * this is saved to the pack record in PouchDB
 1. Name pack file with SHA256 of pack file
 1. Write pack details to record in PouchDB
@@ -149,9 +149,9 @@
     - unreachable (present if this file is not reachable)
 * pack records
     - key: SHA256 of pack file (with "sha256-" prefix)
-    - map of SHA1 to byte offset
+    - map of SHA1 to part index
         + SHA1 of data part (with "sha1-" prefix)
-        + byte offset into pack file
+        + part index into pack file (zero-based)
     - unreachable (present if this pack is not referenced)
 
 ## Implementation

@@ -72,3 +72,10 @@ created.
 ** Phase 5
 *** TODO Store pack files in Amazon Glacier (prefer near line version)
 - https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
+* Electron App
+** Phase N
+*** Create a system tray icon/widget
+**** Popup menu like Time Machine
+**** Show current status, last backup
+**** Action to open the app and examine snapshots
+**** Action to open the app and check settings
