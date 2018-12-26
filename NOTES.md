@@ -48,17 +48,16 @@
     - pack starts with `P4CK`
     - version number (4 bytes)
     - number of entries (4 bytes)
-    - list of entries:
+    - entries:
         + byte length (4 bytes)
         + data
     - name is SHA256 of everything above ++ `.pack`
-    - name is SHA256 of everything above ++ `.pack.gz` if compressed
 * encrypted pack file format
     - header: `C4PX` (rot13 of `P4CK`)
     - version number (4 bytes)
     - HMAC-SHA256 (32 bytes)
-    - master init vector (32 bytes)
-    - encrypted data init vector and session key
+    - master init vector (16 bytes)
+    - encrypted data init vector and session key (48 bytes)
     - encrypted pack data
 * compression: use bzip2, gzip, or lzip (but _not_ xz)
     - https://www.nongnu.org/lzip/xz_inadequate.html
@@ -82,7 +81,7 @@
 1. Name pack file with SHA256 of pack file
 1. Write pack details to record in PouchDB
 1. Attempt compression of pack file
-    * if it is smaller, use that instead, add `.gz` extension
+    * if it is smaller, use that instead
 1. Encrypt the pack file (see below)
 
 ### PouchDB
@@ -263,11 +262,11 @@ uploading.
 
 **Generating Encryption Data**
 
-1. Generate a random 16 byte salt, to be saved in PouchDB.
-1. Generate a random 16 byte initialization vector (IV), to be saved in PouchDB.
-1. Generate 2 random 32-byte "master keys".
+1. Generate a random salt, to be saved in PouchDB.
+1. Generate a random initialization vector (IV), to be saved in PouchDB.
+1. Generate two random "master keys".
 1. Derive encryption key from user provided password and the salt.
-1. Encrypt the master keys with AES/CBC using the the derived key and the IV.
+1. Encrypt the master keys with AES/CTR using the the derived key and the IV.
 1. Calculate the HMAC-SHA256 of (IV + encrypted master keys) using the derived key.
 1. Store everything in the PouchDB encryption record.
 
@@ -281,11 +280,11 @@ uploading.
 
 **Encrypting Pack Files**
 
-1. Generate a random 16 byte session key (used during a single backup)
+1. Generate a random session key
 1. Generate a random "data IV"
 1. Encrypt pack data with AES/CTR using session key and data IV
 1. Generate a random "master IV"
-1. Encrypt (data IV + session key) with AES/CBC using the first master key from PouchDB and the "master IV"
+1. Encrypt (data IV + session key) with AES/CTR using the first master key from PouchDB and the "master IV"
 1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key" from PouchDB
 1. Write as described in the pack file data format
 

@@ -12,11 +12,12 @@
 **** DONE Use PBKDF2 to hash the master password
 **** DONE Use scrypt to hash the master password instead of PBKDF2
 **** DONE Support file encryption
-**** DONE Pack and unpack files
+**** TODO Pack and unpack files
 ***** DONE Use Node.js =zlib= module for compression
 ***** DONE Pipe file data through hasher and output file simultaneously
-**** TODO Pack and unpack files encrypted
-***** TODO Use Node.js =crypto= module
+***** TODO Compress pack files automatically if it produces a smaller file
+**** DONE Pack and unpack files encrypted
+***** DONE Use Node.js =crypto= module
 *** TODO Decide how long the iv should be (is 16 bytes enough?)
 *** TODO Find out what sorts of limits Google Cloud Storage has
 **** Number of buckets?
