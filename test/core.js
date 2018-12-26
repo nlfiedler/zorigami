@@ -31,8 +31,8 @@ describe('Core Functionality', function () {
       const { salt, iv, hmac, encrypted } =
         core.newMasterEncryptionData(password, expected.master1, expected.master2)
       const actual = core.decryptMasterKeys(salt, password, iv, encrypted, hmac)
-      assert.equal(expected.master1.compare(actual.master1), 0)
-      assert.equal(expected.master2.compare(actual.master2), 0)
+      assert.isTrue(expected.master1.equals(actual.master1))
+      assert.isTrue(expected.master2.equals(actual.master2))
     })
   })
 
@@ -47,18 +47,35 @@ describe('Core Functionality', function () {
       await core.encryptFile(infile, encrypted, key, iv)
       const originalBuf = fs.readFileSync(infile)
       const encryptBuf = fs.readFileSync(encrypted)
-      assert.notEqual(originalBuf.compare(encryptBuf), 0,
+      assert.isFalse(originalBuf.equals(encryptBuf),
         'encrypted not equal to original')
       const decrypted = tmp.fileSync().name
       await core.decryptFile(encrypted, decrypted, key, iv)
       const decryptBuf = fs.readFileSync(decrypted)
-      assert.equal(originalBuf.compare(decryptBuf), 0,
+      assert.isTrue(originalBuf.equals(decryptBuf),
         'original and decrypted match')
     })
   })
 
+  describe('file compression', function () {
+    it('should compress and decompress files', async function () {
+      const infile = './test/fixtures/lorem-ipsum.txt'
+      const compressed = tmp.fileSync().name
+      await core.compressFile(infile, compressed)
+      const originalBuf = fs.readFileSync(infile)
+      const compressBuf = fs.readFileSync(compressed)
+      assert.isFalse(originalBuf.equals(compressBuf),
+        'compressed not equal to original')
+      const decompressed = tmp.fileSync().name
+      await core.decompressFile(compressed, decompressed)
+      const decompressBuf = fs.readFileSync(decompressed)
+      assert.isTrue(originalBuf.equals(decompressBuf),
+        'original and decompressed match')
+    })
+  })
+
   describe('pack files', function () {
-    it('should create files', async function () {
+    it('should create a pack with one part', async function () {
       const parts = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
@@ -70,8 +87,49 @@ describe('Core Functionality', function () {
       const results = await core.packParts(parts, packfile)
       assert.equal(results.hash, 'sha256-20bf4683a3bfd2eac935a16cf0745759718971a5f12fe29befa39ae0a22ac6c8')
       assert.equal(results.offsets.size, 1)
-      assert.isTrue(results.offsets.has('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'))
       assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
+      // verify unpacking
+      const outdir = tmp.dirSync().name
+      await core.unpackParts(packfile, outdir)
+      const entries = fs.readdirSync(outdir, { withFileTypes: true })
+      assert.equal(entries.length, 1, 'one file unpacked')
+      assert.isTrue(entries[0].isFile())
+      assert.equal(entries[0].name, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
+    })
+
+    it('should create a pack with multiple parts', async function () {
+      const parts = [
+        {
+          path: './test/fixtures/lorem-ipsum.txt',
+          offset: 0,
+          length: 1000
+        },
+        {
+          path: './test/fixtures/lorem-ipsum.txt',
+          offset: 1000,
+          length: 1000
+        },
+        {
+          path: './test/fixtures/lorem-ipsum.txt',
+          offset: 2000,
+          length: 1129
+        }
+      ]
+      const packfile = tmp.fileSync().name
+      const results = await core.packParts(parts, packfile)
+      assert.equal(results.hash, 'sha256-23064d1275bb1d4c7fe749a3bc8f7f63538fea7d996ed1d995833ee788d575a4')
+      assert.equal(results.offsets.size, 3)
+      assert.equal(results.offsets.get('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'), 0)
+      assert.equal(results.offsets.get('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'), 1)
+      assert.equal(results.offsets.get('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'), 2)
+      // verify unpacking
+      const outdir = tmp.dirSync().name
+      await core.unpackParts(packfile, outdir)
+      const entries = fs.readdirSync(outdir)
+      assert.equal(entries.length, 3, 'three files unpacked')
+      assert.isTrue(entries.includes('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'))
+      assert.isTrue(entries.includes('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'))
+      assert.isTrue(entries.includes('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'))
     })
   })
 })

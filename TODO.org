@@ -12,9 +12,9 @@
 **** DONE Use PBKDF2 to hash the master password
 **** DONE Use scrypt to hash the master password instead of PBKDF2
 **** DONE Support file encryption
-**** TODO Pack and unpack files
-***** TODO Use Node.js =zlib= module for compression
-***** TODO Pipe file data through hasher and output file simultaneously
+**** DONE Pack and unpack files
+***** DONE Use Node.js =zlib= module for compression
+***** DONE Pipe file data through hasher and output file simultaneously
 **** TODO Pack and unpack files encrypted
 ***** TODO Use Node.js =crypto= module
 *** TODO Decide how long the iv should be (is 16 bytes enough?)
