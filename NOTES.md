@@ -51,6 +51,7 @@
     - entries:
         + byte length (4 bytes)
         + data
+    - compressed using gzip, if the result is smaller
     - name is SHA256 of everything above ++ `.pack`
 * encrypted pack file format
     - header: `C4PX` (rot13 of `P4CK`)
@@ -59,8 +60,6 @@
     - master init vector (16 bytes)
     - encrypted data init vector and session key (48 bytes)
     - encrypted pack data
-* compression: use bzip2, gzip, or lzip (but _not_ xz)
-    - https://www.nongnu.org/lzip/xz_inadequate.html
 
 #### Pack Creation
 

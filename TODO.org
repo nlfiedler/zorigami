@@ -4,7 +4,7 @@
 **** DONE Remove the ~users~ route
 **** DONE Clean up all of the JavaScript code
 *** DONE Write a README file
-*** TODO Write some basic code and unit tests
+*** DONE Write some basic code and unit tests
 **** DONE Generate UUID type 5 of username + hostname
 **** DONE Generate a bucket name using ULID and UUID
 **** DONE Set up mocha and chai for testing
@@ -12,10 +12,10 @@
 **** DONE Use PBKDF2 to hash the master password
 **** DONE Use scrypt to hash the master password instead of PBKDF2
 **** DONE Support file encryption
-**** TODO Pack and unpack files
+**** DONE Pack and unpack files
 ***** DONE Use Node.js =zlib= module for compression
 ***** DONE Pipe file data through hasher and output file simultaneously
-***** TODO Compress pack files automatically if it produces a smaller file
+***** DONE Compress pack files automatically if it produces a smaller file
 **** DONE Pack and unpack files encrypted
 ***** DONE Use Node.js =crypto= module
 *** TODO Decide how long the iv should be (is 16 bytes enough?)
