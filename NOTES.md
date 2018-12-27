@@ -10,9 +10,8 @@
 
 * Web (Node.js/ReasonML)
 * Desktop (Electron)
-* Browse by date/time, then folders, then files (those saved at that date/time)
-* Browse by folder and file, then date/time (unifying all folders/files over all backups)
-* Move through snapshots within a particular tree (a la Time Machine)
+* Browse by snapshot, then folders and files
+* Move through snapshots for a particular path
 
 ## Design
 
@@ -203,18 +202,26 @@
 1. Find the differences from the previous snapshot.
 1. If there are no changes, exit the procedure.
 1. Generate a "working" snapshot to indicate work is ongoing.
-1. Create a new bucket, save name in snapshot record.
+1. Add the new tree objects that were generated.
 1. Add new/changed files to pack files, upload to cloud.
 1. Add "file" records to track parts and pack files.
 1. Backup the PouchDB database files.
 1. Mark snapshot as "complete" rather than "working" now that *everything* is uploaded.
 
+#### Uploading Packs
+
+1. Select an existing bucket, or create a new one.
+    * For Amazon, limited to 1,000 vaults, so reuse will be necessary.
+    * For Google, no hard limit, but perhaps a practical limit.
+    * Can add new records to the database (and index) to keep track.
+1. Upload the pack file to the cloud.
+1. Insert pack record in database to track bucket/vault and object/archive ID.
+
 #### Crash Recovery
 
-If most recent snapshot is in "working" state: 1) Create a bucket if the snapshot
-lacks the "bucket" field. 2) Continue with finding files that are new/changed that
-do not already have a record in the database, adding them to pack files and
-uploading.
+If most recent snapshot is in "working" state: Continue with finding files that
+are new/changed that do not already have a record in the database, adding them
+to pack files and uploading.
 
 #### Restore
 

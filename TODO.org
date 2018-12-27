@@ -1,30 +1,4 @@
 * Zorigami
-** Phase 1
-*** DONE Generate the express application
-**** DONE Remove the ~users~ route
-**** DONE Clean up all of the JavaScript code
-*** DONE Write a README file
-*** DONE Write some basic code and unit tests
-**** DONE Generate UUID type 5 of username + hostname
-**** DONE Generate a bucket name using ULID and UUID
-**** DONE Set up mocha and chai for testing
-**** DONE Generate and encrypt/decrypt master keys
-**** DONE Use PBKDF2 to hash the master password
-**** DONE Use scrypt to hash the master password instead of PBKDF2
-**** DONE Support file encryption
-**** DONE Pack and unpack files
-***** DONE Use Node.js =zlib= module for compression
-***** DONE Pipe file data through hasher and output file simultaneously
-***** DONE Compress pack files automatically if it produces a smaller file
-**** DONE Pack and unpack files encrypted
-***** DONE Use Node.js =crypto= module
-*** DONE Decide how long the iv should be (is 16 bytes enough?)
-*** DONE Find out what sorts of limits Google Cloud Storage has
-**** Number of buckets? None
-**** Number of objects per bucket? None
-*** DONE Decide how to handle symbolic and hard links in the future
-**** DONE For now, explicitly ignore symbolic links
-*** TODO Consider how to work within Glacier's 1000 vault (per region) limit
 ** Phase 2
 *** TODO Introduce logging and replace =console= calls with logger
 *** TODO Introduce pouchdb and code for reading/writing data
