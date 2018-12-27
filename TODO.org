@@ -18,12 +18,13 @@
 ***** DONE Compress pack files automatically if it produces a smaller file
 **** DONE Pack and unpack files encrypted
 ***** DONE Use Node.js =crypto= module
-*** TODO Decide how long the iv should be (is 16 bytes enough?)
-*** TODO Find out what sorts of limits Google Cloud Storage has
-**** Number of buckets?
-**** Number of objects per bucket?
-*** TODO Decide how to handle symbolic and hard links in the future
-**** TODO For now, explicitly ignore links
+*** DONE Decide how long the iv should be (is 16 bytes enough?)
+*** DONE Find out what sorts of limits Google Cloud Storage has
+**** Number of buckets? None
+**** Number of objects per bucket? None
+*** DONE Decide how to handle symbolic and hard links in the future
+**** DONE For now, explicitly ignore symbolic links
+*** TODO Consider how to work within Glacier's 1000 vault (per region) limit
 ** Phase 2
 *** TODO Introduce logging and replace =console= calls with logger
 *** TODO Introduce pouchdb and code for reading/writing data
@@ -55,6 +56,8 @@ created.
 ** Phase 4
 *** TODO Write the logic for the "engine"
 **** TODO Produce a ~working~ snapshot of the dataset
+**** TODO Detect symbolic links and ignore them
+- Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
 **** TODO Compute the difference from the previous snapshot
 **** TODO Produce and upload pack files containing new/changed files
 ***** Splitting large files across packs
@@ -71,8 +74,12 @@ created.
 *** TODO Store pack files in Google Cloud Storage
 - https://github.com/googleapis/nodejs-storage/
 ** Phase 5
-*** TODO Store pack files in Amazon Glacier (prefer near line version)
-- https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
+*** TODO Support snapshots consisting only of mode/owner changes
+**** i.e. no file content changes, just the database records
+*** TODO Store pack files in Amazon Glacier
+**** c.f. https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
+**** Offer user option to use "expedited" retrievals so they go faster
+
 * Electron App
 ** Phase N
 *** Create a system tray icon/widget

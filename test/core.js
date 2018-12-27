@@ -18,10 +18,11 @@ describe('Core Functionality', function () {
   })
 
   describe('bucket name', function () {
-    it('should generate a 58 character string', function () {
+    it('should generate a 58 character mostly alphanumeric string', function () {
       const uniqId = core.generateUniqueId('charlie', 'localhost')
       const bucket = core.generateBucketName(uniqId)
       assert.equal(bucket.length, 58)
+      assert.match(bucket, /\w{58}/, 'bucket name is cloud "safe"')
     })
   })
 

@@ -1,4 +1,4 @@
-# New Backup
+# NOTES
 
 ## Features
 
@@ -38,6 +38,25 @@
 * PouchDB is used to store metadata
     - PouchDB database is saved just like any other file
 
+### Computer UUID
+
+1. Use type 5, with URL namespace
+1. The "name" is the computer host name and current user name, separated by slash
+    * e.g. `chihiro/nfiedler` yields `f6ce9ef2-3059-5f8d-9f3b-7d532fe15bf8`
+    * makes finding the backup records for a computer reproducible
+
+### Bucket Name
+
+* bucket name will be ULID + computer UUID (without dash separators)
+    - e.g. `01arz3ndektsv4rrffq69g5favf6ce9ef230595f8d9f3b7d532fe15bf8`
+    - conforms to Google bucket name restrictions
+        + https://cloud.google.com/storage/docs/naming
+        + should be sufficiently unique despite global bucket namespace
+    - conforms to Amazon Glacier vault name restrictions
+        + https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html
+* ULID contains the time, so no need for a timestamp
+* UUID makes it easy to find buckets associated with this computer and user
+
 ### Pack Files
 
 * contains raw file content
@@ -61,28 +80,6 @@
     - encrypted data init vector and session key (48 bytes)
     - encrypted pack data
 
-#### Pack Creation
-
-1. Input: list of (file path, byte offset, byte length) tuples
-    * Offset of zero and length equal to file represents whole file
-1. Create `.pack` file with temporary name
-1. Construct `:sha256` hasher for pack
-1. Write `P4CK`, version, number of entries, to pack file and hasher
-1. For each part:
-    1. Write length in bytes (4 bytes) to pack and hasher
-    1. Init `:sha` hasher for data
-    1. Read data in chunks:
-        1. Write chunk to pack
-        1. Write chunk to data hasher
-        1. Write chunk to pack hasher
-    1. Save data hasher value to sha1/index map
-        * this is saved to the pack record in PouchDB
-1. Name pack file with SHA256 of pack file
-1. Write pack details to record in PouchDB
-1. Attempt compression of pack file
-    * if it is smaller, use that instead
-1. Encrypt the pack file (see below)
-
 ### PouchDB
 
 * configuration record
@@ -105,12 +102,11 @@
     - random salt (16 bytes)
     - random init vector (16 bytes)
     - HMAC-SHA256 of user password and salt
-    - encrypted master keys (x2)
+    - encrypted master keys
 * snapshot records
     - key: SHA1 of snapshot (with "sha1-" prefix)
-    - SHA1 of previous snapshot (absent if first snapshot)
+    - SHA1 of previous snapshot (`null` if first snapshot)
     - date/time of snapshot
-    - name of remote bucket
     - list of root tree entries (sorted by path)
         + base local path
         + tree SHA1
@@ -125,52 +121,26 @@
         + xattrs
         + checksum (SHA1 for tree, SHA256 for file)
         + entry name
-    - c.f. perkeep.org file metadata format for an example
-        + camliType "file" | "directory"
-        + fileName
-        + parts [{blobRef, size}, ...] for file
-        + members [{hash}, ...] for directories
-        + unixGroup (string)
-        + unixGroupId (int)
-        + unixMtime (string)
-        + unixOwner (string)
-        + unixOwnerId (int)
-        + unixPermission (string, e.g. "0644")
     - unreachable (present if this tree is not reachable)
 * file records
     - key: SHA256 of whole file (with "sha256-" prefix)
     - list of parts
-        + remote bucket name
         + pack SHA256
         + part SHA1
-        + large files will have all chunks listed every time, even if only one part changed
+        + all parts listed every time, even if only one part changed
     - unreachable (present if this file is not reachable)
 * pack records
     - key: SHA256 of pack file (with "sha256-" prefix)
     - map of SHA1 to part index
         + SHA1 of data part (with "sha1-" prefix)
         + part index into pack file (zero-based)
+    - remote bucket/vault name
+    - remote archive identifier (e.g. AWS Glacier)
     - unreachable (present if this pack is not referenced)
 
 ## Implementation
 
 ### Procedure
-
-#### Computer UUID
-
-1. Use type 5, with URL namespace
-1. The "name" is the computer host name and current user name, separated by slash
-    * e.g. `chihiro/nfiedler` yields `f6ce9ef2-3059-5f8d-9f3b-7d532fe15bf8`
-    * makes finding the backup records for a computer reproducible
-
-#### Bucket Name
-
-* bucket name will be ULID + computer UUID (without dash separators)
-    - e.g. `01arz3ndektsv4rrffq69g5favf6ce9ef230595f8d9f3b7d532fe15bf8`
-    - fits within Google's bucket name restrictions
-    - should be sufficiently unique despite global bucket namespace
-* ULID contains the time, so no need for a timestamp
-* UUID makes it easy to find buckets associated with this computer and user
 
 #### Tree SHA1 computation
 
@@ -198,12 +168,34 @@
     1. Descend into common directories
 1. Somehow compute new tree SHA1, then recompute all parents
 
-#### Building Pack Files
+#### Collecting Files
 
 1. Collect all changed files for a given snapshot
 1. Split large files into parts smaller than the configured pack size
 1. Use bin packing to split the files/parts into N pack files, minimizing N
 1. Assemble each pack file using the N lists of files/parts
+
+#### Pack Construction
+
+1. Input: list of (file path, byte offset, byte length) tuples
+    * Offset of zero and length equal to file represents whole file
+1. Create `.pack` file with temporary name
+1. Construct `:sha256` hasher for pack
+1. Write `P4CK`, version, number of entries, to pack file and hasher
+1. For each part:
+    1. Write length in bytes (4 bytes) to pack and hasher
+    1. Init `:sha` hasher for data
+    1. Read data in chunks:
+        1. Write chunk to pack
+        1. Write chunk to data hasher
+        1. Write chunk to pack hasher
+    1. Save data hasher value to sha1/index map
+        * this is saved to the pack record in PouchDB
+1. Name pack file with SHA256 of pack file
+1. Write pack details to record in PouchDB
+1. Attempt compression of pack file
+    * if it is smaller, use that instead
+1. Encrypt the pack file (see below)
 
 #### Backup
 
@@ -237,7 +229,11 @@ uploading.
 
 #### Full Recovery
 
+1. Find all buckets with type 5 UUID for a name
+1. Fetch metadata object/archive for those buckets
+1. Present the list to the user to choose which to recover
 1. Retrieve the most recent PouchDB database
+    * For Glacier, this means listing archives of master vault to find database pack
 1. Iterate entries in database, fetching packs and extracting files
 
 #### Pruning
@@ -253,13 +249,13 @@ uploading.
     - Retrieve pack files, remove stale entries, repack, upload
     - Update file records affected by repacking
 
-#### Encryption
+### Encryption
 
 * Need to prompt the user for their password when starting up
     - Start a process for each user, holding the master keys in process state
     - Eventually can add code that uses macOS KeyChain, or the like
 
-**Generating Encryption Data**
+#### Generating Encryption Data
 
 1. Generate a random salt, to be saved in PouchDB.
 1. Generate a random initialization vector (IV), to be saved in PouchDB.
@@ -269,7 +265,7 @@ uploading.
 1. Calculate the HMAC-SHA256 of (IV + encrypted master keys) using the derived key.
 1. Store everything in the PouchDB encryption record.
 
-**Extracting Master Keys**
+#### Extracting Master Keys
 
 1. Retrieve salt from the encryption record.
 1. Derive encryption key from user-supplied password using scrypt and the salt.
@@ -277,7 +273,7 @@ uploading.
 1. Verify computed HMAC against HMAC-SHA256 in the encryption record.
 1. Decrypt the encrypted master keys using the derived key.
 
-**Encrypting Pack Files**
+#### Encrypting Pack Files
 
 1. Generate a random session key
 1. Generate a random "data IV"
@@ -287,7 +283,7 @@ uploading.
 1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key" from PouchDB
 1. Write as described in the pack file data format
 
-**Decrypting Pack Files**
+#### Decrypting Pack Files
 
 1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key" from PouchDB
 1. Ensure the calculated HMAC-SHA256 matches the value in the object header
