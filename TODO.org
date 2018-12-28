@@ -1,41 +1,7 @@
 * Zorigami
 ** Phase 2
-*** TODO Introduce logging and replace =console= calls with logger
-*** TODO Introduce pouchdb and code for reading/writing data
-**** TODO Store the ~encryption~ record in PouchDB
-*** TODO Introduce GraphQL backend and schema
-**** TODO Define the schema
-**** TODO Write a simple resolver
-**** TODO Write a unit test
-*** TODO Decide how snapshots should model changing data and lengthy backups
-In other words, while the backup is occuring, files are changing. The
-snapshot will inevitably not record these changes. As such, a snapshot
-really represents different files at different times. For instance, file A
-was backed up a time T1, and file B was saved later at time T2, but all in
-snapshot S1. The finest granularity is going to be the packfile, so record
-the time the files in that pack were saved as the time that the pack was
-created.
-**** During the backup, tree objects will have a ~working~ state
-**** Once a tree is updated with the final results, it is marked as ~complete~
-**** As such, the tree objects may be change during the backup
-
-** Phase 3
-*** TODO Write a ReasonML frontend
-**** TODO Add =bs-platform= dependency and =bsconfig.json= file
-**** TODO Put front-end code in a directory named =web-src=
-**** TODO Set up =gulp= and =webpack= to build the front-end code
-**** TODO Set up the routing
-**** TODO Write a simple home page that shows something
-*** TODO Update the architecture and data model in =NOTES.md=
-** Phase 4
-*** TODO Write the logic for the "engine"
-**** TODO Produce a ~working~ snapshot of the dataset
-**** TODO Detect symbolic links and ignore them
-- Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
-**** TODO Compute the difference from the previous snapshot
-**** TODO Produce and upload pack files containing new/changed files
-***** Splitting large files across packs
-*** TODO Consider how to handle small changes to large files
+*** DONE Decide how to handle files changing during lengthy backups
+*** DONE Consider how to handle small changes to large files
 **** e.g. using merkle tree of "bytes" to save only changed parts of large files
 **** c.f. perkeep.org design/code for an example of dealing with large files
 - uses Merkle tree of "bytes" schema blobs to represent large files
@@ -43,8 +9,60 @@ created.
 - rolling checksum cut points (ala rsync, bup)
 - de-duplication within files and shifting files
 - efficient seeks/pread
+**** rsync, rolling checksum, splitting notes
+***** https://github.com/perkeep/perkeep/blob/master/internal/rollsum/rollsum.go
+***** https://github.com/apenwarr/bup/blob/master/lib/bup/bupsplit.c
+*** TODO Look into the chunk deduplication approaches
+**** DONE Design schema around storing files as chunks
+***** small files are a single chunk
+***** large files are split into chunks using CDC
+**** TODO Change packing implementation to work with chunks
+***** parts have SHA256 checksum versus SHA1
+***** part checksums are known in advance, no need to calculate them
+**** DONE Look into "content defined chunking" algorithms
+**** DONE Look for "FastCDC" npm
+**** DONE Look for "gear" based CDC as an alternative to FastCDC
+**** FastCDC for node: https://github.com/ronomon/deduplication
+***** finds chunk boundaries and returns sha256 of chunks
+***** actively maintained
+***** MIT licensed
+**** https://github.com/datproject/rabin
+***** does not have a license?
+***** uses a very old fingerprinting algorithm
+**** c.f. https://restic.net/blog/2015-09-12/restic-foundation1-cdc
+*** TODO Introduce logging and replace =console= calls with logger
+*** TODO Introduce config library for configuring different environments
+*** TODO Introduce pouchdb and code for reading/writing data
+**** TODO Store the ~encryption~ record in PouchDB
+*** TODO Implement a "local disk" storage engine for testing
+**** Can also be used for backing up to an attached disk
+*** TODO Write the logic for the "engine"
+**** TODO Produce a ~working~ snapshot of the dataset
+**** TODO Detect symbolic links and store their reference
+- Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
+- Store the mode in the tree as =lrwxr-xr-x= (give or take some bits)
+- Store the link value as the =checksum= in the tree (since there is no file)
+**** TODO Compute the difference from the previous snapshot
+**** TODO Produce and upload pack files containing new/changed files
+***** TODO Split large files across packs
+*** TODO Update the architecture and data model in =NOTES.md=
+** Phase 3
+*** TODO Introduce GraphQL backend and schema
+**** TODO Define the schema
+**** TODO Write a simple resolver
+**** TODO Write a unit test
+*** TODO Write a ReasonML frontend
+**** TODO Add =bs-platform= dependency and =bsconfig.json= file
+**** TODO Put front-end code in a directory named =web-src=
+**** TODO Set up =gulp= and =webpack= to build the front-end code
+**** TODO Set up the routing
+**** TODO Write a simple home page that shows something
+** Phase 4
+*** TODO Use this to replace =replicaz= by persisting over SFTP
+**** Need to implement SFTP protocol
+***** https://github.com/jyu213/ssh2-sftp-client
+*** TODO Design the cloud interface code to be service agnostic
 *** TODO Store database in a bucket named after the "computer UUID"
-*** TODO File restoration should apply user/group at time from which file is being restored
 *** TODO Store pack files in Google Cloud Storage
 - https://github.com/googleapis/nodejs-storage/
 ** Phase 5
@@ -54,6 +72,8 @@ created.
 **** c.f. https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
 **** Offer user option to use "expedited" retrievals so they go faster
 
+*** TODO Automatically pruning backups more then N months old
+**** For Google and Amazon, anything older than 90 days is free to remove
 * Electron App
 ** Phase N
 *** Create a system tray icon/widget

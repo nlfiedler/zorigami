@@ -2,9 +2,24 @@
 
 ## Features
 
+* Maintains multiple versions, not just the most recent
 * Efficiency (de-duplication, large file splitting)
-* Encryption (all remotely stored data is encrypted)
-* Service agnostic (Amazon, Google, Wasabi, Backblaze, B2, OneDrive, Dropbox, etc)
+* Encryption (all remotely stored data is encrypted with 256-bit AES)
+    - Uses unique 256-bit key and IV for each remotely stored pack
+* Service agnostic (SFTP, Amazon, Google, etc)
+* Full restore or file-level restore
+* Restore to dissimilar hardware
+* Local and Cloud storage
+* Scheduled backups (to better manage resources)
+* Cross Platform (macOS, Windows, Linux)
+* Amazon Glacier support (this seems to be uncommon at best)
+* Fault tolerant (automatically recovers from crashes)
+* Ransomware protection
+    - Figure out what this means...
+
+> CloudBerry Backup detects encryption changes in files and prevents existing
+> backups from being overwritten until an administrator confirms if there is an
+> issue.
 
 ## Interface
 
@@ -20,6 +35,16 @@
 * Backend waits for initial setup via web or desktop
 * Upon startup of desktop app, walk user through setup
 * Offer choice of recovering from backup, or starting anew
+
+### Deduplication
+
+Uses a content-defined chunking (a.k.a. content-dependent chunking) algorithm to
+determine suitable chunk boundaries, and stores each unique chunk once based on
+the SHA256 digest of the chunk. In particular, uses
+[FastCDC](https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf)
+which is much faster than Rabin-based fingerprinting, and somewhat faster than
+Gear. This avoids the shortcomings of fixed-size chunking due to boundary
+shifting.
 
 ## Data Format
 
@@ -87,9 +112,12 @@
     - user name
     - computer UUID
     - latest snapshot
-    - cloud service provider (e.g. `aws`, `gcp`)
+    - cloud service provider (e.g. `sftp`, `aws`, `gcp`)
+    - cloud storage type (e.g. "nearline")
     - cloud service region (e.g. `us-west1`)
+    - sftp host and credentials, if any
     - local path to cloud service credentials file
+    - frequency with which to perform backups (hourly, daily, weekly, monthly)
     - time ranges in which to upload snapshots
     - preferred size of pack files (in MB)
     - default ignore file patterns (applies to all datasets)
@@ -103,57 +131,89 @@
     - HMAC-SHA256 of user password and salt
     - encrypted master keys
 * snapshot records
-    - key: SHA1 of snapshot (with "sha1-" prefix)
-    - SHA1 of previous snapshot (`null` if first snapshot)
-    - date/time of snapshot
+    - key: `snapshot/` + SHA1 of snapshot (with "sha1-" prefix) or `index` for pending
+    - parent: SHA1 of previous snapshot (`null` if first snapshot)
+    - start_time: when snapshot started
+    - end_time: when snapshot finished
+    - num_files: number of files in this snapshot
     - list of root tree entries (sorted by path)
         + base local path
         + tree SHA1
     - deleted (present if this snapshot is marked for removal)
 * tree records
-    - key: SHA1 of tree data (with "sha1-" prefix)
-    - list of entries (sorted by name):
+    - key: `tree/` + SHA1 of tree data (with "sha1-" prefix)
+    - entries: (sorted by name)
         + mode (also indicates if tree or file, e.g. `drwxr-xr-x`)
         + user, group (strings)
         + uid, gid (numbers)
         + ctime, mtime
         + xattrs
-        + checksum (SHA1 for tree, SHA256 for file)
+        + reference (SHA1 for tree, SHA256 for file, base64-encoded value for symlink)
         + entry name
-    - unreachable (present if this tree is not reachable)
 * file records
-    - key: SHA256 of whole file (with "sha256-" prefix)
-    - list of parts
-        + pack SHA256
-        + part SHA1
-        + all parts listed every time, even if only one part changed
-    - unreachable (present if this file is not reachable)
+    - key: `file/` + SHA256 at time of snapshot (with "sha256-" prefix)
+    - length: size of file in bytes (0 if `changed`)
+    - chunks: (absent if `changed`)
+        + offset: start of range in large file for this chunk
+        + chunk SHA256
+    - changed: SHA256 at time of backup, if different from key
+* chunk records
+    - key: `chunk/` + SHA256 of chunk (with "sha256-" prefix)
+    - length: size of chunk in bytes
+    - pack: SHA256 of pack
 * pack records
-    - key: SHA256 of pack file (with "sha256-" prefix)
-    - map of SHA1 to part index
-        + SHA1 of data part (with "sha1-" prefix)
-        + part index into pack file (zero-based)
+    - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
+    - map of SHA256 to chunk index
+        + SHA256 of chunk
+        + zero-based index into pack
     - remote bucket/vault name
     - remote archive identifier (e.g. AWS Glacier)
-    - unreachable (present if this pack is not referenced)
 
 ## Implementation
 
 ### Procedure
 
+#### Backup
+
+1. Look for a pending `index` snapshot; if none then:
+    1. Generate the tree objects to represent the state of the dataset.
+    1. Add a special snapshot record named `index` to track work in progress.
+1. Find the differences from the previous snapshot.
+1. If there are no changes, delete `index` snapshot record, exit the procedure.
+1. For each new/changed file, check if record exists; if not:
+    1. For small files, treat as a single chunk
+    1. For large files, use CDC to find chunks
+    1. For each chunk that does not exist in database, add to pack
+    1. If pack file is large enough, upload to storage
+    1. Add "file" and "chunk" records to track chunks and pack files
+    1. If file checksum changed after snapshot, add two records:
+        * set `changed` on the record with the checksum at time of snapshot
+        * set `chunks` on the record with the checksum at time of packing
+1. Rename the `index` snapshot record to have a correct SHA1 key
+1. Store latest snapshot identifier in `configuration` record
+1. Backup the PouchDB database files.
+
 #### Tree SHA1 computation
 
-1. Sort the entries by name
-1. Initialize the hash (`:crypto.hash_init/1`)
-1. Add data from each field of entry to the hash (`:crypto.hash_update/2`)
-1. Finalize the checksum (`:crypto.hash_final/1`)
+The "tree" object implementation has a `toString()` that converts the object to
+a long string, similar to Git. The entries are sorted by name, and the results
+should be deterministic. Then compute the SHA1 of this string.
 
 #### Snapshot SHA1 computation
 
-1. Sort the dataset entries by name
-1. Initialize the hash (`:crypto.hash_init/1`)
-1. Add data from each field to the hash (`:crypto.hash_update/2`)
-1. Finalize the checksum (`:crypto.hash_final/1`)
+The "snapshot" object implementation has a `toString()` that converts the object
+to a long string, similar to Git. The root entries are sorted by name, and the
+results should be deterministic. Then compute the SHA1 of this string.
+
+#### Building the snapshot tree
+
+* Depth-first walk of the directory tree
+* Build a tree object for the directory in question
+* Symbolic links are stored base64-encoded as the `reference`
+    - encoded to guard against character encoding issues (file names might not be UTF-8)
+* Insert tree into the database, if it does not already exist
+* Collect the root(s) and build the snapshot object
+* Insert `pending` snapshot into the database, overwrite if it already exists
 
 #### Finding Changes
 
@@ -167,46 +227,14 @@
     1. Descend into common directories
 1. Somehow compute new tree SHA1, then recompute all parents
 
-#### Collecting Files
+#### Large File Support
 
-1. Collect all changed files for a given snapshot
-1. Split large files into parts smaller than the configured pack size
-1. Use bin packing to split the files/parts into N pack files, minimizing N
-1. Assemble each pack file using the N lists of files/parts
-
-#### Pack Construction
-
-1. Input: list of (file path, byte offset, byte length) tuples
-    * Offset of zero and length equal to file represents whole file
-1. Create `.pack` file with temporary name
-1. Construct `:sha256` hasher for pack
-1. Write `P4CK`, version, number of entries, to pack file and hasher
-1. For each part:
-    1. Write length in bytes (4 bytes) to pack and hasher
-    1. Init `:sha` hasher for data
-    1. Read data in chunks:
-        1. Write chunk to pack
-        1. Write chunk to data hasher
-        1. Write chunk to pack hasher
-    1. Save data hasher value to sha1/index map
-        * this is saved to the pack record in PouchDB
-1. Name pack file with SHA256 of pack file
-1. Write pack details to record in PouchDB
-1. Attempt compression of pack file
-    * if it is smaller, use that instead
-1. Encrypt the pack file (see below)
-
-#### Backup
-
-1. Generate the tree objects to represent the state of the dataset.
-1. Find the differences from the previous snapshot.
-1. If there are no changes, exit the procedure.
-1. Generate a "working" snapshot to indicate work is ongoing.
-1. Add the new tree objects that were generated.
-1. Add new/changed files to pack files, upload to cloud.
-1. Add "file" records to track parts and pack files.
-1. Backup the PouchDB database files.
-1. Mark snapshot as "complete" rather than "working" now that *everything* is uploaded.
+Not going to do this for now. The basic idea would be to use a rolling checksum
+(or rolling hash or rolling sum) to determine the chunk boundaries, or cut
+points, and then save only the changed chunks of the large file. However, this
+would require having the original file on hand to compute the same checksums.
+The advantage of such an approach would be to deduplicate chunks within a file,
+and handle shifting file contents.
 
 #### Uploading Packs
 
@@ -214,25 +242,26 @@
     * For Amazon, limited to 1,000 vaults, so reuse will be necessary.
     * For Google, no hard limit, but perhaps a practical limit.
     * Can add new records to the database (and index) to keep track.
+1. Insert `pending` pack record in database to facilitate cleaning up botched backups.
+    * e.g. if the backup crashes, and files changed, old pack will be left dangling forever
 1. Upload the pack file to the cloud.
-1. Insert pack record in database to track bucket/vault and object/archive ID.
+1. Update pack record to track bucket/vault and object/archive ID.
+1. Remove `pending` from pack record in database.
 
 #### Crash Recovery
 
-If most recent snapshot is in "working" state: Continue with finding files that
-are new/changed that do not already have a record in the database, adding them
-to pack files and uploading.
+1. If there is an `index` snapshot, there is pending work to finish.
+1. Go through the usual backup procedure.
 
-#### Restore
+#### File Restore
 
-1. Based on selection, you have the list of SHA256 values of the target file.
-1. Use the SHA256 to find the bucket/object to be retrieved.
-1. When opening pack file, verify SHA256 of file matches pack file name.
-1. Look up the SHA256 in the pack record to get byte offset, length.
-1. Read data from pack file at given offset and length.
-1. Write the chunk of data to a temporary file.
-1. Repeat this procedure for each SHA256 value.
-1. When finished, close the file and rename to target filename, apply ownership, modes.
+1. Use selected file SHA256 to look up list of chunks.
+1. Use pack SHA256 to find remote coordinates (bucket and object).
+1. Download pack and verify checksum to detect corruption.
+1. Extract the chunk of the file in the pack to a temporary file.
+1. Repeat for each chunk of the file (finding pack, downloading, extracting).
+1. Reproduce the original file from the downloaded chunks.
+1. Apply ownership and mode values according to the tree object.
 
 #### Full Recovery
 
@@ -243,29 +272,40 @@ to pack files and uploading.
     * For Glacier, this means listing archives of master vault to find database pack
 1. Iterate entries in database, fetching packs and extracting files
 
-#### Pruning
+#### Garbage Collection
 
-* Start by marking the snapshot records as "deleted"
-* Use of a bloom filter is probably helpful
-* Modest garbage collection:
+* Automatic garbage collection:
     - Find trees that are no longer referenced
     - Find pack files that are no longer referenced
     - Remove the pack files from the remote side
     - Remove unreachable tree records
+    - Find `pending` pack records and remove remote file
 * Aggressive garbage collection
     - Retrieve pack files, remove stale entries, repack, upload
+    - Remove the old pack files from the remote side
     - Update file records affected by repacking
+
+#### Deleting Old Backups
+
+Remove the snapshot record to be deleted, then garbage collect.
 
 ### Encryption
 
+#### Master Password
+
 * Need to prompt the user for their password when starting up
-    - Start a process for each user, holding the master keys in process state
-    - Eventually can add code that uses macOS KeyChain, or the like
+    - Once decrypted, hold the master keys in process state
+* If available, use a "secret vault" provided by the OS
+    - macOS Keychain
+    - Windows Data Protection API
+    - Linux gnome-keyring
+* If an environment variable is set, can use that
+    - c.f. https://forum.duplicacy.com/t/passwords-credentials-and-environment-variables/1094
 
 #### Generating Encryption Data
 
-1. Generate a random salt, to be saved in PouchDB.
-1. Generate a random initialization vector (IV), to be saved in PouchDB.
+1. Generate a random salt.
+1. Generate a random initialization vector (IV).
 1. Generate two random "master keys".
 1. Derive encryption key from user provided password and the salt.
 1. Encrypt the master keys with AES/CTR using the the derived key and the IV.
@@ -282,17 +322,45 @@ to pack files and uploading.
 
 #### Encrypting Pack Files
 
-1. Generate a random session key
-1. Generate a random "data IV"
-1. Encrypt pack data with AES/CTR using session key and data IV
-1. Generate a random "master IV"
-1. Encrypt (data IV + session key) with AES/CTR using the first master key from PouchDB and the "master IV"
-1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key" from PouchDB
-1. Write as described in the pack file data format
+1. Generate a random session key.
+1. Generate a random "data IV".
+1. Encrypt pack data with AES/CTR using session key and data IV.
+1. Generate a random "master IV".
+1. Encrypt (data IV + session key) with AES/CTR using the first master key and the "master IV".
+1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key".
+1. Write as described in the pack file data format.
 
 #### Decrypting Pack Files
 
-1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key" from PouchDB
-1. Ensure the calculated HMAC-SHA256 matches the value in the object header
-1. Decrypt "encrypted data IV + session key" using the first "master key" from PouchDB and the "master IV"
+1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key".
+1. Ensure the calculated HMAC-SHA256 matches the value in the object header.
+1. Decrypt "encrypted data IV + session key" using the first "master key" and the "master IV".
 1. Decrypt the ciphertext with AES/CTR using the session key and data IV.
+
+## Alternatives
+
+### Arq
+
+* https://www.arqbackup.com
+
+### CloudBerry
+
+* Has enterprise versions
+* https://www.cloudberrylab.com/backup/desktop/windows.aspx
+* Windows-only
+
+### Duplicacy
+
+* https://github.com/gilbertchen/duplicacy
+* Lists other open source tools and compares them
+* Deduplicates chunks across systems
+* Does not support Glacier
+    - Their design depends on accessing chunks by their checksum
+
+### qBackup
+
+* https://www.qualeed.com/en/qbackup/
+
+### restic
+
+* https://restic.net

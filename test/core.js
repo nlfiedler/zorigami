@@ -87,7 +87,7 @@ describe('Core Functionality', function () {
       ]
       const packfile = tmp.fileSync().name
       const results = await core.packParts(parts, packfile)
-      assert.equal(results.hash, 'sha256-20bf4683a3bfd2eac935a16cf0745759718971a5f12fe29befa39ae0a22ac6c8')
+      assert.equal(results.hash, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
       assert.equal(results.offsets.size, 1)
       assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
       // verify unpacking
@@ -119,7 +119,7 @@ describe('Core Functionality', function () {
       ]
       const packfile = tmp.fileSync().name
       const results = await core.packParts(parts, packfile)
-      assert.equal(results.hash, 'sha256-23064d1275bb1d4c7fe749a3bc8f7f63538fea7d996ed1d995833ee788d575a4')
+      assert.equal(results.hash, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
       assert.equal(results.offsets.size, 3)
       assert.equal(results.offsets.get('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'), 0)
       assert.equal(results.offsets.get('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'), 1)
@@ -145,7 +145,7 @@ describe('Core Functionality', function () {
       ]
       const packfile = tmp.fileSync().name
       const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-20bf4683a3bfd2eac935a16cf0745759718971a5f12fe29befa39ae0a22ac6c8')
+      assert.equal(results.hash, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
       assert.equal(results.offsets.size, 1)
       assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
       // verify unpacking
@@ -183,7 +183,7 @@ describe('Core Functionality', function () {
       ]
       const packfile = tmp.fileSync().name
       const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-23064d1275bb1d4c7fe749a3bc8f7f63538fea7d996ed1d995833ee788d575a4')
+      assert.equal(results.hash, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
       assert.equal(results.offsets.size, 3)
       assert.equal(results.offsets.get('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'), 0)
       assert.equal(results.offsets.get('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'), 1)
@@ -215,7 +215,7 @@ describe('Core Functionality', function () {
       ]
       const packfile = tmp.fileSync().name
       const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-1be8d7e946e587f90efd45d65885dc9bc7ef922072f4dc75654d5d863e5b3e5d')
+      assert.equal(results.hash, 'sha256-5b1d0c1cb9e47828e0bb84ba489f1cf1cab0db63bb07f2baaaacbfd63c12fc60')
       assert.equal(results.offsets.size, 2)
       assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
       assert.equal(results.offsets.get('sha1-4c009e44fe5794df0b1f828f2a8c868e66644964'), 1)
