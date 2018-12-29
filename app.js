@@ -3,6 +3,21 @@ const express = require('express')
 const path = require('path')
 const cookieParser = require('cookie-parser')
 const logger = require('morgan')
+const config = require('config')
+const winston = require('winston')
+
+// Configure the logging not related to HTTP, which is handled using morgan.
+winston.exitOnError = false
+winston.level = config.get('logging.level')
+if (config.has('logging.file')) {
+  const filename = config.get('logging.file')
+  winston.add(new winston.transports.File({
+    filename,
+    maxsize: 1048576,
+    maxFiles: 4
+  }))
+  winston.remove(new winston.transports.Console())
+}
 
 const indexRouter = require('./routes/index')
 
