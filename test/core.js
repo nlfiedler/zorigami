@@ -59,6 +59,16 @@ describe('Core Functionality', function () {
     })
   })
 
+  describe('file digests', function () {
+    it('should compute the hash digest of a file', async function () {
+      const infile = './test/fixtures/lorem-ipsum.txt'
+      const sha1 = await core.checksumFile(infile, 'sha1')
+      assert.equal(sha1, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
+      const sha256 = await core.checksumFile(infile, 'sha256')
+      assert.equal(sha256, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
+    })
+  })
+
   describe('file compression', function () {
     it('should compress and decompress files', async function () {
       const infile = './test/fixtures/lorem-ipsum.txt'
@@ -77,8 +87,8 @@ describe('Core Functionality', function () {
   })
 
   describe('pack files', function () {
-    it('should create a pack with one part', async function () {
-      const parts = [
+    it('should create a pack with one chunk', async function () {
+      const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
@@ -86,21 +96,21 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const results = await core.packParts(parts, packfile)
-      assert.equal(results.hash, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
-      assert.equal(results.offsets.size, 1)
-      assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
+      const digest = await core.packChunks(chunks, packfile)
+      assert.equal(digest, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackParts(packfile, outdir)
+      await core.unpackChunks(packfile, 'chunk', outdir)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })
-      assert.equal(entries.length, 1, 'one file unpacked')
+      assert.equal(entries.length, 1, 'one chunk unpacked')
       assert.isTrue(entries[0].isFile())
-      assert.equal(entries[0].name, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
+      assert.equal(entries[0].name, 'chunk.1')
+      const chunkDigest = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      assert.equal(chunkDigest, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
     })
 
-    it('should create a pack with multiple parts', async function () {
-      const parts = [
+    it('should create a pack with multiple chunks', async function () {
+      const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
@@ -118,25 +128,27 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const results = await core.packParts(parts, packfile)
-      assert.equal(results.hash, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
-      assert.equal(results.offsets.size, 3)
-      assert.equal(results.offsets.get('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'), 0)
-      assert.equal(results.offsets.get('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'), 1)
-      assert.equal(results.offsets.get('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'), 2)
+      const digest = await core.packChunks(chunks, packfile)
+      assert.equal(digest, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackParts(packfile, outdir)
+      await core.unpackChunks(packfile, 'chunk', outdir)
       const entries = fs.readdirSync(outdir)
       assert.equal(entries.length, 3, 'three files unpacked')
-      assert.isTrue(entries.includes('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'))
-      assert.isTrue(entries.includes('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'))
-      assert.isTrue(entries.includes('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'))
+      assert.isTrue(entries.includes('chunk.1'))
+      assert.isTrue(entries.includes('chunk.2'))
+      assert.isTrue(entries.includes('chunk.3'))
+      const chunkDigest1 = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      assert.equal(chunkDigest1, 'sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5')
+      const chunkDigest2 = await core.checksumFile(path.join(outdir, 'chunk.2'), 'sha1')
+      assert.equal(chunkDigest2, 'sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603')
+      const chunkDigest3 = await core.checksumFile(path.join(outdir, 'chunk.3'), 'sha1')
+      assert.equal(chunkDigest3, 'sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576')
     })
 
-    it('should create an encrypted pack with one part', async function () {
+    it('should create an encrypted pack with one chunk', async function () {
       const { master1, master2 } = core.generateMasterKeys()
-      const parts = [
+      const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
@@ -144,27 +156,22 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
-      assert.equal(results.offsets.size, 1)
-      assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
+      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      assert.equal(digest, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackPartsEncrypted(packfile, outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })
       assert.equal(entries.length, 1, 'one file unpacked')
       assert.isTrue(entries[0].isFile())
-      assert.equal(entries[0].name, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
-      // compare file contents for extra assurance
-      const originalBuf = fs.readFileSync(parts[0].path)
-      const partfileBuf = fs.readFileSync(path.join(outdir, entries[0].name))
-      assert.isTrue(originalBuf.equals(partfileBuf),
-        'decrytped part file equal to original')
+      assert.equal(entries[0].name, 'chunk.1')
+      const chunkDigest = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      assert.equal(chunkDigest, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
     })
 
-    it('should create an encrypted pack with multiple parts', async function () {
+    it('should create an encrypted pack with multiple chunks', async function () {
       const { master1, master2 } = core.generateMasterKeys()
-      const parts = [
+      const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
@@ -182,26 +189,28 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
-      assert.equal(results.offsets.size, 3)
-      assert.equal(results.offsets.get('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'), 0)
-      assert.equal(results.offsets.get('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'), 1)
-      assert.equal(results.offsets.get('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'), 2)
+      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      assert.equal(digest, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackPartsEncrypted(packfile, outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
       const entries = fs.readdirSync(outdir)
-      assert.equal(entries.length, 3, 'three files unpacked')
-      assert.isTrue(entries.includes('sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5'))
-      assert.isTrue(entries.includes('sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603'))
-      assert.isTrue(entries.includes('sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576'))
+      assert.equal(entries.length, 3, 'three chunks unpacked')
+      assert.isTrue(entries.includes('chunk.1'))
+      assert.isTrue(entries.includes('chunk.2'))
+      assert.isTrue(entries.includes('chunk.3'))
+      const chunkDigest1 = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      assert.equal(chunkDigest1, 'sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5')
+      const chunkDigest2 = await core.checksumFile(path.join(outdir, 'chunk.2'), 'sha1')
+      assert.equal(chunkDigest2, 'sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603')
+      const chunkDigest3 = await core.checksumFile(path.join(outdir, 'chunk.3'), 'sha1')
+      assert.equal(chunkDigest3, 'sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576')
     })
 
     it('should create an encrypted pack for multiple files', async function () {
       // two different files, and one larger than the stream buffer size
       const { master1, master2 } = core.generateMasterKeys()
-      const parts = [
+      const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
@@ -214,18 +223,19 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const results = await core.packPartsEncrypted(parts, packfile, master1, master2)
-      assert.equal(results.hash, 'sha256-5b1d0c1cb9e47828e0bb84ba489f1cf1cab0db63bb07f2baaaacbfd63c12fc60')
-      assert.equal(results.offsets.size, 2)
-      assert.equal(results.offsets.get('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'), 0)
-      assert.equal(results.offsets.get('sha1-4c009e44fe5794df0b1f828f2a8c868e66644964'), 1)
+      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      assert.equal(digest, 'sha256-5b1d0c1cb9e47828e0bb84ba489f1cf1cab0db63bb07f2baaaacbfd63c12fc60')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackPartsEncrypted(packfile, outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
       const entries = fs.readdirSync(outdir)
-      assert.equal(entries.length, 2, 'two files unpacked')
-      assert.isTrue(entries.includes('sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96'))
-      assert.isTrue(entries.includes('sha1-4c009e44fe5794df0b1f828f2a8c868e66644964'))
+      assert.equal(entries.length, 2, 'two chunks unpacked')
+      assert.isTrue(entries.includes('chunk.1'))
+      assert.isTrue(entries.includes('chunk.2'))
+      const chunkDigest1 = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      assert.equal(chunkDigest1, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
+      const chunkDigest2 = await core.checksumFile(path.join(outdir, 'chunk.2'), 'sha1')
+      assert.equal(chunkDigest2, 'sha1-4c009e44fe5794df0b1f828f2a8c868e66644964')
     })
   })
 })

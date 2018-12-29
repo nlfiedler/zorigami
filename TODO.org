@@ -12,11 +12,11 @@
 **** rsync, rolling checksum, splitting notes
 ***** https://github.com/perkeep/perkeep/blob/master/internal/rollsum/rollsum.go
 ***** https://github.com/apenwarr/bup/blob/master/lib/bup/bupsplit.c
-*** TODO Look into the chunk deduplication approaches
+*** DONE Look into the chunk deduplication approaches
 **** DONE Design schema around storing files as chunks
 ***** small files are a single chunk
 ***** large files are split into chunks using CDC
-**** TODO Change packing implementation to work with chunks
+**** DONE Change packing implementation to work with chunks
 ***** parts have SHA256 checksum versus SHA1
 ***** part checksums are known in advance, no need to calculate them
 **** DONE Look into "content defined chunking" algorithms
@@ -58,9 +58,9 @@
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
 ** Phase 4
+*** TODO Implement SFTP protocol
+**** https://github.com/jyu213/ssh2-sftp-client
 *** TODO Use this to replace =replicaz= by persisting over SFTP
-**** Need to implement SFTP protocol
-***** https://github.com/jyu213/ssh2-sftp-client
 *** TODO Design the cloud interface code to be service agnostic
 *** TODO Store database in a bucket named after the "computer UUID"
 *** TODO Store pack files in Google Cloud Storage
