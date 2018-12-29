@@ -30,8 +30,8 @@
 ***** does not have a license?
 ***** uses a very old fingerprinting algorithm
 **** c.f. https://restic.net/blog/2015-09-12/restic-foundation1-cdc
-*** TODO Add content-defined chunking functions
-*** TODO Write function to assemble chunks back into original file
+*** DONE Add content-defined chunking functions
+*** DONE Write function to assemble chunks back into original file
 *** TODO Introduce logging and replace =console= calls with logger
 *** TODO Introduce config library for configuring different environments
 *** TODO Introduce pouchdb and code for reading/writing data

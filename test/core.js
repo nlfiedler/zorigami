@@ -138,12 +138,22 @@ describe('Core Functionality', function () {
       assert.isTrue(entries.includes('chunk.1'))
       assert.isTrue(entries.includes('chunk.2'))
       assert.isTrue(entries.includes('chunk.3'))
-      const chunkDigest1 = await core.checksumFile(path.join(outdir, 'chunk.1'), 'sha1')
+      const chunkFiles = [
+        path.join(outdir, 'chunk.1'),
+        path.join(outdir, 'chunk.2'),
+        path.join(outdir, 'chunk.3')
+      ]
+      const chunkDigest1 = await core.checksumFile(chunkFiles[0], 'sha1')
       assert.equal(chunkDigest1, 'sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5')
-      const chunkDigest2 = await core.checksumFile(path.join(outdir, 'chunk.2'), 'sha1')
+      const chunkDigest2 = await core.checksumFile(chunkFiles[1], 'sha1')
       assert.equal(chunkDigest2, 'sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603')
-      const chunkDigest3 = await core.checksumFile(path.join(outdir, 'chunk.3'), 'sha1')
+      const chunkDigest3 = await core.checksumFile(chunkFiles[2], 'sha1')
       assert.equal(chunkDigest3, 'sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576')
+      // test reassembling the file again
+      const outfile = path.join(outdir, 'lorem-ipsum.txt')
+      await core.assembleChunks(chunkFiles, outfile)
+      const chunkDigestN = await core.checksumFile(outfile, 'sha1')
+      assert.equal(chunkDigestN, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
     })
 
     it('should create an encrypted pack with one chunk', async function () {
