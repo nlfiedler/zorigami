@@ -238,4 +238,21 @@ describe('Core Functionality', function () {
       assert.equal(chunkDigest2, 'sha1-4c009e44fe5794df0b1f828f2a8c868e66644964')
     })
   })
+
+  describe('file chunking', function () {
+    it('should find chunk boundaries', async function () {
+      const infile = './test/fixtures/SekienAkashita.jpg'
+      const results = await core.findFileChunks(infile, 32768)
+      assert.equal(results.length, 3)
+      assert.equal(results[0].hash.toString('hex'), '5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d')
+      assert.equal(results[0].offset, 0)
+      assert.equal(results[0].size, 32857)
+      assert.equal(results[1].hash.toString('hex'), '13f6a4c6d42df2b76c138c13e86e1379c203445055c2b5f043a5f6c291fa520d')
+      assert.equal(results[1].offset, 32857)
+      assert.equal(results[1].size, 16408)
+      assert.equal(results[2].hash.toString('hex'), '0fe7305ba21a5a5ca9f89962c5a6f3e29cd3e2b36f00e565858e0012e5f8df36')
+      assert.equal(results[2].offset, 49265)
+      assert.equal(results[2].size, 60201)
+    })
+  })
 })

@@ -116,6 +116,7 @@ shifting.
     - cloud storage type (e.g. "nearline")
     - cloud service region (e.g. `us-west1`)
     - sftp host and credentials, if any
+    - local path for local backup, if any
     - local path to cloud service credentials file
     - frequency with which to perform backups (hourly, daily, weekly, monthly)
     - time ranges in which to upload snapshots
@@ -152,9 +153,9 @@ shifting.
         + entry name
 * file records
     - key: `file/` + SHA256 at time of snapshot (with "sha256-" prefix)
-    - length: size of file in bytes (0 if `changed`)
+    - length: size of file in bytes (absent if `changed`)
     - chunks: (absent if `changed`)
-        + offset: start of range in large file for this chunk
+        + offset: file position for this chunk
         + chunk SHA256
     - changed: SHA256 at time of backup, if different from key
 * chunk records
@@ -235,6 +236,16 @@ points, and then save only the changed chunks of the large file. However, this
 would require having the original file on hand to compute the same checksums.
 The advantage of such an approach would be to deduplicate chunks within a file,
 and handle shifting file contents.
+
+#### Duplicate chunk detection
+
+The [datproject/rabin](https://github.com/datproject/rabin) project is ISC
+licensed (according to the `package.json`) and is easy to use. It works for
+small and large chunk sizes. However, it is slow compared to the FastCDC
+implementation in
+[ronomon/deduplication](https://github.com/ronomon/deduplication) which has the
+advantage of being actively maintained. The drawback of this package is that a
+working buffer of fairly large size must be allocated.
 
 #### Uploading Packs
 
