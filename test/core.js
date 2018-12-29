@@ -4,7 +4,7 @@
 const { assert } = require('chai')
 const { describe, it } = require('mocha')
 const crypto = require('crypto')
-const core = require('../lib/core')
+const core = require('lib/core')
 const fs = require('fs')
 const path = require('path')
 const tmp = require('tmp')

@@ -1,25 +1,14 @@
+//
+// Copyright (c) 2018 Nathan Fiedler
+//
 const createError = require('http-errors')
 const express = require('express')
 const path = require('path')
 const cookieParser = require('cookie-parser')
-const logger = require('morgan')
-const config = require('config')
-const winston = require('winston')
+const morgan = require('morgan')
+require('lib/logging')
 
-// Configure the logging not related to HTTP, which is handled using morgan.
-winston.exitOnError = false
-winston.level = config.get('logging.level')
-if (config.has('logging.file')) {
-  const filename = config.get('logging.file')
-  winston.add(new winston.transports.File({
-    filename,
-    maxsize: 1048576,
-    maxFiles: 4
-  }))
-  winston.remove(new winston.transports.Console())
-}
-
-const indexRouter = require('./routes/index')
+const indexRouter = require('routes/index')
 
 const app = express()
 
@@ -27,7 +16,7 @@ const app = express()
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'ejs')
 
-app.use(logger('dev'))
+app.use(morgan('dev'))
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 app.use(cookieParser())

@@ -1,0 +1,14 @@
+{
+  "database": {
+    "path": "test/tmp/database/leveldb"
+  },
+  "logging": {
+    "level": "debug",
+    "file": "test/tmp/log.txt"
+  },
+  "morgan": {
+    "logger": {
+      "logPath": "test/tmp"
+    }
+  }
+}

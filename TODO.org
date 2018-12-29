@@ -34,10 +34,7 @@
 *** DONE Write function to assemble chunks back into original file
 *** DONE Introduce logging and replace =console= calls with logger
 *** DONE Introduce config library for configuring different environments
-*** TODO Introduce pouchdb and code for reading/writing data
-**** TODO Store the ~encryption~ record in PouchDB
-*** TODO Implement a "local disk" storage engine for testing
-**** Can also be used for backing up to an attached disk
+*** DONE Introduce pouchdb and code for reading/writing data
 *** TODO Write the logic for the "engine"
 **** TODO Produce a ~working~ snapshot of the dataset
 **** TODO Detect symbolic links and store their reference
@@ -47,6 +44,9 @@
 **** TODO Compute the difference from the previous snapshot
 **** TODO Produce and upload pack files containing new/changed files
 ***** TODO Split large files across packs
+**** TODO Store the ~encryption~ record in PouchDB
+*** TODO Implement a "local disk" storage engine for testing
+**** Can also be used for backing up to an attached disk
 *** TODO Update the architecture and data model in =NOTES.md=
 ** Phase 3
 *** TODO Introduce GraphQL backend and schema

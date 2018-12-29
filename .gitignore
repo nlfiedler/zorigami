@@ -23,3 +23,7 @@ node_modules/
 
 # dotenv environment variables file
 .env
+
+# temporary data
+tmp
+test/tmp
