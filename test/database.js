@@ -3,12 +3,6 @@
 //
 const { assert } = require('chai')
 const { before, describe, it, run } = require('mocha')
-const fs = require('fs-extra')
-const config = require('config')
-
-// clean up from previous test runs before starting the server
-const dbPath = config.get('database.path')
-fs.removeSync(dbPath)
 const database = require('lib/database')
 
 //
@@ -18,7 +12,7 @@ const database = require('lib/database')
 setTimeout(() => {
   describe('Database Functionality', () => {
     before(async () => {
-      await database.initDatabase()
+      await database.clearDatabase()
     })
 
     describe('basic operation', () => {

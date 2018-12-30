@@ -36,6 +36,7 @@
 *** DONE Introduce config library for configuring different environments
 *** DONE Introduce pouchdb and code for reading/writing data
 *** TODO Write the logic for the "engine"
+**** DONE Store the ~encryption~ record in PouchDB
 **** TODO Produce a ~working~ snapshot of the dataset
 **** TODO Detect symbolic links and store their reference
 - Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
@@ -44,7 +45,6 @@
 **** TODO Compute the difference from the previous snapshot
 **** TODO Produce and upload pack files containing new/changed files
 ***** TODO Split large files across packs
-**** TODO Store the ~encryption~ record in PouchDB
 *** TODO Implement a "local disk" storage engine for testing
 **** Can also be used for backing up to an attached disk
 *** TODO Update the architecture and data model in =NOTES.md=
