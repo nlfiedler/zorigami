@@ -111,20 +111,23 @@ shifting.
     - host name
     - user name
     - computer UUID
-    - latest snapshot
-    - cloud service provider (e.g. `sftp`, `aws`, `gcp`)
-    - cloud storage type (e.g. "nearline")
-    - cloud service region (e.g. `us-west1`)
-    - sftp host and credentials, if any
-    - local path for local backup, if any
-    - local path to cloud service credentials file
-    - frequency with which to perform backups (hourly, daily, weekly, monthly)
-    - time ranges in which to upload snapshots
-    - preferred size of pack files (in MB)
+    - default cloud service provider (e.g. `sftp`, `aws`, `gcp`)
+    - default cloud storage type (e.g. "nearline")
+    - default cloud service region (e.g. `us-west1`)
+    - default sftp host and credentials, if any
+    - default local path for local backup, if any
+    - default local path to cloud service credentials file
+    - default frequency with which to perform backups (hourly, daily, weekly, monthly)
+    - default time ranges in which to upload snapshots
+    - default preferred size of pack files (in MB)
     - default ignore file patterns (applies to all datasets)
     - list of datasets:
         + root local path
+        + latest snapshot
+        + schedule/frequency overrides
         + ignore overrides
+        + pack size overrides
+        + storage overrides (e.g. `local` vs `aws`)
 * encryption record
     - database key: `encryption`
     - random salt (16 bytes)
@@ -137,10 +140,7 @@ shifting.
     - start_time: when snapshot started
     - end_time: when snapshot finished
     - num_files: number of files in this snapshot
-    - list of root tree entries (sorted by path)
-        + base local path
-        + tree SHA1
-    - deleted (present if this snapshot is marked for removal)
+    - root tree reference
 * tree records
     - key: `tree/` + SHA1 of tree data (with "sha1-" prefix)
     - entries: (sorted by name)
@@ -286,11 +286,10 @@ working buffer of fairly large size must be allocated.
 #### Garbage Collection
 
 * Automatic garbage collection:
-    - Find trees that are no longer referenced
+    - Remove tree and file records that are no longer referenced
     - Find pack files that are no longer referenced
-    - Remove the pack files from the remote side
-    - Remove unreachable tree records
-    - Find `pending` pack records and remove remote file
+    - Remove the pack files from the remote side, delete the record
+    - Find old `pending` pack records and remove remote file
 * Aggressive garbage collection
     - Retrieve pack files, remove stale entries, repack, upload
     - Remove the old pack files from the remote side

@@ -35,6 +35,9 @@
 *** DONE Introduce logging and replace =console= calls with logger
 *** DONE Introduce config library for configuring different environments
 *** DONE Introduce pouchdb and code for reading/writing data
+*** TODO Implement a "local disk" storage engine for testing
+**** Can also be used for backing up to an attached disk
+*** TODO Evaluate using TypeScript for the backend
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** TODO Produce a ~working~ snapshot of the dataset
@@ -44,9 +47,9 @@
 - Store the link value as the =checksum= in the tree (since there is no file)
 **** TODO Compute the difference from the previous snapshot
 **** TODO Produce and upload pack files containing new/changed files
+***** TODO Fill a queue of N file objects to allow fitting chunks to packs
+(but without having all files in memory at once, which could be many the first time)
 ***** TODO Split large files across packs
-*** TODO Implement a "local disk" storage engine for testing
-**** Can also be used for backing up to an attached disk
 *** TODO Update the architecture and data model in =NOTES.md=
 ** Phase 3
 *** TODO Introduce GraphQL backend and schema
@@ -64,6 +67,7 @@
 **** https://github.com/jyu213/ssh2-sftp-client
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Design the cloud interface code to be service agnostic
+**** Same basic plugin design as the stores
 *** TODO Store database in a bucket named after the "computer UUID"
 *** TODO Store pack files in Google Cloud Storage
 - https://github.com/googleapis/nodejs-storage/
@@ -74,8 +78,9 @@
 **** c.f. https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
 **** Offer user option to use "expedited" retrievals so they go faster
 
-*** TODO Automatically pruning backups more then N months old
+*** TODO Automatically prune backups more then N months old
 **** For Google and Amazon, anything older than 90 days is free to remove
+**** This would be a configuration setting, with defaults and path-specific
 * Electron App
 ** Phase N
 *** Create a system tray icon/widget
