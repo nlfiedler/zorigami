@@ -93,6 +93,7 @@ shifting.
     - number of entries (4 bytes)
     - entries:
         + byte length (4 bytes)
+        + SHA256 checksum (32 bytes)
         + data
     - compressed using gzip, if the result is smaller
     - name is SHA256 of everything above ++ `.pack`
@@ -164,9 +165,6 @@ shifting.
     - pack: SHA256 of pack
 * pack records
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
-    - map of SHA256 to chunk index
-        + SHA256 of chunk
-        + zero-based index into pack
     - remote bucket/vault name
     - remote archive identifier (e.g. AWS Glacier)
 
@@ -266,11 +264,12 @@ working buffer of fairly large size must be allocated.
 
 #### File Restore
 
-1. Use selected file SHA256 to look up list of chunks.
-1. Use pack SHA256 to find remote coordinates (bucket and object).
+1. Use selected file SHA256 to find list of chunks.
+1. For each chunk, look up the pack record to get bucket and object.
 1. Download pack and verify checksum to detect corruption.
 1. Extract the chunk of the file in the pack to a temporary file.
 1. Repeat for each chunk of the file (finding pack, downloading, extracting).
+1. Sort the chunks by the `offset` value from the file record.
 1. Reproduce the original file from the downloaded chunks.
 1. Apply ownership and mode values according to the tree object.
 

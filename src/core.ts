@@ -250,7 +250,7 @@ function decryptStream(input: stream.Readable, output: stream.Writable, key: Buf
  *
  * @param infile path of file to be processed.
  * @param algo name of digest algorithm (e.g. sha1, sha256).
- * @returns hex string of digest with "<algo>-" prefix.
+ * @returns hex string of digest with `algo` plus "-" prefix.
  */
 export function checksumFile(infile: string, algo: string): Promise<string> {
   const input = fs.createReadStream(infile)
@@ -325,7 +325,12 @@ export function decompressFile(infile: string, outfile: string) {
  * @param outfile path of output file.
  * @returns hex string of pack digest with prefix 'sha256-'.
  */
-export async function packChunks(chunks: Array<Chunk>, outfile: string): Promise<string> {
+export async function packChunks(chunks: Chunk[], outfile: string): Promise<string> {
+  for (let chunk of chunks) {
+    if (chunk.hash.length !== 32) {
+      throw new Error('chunk has invalid hash length')
+    }
+  }
   const writeAndHash = async (data: Buffer, fd: number, hash: crypto.Hash) => {
     await fwrite(fd, data)
     hash.update(data)
@@ -341,11 +346,12 @@ export async function packChunks(chunks: Array<Chunk>, outfile: string): Promise
   // Write each of the chunks into the pack, hashing the overall pack.
   const buffer = Buffer.allocUnsafe(BUFFER_SIZE)
   const buf4 = Buffer.allocUnsafe(4)
-  for (let { path, offset, size } of chunks) {
-    buf4.writeUInt32BE(size, 0)
+  for (let chunk of chunks) {
+    buf4.writeUInt32BE(chunk.size, 0)
     await writeAndHash(buf4, outfd, packHash)
-    const infd = await fopen(path, 'r')
-    await copyBytes(infd, offset, buffer, outfd, size, (data: Buffer) => {
+    await writeAndHash(chunk.hash, outfd, packHash)
+    const infd = await fopen(chunk.path, 'r')
+    await copyBytes(infd, chunk.offset, buffer, outfd, chunk.size, (data: Buffer) => {
       packHash.update(data)
     })
     fs.closeSync(infd)
@@ -377,15 +383,14 @@ async function maybeCompress(infile: string) {
 
 /**
  * Extract the chunks from the given pack file, writing them to the output
- * directory, with the names being the given prefix plus a numeric suffix
- * extension, starting at one and monotonically increasing (e.g. prefix.1,
- * prefix.2, etc). If the file is compressed, it will be decompressed in place.
+ * directory, with the names being the original SHA256 of the chunk (with a
+ * "sha256-" prefix). If the file is compressed, it will be decompressed in
+ * place.
  *
  * @param infile path of pack file to read.
- * @param prefix prefix for output file names.
  * @param outdir path to which chunks are written.
  */
-export async function unpackChunks(infile: string, prefix: string, outdir: string) {
+export async function unpackChunks(infile: string, outdir: string) {
   await maybeDecompress(infile)
   const infd = await fopen(infile, 'r')
   const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
@@ -400,7 +405,7 @@ export async function unpackChunks(infile: string, prefix: string, outdir: strin
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
-    await unpackChunksV1(infd, prefix, outdir)
+    await unpackChunksV1(infd, outdir)
     fs.closeSync(infd)
   } else {
     fs.closeSync(infd)
@@ -431,11 +436,10 @@ async function maybeDecompress(infile: string) {
 /**
  * Unpack the chunks to a directory for version 1 of the pack file.
  *
- * @param {number} infd input file descriptor.
- * @param {string} prefix prefix for output file names.
- * @param {string} outdir directory to which chunks are written.
+ * @param infd input file descriptor.
+ * @param outdir directory to which chunks are written.
  */
-async function unpackChunksV1(infd: number, prefix: string, outdir: string) {
+async function unpackChunksV1(infd: number, outdir: string) {
   const buffer = Buffer.allocUnsafe(BUFFER_SIZE)
   let fpos = PACK_HEADER_SIZE
   await readBytes(infd, buffer, 0, 4, fpos)
@@ -443,16 +447,16 @@ async function unpackChunksV1(infd: number, prefix: string, outdir: string) {
   const count = buffer.readUInt32BE(0)
   let index = 0
   while (index < count) {
-    await readBytes(infd, buffer, 0, 4, fpos)
-    fpos += 4
+    // read chunk size (4 bytes) and sha256 (32 bytes)
+    await readBytes(infd, buffer, 0, 36, fpos)
+    fpos += 36
     const chunkSize = buffer.readUInt32BE(0)
-    const outfile = tmp.fileSync({ dir: outdir }).name
+    const fname = 'sha256-' + buffer.slice(4, 36).toString('hex')
+    const outfile = path.join(outdir, fname)
     const outfd = await fopen(outfile, 'w')
     await copyBytes(infd, fpos, buffer, outfd, chunkSize)
     fpos += chunkSize
     fs.closeSync(outfd)
-    const fname = `${prefix}.${index + 1}`
-    fs.renameSync(outfile, path.join(outdir, fname))
     index++
   }
 }
@@ -504,16 +508,14 @@ export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys
 
 /**
  * Extract the chunks from the given encrypted pack file, writing them to the
- * output directory, with the names being the given prefix plus a numeric suffix
- * extension, starting at one and monotonically increasing (e.g. prefix.1,
- * prefix.2, etc). The two master keys are used to decrypt the pack file.
+ * output directory, with the names being the original SHA256 of the chunk (with
+ * a "sha256-" prefix). The two master keys are used to decrypt the pack file.
  *
  * @param infile path of encrypted pack file.
- * @param prefix prefix for output file names.
  * @param outdir path to contain chunk files.
  * @param keys master encryption keys.
  */
-export async function unpackChunksEncrypted(infile: string, prefix: string, outdir: string, keys: MasterKeys) {
+export async function unpackChunksEncrypted(infile: string, outdir: string, keys: MasterKeys) {
   const infd = await fopen(infile, 'r')
   const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
   await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
@@ -527,7 +529,7 @@ export async function unpackChunksEncrypted(infile: string, prefix: string, outd
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
-    await unpackChunksEncryptedV1(infd, prefix, outdir, keys)
+    await unpackChunksEncryptedV1(infd, outdir, keys)
   } else {
     fs.closeSync(infd)
     throw new Error(`pack version unsupported: ${version}`)
@@ -538,11 +540,10 @@ export async function unpackChunksEncrypted(infile: string, prefix: string, outd
  * Unpack the chunks from an encrypted (version 1) pack file.
  *
  * @param infd input file descriptor.
- * @param prefix prefix for output file names.
  * @param outdir path to contain chunk files.
  * @param keys master encryption keys.
  */
-async function unpackChunksEncryptedV1(infd: number, prefix: string, outdir: string, keys: MasterKeys) {
+async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: MasterKeys) {
   // read the encrypted pack file header
   const header = Buffer.allocUnsafe(96)
   let fpos = PACK_HEADER_SIZE
@@ -570,7 +571,7 @@ async function unpackChunksEncryptedV1(infd: number, prefix: string, outdir: str
     const input = fs.createReadStream(null, { fd: infd, start: fpos })
     const output = fs.createWriteStream(packfile)
     await decryptStream(input, output, sessionKey, sessionIV)
-    await unpackChunks(packfile, prefix, outdir)
+    await unpackChunks(packfile, outdir)
     fs.unlinkSync(packfile)
   } else {
     throw new Error('stored HMAC and computed HMAC do not match')
