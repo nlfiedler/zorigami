@@ -1,13 +1,13 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-const winston = require('winston')
-const config = require('config')
+import winston = require('winston')
+import config = require('config')
 
 // Configure the logging not related to HTTP, which is handled using morgan.
 const transports = []
 if (config.has('logging.file')) {
-  const filename = config.get('logging.file')
+  const filename: string = config.get('logging.file')
   transports.push(new winston.transports.File({
     filename,
     maxsize: 1048576,
@@ -29,4 +29,4 @@ const logger = winston.createLogger({
   transports
 })
 
-module.exports = logger
+export = logger

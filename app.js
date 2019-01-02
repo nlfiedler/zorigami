@@ -6,9 +6,9 @@ const express = require('express')
 const path = require('path')
 const cookieParser = require('cookie-parser')
 const morgan = require('morgan')
-require('lib/logging')
+require('./dist/logging')
 
-const indexRouter = require('routes/index')
+const indexRouter = require('./routes/index')
 
 const app = express()
 

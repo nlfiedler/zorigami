@@ -35,9 +35,32 @@
 *** DONE Introduce logging and replace =console= calls with logger
 *** DONE Introduce config library for configuring different environments
 *** DONE Introduce pouchdb and code for reading/writing data
+*** DONE Rewrite JavaScript code using TypeScript
+**** c.f. https://www.typescriptlang.org/docs/handbook/migrating-from-javascript.html
+**** DONE Read about using winston with TypeScript
+***** it has the =index.d.ts= file, so it supports TypeScript
+**** DONE Set up the =tsconfig.json=
+***** DONE Source code lives in =src=
+***** DONE Compiled code goes to =dist=
+**** DONE Define a type to hold the master keys (Object doesn't type check)
+**** DONE Set up the test framework: [[https://tutorialedge.net/typescript/testing-typescript-api-with-mocha-chai/][testing-typescript-api-with-mocha-chai]]
+**** DONE Set up gulp to build the code
+**** DONE Convert one =core= function at a time, writing tests for each
+**** DONE Install type definitions for libraries, e.g. =npm i -D @types/jquery=
+***** DONE chai
+***** DONE fs-extra
+***** DONE mocha
+***** DONE node
+***** DONE pouchdb
+***** DONE tmp
+***** DONE uuid
+***** DONE config
+**** DONE Remove the =NODE_PATH= setting
+*** TODO Consider if =Chunk= should have its own module, and more functions
+*** TODO Consider if =database= module should define a =Document= type
 *** TODO Implement a "local disk" storage engine for testing
+**** TODO Decide if pack files need more metadata redundancy
 **** Can also be used for backing up to an attached disk
-*** TODO Evaluate using TypeScript for the backend
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** TODO Produce a ~working~ snapshot of the dataset
@@ -52,6 +75,13 @@
 ***** TODO Split large files across packs
 *** TODO Update the architecture and data model in =NOTES.md=
 ** Phase 3
+*** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter#typescript-node-starter][guide]] to get Node set up with TypeScript
+***** TODO Look more at how https://github.com/TypeStrong/ts-node can be used
+***** TODO Is rewriting =app.js= worthwhile or necessary?
+***** TODO Translate the routes
+*** TODO Maybe rewrite =gulpfile.ts= in TypeScript
+***** c.f. https://github.com/TypeStrong/ts-node
+***** https://github.com/vvakame/typescript-project-sample/blob/master/gulpfile.ts
 *** TODO Introduce GraphQL backend and schema
 **** TODO Define the schema
 **** TODO Write a simple resolver

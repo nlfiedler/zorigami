@@ -1,10 +1,11 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-const { assert } = require('chai')
-const { before, describe, it, run } = require('mocha')
-const database = require('lib/database')
-const engine = require('lib/engine')
+import * as chai from 'chai'
+import * as database from '../src/database'
+import * as engine from '../src/engine'
+
+const assert = chai.assert
 
 //
 // Give the database a chance to initialize the database asynchronously.

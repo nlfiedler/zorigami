@@ -4,8 +4,8 @@
   "description": "Node.js online backup application",
   "main": "app.js",
   "scripts": {
-    "start": "NODE_PATH=. node ./bin/www",
-    "test": "NODE_CONFIG_ENV=test NODE_PATH=. mocha --delay"
+    "start": "node ./bin/www",
+    "test": "NODE_CONFIG_ENV=test mocha --delay -r ts-node/register test/*.ts"
   },
   "repository": {
     "type": "git",
@@ -19,7 +19,7 @@
   "license": "UNLICENSED",
   "homepage": "https://bitbucket.org/nlfiedler/zorigami/",
   "dependencies": {
-    "@ronomon/deduplication": "^2.0.4",
+    "@ronomon/deduplication": "github:nlfiedler/deduplication#types",
     "config": "^3.0.1",
     "cookie-parser": "~1.4.3",
     "debug": "~4.1.0",
@@ -35,9 +35,20 @@
     "winston": "^3.1.0"
   },
   "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/config": "0.0.34",
+    "@types/fs-extra": "^5.0.4",
+    "@types/mocha": "^5.2.5",
+    "@types/node": "^10.12.18",
+    "@types/pouchdb": "^6.3.2",
+    "@types/tmp": "0.0.33",
+    "@types/uuid": "^3.4.4",
     "chai": "^4.2.0",
     "gulp": "^4.0.0",
     "gulp-nodemon": "^2.4.2",
-    "mocha": "^5.2.0"
+    "gulp-typescript": "^5.0.0",
+    "mocha": "^5.2.0",
+    "ts-node": "^7.0.1",
+    "typescript": "^3.2.2"
   }
 }

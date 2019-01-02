@@ -1,21 +1,21 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-const config = require('config')
-const fs = require('fs-extra')
-const logger = require('lib/logging')
-const PouchDB = require('pouchdb')
+import config = require('config')
+import fs = require('fs-extra')
+import logger = require('./logging')
+import PouchDB = require('pouchdb')
 
-const dbPath = config.get('database.path')
+const dbPath: string = config.get('database.path')
 fs.ensureDirSync(dbPath)
 const db = new PouchDB(dbPath)
 
 /**
  * Ensure the database is prepared with the necessary design documents.
  *
- * @returns {Promise<boolean>} resolves to true.
+ * @returns always returns true.
  */
-async function initDatabase () {
+export async function initDatabase(): Promise<boolean> {
   // let indexCreated = await createIndices(assetsDefinition)
   // if (indexCreated) {
   //   logger.info('database indices created')
@@ -28,8 +28,10 @@ async function initDatabase () {
 
 /**
  * Remove all documents from the database and initialize again.
+ *
+ * @returns whatever `initDatabase` returns.
  */
-async function clearDatabase () {
+export async function clearDatabase(): Promise<boolean> {
   let allDocs = await db.allDocs({ include_docs: true })
   let promises = allDocs.rows.map((row) => db.remove(row.doc))
   let results = await Promise.all(promises)
@@ -43,11 +45,11 @@ async function clearDatabase () {
 /**
  * Insert or update a document in the database.
  *
- * @param {object} doc new document
+ * @param doc new document
  * @param {string} doc._id document identifier
- * @returns {Promise} resolves to false if inserted, true if updated.
+ * @returns false if inserted, true if updated.
  */
-async function updateDocument (doc) {
+export async function updateDocument(doc: any): Promise<boolean> {
   try {
     let oldDoc = await db.get(doc._id)
     await db.put({ ...doc, _rev: oldDoc._rev })
@@ -69,9 +71,9 @@ async function updateDocument (doc) {
  * equals 'Buffer', convert the field to a Buffer whose data is that of the
  * 'data' field.
  *
- * @param {Object} doc document fetched from database, modified in place.
+ * @param doc document fetched from database, modified in place.
  */
-function convertBuffers (doc) {
+function convertBuffers(doc: any) {
   for (let prop in doc) {
     if (doc[prop].hasOwnProperty('type')) {
       if (doc[prop].type === 'Buffer') {
@@ -85,10 +87,10 @@ function convertBuffers (doc) {
  * Retrieve the document with the given identifier. Automatically converts
  * fields of certain types (e.g. Buffer) for convenience.
  *
- * @param {string} docId identifier of document to retrieve.
- * @returns {Promise<Object>} resolves to document object, or null if not found.
+ * @param docId identifier of document to retrieve.
+ * @returns document object, or null if not found.
  */
-async function fetchDocument (docId) {
+export async function fetchDocument(docId: string): Promise<any> {
   try {
     const doc = await db.get(docId)
     convertBuffers(doc)
@@ -100,11 +102,4 @@ async function fetchDocument (docId) {
       throw err
     }
   }
-}
-
-module.exports = {
-  initDatabase,
-  clearDatabase,
-  fetchDocument,
-  updateDocument
 }

@@ -1,9 +1,10 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-const { assert } = require('chai')
-const { before, describe, it, run } = require('mocha')
-const database = require('lib/database')
+import * as chai from 'chai'
+import * as database from '../src/database'
+
+const assert = chai.assert
 
 //
 // Give the database a chance to initialize the database asynchronously.
@@ -27,8 +28,8 @@ setTimeout(() => {
         }
         let wasUpdate = await database.updateDocument(input)
         assert.isFalse(wasUpdate, 'created a new document')
-        input.friend = 'Homura'
-        wasUpdate = await database.updateDocument(input)
+        const update = Object.assign({}, {friend: 'Homura'}, input)
+        wasUpdate = await database.updateDocument(update)
         assert.isTrue(wasUpdate, 'updated an old document')
         result = await database.fetchDocument('cafebabe')
         assert.equal(result.friend, 'Homura')

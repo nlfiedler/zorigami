@@ -1,13 +1,14 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-const { assert } = require('chai')
-const { describe, it } = require('mocha')
-const crypto = require('crypto')
-const core = require('lib/core')
-const fs = require('fs')
-const path = require('path')
-const tmp = require('tmp')
+import * as chai from 'chai'
+import * as core from '../src/core'
+import crypto = require('crypto')
+import fs = require('fs')
+import path = require('path')
+import * as tmp from 'tmp'
+
+const assert = chai.assert
 
 describe('Core Functionality', function () {
   describe('unique identifier', function () {
@@ -30,9 +31,8 @@ describe('Core Functionality', function () {
     it('should encrypt and decrypt successfully', function () {
       const password = 'keyboard cat'
       const expected = core.generateMasterKeys()
-      const { salt, iv, hmac, encrypted } =
-        core.newMasterEncryptionData(password, expected.master1, expected.master2)
-      const actual = core.decryptMasterKeys(salt, password, iv, encrypted, hmac)
+      const encdata = core.newMasterEncryptionData(password, expected)
+      const actual = core.decryptMasterKeys(encdata, password)
       assert.isTrue(expected.master1.equals(actual.master1))
       assert.isTrue(expected.master2.equals(actual.master2))
     })
@@ -45,13 +45,13 @@ describe('Core Functionality', function () {
       const iv = Buffer.alloc(16)
       crypto.randomFillSync(iv)
       const infile = './test/fixtures/lorem-ipsum.txt'
-      const encrypted = tmp.fileSync().name
+      const encrypted = tmp.fileSync(undefined).name
       await core.encryptFile(infile, encrypted, key, iv)
       const originalBuf = fs.readFileSync(infile)
       const encryptBuf = fs.readFileSync(encrypted)
       assert.isFalse(originalBuf.equals(encryptBuf),
         'encrypted not equal to original')
-      const decrypted = tmp.fileSync().name
+      const decrypted = tmp.fileSync(undefined).name
       await core.decryptFile(encrypted, decrypted, key, iv)
       const decryptBuf = fs.readFileSync(decrypted)
       assert.isTrue(originalBuf.equals(decryptBuf),
@@ -72,13 +72,13 @@ describe('Core Functionality', function () {
   describe('file compression', function () {
     it('should compress and decompress files', async function () {
       const infile = './test/fixtures/lorem-ipsum.txt'
-      const compressed = tmp.fileSync().name
+      const compressed = tmp.fileSync(undefined).name
       await core.compressFile(infile, compressed)
       const originalBuf = fs.readFileSync(infile)
       const compressBuf = fs.readFileSync(compressed)
       assert.isFalse(originalBuf.equals(compressBuf),
         'compressed not equal to original')
-      const decompressed = tmp.fileSync().name
+      const decompressed = tmp.fileSync(undefined).name
       await core.decompressFile(compressed, decompressed)
       const decompressBuf = fs.readFileSync(decompressed)
       assert.isTrue(originalBuf.equals(decompressBuf),
@@ -92,7 +92,7 @@ describe('Core Functionality', function () {
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
-          length: 3129
+          size: 3129
         }
       ]
       const packfile = tmp.fileSync().name
@@ -114,17 +114,17 @@ describe('Core Functionality', function () {
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
-          length: 1000
+          size: 1000
         },
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 1000,
-          length: 1000
+          size: 1000
         },
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 2000,
-          length: 1129
+          size: 1129
         }
       ]
       const packfile = tmp.fileSync().name
@@ -157,20 +157,20 @@ describe('Core Functionality', function () {
     })
 
     it('should create an encrypted pack with one chunk', async function () {
-      const { master1, master2 } = core.generateMasterKeys()
+      const keys = core.generateMasterKeys()
       const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
-          length: 3129
+          size: 3129
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
       assert.equal(digest, 'sha256-5c5ed2868c12085f9ef1ad33cd8e94f806a471eb593c5debe3f8410379739da9')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, keys)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })
       assert.equal(entries.length, 1, 'one file unpacked')
       assert.isTrue(entries[0].isFile())
@@ -180,30 +180,30 @@ describe('Core Functionality', function () {
     })
 
     it('should create an encrypted pack with multiple chunks', async function () {
-      const { master1, master2 } = core.generateMasterKeys()
+      const keys = core.generateMasterKeys()
       const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
-          length: 1000
+          size: 1000
         },
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 1000,
-          length: 1000
+          size: 1000
         },
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 2000,
-          length: 1129
+          size: 1129
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
       assert.equal(digest, 'sha256-66dd6914eaa84902d74109685af95a6651947a6d34aef0fec385b6092007bf95')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, keys)
       const entries = fs.readdirSync(outdir)
       assert.equal(entries.length, 3, 'three chunks unpacked')
       assert.isTrue(entries.includes('chunk.1'))
@@ -219,25 +219,25 @@ describe('Core Functionality', function () {
 
     it('should create an encrypted pack for multiple files', async function () {
       // two different files, and one larger than the stream buffer size
-      const { master1, master2 } = core.generateMasterKeys()
+      const keys = core.generateMasterKeys()
       const chunks = [
         {
           path: './test/fixtures/lorem-ipsum.txt',
           offset: 0,
-          length: 3129
+          size: 3129
         },
         {
           path: './test/fixtures/SekienAkashita.jpg',
           offset: 0,
-          length: 109466
+          size: 109466
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, master1, master2)
+      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
       assert.equal(digest, 'sha256-5b1d0c1cb9e47828e0bb84ba489f1cf1cab0db63bb07f2baaaacbfd63c12fc60')
       // verify unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, master1, master2)
+      await core.unpackChunksEncrypted(packfile, 'chunk', outdir, keys)
       const entries = fs.readdirSync(outdir)
       assert.equal(entries.length, 2, 'two chunks unpacked')
       assert.isTrue(entries.includes('chunk.1'))
