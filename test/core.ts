@@ -99,7 +99,7 @@ describe('Core Functionality', function () {
         assert.include(err.toString(), 'invalid hash length')
       })
     })
-  
+
     it('should create a pack with one chunk', async function () {
       const chunks = [
         {
@@ -112,7 +112,8 @@ describe('Core Functionality', function () {
       const packfile = tmp.fileSync().name
       const digest = await core.packChunks(chunks, packfile)
       assert.equal(digest, 'sha256-ba75dbf315348a3d869fc9cd7e7e0acef28e9de9a9490b2b2901efd700db8c0a')
-      // verify unpacking
+      // due to possible pack compression, we cannot verify the checksum of the pack file
+      // but, we can verify by unpacking the chunks again
       const outdir = tmp.dirSync().name
       await core.unpackChunks(packfile, outdir)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })

@@ -36,15 +36,6 @@ setTimeout(() => {
         assert.isTrue(keys2.master2.equals(keys1.master2), 'master2 keys match')
       })
     })
-
-    describe('storing pack files', () => {
-      it('should create and store pack files', async () => {
-        // TODO: create pack file
-        // TODO: configure and register a 'local' store
-        // TODO: invoke the store module to save the pack
-        // TODO: retrieve the pack file and verify match
-      })
-    })
   })
 
   run()

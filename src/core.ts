@@ -613,7 +613,7 @@ function hmacStream(input: stream.Readable, hmac: crypto.Hmac): Promise<Buffer> 
 async function readBytes(fd: number, buffer: Buffer, offset: number, length: number, fpos: number) {
   let count = 0
   while (count < length) {
-    const {bytesRead} = await fread(fd, buffer, offset + count, length - count, fpos)
+    const { bytesRead } = await fread(fd, buffer, offset + count, length - count, fpos)
     count += bytesRead
     fpos += bytesRead
   }
@@ -634,7 +634,7 @@ async function readBytes(fd: number, buffer: Buffer, offset: number, length: num
 async function copyBytes(infd: number, fpos: number, buffer: Buffer, outfd: number, length: number, cb?: Function) {
   let count = 0
   while (count < length) {
-    const {bytesRead} = await fread(infd, buffer, 0, Math.min(length - count, buffer.length), fpos)
+    const { bytesRead } = await fread(infd, buffer, 0, Math.min(length - count, buffer.length), fpos)
     count += bytesRead
     fpos += bytesRead
     const data = buffer.slice(0, bytesRead)
