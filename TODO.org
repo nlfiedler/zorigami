@@ -56,6 +56,47 @@
 ***** DONE uuid
 ***** DONE config
 **** DONE Remove the =NODE_PATH= setting
+*** DONE Find out average file size on macOS
+**** For ~nfiedler~ home directory:
+***** 330,592 total files
+***** 330,213 files under 4 MB
+***** average file size: 198 KB
+***** files 100 MB to 1 GB: 11
+***** files 1 GB to 10 GB: 4
+***** 3 largest files: 14, 14, 16 GB
+**** For ~p4nathan~ home directory:
+#+BEGIN_SRC shell
+$ gfind . -type f -fprintf /tmp/sizes '%k\n'
+
+$ awk '{ total += $1; count++ } END { print total/count }' /tmp/sizes
+580.741
+
+$ sort -n /tmp/sizes | uniq -c
+$ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
+#+END_SRC
+***** 145,051 total files
+***** 144,768 files under 4 MB
+***** average file size: 580 KB
+***** files 100 MB to 1 GB: 3
+***** files 1 GB to 10 GB: 9
+***** 3 largest files: 10, 17, 18 GB
+*** DONE Find out average file sizes in the shared data set
+**** =/zeniba/shared=
+***** 124,381 total files
+***** 122,354 files under 4 MB
+***** average file size: 2473 KB
+***** files 100 MB to 1 GB: 529
+***** files 1 GB to 10 GB: 16
+***** 3 largest files: 6, 6, 34 GB
+*** DONE Find out file sizes for LevelDB
+**** logs grow to 4 MB
+**** db files grow to 2 MB
+*** DONE Consider if PouchDB/LevelDB will be adequate for tracking 300,000 files
+**** DONE Try testing with some simple live data test (e.g. scan all files into the database)
+***** 33,028 file records ={_id/sha256, filepath, size}= yields 11 MB of LevelDB data
+***** 43,9xx file records ={_id/sha256, filepath, size}= yields 15 MB of LevelDB data
+***** runs in a few minutes
+**** 300,000 files would be at least 100 MB for database
 *** TODO Consider if =Chunk= should have its own module, and more functions
 *** TODO Consider if =database= module should define a =Document= type
 *** TODO Implement a "local disk" storage engine for testing
@@ -63,6 +104,18 @@
 **** Can also be used for backing up to an attached disk
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
+**** DONE Need a strategy for scanning file tree without blowing up
+***** Make the tree walker invoke the callback as a promise and =.then= walk subdirs
+***** Have the walker return a promise so we can take action when it is done
+***** Walking home directory results in various errors
+****** should have found 330,668 files, but only successfully stat'd 33,028
+****** error: no such file or directory
+****** error: permissions denied
+****** error: too many open files
+***** The ~too many open files~ error is causing the shortened results
+***** All of the errors seem to dump out at once
+**** TODO Use =bin/dbfiles.js= as a guide for the above ~tree walker~
+**** TODO Specifically exclude the database from the initial data set
 **** TODO Produce a ~working~ snapshot of the dataset
 **** TODO Detect symbolic links and store their reference
 - Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
@@ -73,6 +126,9 @@
 ***** TODO Fill a queue of N file objects to allow fitting chunks to packs
 (but without having all files in memory at once, which could be many the first time)
 ***** TODO Split large files across packs
+*** TODO Implement SFTP protocol
+**** https://github.com/jyu213/ssh2-sftp-client
+*** TODO Consider how to support deduplication across multiple computers
 *** TODO Update the architecture and data model in =NOTES.md=
 ** Phase 3
 *** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter#typescript-node-starter][guide]] to get Node set up with TypeScript
@@ -93,8 +149,6 @@
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
 ** Phase 4
-*** TODO Implement SFTP protocol
-**** https://github.com/jyu213/ssh2-sftp-client
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Design the cloud interface code to be service agnostic
 **** Same basic plugin design as the stores
@@ -102,6 +156,9 @@
 *** TODO Store pack files in Google Cloud Storage
 - https://github.com/googleapis/nodejs-storage/
 ** Phase 5
+*** TODO Consider storing xattrs in separate blobs (to deduplicate)
+**** TODO Keep the entries in sorted order with a deterministic format
+**** TODO Looks like xattrs tend to have a lot of zero bytes
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 *** TODO Store pack files in Amazon Glacier
@@ -113,7 +170,8 @@
 **** This would be a configuration setting, with defaults and path-specific
 * Electron App
 ** Phase N
-*** Create a system tray icon/widget
+*** TODO Write it in TypeScript
+*** TODO Create a system tray icon/widget
 **** Popup menu like Time Machine
 **** Show current status, last backup
 **** Action to open the app and examine snapshots
