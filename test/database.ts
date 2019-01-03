@@ -10,14 +10,14 @@ const assert = chai.assert
 // Give the database a chance to initialize the database asynchronously.
 // A timeout of zero is not sufficient, so this timing is fragile.
 //
-setTimeout(() => {
-  describe('Database Functionality', () => {
-    before(async () => {
+setTimeout(function () {
+  describe('Database Functionality', function () {
+    before(async function () {
       await database.clearDatabase()
     })
 
-    describe('basic operation', () => {
-      it('should insert and fetch a document', async () => {
+    describe('basic operation', function () {
+      it('should insert and fetch a document', async function () {
         let result = await database.fetchDocument('test1')
         assert.isNull(result, 'no document should return null')
         const input = {

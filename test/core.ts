@@ -93,7 +93,7 @@ describe('Core Functionality', function () {
         hash: Buffer.from('cafebabe', 'hex'),
         offset: 0,
         size: 0
-      }], 'foobar').then(() => {
+      }], 'foobar').then(function () {
         assert.fail('expected packChunks to reject invalid input')
       }).catch((err) => {
         assert.include(err.toString(), 'invalid hash length')

@@ -11,14 +11,14 @@ const assert = chai.assert
 // Give the database a chance to initialize the database asynchronously.
 // A timeout of zero is not sufficient, so this timing is fragile.
 //
-setTimeout(() => {
-  describe('Engine Functionality', () => {
-    before(async () => {
+setTimeout(function () {
+  describe('Engine Functionality', function () {
+    before(async function () {
       await database.clearDatabase()
     })
 
-    describe('basic operation', () => {
-      it('should generate master keys and save to database', async () => {
+    describe('basic operation', function () {
+      it('should generate master keys and save to database', async function () {
         // ensure the encryption record does not yet exist
         let result = await database.fetchDocument('encryption')
         assert.isNull(result, 'encryption record does not exist')
