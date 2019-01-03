@@ -97,11 +97,11 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 ***** 43,9xx file records ={_id/sha256, filepath, size}= yields 15 MB of LevelDB data
 ***** runs in a few minutes
 **** 300,000 files would be at least 100 MB for database
-*** TODO Consider if =Chunk= should have its own module, and more functions
-*** TODO Consider if =database= module should define a =Document= type
-*** TODO Implement a "local disk" storage engine for testing
-**** TODO Decide if pack files need more metadata redundancy
-**** Can also be used for backing up to an attached disk
+*** DONE Implement a "local disk" storage engine for testing
+*** TODO Implement a store supporting SFTP
+**** c.f. https://github.com/jyu213/ssh2-sftp-client
+**** TODO use =dotenv= to set SFTP parameters
+**** TODO test code conditionally runs SFTP tests if environment is defined
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** DONE Need a strategy for scanning file tree without blowing up
@@ -126,8 +126,8 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 ***** TODO Fill a queue of N file objects to allow fitting chunks to packs
 (but without having all files in memory at once, which could be many the first time)
 ***** TODO Split large files across packs
-*** TODO Implement SFTP protocol
-**** https://github.com/jyu213/ssh2-sftp-client
+*** TODO Consider if =Chunk= should have its own module, and more functions
+*** TODO Consider if =database= module should define a =Document= type
 *** TODO Consider how to support deduplication across multiple computers
 *** TODO Update the architecture and data model in =NOTES.md=
 ** Phase 3

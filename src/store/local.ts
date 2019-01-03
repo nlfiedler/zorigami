@@ -39,4 +39,20 @@ export class LocalStore {
     }
     fx.copySync(packfile, outfile)
   }
+
+  listBuckets(): string[] {
+    const entries = fs.readdirSync(this.basepath, { withFileTypes: true })
+    const dirs = entries.filter((entry) => entry.isDirectory())
+    return dirs.map((entry) => entry.name)
+  }
+
+  listObjects(bucket: string): string[] {
+    const buckdir = path.join(this.basepath, bucket)
+    if (!fs.existsSync(buckdir)) {
+      throw new Error('no such bucket: ' + bucket)
+    }
+    const entries = fs.readdirSync(buckdir, { withFileTypes: true })
+    const files = entries.filter((entry) => entry.isFile())
+    return files.map((entry) => entry.name)
+  }
 }

@@ -20,8 +20,21 @@ export interface Store {
    * @param outfile path to which pack will be written.
    */
   retrievePack(bucket: string, object: string, outfile: string): void
-  // - list all buckets
-  // - list all objects in a bucket
+
+  /**
+   * Returns a list of all buckets.
+   *
+   * @returns names of buckets.
+   */
+  listBuckets(): string[]
+
+  /**
+   * Returns a list of all objects in the named bucket.
+   *
+   * @param bucket name of the bucket to examine.
+   * @returns names of buckets.
+   */
+  listObjects(bucket: string): string[]
 }
 
 const stores = new Map()
@@ -87,6 +100,37 @@ export function retrievePack(key: string, bucket: string, object: string, outfil
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     store.retrievePack(bucket, object, outfile)
+  } else {
+    throw new Error(`no store registered for ${key}`)
+  }
+}
+
+/**
+ * Returns a list of all buckets.
+ *
+ * @param key the key for the store to examine.
+ * @returns names of buckets.
+ */
+export function listBuckets(key: string): string[] {
+  if (stores.has(key)) {
+    const store: Store = stores.get(key)
+    return store.listBuckets()
+  } else {
+    throw new Error(`no store registered for ${key}`)
+  }
+}
+
+/**
+ * Returns a list of all objects in the named bucket.
+ *
+ * @param key the key for the store to examine.
+ * @param bucket name of the bucket to examine.
+ * @returns names of buckets.
+ */
+export function listObjects(key: string, bucket: string): string[] {
+  if (stores.has(key)) {
+    const store: Store = stores.get(key)
+    return store.listObjects(bucket)
   } else {
     throw new Error(`no store registered for ${key}`)
   }

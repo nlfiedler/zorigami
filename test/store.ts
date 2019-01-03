@@ -17,7 +17,7 @@ const assert = chai.assert
 //
 describe('Store Functionality', () => {
   describe('storing pack files', () => {
-    it('should raise on missing file', async function () {
+    it('should raise on missing file', function () {
       const localStore = new local.LocalStore('.')
       store.registerStore('local', localStore)
       const storeFn = () => {
@@ -26,13 +26,22 @@ describe('Store Functionality', () => {
       assert.throws(storeFn, Error, 'missing file')
     })
 
-    it('should raise on missing pack file', async function () {
+    it('should raise on missing pack file', function () {
       const localStore = new local.LocalStore('.')
       store.registerStore('local', localStore)
       const storeFn = () => {
         store.retrievePack('local', 'bucket', 'object', 'tmp')
       }
       assert.throws(storeFn, Error, 'missing pack file')
+    })
+
+    it('should raise on no such bucket', function () {
+      const localStore = new local.LocalStore('.')
+      store.registerStore('local', localStore)
+      const storeFn = () => {
+        store.listObjects('local', 'bucket')
+      }
+      assert.throws(storeFn, Error, 'no such bucket')
     })
 
     it('should store and retrieve pack files', async () => {
@@ -56,13 +65,21 @@ describe('Store Functionality', () => {
       const object = path.basename(packfile)
       store.storePack('local', packfile, bucket, object)
       assert.isFalse(fs.existsSync(packfile))
+      // check for bucket(s) being present
+      const buckets = store.listBuckets('local')
+      assert.lengthOf(buckets, 1, 'returned one bucket')
+      assert.equal(buckets[0], bucket)
+      // check for object(s) being present
+      const objects = store.listObjects('local', bucket)
+      assert.lengthOf(objects, 1, 'returned one object')
+      assert.equal(objects[0], object)
       // retrieve the pack file and verify by unpacking chunks
       store.retrievePack('local', bucket, object, packfile)
       assert.isTrue(fs.existsSync(packfile))
       const outdir = tmp.dirSync().name
       await core.unpackChunks(packfile, outdir)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })
-      assert.equal(entries.length, 1, 'one chunk unpacked')
+      assert.lengthOf(entries, 1, 'one chunk unpacked')
       assert.isTrue(entries[0].isFile())
       assert.equal(entries[0].name, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
       const chunkDigest = await core.checksumFile(
