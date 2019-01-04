@@ -99,10 +99,9 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** 300,000 files would be at least 100 MB for database
 *** DONE Implement a "local disk" storage engine for testing
 *** DONE Remove the try/catch in dedupe, it is not needed for production
-*** TODO Use https://github.com/joyent/node-verror for errors
-**** TODO Define custom errors using =options.name=
-*** TODO Change the tests to check the error =name=
-*** TODO Local store should set =path= property of errors
+*** DONE Use https://github.com/joyent/node-verror for errors
+**** DONE Define custom errors using =options.name=
+*** DONE Local store should set =path= property of errors
 **** c.f. https://www.joyent.com/node-js/production/design/errors
 *** TODO Encode error handling in the interface
 **** Use =throw= for synchronous programmer errors

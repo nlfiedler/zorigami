@@ -9,6 +9,7 @@ import util = require('util')
 import zlib = require('zlib')
 import fx = require('fs-extra')
 import tmp = require('tmp')
+import verr = require('verror')
 import dedupe = require('@ronomon/deduplication')
 import uuidv5 = require('uuid/v5')
 import ULID = require('ulid')
@@ -174,7 +175,7 @@ export function decryptMasterKeys(data: EncryptionData, password: string): Maste
   const key = hashPassword(password, data.salt)
   const hmac2 = computeHmac(key, Buffer.concat([data.iv, data.encrypted]))
   if (data.hmac.compare(hmac2) !== 0) {
-    throw new Error('HMAC does not match records')
+    throw new verr.VError('HMAC does not match records')
   }
   const plaintext = decrypt(data.encrypted, key, data.iv)
   const middle = plaintext.length / 2
@@ -328,7 +329,9 @@ export function decompressFile(infile: string, outfile: string) {
 export async function packChunks(chunks: Chunk[], outfile: string): Promise<string> {
   for (let chunk of chunks) {
     if (chunk.hash.length !== 32) {
-      throw new Error('chunk has invalid hash length')
+      throw new verr.VError({
+        name: 'IllegalArgumentError'
+      }, 'chunk has invalid hash length')
     }
   }
   const writeAndHash = async (data: Buffer, fd: number, hash: crypto.Hash) => {
@@ -397,11 +400,11 @@ export async function unpackChunks(infile: string, outdir: string) {
   await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
   const magic = header.toString('utf8', 0, 4)
   if (magic !== 'P4CK') {
-    throw new Error(`pack magic number invalid: ${magic}`)
+    throw new verr.VError(`pack magic number invalid: ${magic}`)
   }
   const version = header.readUInt32BE(4)
   if (version < 1) {
-    throw new Error(`pack version invalid: ${version}`)
+    throw new verr.VError(`pack version invalid: ${version}`)
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
@@ -409,7 +412,7 @@ export async function unpackChunks(infile: string, outdir: string) {
     fs.closeSync(infd)
   } else {
     fs.closeSync(infd)
-    throw new Error(`pack version unsupported: ${version}`)
+    throw new verr.VError(`pack version unsupported: ${version}`)
   }
 }
 
@@ -521,18 +524,18 @@ export async function unpackChunksEncrypted(infile: string, outdir: string, keys
   await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
   const magic = header.toString('utf8', 0, 4)
   if (magic !== 'C4PX') {
-    throw new Error(`pack magic number invalid: ${magic}`)
+    throw new verr.VError(`pack magic number invalid: ${magic}`)
   }
   const version = header.readUInt32BE(4)
   if (version < 1) {
-    throw new Error(`pack version invalid: ${version}`)
+    throw new verr.VError(`pack version invalid: ${version}`)
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
     await unpackChunksEncryptedV1(infd, outdir, keys)
   } else {
     fs.closeSync(infd)
-    throw new Error(`pack version unsupported: ${version}`)
+    throw new verr.VError(`pack version unsupported: ${version}`)
   }
 }
 
@@ -574,7 +577,7 @@ async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: Maste
     await unpackChunks(packfile, outdir)
     fs.unlinkSync(packfile)
   } else {
-    throw new Error('stored HMAC and computed HMAC do not match')
+    throw new verr.VError('stored HMAC and computed HMAC do not match')
   }
 }
 

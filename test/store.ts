@@ -17,22 +17,22 @@ const assert = chai.assert
 //
 describe('Store Functionality', () => {
   describe('storing pack files', () => {
-    it('should raise on missing file', function () {
+    it('should raise on missing pack file', function () {
       const localStore = new local.LocalStore('.')
       store.registerStore('local', localStore)
       const storeFn = () => {
         store.storePack('local', './test/fixtures/does_not_exist', 'bucket', 'object')
       }
-      assert.throws(storeFn, Error, 'missing file')
+      assert.throws(storeFn, Error, 'missing pack file')
     })
 
-    it('should raise on missing pack file', function () {
+    it('should raise on missing object file', function () {
       const localStore = new local.LocalStore('.')
       store.registerStore('local', localStore)
       const storeFn = () => {
         store.retrievePack('local', 'bucket', 'object', 'tmp')
       }
-      assert.throws(storeFn, Error, 'missing pack file')
+      assert.throws(storeFn, Error, 'missing object file')
     })
 
     it('should raise on no such bucket', function () {

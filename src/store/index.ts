@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
+import verr = require('verror')
 
 export interface Store {
   /**
@@ -84,7 +85,10 @@ export function storePack(key: string, packfile: string, bucket: string, object:
     const store: Store = stores.get(key)
     store.storePack(packfile, bucket, object)
   } else {
-    throw new Error(`no store registered for ${key}`)
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
   }
 }
 
@@ -101,7 +105,10 @@ export function retrievePack(key: string, bucket: string, object: string, outfil
     const store: Store = stores.get(key)
     store.retrievePack(bucket, object, outfile)
   } else {
-    throw new Error(`no store registered for ${key}`)
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
   }
 }
 
@@ -116,7 +123,10 @@ export function listBuckets(key: string): string[] {
     const store: Store = stores.get(key)
     return store.listBuckets()
   } else {
-    throw new Error(`no store registered for ${key}`)
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
   }
 }
 
@@ -132,6 +142,9 @@ export function listObjects(key: string, bucket: string): string[] {
     const store: Store = stores.get(key)
     return store.listObjects(bucket)
   } else {
-    throw new Error(`no store registered for ${key}`)
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
   }
 }

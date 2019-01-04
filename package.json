@@ -32,6 +32,7 @@
     "tmp": "0.0.33",
     "ulid": "^2.3.0",
     "uuid": "^3.3.2",
+    "verror": "^1.10.0",
     "winston": "^3.1.0"
   },
   "devDependencies": {
@@ -43,6 +44,7 @@
     "@types/pouchdb": "^6.3.2",
     "@types/tmp": "0.0.33",
     "@types/uuid": "^3.4.4",
+    "@types/verror": "^1.10.3",
     "chai": "^4.2.0",
     "gulp": "^4.0.0",
     "gulp-nodemon": "^2.4.2",

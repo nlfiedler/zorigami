@@ -4,6 +4,7 @@
 import fs = require('fs')
 import path = require('path')
 import fx = require('fs-extra')
+import verr = require('verror')
 
 /**
  * Local disk implementation of the `Store` interface.
@@ -22,7 +23,12 @@ export class LocalStore {
 
   storePack(packfile: string, bucket: string, object: string): void {
     if (!fs.existsSync(packfile)) {
-      throw new Error('missing file: ' + packfile)
+      throw new verr.VError({
+        name: 'IllegalArgumentError',
+        info: {
+          path: packfile
+        }
+      }, `missing pack file: ${packfile}`)
     }
     const buckdir = path.join(this.basepath, bucket)
     fx.ensureDirSync(buckdir)
@@ -35,7 +41,12 @@ export class LocalStore {
     fx.ensureDirSync(path.dirname(outfile))
     const packfile = path.join(buckdir, object)
     if (!fs.existsSync(packfile)) {
-      throw new Error('missing pack file: ' + packfile)
+      throw new verr.VError({
+        name: 'RuntimeError',
+        info: {
+          path: packfile
+        }
+      }, `missing object file: ${packfile}`)
     }
     fx.copySync(packfile, outfile)
   }
@@ -49,7 +60,12 @@ export class LocalStore {
   listObjects(bucket: string): string[] {
     const buckdir = path.join(this.basepath, bucket)
     if (!fs.existsSync(buckdir)) {
-      throw new Error('no such bucket: ' + bucket)
+      throw new verr.VError({
+        name: 'RuntimeError',
+        info: {
+          bucket: bucket
+        }
+      }, `no such bucket: ${bucket}`)
     }
     const entries = fs.readdirSync(buckdir, { withFileTypes: true })
     const files = entries.filter((entry) => entry.isFile())
