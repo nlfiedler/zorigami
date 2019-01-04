@@ -63,18 +63,18 @@ describe('Store Functionality', () => {
       const localStore = new local.LocalStore(basedir)
       store.registerStore('local', localStore)
       const object = path.basename(packfile)
-      store.storePack('local', packfile, bucket, object)
+      await store.waitForDone(store.storePack('local', packfile, bucket, object))
       assert.isFalse(fs.existsSync(packfile))
       // check for bucket(s) being present
-      const buckets = store.listBuckets('local')
+      const buckets = await store.collectBuckets(store.listBuckets('local'))
       assert.lengthOf(buckets, 1, 'returned one bucket')
       assert.equal(buckets[0], bucket)
       // check for object(s) being present
-      const objects = store.listObjects('local', bucket)
+      const objects = await store.collectObjects(store.listObjects('local', bucket))
       assert.lengthOf(objects, 1, 'returned one object')
       assert.equal(objects[0], object)
       // retrieve the pack file and verify by unpacking chunks
-      store.retrievePack('local', bucket, object, packfile)
+      await store.waitForDone(store.retrievePack('local', bucket, object, packfile))
       assert.isTrue(fs.existsSync(packfile))
       const outdir = tmp.dirSync().name
       await core.unpackChunks(packfile, outdir)

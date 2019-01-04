@@ -103,10 +103,10 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** DONE Define custom errors using =options.name=
 *** DONE Local store should set =path= property of errors
 **** c.f. https://www.joyent.com/node-js/production/design/errors
-*** TODO Encode error handling in the interface
+*** DONE Encode error handling in the interface
 **** Use =throw= for synchronous programmer errors
 **** Use =reject= for asynchronous operational errors
-*** TODO Consider using an =EventEmitter= for returning lists of buckets and objects
+*** DONE Consider using an =EventEmitter= for returning lists of buckets and objects
 **** c.f. https://nodejs.org/dist/latest-v10.x/docs/api/events.html
 *** TODO Implement a store supporting SFTP
 **** c.f. https://github.com/jyu213/ssh2-sftp-client
@@ -123,6 +123,11 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** c.f. https://www.joyent.com/node-js/production/design/errors
 **** Allow setting username, password, private key, and key passphrase
 ***** all of these are supported by =mscdex/ssh2= library
+*** DONE Look for a good way to have =EventEmitter= with naturally synchronous functions
+**** As in something better than invoking =setTimeout()=
+**** Probably =process.nextTick()= would be better
+*** DONE Use =EventEmitter= for store and retrieve functions, with "wait for done" helpers
+*** TODO How does one document the events from emitters?
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** DONE Need a strategy for scanning file tree without blowing up

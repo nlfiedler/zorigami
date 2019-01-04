@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
+import events = require('events')
 import fs = require('fs')
 import path = require('path')
 import fx = require('fs-extra')
@@ -21,7 +22,7 @@ export class LocalStore {
     this.basepath = basepath
   }
 
-  storePack(packfile: string, bucket: string, object: string): void {
+  storePack(packfile: string, bucket: string, object: string): events.EventEmitter {
     if (!fs.existsSync(packfile)) {
       throw new verr.VError({
         name: 'IllegalArgumentError',
@@ -30,15 +31,29 @@ export class LocalStore {
         }
       }, `missing pack file: ${packfile}`)
     }
-    const buckdir = path.join(this.basepath, bucket)
-    fx.ensureDirSync(buckdir)
-    const destfile = path.join(buckdir, object)
-    fx.moveSync(packfile, destfile)
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      const buckdir = path.join(this.basepath, bucket)
+      fx.ensureDir(buckdir, err => {
+        if (err) {
+          emitter.emit('error', err)
+        } else {
+          const destfile = path.join(buckdir, object)
+          fx.move(packfile, destfile, err => {
+            if (err) {
+              emitter.emit('error', err)
+            } else {
+              emitter.emit('done')
+            }    
+          })
+        }
+      })
+    })
+    return emitter
   }
 
-  retrievePack(bucket: string, object: string, outfile: string): void {
+  retrievePack(bucket: string, object: string, outfile: string): events.EventEmitter {
     const buckdir = path.join(this.basepath, bucket)
-    fx.ensureDirSync(path.dirname(outfile))
     const packfile = path.join(buckdir, object)
     if (!fs.existsSync(packfile)) {
       throw new verr.VError({
@@ -48,16 +63,39 @@ export class LocalStore {
         }
       }, `missing object file: ${packfile}`)
     }
-    fx.copySync(packfile, outfile)
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      fx.ensureDir(path.dirname(outfile), err => {
+        if (err) {
+          emitter.emit('error', err)
+        } else {
+          fx.copy(packfile, outfile, err => {
+            if (err) {
+              emitter.emit('error', err)
+            } else {
+              emitter.emit('done')
+            }    
+          })
+        }
+      })
+    })
+    return emitter
   }
 
-  listBuckets(): string[] {
+  listBuckets(): events.EventEmitter {
     const entries = fs.readdirSync(this.basepath, { withFileTypes: true })
     const dirs = entries.filter((entry) => entry.isDirectory())
-    return dirs.map((entry) => entry.name)
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      for (let entry of dirs) {
+        emitter.emit('bucket', entry.name)
+      }
+      emitter.emit('done')
+    })
+    return emitter
   }
 
-  listObjects(bucket: string): string[] {
+  listObjects(bucket: string): events.EventEmitter {
     const buckdir = path.join(this.basepath, bucket)
     if (!fs.existsSync(buckdir)) {
       throw new verr.VError({
@@ -69,6 +107,13 @@ export class LocalStore {
     }
     const entries = fs.readdirSync(buckdir, { withFileTypes: true })
     const files = entries.filter((entry) => entry.isFile())
-    return files.map((entry) => entry.name)
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      for (let entry of files) {
+        emitter.emit('object', entry.name)
+      }
+      emitter.emit('done')
+    })
+    return emitter
   }
 }
