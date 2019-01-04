@@ -98,10 +98,32 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 ***** runs in a few minutes
 **** 300,000 files would be at least 100 MB for database
 *** DONE Implement a "local disk" storage engine for testing
+*** DONE Remove the try/catch in dedupe, it is not needed for production
+*** TODO Use https://github.com/joyent/node-verror for errors
+**** TODO Define custom errors using =options.name=
+*** TODO Change the tests to check the error =name=
+*** TODO Local store should set =path= property of errors
+**** c.f. https://www.joyent.com/node-js/production/design/errors
+*** TODO Encode error handling in the interface
+**** Use =throw= for synchronous programmer errors
+**** Use =reject= for asynchronous operational errors
+*** TODO Consider using an =EventEmitter= for returning lists of buckets and objects
+**** c.f. https://nodejs.org/dist/latest-v10.x/docs/api/events.html
 *** TODO Implement a store supporting SFTP
 **** c.f. https://github.com/jyu213/ssh2-sftp-client
-**** TODO use =dotenv= to set SFTP parameters
-**** TODO test code conditionally runs SFTP tests if environment is defined
+**** c.f. https://github.com/mscdex/ssh2
+**** DONE use =dotenv= to set SFTP parameters
+**** DONE test code conditionally runs SFTP tests if environment is defined
+**** TODO Use a docker container for testing sftp properly
+**** c.f. https://hub.docker.com/r/atmoz/sftp/
+**** TODO test with both user/pass and SSH keys
+**** TODO Add the =Dockerfile= to the =zorigami= code base
+**** TODO also have a compose file and keys
+**** TODO Add notes to =README= about using docker container for testing
+**** TODO Set =remoteHostname= and =remotePort= properties for any errors
+**** c.f. https://www.joyent.com/node-js/production/design/errors
+**** Allow setting username, password, private key, and key passphrase
+***** all of these are supported by =mscdex/ssh2= library
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** DONE Need a strategy for scanning file tree without blowing up
@@ -115,6 +137,8 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 ***** The ~too many open files~ error is causing the shortened results
 ***** All of the errors seem to dump out at once
 **** TODO Use =bin/dbfiles.js= as a guide for the above ~tree walker~
+***** TODO Consider using an =EventEmitter= for returning results
+***** TODO Need to return both files and directories
 **** TODO Specifically exclude the database from the initial data set
 **** TODO Produce a ~working~ snapshot of the dataset
 **** TODO Detect symbolic links and store their reference
@@ -125,11 +149,14 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** TODO Produce and upload pack files containing new/changed files
 ***** TODO Fill a queue of N file objects to allow fitting chunks to packs
 (but without having all files in memory at once, which could be many the first time)
+****** Maybe =EventEmitter= makes sense here, too, to allow reporting errors
 ***** TODO Split large files across packs
 *** TODO Consider if =Chunk= should have its own module, and more functions
 *** TODO Consider if =database= module should define a =Document= type
 *** TODO Consider how to support deduplication across multiple computers
 *** TODO Update the architecture and data model in =NOTES.md=
+*** TODO Consider adding =deduplication= definitions to DefinitelyTyped
+**** c.f. http://definitelytyped.org/guides/contributing.html
 ** Phase 3
 *** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter#typescript-node-starter][guide]] to get Node set up with TypeScript
 ***** TODO Look more at how https://github.com/TypeStrong/ts-node can be used

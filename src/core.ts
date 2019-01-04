@@ -709,40 +709,36 @@ export function findFileChunks(infile: string, average: number): Promise<Chunk[]
       fileOffset += bytesRead
       flags = (bytesRead < length) ? 1 : 0
       const sourceSize = sourceStart + bytesRead
-      try {
-        dedupe.deduplicate(average, minimum, maximum, source, 0, sourceSize, target, 0, flags,
-          (error: Error, sourceOffset: number, targetOffset: number) => {
-            // n.b. the library throws the error, so this is always undefined
-            if (error) {
-              close(error)
-              return
-            }
-            let offset = 0
-            while (offset < targetOffset) {
-              const hash = target.slice(offset, offset + 32)
-              offset += 32
-              const size = target.readUInt32BE(offset)
-              offset += 4
-              chunks.push({ hash, offset: chunkOffset, size })
-              chunkOffset += size
-            }
-            // Anything remaining in the source buffer should be moved to the
-            // beginning of the source buffer, and become the sourceStart for the
-            // next read so that we do not read data we have already read:
-            sourceStart = sourceSize - sourceOffset
-            if (sourceStart > 0) {
-              source.copy(source, 0, sourceOffset, sourceOffset + sourceStart)
-            }
-            if (flags !== 0) {
-              // the last block has finished processing
-              close()
-              resolve(chunks)
-            }
+      dedupe.deduplicate(average, minimum, maximum, source, 0, sourceSize, target, 0, flags,
+        (error: Error, sourceOffset: number, targetOffset: number) => {
+          // n.b. the library throws the error, so this is always undefined
+          if (error) {
+            close(error)
+            return
           }
-        )
-      } catch (err) {
-        close(err)
-      }
+          let offset = 0
+          while (offset < targetOffset) {
+            const hash = target.slice(offset, offset + 32)
+            offset += 32
+            const size = target.readUInt32BE(offset)
+            offset += 4
+            chunks.push({ hash, offset: chunkOffset, size })
+            chunkOffset += size
+          }
+          // Anything remaining in the source buffer should be moved to the
+          // beginning of the source buffer, and become the sourceStart for the
+          // next read so that we do not read data we have already read:
+          sourceStart = sourceSize - sourceOffset
+          if (sourceStart > 0) {
+            source.copy(source, 0, sourceOffset, sourceOffset + sourceStart)
+          }
+          if (flags !== 0) {
+            // the last block has finished processing
+            close()
+            resolve(chunks)
+          }
+        }
+      )
     }
   })
 }
