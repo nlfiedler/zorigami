@@ -1,18 +1,18 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import crypto = require('crypto')
-import fs = require('fs')
-import path = require('path')
-import stream = require('stream')
-import util = require('util')
-import zlib = require('zlib')
-import fx = require('fs-extra')
-import tmp = require('tmp')
-import verr = require('verror')
-import dedupe = require('@ronomon/deduplication')
-import uuidv5 = require('uuid/v5')
-import ULID = require('ulid')
+import * as crypto from 'crypto'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as stream from 'stream'
+import * as util from 'util'
+import * as zlib from 'zlib'
+import * as fx from 'fs-extra'
+import * as tmp from 'tmp'
+import * as verr from 'verror'
+import * as dedupe from '@ronomon/deduplication'
+import * as uuidv5 from 'uuid/v5'
+import * as ULID from 'ulid'
 
 const fopen = util.promisify(fs.open)
 const fread = util.promisify(fs.read)

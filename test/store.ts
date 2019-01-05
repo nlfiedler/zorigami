@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import fs = require('fs')
-import path = require('path')
+import * as fs from 'fs'
+import * as path from 'path'
 import * as chai from 'chai'
 import * as tmp from 'tmp'
 import * as core from '../src/core'

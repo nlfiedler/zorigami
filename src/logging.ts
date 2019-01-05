@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import winston = require('winston')
-import config = require('config')
+import * as winston from 'winston'
+import * as config from 'config'
 
 // Configure the logging not related to HTTP, which is handled using morgan.
 const transports = []
@@ -29,4 +29,4 @@ const logger = winston.createLogger({
   transports
 })
 
-export = logger
+export default logger

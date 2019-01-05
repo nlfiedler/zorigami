@@ -1,10 +1,10 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import config = require('config')
-import fs = require('fs-extra')
-import logger = require('./logging')
-import PouchDB = require('pouchdb')
+import * as config from 'config'
+import * as fs from 'fs-extra'
+import logger from './logging'
+import * as PouchDB from 'pouchdb'
 
 const dbPath: string = config.get('database.path')
 fs.ensureDirSync(dbPath)

@@ -1,11 +1,11 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import events = require('events')
-import fs = require('fs')
-import path = require('path')
-import fx = require('fs-extra')
-import verr = require('verror')
+import * as events from 'events'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as fx from 'fs-extra'
+import * as verr from 'verror'
 import { StoreEmitter } from './index'
 
 /**

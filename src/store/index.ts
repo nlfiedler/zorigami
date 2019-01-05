@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import events = require('events')
-import verr = require('verror')
+import * as events from 'events'
+import * as verr from 'verror'
 
 /**
  * Emitted when there is progress to report on an operation.

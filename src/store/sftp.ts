@@ -1,10 +1,10 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import events = require('events')
-import fs = require('fs')
-import path = require('path')
-import Client = require('ssh2-sftp-client')
+import * as events from 'events'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as Client from 'ssh2-sftp-client'
 import { StoreEmitter } from './index'
 
 /**

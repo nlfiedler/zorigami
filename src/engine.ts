@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2018 Nathan Fiedler
 //
-import core = require('./core')
-import database = require('./database')
+import * as core from './core'
+import * as database from './database'
 
 /**
  * Get the master keys for encrypting the pack files. They will be loaded from
