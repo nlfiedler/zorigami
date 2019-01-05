@@ -108,26 +108,27 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** Use =reject= for asynchronous operational errors
 *** DONE Consider using an =EventEmitter= for returning lists of buckets and objects
 **** c.f. https://nodejs.org/dist/latest-v10.x/docs/api/events.html
-*** TODO Implement a store supporting SFTP
+*** DONE Implement a store supporting SFTP
 **** c.f. https://github.com/jyu213/ssh2-sftp-client
 **** c.f. https://github.com/mscdex/ssh2
 **** DONE use =dotenv= to set SFTP parameters
 **** DONE test code conditionally runs SFTP tests if environment is defined
-**** TODO Use a docker container for testing sftp properly
-**** c.f. https://hub.docker.com/r/atmoz/sftp/
-**** TODO test with both user/pass and SSH keys
-**** TODO Add the =Dockerfile= to the =zorigami= code base
-**** TODO also have a compose file and keys
-**** TODO Add notes to =README= about using docker container for testing
-**** TODO Set =remoteHostname= and =remotePort= properties for any errors
-**** c.f. https://www.joyent.com/node-js/production/design/errors
-**** Allow setting username, password, private key, and key passphrase
-***** all of these are supported by =mscdex/ssh2= library
+**** DONE Use a docker container for testing sftp properly
+***** c.f. https://hub.docker.com/r/atmoz/sftp/
+***** DONE Add a =docker-compose.yml= file (and host keys?)
+**** DONE Define an =Options= for SFTP constructor to provide password, private key, passphase, port
+**** DONE Add notes to =README= about using docker container for testing
+**** DONE Allow setting username, password, private key, and key passphrase
 *** DONE Look for a good way to have =EventEmitter= with naturally synchronous functions
 **** As in something better than invoking =setTimeout()=
 **** Probably =process.nextTick()= would be better
 *** DONE Use =EventEmitter= for store and retrieve functions, with "wait for done" helpers
 *** TODO How does one document the events from emitters?
+**** TODO Use "Events" "technique 3" at [[https://cancerberosgx.github.io/javascript-documentation-examples/examples/typedoc-tutorial-basic/docs/docco/src/index.html][cancerberosgx.github.io]]
+*** TODO Settle on =require= vs proper =import= statements
+**** c.f. https://www.typescriptlang.org/docs/handbook/modules.html
+**** TODO make sure compiler target is =commonjs=
+**** TODO make sure to use =export default foo= instead of =export = foo=
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** DONE Need a strategy for scanning file tree without blowing up
@@ -161,8 +162,9 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 *** TODO Update the architecture and data model in =NOTES.md=
 *** TODO Consider adding =deduplication= definitions to DefinitelyTyped
 **** c.f. http://definitelytyped.org/guides/contributing.html
+*** TODO Check out the documentation for =tsconfig.json= and compiler options
 ** Phase 3
-*** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter#typescript-node-starter][guide]] to get Node set up with TypeScript
+*** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
 ***** TODO Look more at how https://github.com/TypeStrong/ts-node can be used
 ***** TODO Is rewriting =app.js= worthwhile or necessary?
 ***** TODO Translate the routes

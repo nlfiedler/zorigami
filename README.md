@@ -30,3 +30,9 @@ To start an instance configured for development, run the following command.
 $ npm install
 $ npm test
 ```
+
+### Docker
+
+[Docker](https://www.docker.com) is used for testing some features of the
+application (e.g. SFTP). Change to the `test/docker` directory and start the
+SFTP server via `docker-compose up -d` (requires Docker Compose).

@@ -714,7 +714,7 @@ export function findFileChunks(infile: string, average: number): Promise<Chunk[]
       const sourceSize = sourceStart + bytesRead
       dedupe.deduplicate(average, minimum, maximum, source, 0, sourceSize, target, 0, flags,
         (error: Error, sourceOffset: number, targetOffset: number) => {
-          // n.b. the library throws the error, so this is always undefined
+          // if error is defined, a runtime error occurred
           if (error) {
             close(error)
             return

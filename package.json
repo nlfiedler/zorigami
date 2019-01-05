@@ -4,8 +4,8 @@
   "description": "Node.js online backup application",
   "main": "app.js",
   "scripts": {
-    "start": "node ./bin/www",
-    "test": "NODE_CONFIG_ENV=test mocha --delay -r ts-node/register test/*.ts"
+    "start": "node -r dotenv/config ./bin/www",
+    "test": "NODE_CONFIG_ENV=test mocha --delay -r dotenv/config -r ts-node/register test/*.ts"
   },
   "repository": {
     "type": "git",
@@ -23,12 +23,14 @@
     "config": "^3.0.1",
     "cookie-parser": "~1.4.3",
     "debug": "~4.1.0",
+    "dotenv": "^6.2.0",
     "ejs": "~2.6.1",
     "express": "~4.16.0",
     "fs-extra": "^7.0.1",
     "http-errors": "~1.7.1",
     "morgan": "~1.9.0",
     "pouchdb": "^7.0.0",
+    "ssh2-sftp-client": "^2.4.3",
     "tmp": "0.0.33",
     "ulid": "^2.3.0",
     "uuid": "^3.3.2",
@@ -42,6 +44,7 @@
     "@types/mocha": "^5.2.5",
     "@types/node": "^10.12.18",
     "@types/pouchdb": "^6.3.2",
+    "@types/ssh2-sftp-client": "^2.4.0",
     "@types/tmp": "0.0.33",
     "@types/uuid": "^3.4.4",
     "@types/verror": "^1.10.3",
