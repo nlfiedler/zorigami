@@ -6,6 +6,7 @@ import fs = require('fs')
 import path = require('path')
 import fx = require('fs-extra')
 import verr = require('verror')
+import { StoreEmitter } from './index'
 
 /**
  * Local disk implementation of the `Store` interface.
@@ -22,7 +23,7 @@ export class LocalStore {
     this.basepath = basepath
   }
 
-  storePack(packfile: string, bucket: string, object: string): events.EventEmitter {
+  storePack(packfile: string, bucket: string, object: string): StoreEmitter {
     if (!fs.existsSync(packfile)) {
       throw new verr.VError({
         name: 'IllegalArgumentError',
@@ -52,7 +53,7 @@ export class LocalStore {
     return emitter
   }
 
-  retrievePack(bucket: string, object: string, outfile: string): events.EventEmitter {
+  retrievePack(bucket: string, object: string, outfile: string): StoreEmitter {
     const buckdir = path.join(this.basepath, bucket)
     const packfile = path.join(buckdir, object)
     if (!fs.existsSync(packfile)) {
@@ -82,7 +83,7 @@ export class LocalStore {
     return emitter
   }
 
-  listBuckets(): events.EventEmitter {
+  listBuckets(): StoreEmitter {
     const entries = fs.readdirSync(this.basepath, { withFileTypes: true })
     const dirs = entries.filter((entry) => entry.isDirectory())
     const emitter = new events.EventEmitter()
@@ -95,7 +96,7 @@ export class LocalStore {
     return emitter
   }
 
-  listObjects(bucket: string): events.EventEmitter {
+  listObjects(bucket: string): StoreEmitter {
     const buckdir = path.join(this.basepath, bucket)
     if (!fs.existsSync(buckdir)) {
       throw new verr.VError({

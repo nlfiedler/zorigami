@@ -4,6 +4,58 @@
 import events = require('events')
 import verr = require('verror')
 
+/**
+ * Emitted when there is progress to report on an operation.
+ *
+ * @asMemberOf Store
+ * @event
+ * @param value indicates the progress.
+ */
+declare function progress (value: number): void
+
+/**
+ * Emitted for each bucket when iterating over all buckets.
+ *
+ * @asMemberOf Store
+ * @event
+ * @param name name of the bucket.
+ */
+declare function bucket (name: string): void
+
+/**
+ * Emitted for each object when iterating over all objects.
+ *
+ * @asMemberOf Store
+ * @event
+ * @param name name of the object.
+ */
+declare function object (name: string): void
+
+/**
+ * Emitted when an operation has completed.
+ *
+ * @asMemberOf Store
+ * @event
+ */
+declare function done (): void
+
+/**
+ * Emitted when an error has occurred.
+ *
+ * @asMemberOf Store
+ * @event
+ * @param error the error.
+ */
+declare function error (error: Error): void
+
+export interface StoreEmitter extends events.EventEmitter {
+  on(event: 'progress', listener: typeof progress): this
+  on(event: 'bucket', listener: typeof bucket): this
+  on(event: 'object', listener: typeof object): this
+  on(event: 'done', listener: typeof done): this
+  on(event: 'error', listener: typeof error): this
+}
+
 export interface Store {
   /**
    * Store the pack file the local disk.
@@ -13,7 +65,7 @@ export interface Store {
    * @param object desired name of the pack in the bucket.
    * @returns emits `progress`, `done`, and `error` events.
    */
-  storePack(packfile: string, bucket: string, object: string): events.EventEmitter
+  storePack(packfile: string, bucket: string, object: string): StoreEmitter
 
   /**
    * Retrieve a pack from the given bucket and object name.
@@ -23,7 +75,7 @@ export interface Store {
    * @param outfile path to which pack will be written.
    * @returns emits `progress`, `done`, and `error` events.
    */
-  retrievePack(bucket: string, object: string, outfile: string): events.EventEmitter
+  retrievePack(bucket: string, object: string, outfile: string): StoreEmitter
 
   /**
    * Returns a list of all buckets via `bucket` events. Emits `done`
@@ -31,7 +83,7 @@ export interface Store {
    *
    * @returns names of buckets via event emitter.
    */
-  listBuckets(): events.EventEmitter
+  listBuckets(): StoreEmitter
 
   /**
    * Returns a list of all objects in the named bucket via `object` events.
@@ -40,7 +92,7 @@ export interface Store {
    * @param bucket name of the bucket to examine.
    * @returns names of objects via event emitter.
    */
-  listObjects(bucket: string): events.EventEmitter
+  listObjects(bucket: string): StoreEmitter
 }
 
 const stores = new Map()
@@ -86,7 +138,7 @@ export function unregisterStore(key: string): void {
  * @param object preferred name of the remote object for this pack.
  * @returns emits `progress`, `done`, and `error` events.
  */
-export function storePack(key: string, packfile: string, bucket: string, object: string): events.EventEmitter {
+export function storePack(key: string, packfile: string, bucket: string, object: string): StoreEmitter {
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     return store.storePack(packfile, bucket, object)
@@ -107,7 +159,7 @@ export function storePack(key: string, packfile: string, bucket: string, object:
  * @param outfile path to which pack will be written.
  * @returns emits `progress`, `done`, and `error` events.
  */
-export function retrievePack(key: string, bucket: string, object: string, outfile: string): events.EventEmitter {
+export function retrievePack(key: string, bucket: string, object: string, outfile: string): StoreEmitter {
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     return store.retrievePack(bucket, object, outfile)
@@ -125,7 +177,7 @@ export function retrievePack(key: string, bucket: string, object: string, outfil
  * @param key the key for the store to examine.
  * @returns names of buckets via an event emitter.
  */
-export function listBuckets(key: string): events.EventEmitter {
+export function listBuckets(key: string): StoreEmitter {
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     return store.listBuckets()
@@ -144,7 +196,7 @@ export function listBuckets(key: string): events.EventEmitter {
  * @param bucket name of the bucket to examine.
  * @returns names of objects via an event emitter.
  */
-export function listObjects(key: string, bucket: string): events.EventEmitter {
+export function listObjects(key: string, bucket: string): StoreEmitter {
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     return store.listObjects(bucket)
@@ -162,7 +214,7 @@ export function listObjects(key: string, bucket: string): events.EventEmitter {
  * @param emitter event emitter as from `listBuckets()`.
  * @returns resolves to list of bucket names.
  */
-export function collectBuckets(emitter: events.EventEmitter): Promise<string[]> {
+export function collectBuckets(emitter: StoreEmitter): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const buckets: string[] = []
     emitter.on('bucket', (name) => {
@@ -183,7 +235,7 @@ export function collectBuckets(emitter: events.EventEmitter): Promise<string[]> 
  * @param emitter event emitter as from `listObjects()`.
  * @returns resolves to list of object names.
  */
-export function collectObjects(emitter: events.EventEmitter): Promise<string[]> {
+export function collectObjects(emitter: StoreEmitter): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const objects: string[] = []
     emitter.on('object', (name) => {
@@ -205,7 +257,7 @@ export function collectObjects(emitter: events.EventEmitter): Promise<string[]> 
  * @param emitter event emitter that yields `done` or `error`.
  * @returns promise.
  */
-export function waitForDone(emitter: events.EventEmitter): Promise<any> {
+export function waitForDone(emitter: StoreEmitter): Promise<any> {
   return new Promise((resolve, reject) => {
     emitter.on('error', (err) => {
       reject(err)

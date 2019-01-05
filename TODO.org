@@ -123,8 +123,8 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** As in something better than invoking =setTimeout()=
 **** Probably =process.nextTick()= would be better
 *** DONE Use =EventEmitter= for store and retrieve functions, with "wait for done" helpers
-*** TODO How does one document the events from emitters?
-**** TODO Use "Events" "technique 3" at [[https://cancerberosgx.github.io/javascript-documentation-examples/examples/typedoc-tutorial-basic/docs/docco/src/index.html][cancerberosgx.github.io]]
+*** DONE How does one document the events from emitters?
+**** DONE Use "Events" "technique 3" at [[https://cancerberosgx.github.io/javascript-documentation-examples/examples/typedoc-tutorial-basic/docs/docco/src/index.html][cancerberosgx.github.io]]
 *** TODO Settle on =require= vs proper =import= statements
 **** c.f. https://www.typescriptlang.org/docs/handbook/modules.html
 **** TODO make sure compiler target is =commonjs=

@@ -5,7 +5,7 @@ import events = require('events')
 import fs = require('fs')
 import path = require('path')
 import Client = require('ssh2-sftp-client')
-import verr = require('verror')
+import { StoreEmitter } from './index'
 
 /**
  * SSH/SFTP connection options.
@@ -63,7 +63,7 @@ export class SecureFtpStore {
     }
   }
 
-  storePack(packfile: string, bucket: string, object: string): events.EventEmitter {
+  storePack(packfile: string, bucket: string, object: string): StoreEmitter {
     if (!fs.existsSync(packfile)) {
       throw new Error('missing file: ' + packfile)
     }
@@ -83,7 +83,7 @@ export class SecureFtpStore {
     return emitter
   }
 
-  retrievePack(bucket: string, object: string, outfile: string): events.EventEmitter {
+  retrievePack(bucket: string, object: string, outfile: string): StoreEmitter {
     const emitter = new events.EventEmitter()
     let sftp = new Client()
     sftp.connect(this.makeConnectOptions()).then(() => {
@@ -98,7 +98,7 @@ export class SecureFtpStore {
     return emitter
   }
 
-  listBuckets(): events.EventEmitter {
+  listBuckets(): StoreEmitter {
     const emitter = new events.EventEmitter()
     let sftp = new Client()
     sftp.connect(this.makeConnectOptions()).then(() => {
@@ -118,7 +118,7 @@ export class SecureFtpStore {
     return emitter
   }
 
-  listObjects(bucket: string): events.EventEmitter {
+  listObjects(bucket: string): StoreEmitter {
     const emitter = new events.EventEmitter()
     let sftp = new Client()
     sftp.connect(this.makeConnectOptions()).then(() => {
