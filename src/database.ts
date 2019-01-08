@@ -2,12 +2,12 @@
 // Copyright (c) 2018 Nathan Fiedler
 //
 import * as config from 'config'
-import * as fs from 'fs-extra'
+import * as fx from 'fs-extra'
 import logger from './logging'
 import * as PouchDB from 'pouchdb'
 
 const dbPath: string = config.get('database.path')
-fs.ensureDirSync(dbPath)
+fx.ensureDirSync(dbPath)
 const db = new PouchDB(dbPath)
 
 /**
@@ -64,6 +64,68 @@ export async function updateDocument(doc: any): Promise<boolean> {
       throw err
     }
   }
+}
+
+/**
+ * Ensure the database contains a tree by the given checksum. Conflicts are
+ * ignored; if it has the same checksum, it is the same tree.
+ *
+ * @param checksum hash digest of the tree object.
+ * @param doc tree object itself, stored as-is.
+ */
+export async function insertTree(checksum: string, doc: any): Promise<void> {
+  try {
+    await db.put({
+      ...doc,
+      _id: 'tree/' + checksum
+    })
+    logger.info(`inserted new tree ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
+ * Retrieve the tree record by the given checksum.
+ *
+ * @param checksum checksum of the desired tree.
+ * @returns document object, or null if not found.
+ */
+export async function getTree(checksum: string): Promise<any> {
+  return fetchDocument('tree/' + checksum)
+}
+
+/**
+ * Ensure the database contains a snapshot by the given checksum. Conflicts are
+ * ignored; if it has the same checksum, it is the same snapshot.
+ *
+ * @param checksum hash digest of the snapshot object.
+ * @param doc snapshot object itself, stored as-is.
+ */
+export async function insertSnapshot(checksum: string, doc: any): Promise<void> {
+  try {
+    await db.put({
+      ...doc,
+      _id: 'snapshot/' + checksum
+    })
+    logger.info(`inserted new snapshot ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
+ * Retrieve the snapshot record by the given checksum.
+ *
+ * @param checksum checksum of the desired snapshot.
+ * @returns document object, or null if not found.
+ */
+export async function getSnapshot(checksum: string): Promise<any> {
+  return fetchDocument('snapshot/' + checksum)
 }
 
 /**

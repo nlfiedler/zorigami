@@ -23,12 +23,29 @@
 
 ## Interface
 
-* Web (Node.js/ReasonML)
-* Desktop (Electron)
+* Web browser
+* Desktop application
+* System tray icon/menu
 * Browse by snapshot, then folders and files
 * Move through snapshots for a particular path
 
+## Architecture
+
+* HTTP backend as GraphQL server
+* Web frontend as GraphQL client
+* Desktop application as GraphQL client
+* Document-oriented database for metadata
+* Local or Remote file store for pack storage
+
 ## Design
+
+* Backend written in TypeScript, uses Apollo GraphQL server
+* Front-end written in ReasonML, uses Apollo GraphQL client
+* Desktop application written in TypeScript, uses Electron
+* Document-oriented database is PouchDB, with PouchDB Server
+* Storage implementations support local, SFTP, Google, Amazon, etc
+
+## Use Cases
 
 ### Initial Setup
 
@@ -36,15 +53,9 @@
 * Upon startup of desktop app, walk user through setup
 * Offer choice of recovering from backup, or starting anew
 
-### Deduplication
+### Regular Backup
 
-Uses a content-defined chunking (a.k.a. content-dependent chunking) algorithm to
-determine suitable chunk boundaries, and stores each unique chunk once based on
-the SHA256 digest of the chunk. In particular, uses
-[FastCDC](https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf)
-which is much faster than Rabin-based fingerprinting, and somewhat faster than
-Gear. This avoids the shortcomings of fixed-size chunking due to boundary
-shifting.
+* Backend performs backups according to configured schedule
 
 ## Data Format
 
@@ -107,11 +118,14 @@ shifting.
 
 ### PouchDB
 
+#### Primary Database
+
 * configuration record
     - database key: `configuration`
     - host name
     - user name
     - computer UUID
+    - peers: list of peer installations for chunk deduplication
     - default cloud service provider (e.g. `sftp`, `aws`, `gcp`)
     - default cloud storage type (e.g. "nearline")
     - default cloud service region (e.g. `us-west1`)
@@ -159,6 +173,11 @@ shifting.
         + offset: file position for this chunk
         + chunk SHA256
     - changed: SHA256 at time of backup, if different from key
+
+#### Chunk Database
+
+Sync with peers for multi-host chunk deduplication.
+
 * chunk records
     - key: `chunk/` + SHA256 of chunk (with "sha256-" prefix)
     - length: size of chunk in bytes
@@ -167,8 +186,26 @@ shifting.
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
     - remote bucket/vault name
     - remote archive identifier (e.g. AWS Glacier)
+    - upload_date: date/time of successful upload, for conflict resolution
 
 ## Implementation
+
+### Deduplication
+
+Uses a content-defined chunking (a.k.a. content-dependent chunking) algorithm to
+determine suitable chunk boundaries, and stores each unique chunk once based on
+the SHA256 digest of the chunk. In particular, uses
+[FastCDC](https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf)
+which is much faster than Rabin-based fingerprinting, and somewhat faster than
+Gear. This avoids the shortcomings of fixed-size chunking due to boundary
+shifting.
+
+#### Database Sync
+
+When the peer(s) are available, sync with their chunk/pack database to get
+recent records. If there are conflicts (which seems unlikely given the pack
+would have to have the exact same chunks) resolve by keeping the pack record
+that has the most recent `upload_date`.
 
 ### Procedure
 
@@ -179,12 +216,13 @@ shifting.
     1. Add a special snapshot record named `index` to track work in progress.
 1. Find the differences from the previous snapshot.
 1. If there are no changes, delete `index` snapshot record, exit the procedure.
+1. Sync with any configured peers to get recent chunk updates.
 1. For each new/changed file, check if record exists; if not:
     1. For small files, treat as a single chunk
     1. For large files, use CDC to find chunks
     1. For each chunk that does not exist in database, add to pack
     1. If pack file is large enough, upload to storage
-    1. Add "file" and "chunk" records to track chunks and pack files
+    1. Add `chunk` and `pack` records upon successful pack storage
     1. If file checksum changed after snapshot, add two records:
         * set `changed` on the record with the checksum at time of snapshot
         * set `chunks` on the record with the checksum at time of packing
@@ -225,15 +263,6 @@ results should be deterministic. Then compute the SHA1 of this string.
     1. file: if SHA256 differs, file changed
     1. Descend into common directories
 1. Somehow compute new tree SHA1, then recompute all parents
-
-#### Large File Support
-
-Not going to do this for now. The basic idea would be to use a rolling checksum
-(or rolling hash or rolling sum) to determine the chunk boundaries, or cut
-points, and then save only the changed chunks of the large file. However, this
-would require having the original file on hand to compute the same checksums.
-The advantage of such an approach would be to deduplicate chunks within a file,
-and handle shifting file contents.
 
 #### Duplicate chunk detection
 

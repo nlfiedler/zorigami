@@ -59,6 +59,17 @@ describe('Core Functionality', function () {
     })
   })
 
+
+  describe('data digests', function () {
+    it('should compute the hash digest of data', async function () {
+      const data = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.'
+      const sha1 = await core.checksumData(data, 'sha1')
+      assert.equal(sha1, 'sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c')
+      const sha256 = await core.checksumData(data, 'sha256')
+      assert.equal(sha256, 'sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433')
+    })
+  })
+
   describe('file digests', function () {
     it('should compute the hash digest of a file', async function () {
       const infile = './test/fixtures/lorem-ipsum.txt'

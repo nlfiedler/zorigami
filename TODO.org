@@ -1,61 +1,5 @@
 * Zorigami
 ** Phase 2
-*** DONE Decide how to handle files changing during lengthy backups
-*** DONE Consider how to handle small changes to large files
-**** e.g. using merkle tree of "bytes" to save only changed parts of large files
-**** c.f. perkeep.org design/code for an example of dealing with large files
-- uses Merkle tree of "bytes" schema blobs to represent large files
-- data stored at the leaves of the tree
-- rolling checksum cut points (ala rsync, bup)
-- de-duplication within files and shifting files
-- efficient seeks/pread
-**** rsync, rolling checksum, splitting notes
-***** https://github.com/perkeep/perkeep/blob/master/internal/rollsum/rollsum.go
-***** https://github.com/apenwarr/bup/blob/master/lib/bup/bupsplit.c
-*** DONE Look into the chunk deduplication approaches
-**** DONE Design schema around storing files as chunks
-***** small files are a single chunk
-***** large files are split into chunks using CDC
-**** DONE Change packing implementation to work with chunks
-***** parts have SHA256 checksum versus SHA1
-***** part checksums are known in advance, no need to calculate them
-**** DONE Look into "content defined chunking" algorithms
-**** DONE Look for "FastCDC" npm
-**** DONE Look for "gear" based CDC as an alternative to FastCDC
-**** FastCDC for node: https://github.com/ronomon/deduplication
-***** finds chunk boundaries and returns sha256 of chunks
-***** actively maintained
-***** MIT licensed
-**** https://github.com/datproject/rabin
-***** does not have a license?
-***** uses a very old fingerprinting algorithm
-**** c.f. https://restic.net/blog/2015-09-12/restic-foundation1-cdc
-*** DONE Add content-defined chunking functions
-*** DONE Write function to assemble chunks back into original file
-*** DONE Introduce logging and replace =console= calls with logger
-*** DONE Introduce config library for configuring different environments
-*** DONE Introduce pouchdb and code for reading/writing data
-*** DONE Rewrite JavaScript code using TypeScript
-**** c.f. https://www.typescriptlang.org/docs/handbook/migrating-from-javascript.html
-**** DONE Read about using winston with TypeScript
-***** it has the =index.d.ts= file, so it supports TypeScript
-**** DONE Set up the =tsconfig.json=
-***** DONE Source code lives in =src=
-***** DONE Compiled code goes to =dist=
-**** DONE Define a type to hold the master keys (Object doesn't type check)
-**** DONE Set up the test framework: [[https://tutorialedge.net/typescript/testing-typescript-api-with-mocha-chai/][testing-typescript-api-with-mocha-chai]]
-**** DONE Set up gulp to build the code
-**** DONE Convert one =core= function at a time, writing tests for each
-**** DONE Install type definitions for libraries, e.g. =npm i -D @types/jquery=
-***** DONE chai
-***** DONE fs-extra
-***** DONE mocha
-***** DONE node
-***** DONE pouchdb
-***** DONE tmp
-***** DONE uuid
-***** DONE config
-**** DONE Remove the =NODE_PATH= setting
 *** DONE Find out average file size on macOS
 **** For ~nfiedler~ home directory:
 ***** 330,592 total files
@@ -92,65 +36,26 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** logs grow to 4 MB
 **** db files grow to 2 MB
 *** DONE Consider if PouchDB/LevelDB will be adequate for tracking 300,000 files
-**** DONE Try testing with some simple live data test (e.g. scan all files into the database)
-***** 33,028 file records ={_id/sha256, filepath, size}= yields 11 MB of LevelDB data
-***** 43,9xx file records ={_id/sha256, filepath, size}= yields 15 MB of LevelDB data
-***** runs in a few minutes
-**** 300,000 files would be at least 100 MB for database
-*** DONE Implement a "local disk" storage engine for testing
-*** DONE Remove the try/catch in dedupe, it is not needed for production
-*** DONE Use https://github.com/joyent/node-verror for errors
-**** DONE Define custom errors using =options.name=
-*** DONE Local store should set =path= property of errors
-**** c.f. https://www.joyent.com/node-js/production/design/errors
-*** DONE Encode error handling in the interface
-**** Use =throw= for synchronous programmer errors
-**** Use =reject= for asynchronous operational errors
-*** DONE Consider using an =EventEmitter= for returning lists of buckets and objects
-**** c.f. https://nodejs.org/dist/latest-v10.x/docs/api/events.html
-*** DONE Implement a store supporting SFTP
-**** c.f. https://github.com/jyu213/ssh2-sftp-client
-**** c.f. https://github.com/mscdex/ssh2
-**** DONE use =dotenv= to set SFTP parameters
-**** DONE test code conditionally runs SFTP tests if environment is defined
-**** DONE Use a docker container for testing sftp properly
-***** c.f. https://hub.docker.com/r/atmoz/sftp/
-***** DONE Add a =docker-compose.yml= file (and host keys?)
-**** DONE Define an =Options= for SFTP constructor to provide password, private key, passphase, port
-**** DONE Add notes to =README= about using docker container for testing
-**** DONE Allow setting username, password, private key, and key passphrase
-*** DONE Look for a good way to have =EventEmitter= with naturally synchronous functions
-**** As in something better than invoking =setTimeout()=
-**** Probably =process.nextTick()= would be better
-*** DONE Use =EventEmitter= for store and retrieve functions, with "wait for done" helpers
-*** DONE How does one document the events from emitters?
-**** DONE Use "Events" "technique 3" at [[https://cancerberosgx.github.io/javascript-documentation-examples/examples/typedoc-tutorial-basic/docs/docco/src/index.html][cancerberosgx.github.io]]
-*** DONE Settle on =require= vs proper =import= statements
-**** c.f. https://www.typescriptlang.org/docs/handbook/modules.html
-**** DONE make sure compiler module is =commonjs=
-**** DONE make sure to use =export default foo= instead of =export = foo=
+**** DONE Try testing with some simple live data test
+***** 334,147 files in total
+***** 230,219 unique files yields 73 MB of LevelDB data
+***** runs in a 8 minutes
 *** TODO Write the logic for the "engine"
 **** DONE Store the ~encryption~ record in PouchDB
 **** DONE Need a strategy for scanning file tree without blowing up
-***** Make the tree walker invoke the callback as a promise and =.then= walk subdirs
-***** Have the walker return a promise so we can take action when it is done
-***** Walking home directory results in various errors
-****** should have found 330,668 files, but only successfully stat'd 33,028
-****** error: no such file or directory
-****** error: permissions denied
-****** error: too many open files
-***** The ~too many open files~ error is causing the shortened results
-***** All of the errors seem to dump out at once
-**** TODO Use =bin/dbfiles.js= as a guide for the above ~tree walker~
-***** TODO Consider using an =EventEmitter= for returning results
-***** TODO Need to return both files and directories
+**** DONE Use =bin/dbfiles.js= as a guide for the above ~tree walker~
+***** DONE Use =async= and =await= in a single function to process tree
+***** DONE Need to return both files and directories
+**** DONE Move the =dbfiles.ts= into =engine.ts= and start testing
+**** DONE Compute the difference from the previous snapshot
 **** TODO Specifically exclude the database from the initial data set
-**** TODO Produce a ~working~ snapshot of the dataset
+**** DONE Produce a ~working~ snapshot of the dataset
+**** TODO Get the user and group names in addition to uid, gid
+**** TODO Get the xattrs, if available (i.e. macOS)
 **** TODO Detect symbolic links and store their reference
 - Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
 - Store the mode in the tree as =lrwxr-xr-x= (give or take some bits)
 - Store the link value as the =checksum= in the tree (since there is no file)
-**** TODO Compute the difference from the previous snapshot
 **** TODO Produce and upload pack files containing new/changed files
 ***** TODO Fill a queue of N file objects to allow fitting chunks to packs
 (but without having all files in memory at once, which could be many the first time)
@@ -158,11 +63,10 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 ***** TODO Split large files across packs
 *** TODO Consider if =Chunk= should have its own module, and more functions
 *** TODO Consider if =database= module should define a =Document= type
-*** TODO Consider how to support deduplication across multiple computers
 *** TODO Update the architecture and data model in =NOTES.md=
 *** TODO Consider adding =deduplication= definitions to DefinitelyTyped
 **** c.f. http://definitelytyped.org/guides/contributing.html
-*** TODO Check out the documentation for =tsconfig.json= and compiler options
+*** DONE Check out the documentation for =tsconfig.json= and compiler options
 ** Phase 3
 *** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
 ***** TODO Look more at how https://github.com/TypeStrong/ts-node can be used
@@ -194,6 +98,13 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** TODO Looks like xattrs tend to have a lot of zero bytes
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
+*** TODO Support deduplication across multiple computers
+**** Place the chunks and packs in a seperate "database" for syncing
+**** Use the express support in [[https://github.com/pouchdb/pouchdb-server][pouchdb-server]] to serve up chunks/packs db
+**** User configures the host name of the ~peer~ installation
+***** Use that to form the URL with which to =sync=
+**** Share the chunks and packs documents with a ~peer~ installation
+**** At the start of backup, sync with the ~peer~ to get latest chunks/packs
 *** TODO Store pack files in Amazon Glacier
 **** c.f. https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
 **** Offer user option to use "expedited" retrievals so they go faster
@@ -209,3 +120,9 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** Show current status, last backup
 **** Action to open the app and examine snapshots
 **** Action to open the app and check settings
+* Product
+** Name
+*** Joseph suggests "Attic"
+**** =atticapp.com= is taken
+**** =attic.app= is for sale
+**** Look for ~attic~ in different languages

@@ -247,6 +247,19 @@ function decryptStream(input: stream.Readable, output: stream.Writable, key: Buf
 }
 
 /**
+ * Compute the hash digest of the given data.
+ *
+ * @param data data from which to produce a checksum.
+ * @param algo digest algorithm to be used (e.g. sha1).
+ * @returns hex string of digest with `algo` plus "-" prefix.
+ */
+export function checksumData(data: string | Buffer, algo: string): string {
+  const hash = crypto.createHash(algo)
+  hash.update(data)
+  return `${algo}-${hash.digest('hex')}`
+}
+
+/**
  * Compute the hash digest of the given file.
  *
  * @param infile path of file to be processed.
