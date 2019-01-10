@@ -5,10 +5,14 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
 const posix = require('posix-ext')
+const xattr = require('fs-xattr')
 import * as core from './core'
 import * as database from './database'
 
 const freaddir = util.promisify(fs.readdir)
+const flstat = util.promisify(fs.lstat)
+const xlist = util.promisify(xattr.list)
+const xget = util.promisify(xattr.get)
 export const NULL_SHA1 = 'sha1-0000000000000000000000000000000000000000'
 
 /**
@@ -237,6 +241,16 @@ function modeToType(mode: number): FileType {
 }
 
 /**
+ * Represents an extended attribute.
+ */
+interface ExtAttr {
+  /** name of the extended attribute */
+  name: string,
+  /** hash digest of the attribute value */
+  hash: string
+}
+
+/**
  * Represents a file or directory within a tree object.
  */
 export interface TreeEntry {
@@ -250,7 +264,8 @@ export interface TreeEntry {
   ctime: number,
   mtime: number,
   /** SHA1 for tree, SHA256 for file, base64 encoded link value for symlinks */
-  reference: string
+  reference: string,
+  xattrs?: ExtAttr[]
 }
 
 /**
@@ -262,6 +277,9 @@ function sortTreeEntryByName(entries: TreeEntry[]): void {
   entries.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/**
+ * Result of calling `scantree()` function.
+ */
 interface TreeScan {
   entries: TreeEntry[]
   fileCount: number
@@ -291,11 +309,11 @@ async function scantree(basepath: string): Promise<TreeScan> {
     if (entry.isSymbolicLink()) {
       const fullpath = path.join(basepath, entry.name)
       const reference = readlink(fullpath)
-      entries.push(processPath(entry.name, fullpath, reference))
+      entries.push(await processPath(entry.name, fullpath, reference))
     } else if (entry.isFile()) {
       const fullpath = path.join(basepath, entry.name)
       const checksum = await core.checksumFile(fullpath, 'sha256')
-      entries.push(processPath(entry.name, fullpath, checksum))
+      entries.push(await processPath(entry.name, fullpath, checksum))
       fileCount++
     }
   }
@@ -307,18 +325,19 @@ async function scantree(basepath: string): Promise<TreeScan> {
 }
 
 /**
- * Create a `TreeEntry` record for this path.
+ * Create a `TreeEntry` record for this path, which may include storing extended
+ * attributes in the database.
  *
  * @param basename entry name being processed.
  * @param fullpath full path of the entry.
  * @param reference reference (sha1, sha256, symlink) for the entry.
  * @returns object representing this path.
  */
-function processPath(basename: string, fullpath: string, reference: string): TreeEntry {
-  const stat = fs.lstatSync(fullpath)
+async function processPath(basename: string, fullpath: string, reference: string): Promise<TreeEntry> {
+  const stat: fs.Stats = await flstat(fullpath)
   const user = posix.getpwuid(stat.uid)
   const group = posix.getgrgid(stat.gid)
-  return {
+  const doc: TreeEntry = {
     name: basename,
     mode: stat.mode,
     uid: stat.uid,
@@ -329,6 +348,18 @@ function processPath(basename: string, fullpath: string, reference: string): Tre
     mtime: stat.mtimeMs,
     reference: reference
   }
+  const attrs: string[] = await xlist(fullpath)
+  if (attrs) {
+    const xattrs: ExtAttr[] = []
+    for (let name of attrs) {
+      const value = await xget(fullpath, name)
+      const hash = core.checksumData(value, 'sha1')
+      await database.insertExtAttr(hash, value)
+      xattrs.push({name, hash})
+    }
+    doc.xattrs = xattrs
+  }
+  return doc
 }
 
 /**

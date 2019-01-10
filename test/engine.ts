@@ -5,6 +5,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as chai from 'chai'
 import * as fx from 'fs-extra'
+const xattr = require('fs-xattr')
 import * as database from '../src/database'
 import * as engine from '../src/engine'
 
@@ -44,8 +45,12 @@ describe('Engine Functionality', function () {
       const snapshot1 = await database.getSnapshot(snapSha1)
       assert.property(snapshot1, 'parent', 'snapshot has parent property')
       assert.equal(snapshot1.parent, engine.NULL_SHA1, 'first snapshot parent is 0')
+      // tree should have entries with user and group fields
+      const tree1 = await database.getTree(snapshot1.tree)
+      assert.isTrue(tree1.entries.every((e: engine.TreeEntry) => e.user && e.group))
       // make a change to the data set
       fx.copySync('test/fixtures/SekienAkashita.jpg', path.join(basepath, 'SekienAkashita.jpg'))
+      xattr.setSync(path.join(basepath, 'SekienAkashita.jpg'), 'me.fiedlers.test', 'foobar')
       // take another snapshot
       const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
       const snapshot2 = await database.getSnapshot(snapSha2)
@@ -60,9 +65,15 @@ describe('Engine Functionality', function () {
         'sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed',
         'changed files includes SekienAkashita.jpg'
       )
-      // tree should have entries with user and group fields
-      const tree1 = await database.getTree(snapshot1.tree)
-      assert.isTrue(tree1.entries.every((e: engine.TreeEntry) => e.user && e.group))
+      // ensure extended attributes are stored in database
+      const tree2 = await database.getTree(snapshot2.tree)
+      const entryWithAttr = tree2.entries.find((e: engine.TreeEntry) => {
+        return e.xattrs && e.xattrs.length && e.xattrs[0].name
+      })
+      assert.isDefined(entryWithAttr)
+      const extattr = await database.getExtAttr(entryWithAttr.xattrs[0].hash)
+      assert.isDefined(extattr)
+      assert.instanceOf(extattr, Buffer, 'extended attribute is a buffer')
     })
 
     it('should detect differences with mixed ordering', async function () {

@@ -119,6 +119,41 @@ export async function insertSnapshot(checksum: string, doc: any): Promise<void> 
 }
 
 /**
+ * Retrieve the extended attribute value by the given checksum.
+ *
+ * @param checksum checksum of the desired attribute.
+ * @returns attribute data, or null if not found.
+ */
+export async function getExtAttr(checksum: string): Promise<Buffer> {
+  const doc = await fetchDocument('xattr/' + checksum)
+  if (doc) {
+    return doc.value
+  }
+  return null
+}
+
+/**
+ * Ensure the database contains an extended attribute by the given checksum.
+ * Conflicts are ignored; if it has the same checksum, it is the same attribute.
+ *
+ * @param checksum hash digest of the attribute data.
+ * @param doc attribute data itself, stored as-is.
+ */
+export async function insertExtAttr(checksum: string, data: Buffer): Promise<void> {
+  try {
+    await db.put({
+      _id: 'xattr/' + checksum,
+      value: data
+    })
+    logger.info(`inserted new attribute ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
  * Retrieve the snapshot record by the given checksum.
  *
  * @param checksum checksum of the desired snapshot.
