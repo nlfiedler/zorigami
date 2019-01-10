@@ -50,7 +50,9 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** DONE Compute the difference from the previous snapshot
 **** TODO Specifically exclude the database from the initial data set
 **** DONE Produce a ~working~ snapshot of the dataset
-**** TODO Get the user and group names in addition to uid, gid
+**** DONE Get the user and group names in addition to uid, gid
+***** look for =getpwuid= and =getgrgid= support
+***** https://github.com/prantlf/node-posix-ext
 **** TODO Get the xattrs, if available (i.e. macOS)
 **** DONE Detect symbolic links and store their reference
 **** TODO Produce and upload pack files containing new/changed files

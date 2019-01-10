@@ -29,6 +29,7 @@
     "fs-extra": "^7.0.1",
     "http-errors": "~1.7.1",
     "morgan": "~1.9.0",
+    "posix-ext": "^0.4.5",
     "pouchdb": "^7.0.0",
     "ssh2-sftp-client": "^2.4.3",
     "tmp": "0.0.33",

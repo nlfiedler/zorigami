@@ -4,6 +4,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
+const posix = require('posix-ext')
 import * as core from './core'
 import * as database from './database'
 
@@ -243,7 +244,9 @@ export interface TreeEntry {
   name: string,
   mode: number,
   uid: number,
+  user: string,
   gid: number,
+  group: string,
   ctime: number,
   mtime: number,
   /** SHA1 for tree, SHA256 for file, base64 encoded link value for symlinks */
@@ -313,11 +316,15 @@ async function scantree(basepath: string): Promise<TreeScan> {
  */
 function processPath(basename: string, fullpath: string, reference: string): TreeEntry {
   const stat = fs.lstatSync(fullpath)
+  const user = posix.getpwuid(stat.uid)
+  const group = posix.getgrgid(stat.gid)
   return {
     name: basename,
     mode: stat.mode,
     uid: stat.uid,
+    user: user.name,
     gid: stat.gid,
+    group: group.name,
     ctime: stat.ctimeMs,
     mtime: stat.mtimeMs,
     reference: reference

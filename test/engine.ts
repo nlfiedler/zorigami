@@ -60,6 +60,9 @@ describe('Engine Functionality', function () {
         'sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed',
         'changed files includes SekienAkashita.jpg'
       )
+      // tree should have entries with user and group fields
+      const tree1 = await database.getTree(snapshot1.tree)
+      assert.isTrue(tree1.entries.every((e: engine.TreeEntry) => e.user && e.group))
     })
 
     it('should detect differences with mixed ordering', async function () {
