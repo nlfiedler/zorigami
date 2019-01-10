@@ -5,7 +5,8 @@
   "main": "app.js",
   "scripts": {
     "start": "node -r dotenv/config ./bin/www",
-    "test": "NODE_CONFIG_ENV=test mocha --delay -r dotenv/config -r ts-node/register test/*.ts"
+    "test": "NODE_CONFIG_ENV=test mocha --delay -r dotenv/config -r ts-node/register test/*.ts",
+    "lick": "license-checker --production --exclude MIT,ISC,LGPL,WTFPL,Apache-2.0,BSD-3-Clause,BSD-2-Clause,MPL-2.0,Unlicense"
   },
   "repository": {
     "type": "git",
@@ -54,6 +55,7 @@
     "gulp": "^4.0.0",
     "gulp-nodemon": "^2.4.2",
     "gulp-typescript": "^5.0.0",
+    "license-checker": "^25.0.0",
     "mocha": "^5.2.0",
     "ts-node": "^7.0.1",
     "typescript": "^3.2.2"

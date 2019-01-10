@@ -60,7 +60,7 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 (but without having all files in memory at once, which could be many the first time)
 ****** Maybe =EventEmitter= makes sense here, too, to allow reporting errors
 ***** TODO Split large files across packs
-*** TODO Add =license-checker= and run it
+*** DONE Add =license-checker= and run it
 *** TODO Consider if =Chunk= should have its own module, and more functions
 *** TODO Consider if =database= module should define a =Document= type
 *** TODO Update the architecture and data model in =NOTES.md=
