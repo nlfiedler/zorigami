@@ -52,10 +52,7 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** DONE Produce a ~working~ snapshot of the dataset
 **** TODO Get the user and group names in addition to uid, gid
 **** TODO Get the xattrs, if available (i.e. macOS)
-**** TODO Detect symbolic links and store their reference
-- Use =fs.lstat()= and =stats.isSymbolicLink()= to detect symlinks
-- Store the mode in the tree as =lrwxr-xr-x= (give or take some bits)
-- Store the link value as the =checksum= in the tree (since there is no file)
+**** DONE Detect symbolic links and store their reference
 **** TODO Produce and upload pack files containing new/changed files
 ***** TODO Fill a queue of N file objects to allow fitting chunks to packs
 (but without having all files in memory at once, which could be many the first time)

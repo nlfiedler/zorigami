@@ -97,15 +97,17 @@ export async function findChangedFiles(
   // use a queue to perform a breadth-first traversal
   const queue: typeof entry[] = []
   // to start, add tree for each snapshot to the queue
-  queue.push(['.', await getSnapshotTree(snapshot1), await getSnapshotTree(snapshot2)])
+  const snap1doc = await database.getSnapshot(snapshot1)
+  const snap2doc = await database.getSnapshot(snapshot2)
+  queue.push(['.', snap1doc.tree, snap2doc.tree])
   while (queue.length) {
     const entry = queue.shift()
     const tree1 = await database.getTree(entry[1])
     const entries1: TreeEntry[] = tree1.entries
     const tree2 = await database.getTree(entry[2])
     const entries2: TreeEntry[] = tree2.entries
-    entries1.sort((a, b) => a.name.localeCompare(b.name))
-    entries2.sort((a, b) => a.name.localeCompare(b.name))
+    sortTreeEntryByName(entries1)
+    sortTreeEntryByName(entries2)
     // walk through the lists in sorted, merged order
     let index1 = 0
     let index2 = 0
@@ -117,7 +119,7 @@ export async function findChangedFiles(
         index1++
       } else if (entry1.name > entry2.name) {
         // file or directory has been added
-        if (entry2.mode & fs.constants.S_IFDIR) {
+        if (modeToType(entry2.mode) === FileType.DIR) {
           // tree: add every file under it to 'added'
           await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
         } else {
@@ -126,22 +128,23 @@ export async function findChangedFiles(
         index2++
       } else if (entry1.reference !== entry2.reference) {
         // they have the same name but differ somehow
-        const is1dir = entry1.mode & fs.constants.S_IFDIR
-        const is1file = entry1.mode & fs.constants.S_IFREG
-        const is2dir = entry2.mode & fs.constants.S_IFDIR
-        const is2file = entry2.mode & fs.constants.S_IFREG
+        const is1dir: boolean = modeToType(entry1.mode) === FileType.DIR
+        const is1file: boolean = modeToType(entry1.mode) === FileType.REG
+        const is1link: boolean = modeToType(entry1.mode) === FileType.LNK
+        const is2dir: boolean = modeToType(entry2.mode) === FileType.DIR
+        const is2file: boolean = modeToType(entry2.mode) === FileType.REG
         if (is1dir && is2dir) {
           // tree A & B: add both trees to the queue
           const dirpath = path.join(entry[0], entry1.name)
           queue.push([dirpath, entry1.reference, entry2.reference])
-        } else if (is1file && is2file || is1dir && is2file) {
+        } else if ((is1file || is1dir || is1link) && is2file) {
           // new file or a changed file
           changed.set(path.join(entry[0], entry2.name), entry2.reference)
-        } else if (is1file && is2dir) {
+        } else if ((is1file || is1link) && is2dir) {
           // now a directory, add everything under it
           await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
         }
-        // some other thing (e.g. character device), ignore it for now
+        // ignore everything else
         index1++
         index2++
       } else {
@@ -154,10 +157,10 @@ export async function findChangedFiles(
     while (index2 < entries2.length) {
       const entry2 = entries2[index2]
       // file or directory has been added
-      if (entry2.mode & fs.constants.S_IFDIR) {
+      if (modeToType(entry2.mode) === FileType.DIR) {
         // tree: add every file under it to 'added'
         await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
-      } else {
+      } else if (modeToType(entry2.mode) === FileType.REG) {
         changed.set(path.join(entry[0], entry2.name), entry2.reference)
       }
       index2++
@@ -166,13 +169,20 @@ export async function findChangedFiles(
   return changed
 }
 
+/**
+ * For the given tree, add every file therein to the `changed` map.
+ *
+ * @param changed map to which new or changed files are added.
+ * @param basepath path prefix for files found under the tree.
+ * @param ref database document identifier of the tree record.
+ */
 async function addAllFilesUnder(changed: Map<string, string>, basepath: string, ref: string) {
   const tree = await database.getTree(ref)
   const entries: TreeEntry[] = tree.entries
   for (let entry of entries) {
-    if (entry.mode & fs.constants.S_IFDIR) {
+    if (modeToType(entry.mode) === FileType.DIR) {
       await addAllFilesUnder(changed, path.join(basepath, entry.name), entry.reference)
-    } else if (entry.mode & fs.constants.S_IFREG) {
+    } else if (modeToType(entry.mode) === FileType.REG) {
       changed.set(path.join(basepath, entry.name), entry.reference)
     }
   }
@@ -184,15 +194,51 @@ function performBackup() {
   // TODO: filter out files that we already have records for
 }
 
-async function getSnapshotTree(snapshot: string): Promise<string> {
-  const doc = await database.getSnapshot(snapshot)
-  return doc.tree
+/**
+ * Represents the file type in a convenient form.
+ */
+const enum FileType {
+  FIFO,
+  CHR,
+  DIR,
+  BLK,
+  REG,
+  LNK,
+  SOCK,
+  OTHER // did not match any known constant
+}
+
+/**
+ * Convert the file mode to the `FileType` enum.
+ *
+ * @param mode file mode as from `stat`.
+ * @returns one of the `FileType` values.
+ */
+function modeToType(mode: number): FileType {
+  switch (mode & fs.constants.S_IFMT) {
+    case fs.constants.S_IFIFO:
+      return FileType.FIFO
+    case fs.constants.S_IFCHR:
+      return FileType.CHR
+    case fs.constants.S_IFDIR:
+      return FileType.DIR
+    case fs.constants.S_IFBLK:
+      return FileType.BLK
+    case fs.constants.S_IFREG:
+      return FileType.REG
+    case fs.constants.S_IFLNK:
+      return FileType.LNK
+    case fs.constants.S_IFSOCK:
+      return FileType.SOCK
+    default:
+      return FileType.OTHER
+  }
 }
 
 /**
  * Represents a file or directory within a tree object.
  */
-interface TreeEntry {
+export interface TreeEntry {
   /** file or directory name */
   name: string,
   mode: number,
@@ -200,8 +246,17 @@ interface TreeEntry {
   gid: number,
   ctime: number,
   mtime: number,
-  /** SHA1 for tree, SHA256 for file */
+  /** SHA1 for tree, SHA256 for file, base64 encoded link value for symlinks */
   reference: string
+}
+
+/**
+ * Sorts the array of `TreeEntry` objects in place.
+ *
+ * @param entries array of `TreeEntry` objects to sort.
+ */
+function sortTreeEntryByName(entries: TreeEntry[]): void {
+  entries.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 interface TreeScan {
@@ -230,7 +285,11 @@ async function scantree(basepath: string): Promise<TreeScan> {
     }
   }
   for (let entry of dirents) {
-    if (entry.isFile()) {
+    if (entry.isSymbolicLink()) {
+      const fullpath = path.join(basepath, entry.name)
+      const reference = readlink(fullpath)
+      entries.push(processPath(entry.name, fullpath, reference))
+    } else if (entry.isFile()) {
       const fullpath = path.join(basepath, entry.name)
       const checksum = await core.checksumFile(fullpath, 'sha256')
       entries.push(processPath(entry.name, fullpath, checksum))
@@ -249,11 +308,11 @@ async function scantree(basepath: string): Promise<TreeScan> {
  *
  * @param basename entry name being processed.
  * @param fullpath full path of the entry.
- * @param checksum checksum for the entry.
+ * @param reference reference (sha1, sha256, symlink) for the entry.
  * @returns object representing this path.
  */
-function processPath(basename: string, fullpath: string, checksum: string): TreeEntry {
-  const stat = fs.statSync(fullpath)
+function processPath(basename: string, fullpath: string, reference: string): TreeEntry {
+  const stat = fs.lstatSync(fullpath)
   return {
     name: basename,
     mode: stat.mode,
@@ -261,8 +320,19 @@ function processPath(basename: string, fullpath: string, checksum: string): Tree
     gid: stat.gid,
     ctime: stat.ctimeMs,
     mtime: stat.mtimeMs,
-    reference: checksum
+    reference: reference
   }
+}
+
+/**
+ * Read the symbolic link value as base64 encoded bytes.
+ *
+ * @param path full path to the symbolic link.
+ * @returns base64 encoded value of the link.
+ */
+function readlink(path: string): string {
+  const buf = fs.readlinkSync(path, { encoding: 'buffer' })
+  return buf.toString('base64')
 }
 
 /**
@@ -293,7 +363,7 @@ async function insertTree(tree: TreeEntry[]): Promise<void> {
  * @return formatted tree.
  */
 function formatTree(entries: TreeEntry[]): string {
-  entries.sort((a, b) => a.name.localeCompare(b.name))
+  sortTreeEntryByName(entries)
   const formed = entries.map(e => {
     return `${e.mode} ${e.uid}:${e.gid} ${e.ctime} ${e.mtime} ${e.reference} ${e.name}`
   })

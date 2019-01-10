@@ -119,11 +119,64 @@ describe('Engine Functionality', function () {
       assert.equal(changes1.size, 2, '2 changed files')
       assert.isTrue(changes1.has('mmm'), 'mmm has changed')
       assert.isTrue(changes1.has('ccc/ccc.txt'), 'ccc.txt has changed')
+    })
   })
 
-    // TODO: test data where files become links
-    // TODO: test data where directories become links
-    // TODO: test data where links become directories
-    // TODO: test data where links become files
+  describe('snapshots and symbolic links', function () {
+    it('should encode symbolic links in the tree', async function () {
+      await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      fx.removeSync(basepath)
+      fx.ensureDirSync(basepath)
+      fs.writeFileSync(path.join(basepath, 'mmm.txt'), 'morose monkey munching muffins')
+      fs.symlinkSync('mmm.txt', path.join(basepath, 'linky'))
+      const snapSha1 = await engine.takeSnapshot(basepath)
+      const snapshot1 = await database.getSnapshot(snapSha1)
+      const tree1 = await database.getTree(snapshot1.tree)
+      assert.isTrue(tree1.entries.some((e: engine.TreeEntry) => e.reference === 'bW1tLnR4dA=='))
+    })
+
+    it('should track links becoming files/dirs', async function () {
+      await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      fx.removeSync(basepath)
+      fx.ensureDirSync(basepath)
+      fs.writeFileSync(path.join(basepath, 'mmm.txt'), 'morose monkey munching muffins')
+      fs.symlinkSync('mmm.txt', path.join(basepath, 'bbb'))
+      fs.symlinkSync('mmm.txt', path.join(basepath, 'ccc'))
+      const snapSha1 = await engine.takeSnapshot(basepath)
+      // replace the links with files and directories
+      fs.unlinkSync(path.join(basepath, 'bbb'))
+      fs.writeFileSync(path.join(basepath, 'bbb'), 'bored baby baboons bathing')
+      fs.unlinkSync(path.join(basepath, 'ccc'))
+      fs.mkdirSync(path.join(basepath, 'ccc'))
+      fs.writeFileSync(path.join(basepath, 'ccc', 'ccc.txt'), 'catastrophic catastrophes')
+      const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
+      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      assert.equal(changes1.size, 2, '2 changed files')
+      assert.isTrue(changes1.has('bbb'), 'bbb has changed')
+      assert.isTrue(changes1.has('ccc/ccc.txt'), 'ccc.txt has changed')
+    })
+
+    it('should ignore files/dirs becoming links', async function () {
+      await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      fx.removeSync(basepath)
+      fx.ensureDirSync(basepath)
+      fs.writeFileSync(path.join(basepath, 'bbb'), 'bored baby baboons bathing')
+      fs.mkdirSync(path.join(basepath, 'ccc'))
+      fs.writeFileSync(path.join(basepath, 'ccc', 'ccc.txt'), 'cuddling cute cucumbers')
+      const snapSha1 = await engine.takeSnapshot(basepath)
+      // replace the files and directories with links
+      fs.writeFileSync(path.join(basepath, 'mmm.txt'), 'morose monkey munching muffins')
+      fs.unlinkSync(path.join(basepath, 'bbb'))
+      fs.symlinkSync('mmm.txt', path.join(basepath, 'bbb'))
+      fx.removeSync(path.join(basepath, 'ccc'))
+      fs.symlinkSync('mmm.txt', path.join(basepath, 'ccc'))
+      const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
+      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      assert.equal(changes1.size, 1, '1 changed files')
+      assert.isTrue(changes1.has('mmm.txt'), 'mmm.txt has changed')
+    })
   })
 })
