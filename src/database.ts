@@ -129,9 +129,9 @@ export async function getSnapshot(checksum: string): Promise<any> {
 }
 
 /**
- * For any fields of the document that are objects with property 'type' that
- * equals 'Buffer', convert the field to a Buffer whose data is that of the
- * 'data' field.
+ * For any fields of the document that are objects with property `type` that
+ * equals `Buffer`, convert the field to a Buffer whose data is that of the
+ * `data` field.
  *
  * @param doc document fetched from database, modified in place.
  */
