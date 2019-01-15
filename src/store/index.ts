@@ -63,7 +63,7 @@ export interface Store {
    * @param packfile path of the pack file.
    * @param bucket name of the bucket in which to store the pack.
    * @param object desired name of the pack in the bucket.
-   * @returns emits `progress`, `done`, and `error` events.
+   * @returns emits `progress`, `object`, `done`, and `error` events.
    */
   storePack(packfile: string, bucket: string, object: string): StoreEmitter
 
@@ -97,19 +97,6 @@ export interface Store {
 
 const stores = new Map()
 
-// storage implementations define a class that this module expects
-// engine reads the configuration and instantiates the store objects
-// various storage objects are registered with this module
-// operations in this module perform input validation and such
-// this module then delegates to the storage implementations
-// implement a "local" store that uses a local path
-//
-// basic API:
-// - store a pack using bucket and object name
-// - retrieve a pack using bucket and object name
-// - list all buckets
-// - list all objects in a bucket
-
 /**
  * Add the given store implementation to those used for storing packs.
  *
@@ -130,13 +117,16 @@ export function unregisterStore(key: string): void {
 }
 
 /**
- * Save the given pack file to the store named by the key.
+ * Save the given pack file to the store named by the key. The store will emit
+ * an `object` event prior to the `done` event, with the name of the object as
+ * it is known in the remote store. Some remote stores generate an identifier
+ * for the object (e.g. Amazon Glacier).
  *
  * @param key the key for the store to receive the pack.
  * @param packfile the pack to be stored.
  * @param bucket the bucket to which the pack should be stored.
  * @param object preferred name of the remote object for this pack.
- * @returns emits `progress`, `done`, and `error` events.
+ * @returns emits `progress`, `object`, `done`, and `error` events.
  */
 export function storePack(key: string, packfile: string, bucket: string, object: string): StoreEmitter {
   if (stores.has(key)) {

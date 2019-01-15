@@ -50,6 +50,8 @@ export interface Chunk {
   readonly offset: number
   /** Size in bytes of the chunk. */
   readonly size: number
+  /** If true, chunk has been uploaded. */
+  uploaded?: boolean
 }
 
 /**
@@ -260,6 +262,32 @@ export function checksumData(data: string | Buffer, algo: string): string {
 }
 
 /**
+ * Convert a hash digest buffer to a hex string with an algo prefix.
+ *
+ * @param hash a hash digest in buffer form.
+ * @param algo algorithm used to compute the hash.
+ * @returns hash digest as hex string with algo prefix (e.g. "sha1-...").
+ */
+export function checksumFromBuffer(hash: Buffer, algo: string): string {
+  return algo + '-' + hash.toString('hex')
+}
+
+/**
+ * Convert a checksum string into a buffer of the hash digest.
+ *
+ * @param value hash digest with an algorithm prefix (e.g. 'sha1-').
+ * @return buffer with digest bytes.
+ */
+export function bufferFromChecksum(value: string): Buffer {
+  if (value.startsWith('sha1-')) {
+    return Buffer.from(value.slice(5), 'hex')
+  } else if (value.startsWith('sha256-')) {
+    return Buffer.from(value.slice(7), 'hex')
+  }
+  throw new verr.VError(`checksum unsupported: ${value}`)
+}
+
+/**
  * Compute the hash digest of the given file.
  *
  * @param infile path of file to be processed.
@@ -467,7 +495,7 @@ async function unpackChunksV1(infd: number, outdir: string) {
     await readBytes(infd, buffer, 0, 36, fpos)
     fpos += 36
     const chunkSize = buffer.readUInt32BE(0)
-    const fname = 'sha256-' + buffer.slice(4, 36).toString('hex')
+    const fname = checksumFromBuffer(buffer.slice(4, 36), 'sha256')
     const outfile = path.join(outdir, fname)
     const outfd = await fopen(outfile, 'w')
     await copyBytes(infd, fpos, buffer, outfd, chunkSize)
@@ -517,7 +545,7 @@ export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys
   header.write('C4PX')
   header.writeUInt32BE(1, 4)
   const prefix = Buffer.concat([header, mac, masterIV, encryptedKeys])
-  await copyFile(prefix, encfile, outfile)
+  await copyFileWithPrefix(prefix, encfile, outfile)
   fs.unlinkSync(encfile)
   return results
 }
@@ -668,7 +696,7 @@ async function copyBytes(infd: number, fpos: number, buffer: Buffer, outfd: numb
  * @param infile input file path.
  * @param outfile output file path.
  */
-function copyFile(header: Buffer, infile: string, outfile: string) {
+export function copyFileWithPrefix(header: Buffer, infile: string, outfile: string) {
   const input = fs.createReadStream(infile)
   const output = fs.createWriteStream(outfile)
   return new Promise((resolve, reject) => {
@@ -704,58 +732,60 @@ export function findFileChunks(infile: string, average: number): Promise<Chunk[]
   const target = Buffer.alloc(dedupe.targetSize(minimum, source.length))
 
   return new Promise((resolve, reject) => {
-    let flags = 0
+    let chunks: Chunk[] = []
+    let fileOffset = 0
+    let chunkOffset = 0
+
     const close = (error?: Error) => {
       fs.closeSync(fd)
       if (error) {
-        // force the loop to exit
-        flags = 1
         reject(error)
       }
     }
 
-    let chunks: Chunk[] = []
-    let fileOffset = 0
-    let chunkOffset = 0
-    let sourceStart = 0
-
-    while (flags === 0) {
+    const read = (sourceStart: number) => {
       const length = source.length - sourceStart
       const bytesRead = fs.readSync(fd, source, sourceStart, length, fileOffset)
       fileOffset += bytesRead
-      flags = (bytesRead < length) ? 1 : 0
-      const sourceSize = sourceStart + bytesRead
+      const flags = (bytesRead < length) ? 1 : 0
+      write(sourceStart + bytesRead, flags)
+    }
+
+    const write = (sourceSize: number, flags: number): void => {
       dedupe.deduplicate(average, minimum, maximum, source, 0, sourceSize, target, 0, flags,
         (error: Error, sourceOffset: number, targetOffset: number) => {
           // if error is defined, a runtime error occurred
           if (error) {
-            close(error)
-            return
+            return close(error)
           }
           let offset = 0
           while (offset < targetOffset) {
-            const hash = target.slice(offset, offset + 32)
-            offset += 32
+            const hash = Buffer.allocUnsafe(32)
+            offset += target.copy(hash, 0, offset, offset + 32)
             const size = target.readUInt32BE(offset)
             offset += 4
-            chunks.push({ hash, offset: chunkOffset, size })
+            chunks.push({ path: infile, hash, offset: chunkOffset, size })
             chunkOffset += size
           }
           // Anything remaining in the source buffer should be moved to the
           // beginning of the source buffer, and become the sourceStart for the
           // next read so that we do not read data we have already read:
-          sourceStart = sourceSize - sourceOffset
-          if (sourceStart > 0) {
-            source.copy(source, 0, sourceOffset, sourceOffset + sourceStart)
+          const remaining = sourceSize - sourceOffset
+          if (remaining > 0) {
+            source.copy(source, 0, sourceOffset, sourceOffset + remaining)
           }
-          if (flags !== 0) {
+          if (flags === 1) {
             // the last block has finished processing
             close()
             resolve(chunks)
+          } else {
+            read(remaining)
           }
         }
       )
     }
+
+    read(0)
   })
 }
 

@@ -75,6 +75,7 @@ export class SecureFtpStore {
       return sftp.fastPut(packfile, path.join(this.basepath, bucket, object))
     }).then((data) => {
       sftp.end()
+      emitter.emit('object', object)
       emitter.emit('done', data)
     }).catch((err) => {
       sftp.end()

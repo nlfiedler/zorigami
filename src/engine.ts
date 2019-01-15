@@ -4,16 +4,21 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
+import * as fx from 'fs-extra'
 const posix = require('posix-ext')
 const xattr = require('fs-xattr')
+import * as tmp from 'tmp'
 import * as core from './core'
 import * as database from './database'
+import * as store from './store'
 
 const freaddir = util.promisify(fs.readdir)
 const flstat = util.promisify(fs.lstat)
 const xlist = util.promisify(xattr.list)
 const xget = util.promisify(xattr.get)
 export const NULL_SHA1 = 'sha1-0000000000000000000000000000000000000000'
+// Chunks will be sized relative to pack files, up to this maximum.
+const MAX_CHUNK_SIZE = 4194304
 
 /**
  * Get the master keys for encrypting the pack files. They will be loaded from
@@ -46,6 +51,290 @@ export async function getMasterKeys(password: string): Promise<core.MasterKeys> 
     keys = core.decryptMasterKeys(data, password)
   }
   return keys
+}
+
+interface Dataset {
+  /** The computer UUID for generating bucket names. */
+  uniqueId: string
+  /** local base path of dataset to be saved */
+  basepath: string
+  /**
+   * latest snapshot reference; `NULL_SHA1` if not set
+   */
+  latest: string
+  /** path for temporary pack building */
+  workspace: string
+  // + schedule/frequency overrides
+  // + ignore overrides
+  /** Target size in bytes for pack files. */
+  packSize: number
+  // + storage overrides (e.g. `local` vs `aws`)
+  /** Name of the store to contain pack files. */
+  store: string
+}
+
+/**
+ * Results of building a single pack file, with information suitable
+ * for updating the database.
+ */
+interface PackBuildResults {
+  /** pack file sha256 */
+  checksum: string,
+  /** the chunks in this pack file */
+  chunks: core.Chunk[]
+}
+
+/**
+ * Keep track of files and their chunks, constructing pack files, tracking which
+ * chunks are uploaded, and thereby which files are done.
+ */
+class PackBuilder {
+  private packSize: number
+  private chunks: core.Chunk[]
+  private chunksSize: number
+  /** tracks files and their chunks */
+  private fileChunks: Map<string, core.Chunk[]>
+
+  constructor(packSize: number) {
+    this.packSize = packSize
+    this.chunks = []
+    this.chunksSize = 0
+    this.fileChunks = new Map<string, core.Chunk[]>()
+  }
+
+  async addFile(filepath: string, checksum: string): Promise<void> {
+    const stat: fs.Stats = await flstat(filepath)
+    let fileChunks = null
+    if (stat.size > this.packSize) {
+      // Split large files into chunks, add chunks to the list; the file chunk
+      // finder produces a fairly wide range of sizes, so aim for chunks being
+      // about 1/4 of the pack size. Keep chunks below a reasonable size.
+      let desired = Math.min(this.packSize / 4, MAX_CHUNK_SIZE)
+      fileChunks = await core.findFileChunks(filepath, desired)
+    } else {
+      // small files are chunks all by themselves
+      const hash = core.bufferFromChecksum(checksum)
+      fileChunks = [{ path: filepath, hash, offset: 0, size: stat.size }]
+    }
+    const newChunks = await filterKnownChunks(fileChunks)
+    for (let chunk of newChunks) {
+      this.chunks.push(chunk)
+      this.chunksSize += chunk.size
+    }
+    this.fileChunks.set(checksum, newChunks)
+  }
+
+  hasChunks(): boolean {
+    return this.chunks.length > 0
+  }
+
+  isFull(): boolean {
+    return this.chunksSize > this.packSize
+  }
+
+  async buildPack(outfile: string, keys: core.MasterKeys): Promise<PackBuildResults> {
+    let size = 0
+    let index = 0
+    while (size < this.packSize && index < this.chunks.length) {
+      size += this.chunks[index].size
+      index++
+    }
+    const outgoing = this.chunks.slice(0, index)
+    const sha256 = await core.packChunksEncrypted(outgoing, outfile, keys)
+    this.chunks = this.chunks.slice(index)
+    this.chunksSize -= size
+    return { checksum: sha256, chunks: outgoing }
+  }
+
+  extractComplete(chunks: core.Chunk[]): Map<string, core.Chunk[]> {
+    // get the done chunks in a convenient map by hash with their checksum as a
+    // hex string (buffers do not compare automatically)
+    const doneChunks = new Map()
+    for (let chunk of chunks) {
+      doneChunks.set(chunk.hash.toString('hex'), chunk)
+    }
+    // mark chunks as being uploaded if they are in the done set
+    for (let fileChunks of this.fileChunks.values()) {
+      for (let chunk of fileChunks) {
+        if (doneChunks.has(chunk.hash.toString('hex'))) {
+          chunk.uploaded = true
+        }
+      }
+    }
+    // extract those files that have been completely uploaded
+    const completed: Map<string, core.Chunk[]> = new Map()
+    this.fileChunks.forEach((fileChunks, checksum, map) => {
+      const allDone = fileChunks.every((e) => e.uploaded)
+      if (allDone) {
+        completed.set(checksum, fileChunks)
+        map.delete(checksum)
+      }
+    })
+    return completed
+  }
+}
+
+/**
+ * Perform a backup for the given dataset.
+ *
+ * @param dataset the dataset for which to perform a backup.
+ * @param keys master keys for encrypting the pack.
+ * @returns checksum of the new snapshot.
+ */
+export async function performBackup(dataset: Dataset, keys: core.MasterKeys): Promise<string> {
+  fx.ensureDirSync(dataset.workspace)
+  const snapshot = await takeSnapshot(dataset.basepath)
+  const bucket = core.generateBucketName(dataset.uniqueId)
+  const builder = new PackBuilder(dataset.packSize)
+  const sendOnePack = async () => {
+    const packfile = tmp.fileSync({ dir: dataset.workspace }).name
+    const object = path.basename(packfile)
+    const results = await builder.buildPack(packfile, keys)
+    const remoteObject = await waitForUpload(store.storePack(dataset.store, packfile, bucket, object))
+    await recordFinishedChunks(results, bucket, remoteObject)
+    const files = builder.extractComplete(results.chunks)
+    await recordFinishedFiles(files)
+  }
+  const handleFile = async (filepath: string, checksum: string) => {
+    // ignore files which already have records
+    const filerec = await database.getFile(checksum)
+    if (filerec === null) {
+      await builder.addFile(filepath, checksum)
+      // loop until pack builder is below desired size
+      // (adding a very large file may require multiple packs)
+      while (builder.isFull()) {
+        await sendOnePack()
+      }
+    }
+  }
+  if (dataset.latest === NULL_SHA1) {
+    // no previous snapshot, visit every file in the new snapshot
+    for await (let [filepath, filesha] of walkTree(snapshot)) {
+      const fullpath = path.join(dataset.basepath, filepath)
+      await handleFile(fullpath, filesha)
+    }
+  } else {
+    // find those files that changed from the previous snapshot
+    const changes = await findChangedFiles(dataset.latest, snapshot)
+    for (let [filepath, filesha] of changes.entries()) {
+      const fullpath = path.join(dataset.basepath, filepath)
+      await handleFile(fullpath, filesha)
+    }
+  }
+  // empty the last pack file
+  while (builder.hasChunks()) {
+    await sendOnePack()
+  }
+  return snapshot
+}
+
+/**
+ * A generator that yields [filepath, checksum] pairs for files within
+ * the given snapshot. Descends into directories in a bread-first fashion.
+ *
+ * @param snapshot checksum of the snapshot to process.
+ * @returns tuple of file path and SHA256 checksum.
+ */
+async function* walkTree(snapshot: string): AsyncIterableIterator<[string, string]> {
+  // queue entry is (full-path, tree-sha1)
+  let queueEntry: [string, string]
+  // use a queue to perform a breadth-first traversal
+  const queue: typeof queueEntry[] = []
+  const snapdoc = await database.getSnapshot(snapshot)
+  queue.push(['.', snapdoc.tree])
+  while (queue.length) {
+    const [basedir, treesha] = queue.shift()
+    const tree = await database.getTree(treesha)
+    for (let ent of tree.entries) {
+      if (modeToType(ent.mode) === FileType.DIR) {
+        queue.push([path.join(basedir, ent.name), ent.reference])
+      } else if (modeToType(ent.mode) === FileType.REG) {
+        yield [path.join(basedir, ent.name), ent.reference]
+      }
+    }
+  }
+}
+
+/**
+ * Wait for a pack file upload to complete, returning the object name
+ * as it is known on the remote end.
+ *
+ * @param emitter the store event emitter.
+ * @returns resolves to the remote object identifier.
+ */
+function waitForUpload(emitter: store.StoreEmitter): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let object: string = null
+    emitter.on('object', (name) => {
+      object = name
+    })
+    emitter.on('error', (err) => {
+      reject(err)
+    })
+    emitter.on('done', () => {
+      resolve(object)
+    })
+  })
+}
+
+async function filterKnownChunks(chunks: core.Chunk[]): Promise<core.Chunk[]> {
+  const results: core.Chunk[] = []
+  for (let chunk of chunks) {
+    const key = core.checksumFromBuffer(chunk.hash, 'sha256')
+    const chunkrec = await database.getChunk(key)
+    if (chunkrec === null) {
+      results.push(chunk)
+    }
+  }
+  return results
+}
+
+/**
+ * Record the packs and chunks that were successfully uploaded.
+ * 
+ * @param results details regarding the pack file.
+ * @param bucket name of the remote bucket.
+ * @param object name of the remote object (may be archive identifier).
+ */
+async function recordFinishedChunks(results: PackBuildResults, bucket: string, object: string) {
+  // chunk records point to the packs
+  for (let chunk of results.chunks) {
+    const doc = {
+      length: chunk.size,
+      pack: results.checksum
+    }
+    await database.insertChunk(core.checksumFromBuffer(chunk.hash, 'sha256'), doc)
+  }
+  // pack records provide the remote coordinates
+  const doc = {
+    bucket,
+    object,
+    upload_date: Date.now()
+  }
+  await database.insertPack(results.checksum, doc)
+}
+
+/**
+ * Record the files that were successfully uploaded in their entirety.
+ * 
+ * @param files map of file checksums to the chunks within the file.
+ */
+async function recordFinishedFiles(files: Map<string, core.Chunk[]>) {
+  // file records track the file size and all of its chunks
+  for (let [checksum, chunks] of files.entries()) {
+    let size = 0
+    const parts = []
+    for (let chunk of chunks) {
+      const digest = core.checksumFromBuffer(chunk.hash, 'sha256')
+      parts.push({ offset: chunk.offset, digest })
+      size += chunk.size
+    }
+    const doc = {
+      length: size,
+      chunks: parts
+    }
+    await database.insertFile(checksum, doc)
+  }
 }
 
 /**
@@ -106,10 +395,10 @@ export async function findChangedFiles(
   const snap2doc = await database.getSnapshot(snapshot2)
   queue.push(['.', snap1doc.tree, snap2doc.tree])
   while (queue.length) {
-    const entry = queue.shift()
-    const tree1 = await database.getTree(entry[1])
+    const [basedir, tree1sha, tree2sha] = queue.shift()
+    const tree1 = await database.getTree(tree1sha)
     const entries1: TreeEntry[] = tree1.entries
-    const tree2 = await database.getTree(entry[2])
+    const tree2 = await database.getTree(tree2sha)
     const entries2: TreeEntry[] = tree2.entries
     sortTreeEntryByName(entries1)
     sortTreeEntryByName(entries2)
@@ -126,9 +415,9 @@ export async function findChangedFiles(
         // file or directory has been added
         if (modeToType(entry2.mode) === FileType.DIR) {
           // tree: add every file under it to 'added'
-          await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
+          await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
         } else {
-          changed.set(path.join(entry[0], entry2.name), entry2.reference)
+          changed.set(path.join(basedir, entry2.name), entry2.reference)
         }
         index2++
       } else if (entry1.reference !== entry2.reference) {
@@ -140,14 +429,14 @@ export async function findChangedFiles(
         const is2file: boolean = modeToType(entry2.mode) === FileType.REG
         if (is1dir && is2dir) {
           // tree A & B: add both trees to the queue
-          const dirpath = path.join(entry[0], entry1.name)
+          const dirpath = path.join(basedir, entry1.name)
           queue.push([dirpath, entry1.reference, entry2.reference])
         } else if ((is1file || is1dir || is1link) && is2file) {
           // new file or a changed file
-          changed.set(path.join(entry[0], entry2.name), entry2.reference)
+          changed.set(path.join(basedir, entry2.name), entry2.reference)
         } else if ((is1file || is1link) && is2dir) {
           // now a directory, add everything under it
-          await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
+          await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
         }
         // ignore everything else
         index1++
@@ -164,9 +453,9 @@ export async function findChangedFiles(
       // file or directory has been added
       if (modeToType(entry2.mode) === FileType.DIR) {
         // tree: add every file under it to 'added'
-        await addAllFilesUnder(changed, path.join(entry[0], entry2.name), entry2.reference)
+        await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
       } else if (modeToType(entry2.mode) === FileType.REG) {
-        changed.set(path.join(entry[0], entry2.name), entry2.reference)
+        changed.set(path.join(basedir, entry2.name), entry2.reference)
       }
       index2++
     }
@@ -191,12 +480,6 @@ async function addAllFilesUnder(changed: Map<string, string>, basepath: string, 
       changed.set(path.join(basepath, entry.name), entry.reference)
     }
   }
-}
-
-function performBackup() {
-  // TODO: take snapshot
-  // TODO: find changed files
-  // TODO: filter out files that we already have records for
 }
 
 /**
@@ -247,7 +530,7 @@ interface ExtAttr {
   /** name of the extended attribute */
   name: string,
   /** hash digest of the attribute value */
-  hash: string
+  digest: string
 }
 
 /**
@@ -355,7 +638,7 @@ async function processPath(basename: string, fullpath: string, reference: string
       const value = await xget(fullpath, name)
       const hash = core.checksumData(value, 'sha1')
       await database.insertExtAttr(hash, value)
-      xattrs.push({name, hash})
+      xattrs.push({ name, digest: hash })
     }
     doc.xattrs = xattrs
   }

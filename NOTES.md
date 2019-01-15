@@ -165,7 +165,7 @@
         + ctime, mtime
         + xattrs[]
           - name
-          - hash (SHA1 for xattr, with "sha1-" prefix)
+          - digest (SHA1 for xattr, with "sha1-" prefix)
         + reference (SHA1 for tree, SHA256 for file, base64-encoded value for symlink)
         + entry name
 * file records
@@ -173,7 +173,7 @@
     - length: size of file in bytes (absent if `changed`)
     - chunks: (absent if `changed`)
         + offset: file position for this chunk
-        + chunk SHA256
+        + digest: chunk SHA256
     - changed: SHA256 at time of backup, if different from key
 * extended attribute records
     - key: `xattr/` + SHA1 of the attribute value (with "sha1-" prefix)

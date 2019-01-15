@@ -5,15 +5,21 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as chai from 'chai'
 import * as fx from 'fs-extra'
+import * as tmp from 'tmp'
 const xattr = require('fs-xattr')
+import * as core from '../src/core'
 import * as database from '../src/database'
 import * as engine from '../src/engine'
+import * as store from '../src/store'
+import * as local from '../src/store/local'
 
 const assert = chai.assert
 
 describe('Engine Functionality', function () {
   describe('basic encryption', function () {
     it('should generate master keys and save to database', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       // ensure the encryption record does not yet exist
       let result = await database.fetchDocument('encryption')
@@ -35,6 +41,8 @@ describe('Engine Functionality', function () {
 
   describe('basic snapshots', function () {
     it('should record a snapshot to database', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -71,12 +79,14 @@ describe('Engine Functionality', function () {
         return e.xattrs && e.xattrs.length && e.xattrs[0].name
       })
       assert.isDefined(entryWithAttr)
-      const extattr = await database.getExtAttr(entryWithAttr.xattrs[0].hash)
+      const extattr = await database.getExtAttr(entryWithAttr.xattrs[0].digest)
       assert.isDefined(extattr)
       assert.instanceOf(extattr, Buffer, 'extended attribute is a buffer')
     })
 
     it('should detect differences with mixed ordering', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -114,6 +124,8 @@ describe('Engine Functionality', function () {
     })
 
     it('should detect entry type changes', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -138,6 +150,8 @@ describe('Engine Functionality', function () {
 
   describe('snapshots and symbolic links', function () {
     it('should encode symbolic links in the tree', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -151,6 +165,8 @@ describe('Engine Functionality', function () {
     })
 
     it('should track links becoming files/dirs', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -173,6 +189,8 @@ describe('Engine Functionality', function () {
     })
 
     it('should ignore files/dirs becoming links', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -192,5 +210,137 @@ describe('Engine Functionality', function () {
       assert.equal(changes1.size, 1, '1 changed files')
       assert.isTrue(changes1.has('mmm.txt'), 'mmm.txt has changed')
     })
+  })
+
+  describe('basic backup', function () {
+    it('should produce pack files for initial backup', async function () {
+      // PouchDB 7.0 takes more than 2 seconds to prime the index
+      this.timeout(10000)
+      await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      fx.removeSync(basepath)
+      fx.ensureDirSync(basepath)
+      fx.copySync('test/fixtures/lorem-ipsum.txt', path.join(basepath, 'lorem-ipsum.txt'))
+      // take a snapshot of the test data
+      const uniqId = core.generateUniqueId('charlie', 'localhost')
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const packdir = 'test/tmp/packs'
+      fx.removeSync(packdir)
+      const workdir = 'test/tmp/workspace'
+      fx.removeSync(workdir)
+      const localStore = new local.LocalStore(packdir)
+      store.registerStore('local', localStore)
+      const dataset = {
+        uniqueId: uniqId,
+        basepath,
+        latest: engine.NULL_SHA1,
+        workspace: workdir,
+        packSize: 65536,
+        store: 'local'
+      }
+      const snapSha1 = await engine.performBackup(dataset, keys)
+      // verify bucket and object exist
+      const buckets = await store.collectBuckets(store.listBuckets('local'))
+      assert.lengthOf(buckets, 1, 'returned one bucket')
+      assert.typeOf(buckets[0], 'string', 'bucket is a string')
+      const objects = await store.collectObjects(store.listObjects('local', buckets[0]))
+      assert.lengthOf(objects, 1, 'returned one object')
+      assert.typeOf(objects[0], 'string', 'object is a string')
+      dataset.latest = snapSha1
+      await database.updateConfiguration(dataset)
+    })
+
+    it('should produce pack files for second backup', async function () {
+      // await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      // fx.removeSync(basepath)
+      // fx.ensureDirSync(basepath)
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // add another file
+      fx.copySync('test/fixtures/SekienAkashita.jpg', path.join(basepath, 'SekienAkashita.jpg'))
+      // perform another backup
+      const snapSha1 = await engine.performBackup(dataset, keys)
+      // verify new pack files exist
+      const buckets = await store.collectBuckets(store.listBuckets('local'))
+      assert.lengthOf(buckets, 2, 'returned two buckets')
+      buckets.sort()
+      let objects = await store.collectObjects(store.listObjects('local', buckets[0]))
+      assert.lengthOf(objects, 1, 'returned one object')
+      objects = await store.collectObjects(store.listObjects('local', buckets[1]))
+      assert.lengthOf(objects, 2, 'returned two objects')
+      dataset.latest = snapSha1
+      await database.updateConfiguration(dataset)
+    })
+
+    it('should ignore duplicate files', async function () {
+      // await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      // fx.removeSync(basepath)
+      // fx.ensureDirSync(basepath)
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // add another file
+      fx.copySync('test/fixtures/lorem-ipsum.txt', path.join(basepath, 'lorem-copy.txt'))
+      // perform another backup
+      const snapSha1 = await engine.performBackup(dataset, keys)
+      // verify no new buckets have been created
+      const buckets = await store.collectBuckets(store.listBuckets('local'))
+      assert.lengthOf(buckets, 2, 'returned two buckets')
+      dataset.latest = snapSha1
+      await database.updateConfiguration(dataset)
+    })
+
+    it('should ignore duplicate chunks within large files', async function () {
+      // await database.clearDatabase()
+      const basepath = 'test/tmp/fixtures'
+      // fx.removeSync(basepath)
+      // fx.ensureDirSync(basepath)
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // count number of existing chunks in database
+      let chunks = await database.countChunks()
+      assert.equal(chunks, 7)
+      // add another file
+      core.copyFileWithPrefix(
+        Buffer.from('mary had a little lamb'),
+        'test/fixtures/SekienAkashita.jpg',
+        path.join(basepath, 'SekienShifted.jpg')
+      )
+      // perform another backup
+      const snapSha1 = await engine.performBackup(dataset, keys)
+      // verify new bucket and objects have been created
+      const buckets = await store.collectBuckets(store.listBuckets('local'))
+      assert.lengthOf(buckets, 3, 'returned three buckets')
+      buckets.sort()
+      let objects = await store.collectObjects(store.listObjects('local', buckets[0]))
+      assert.lengthOf(objects, 1, 'returned one object')
+      objects = await store.collectObjects(store.listObjects('local', buckets[1]))
+      assert.lengthOf(objects, 2, 'returned two objects')
+      objects = await store.collectObjects(store.listObjects('local', buckets[2]))
+      assert.lengthOf(objects, 1, 'returned one object')
+      dataset.latest = snapSha1
+      await database.updateConfiguration(dataset)
+      // ensure only one additional chunk in the database
+      chunks = await database.countChunks()
+      assert.equal(chunks, 8)
+      // verify that only the new chunk was written to the pack file
+      const packfile = tmp.fileSync().name
+      await store.waitForDone(store.retrievePack('local', buckets[2], objects[0], packfile))
+      const outdir = tmp.dirSync().name
+      await core.unpackChunksEncrypted(packfile, outdir, keys)
+      const entries = fs.readdirSync(outdir, { withFileTypes: true })
+      assert.lengthOf(entries, 1, 'one chunk unpacked')
+      assert.equal(entries[0].name, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1')
+      const chunkDigest = await core.checksumFile(
+        path.join(outdir, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1'), 'sha256')
+      assert.equal(chunkDigest, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1')
+    })
+    // TODO: restore the lorem-ipsum.txt file using its sha256
+    // TODO: restore the SekienAkashita.jpg file using its sha256
   })
 })

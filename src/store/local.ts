@@ -44,6 +44,7 @@ export class LocalStore {
             if (err) {
               emitter.emit('error', err)
             } else {
+              emitter.emit('object', object)
               emitter.emit('done')
             }    
           })

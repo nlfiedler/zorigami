@@ -10,19 +10,72 @@ const dbPath: string = config.get('database.path')
 fx.ensureDirSync(dbPath)
 const db = new PouchDB(dbPath)
 
+declare function emit(value: any, count: number): void
+
+let queriesDefinition = {
+  _id: '_design/queries',
+  views: {
+    all_types: {
+      map: function (doc: any) {
+        if (doc._id.includes('/')) {
+          emit(doc._id.split('/')[0], 1)
+        }
+      }.toString(),
+      reduce: '_count'
+    }
+  }
+}
+
+/**
+ * If the schema has changed, update the design document. If it was not yet
+ * created, do so now.
+ *
+ * @param index design document to be inserted/updated.
+ * @returns true if index was created, false otherwise.
+ */
+async function createIndices(index: any): Promise<boolean> {
+  let created = false
+  try {
+    await db.get(index._id)
+  } catch (err) {
+    if (err.status === 404) {
+      await db.put(index)
+      created = true
+    } else {
+      throw err
+    }
+  }
+  // clean up any stale indices from previous versions
+  await db.viewCleanup()
+  return created
+}
+
+/**
+ * Perform a query against all of the views to prime the indices.
+ *
+ * @param index design document to be primed.
+ */
+async function primeIndices(index: any): Promise<void> {
+  for (const view in index.views) {
+    // this takes a bit longer with PouchDB 7.0
+    await db.query(`queries/${view}`, {
+      limit: 0
+    })
+  }
+}
+
 /**
  * Ensure the database is prepared with the necessary design documents.
  *
  * @returns always returns true.
  */
 export async function initDatabase(): Promise<boolean> {
-  // let indexCreated = await createIndices(assetsDefinition)
-  // if (indexCreated) {
-  //   logger.info('database indices created')
-  //   await primeIndices(assetsDefinition)
-  //   logger.info('database indices primed')
-  // }
-  logger.info('database ready')
+  let indexCreated = await createIndices(queriesDefinition)
+  if (indexCreated) {
+    logger.info('database indices created')
+    await primeIndices(queriesDefinition)
+    logger.info('database indices primed')
+  }
   return true
 }
 
@@ -64,6 +117,29 @@ export async function updateDocument(doc: any): Promise<boolean> {
       throw err
     }
   }
+}
+
+/**
+ * Update the `configuration` document with the values provided.
+ *
+ * @param config configuration values to be saved.
+ * @returns false if inserted, true if updated.
+ */
+export async function updateConfiguration(config: any): Promise<boolean> {
+  const doc = {
+    ...config,
+    _id: 'configuration'
+  }
+  return updateDocument(doc)
+}
+
+/**
+ * Retrieve the `configuration` document, if any.
+ *
+ * @returns document object, or null if not found.
+ */
+export async function getConfiguration(): Promise<any> {
+  return fetchDocument('configuration')
 }
 
 /**
@@ -164,6 +240,89 @@ export async function getSnapshot(checksum: string): Promise<any> {
 }
 
 /**
+ * Ensure the database contains a file by the given checksum. Conflicts are
+ * ignored; if it has the same checksum, it is the same file.
+ *
+ * @param checksum hash digest of the file object.
+ * @param doc file object itself, stored as-is.
+ */
+export async function insertFile(checksum: string, doc: any): Promise<void> {
+  try {
+    await db.put({
+      ...doc,
+      _id: 'file/' + checksum
+    })
+    logger.info(`inserted new file ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
+ * Retrieve the file record by the given checksum.
+ *
+ * @param checksum checksum of the desired file.
+ * @returns document object, or null if not found.
+ */
+export async function getFile(checksum: string): Promise<any> {
+  return fetchDocument('file/' + checksum)
+}
+
+/**
+ * Ensure the database contains a pack by the given checksum. Conflicts are
+ * ignored; if it has the same checksum, it is the same pack.
+ *
+ * @param checksum hash digest of the pack object.
+ * @param doc pack object itself, stored as-is.
+ */
+export async function insertPack(checksum: string, doc: any): Promise<void> {
+  try {
+    await db.put({
+      ...doc,
+      _id: 'pack/' + checksum
+    })
+    logger.info(`inserted new pack ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
+ * Retrieve the chunk record by the given checksum.
+ *
+ * @param checksum checksum of the desired chunk.
+ * @returns document object, or null if not found.
+ */
+export async function getChunk(checksum: string): Promise<any> {
+  return fetchDocument('chunk/' + checksum)
+}
+
+/**
+ * Ensure the database contains a chunk by the given checksum. Conflicts are
+ * ignored; if it has the same checksum, it is the same chunk.
+ *
+ * @param checksum hash digest of the chunk object.
+ * @param doc chunk object itself, stored as-is.
+ */
+export async function insertChunk(checksum: string, doc: any): Promise<void> {
+  try {
+    await db.put({
+      ...doc,
+      _id: 'chunk/' + checksum
+    })
+    logger.info(`inserted new chunk ${checksum}`)
+  } catch (err) {
+    if (err.status !== 409) {
+      throw err
+    }
+  }
+}
+
+/**
  * For any fields of the document that are objects with property `type` that
  * equals `Buffer`, convert the field to a Buffer whose data is that of the
  * `data` field.
@@ -199,4 +358,20 @@ export async function fetchDocument(docId: string): Promise<any> {
       throw err
     }
   }
+}
+
+/**
+ * Return the number of chunks in the database.
+ *
+ * @returns count of `chunk` records.
+ */
+export async function countChunks(): Promise<number> {
+  const res = await db.query('queries/all_types', {
+    key: 'chunk',
+    group: true
+  })
+  if (res.rows === undefined || res.rows.length === 0) {
+    throw new Error('invalid query response')
+  }
+  return res['rows'][0].value
 }

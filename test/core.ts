@@ -68,6 +68,15 @@ describe('Core Functionality', function () {
       const sha256 = await core.checksumData(data, 'sha256')
       assert.equal(sha256, 'sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433')
     })
+
+    it('should convert hash string to buffer', function () {
+      const sha1 = 'sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c'
+      const hash1 = core.bufferFromChecksum(sha1)
+      assert.equal(hash1.length, 20, 'sha1 turns into 20 byte buffer')
+      const sha256 = 'sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433'
+      const hash256 = core.bufferFromChecksum(sha256)
+      assert.equal(hash256.length, 32, 'sha256 turns into 32 byte buffer')
+    })
   })
 
   describe('file digests', function () {
@@ -292,19 +301,66 @@ describe('Core Functionality', function () {
   })
 
   describe('file chunking', function () {
-    it('should find chunk boundaries', async function () {
+    it('should find 16k chunk boundaries', async function () {
+      const infile = './test/fixtures/SekienAkashita.jpg'
+      const results = await core.findFileChunks(infile, 16384)
+      assert.lengthOf(results, 6)
+      assert.equal(results[0].hash.toString('hex'), '103159aa68bb1ea98f64248c647b8fe9a303365d80cb63974a73bba8bc3167d7')
+      assert.equal(results[0].offset, 0)
+      assert.equal(results[0].size, 22366)
+      assert.equal(results[0].path, infile)
+      assert.equal(results[1].hash.toString('hex'), 'c95e0d6a53f61dc7b6039cfb8618f6e587fc6395780cf28169f4013463c89db3')
+      assert.equal(results[1].offset, 22366)
+      assert.equal(results[1].size, 8282)
+      assert.equal(results[1].path, infile)
+      assert.equal(results[2].hash.toString('hex'), 'e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82')
+      assert.equal(results[2].offset, 30648)
+      assert.equal(results[2].size, 16303)
+      assert.equal(results[2].path, infile)
+      assert.equal(results[3].hash.toString('hex'), 'bd1198535cdb87c5571378db08b6e886daf810873f5d77000a54795409464138')
+      assert.equal(results[3].offset, 46951)
+      assert.equal(results[3].size, 18696)
+      assert.equal(results[3].path, infile)
+      assert.equal(results[4].hash.toString('hex'), '5c8251cce144b5291be3d4b161461f3e5ed441a7a24a1a65fdcc3d7b21bfc29d')
+      assert.equal(results[4].offset, 65647)
+      assert.equal(results[4].size, 32768)
+      assert.equal(results[4].path, infile)
+      assert.equal(results[5].hash.toString('hex'), 'a566243537738371133ecff524501290f0621f786f010b45d20a9d5cf82365f8')
+      assert.equal(results[5].offset, 98415)
+      assert.equal(results[5].size, 11051)
+      assert.equal(results[5].path, infile)
+    })
+
+    it('should find 32k chunk boundaries', async function () {
       const infile = './test/fixtures/SekienAkashita.jpg'
       const results = await core.findFileChunks(infile, 32768)
       assert.lengthOf(results, 3)
       assert.equal(results[0].hash.toString('hex'), '5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d')
       assert.equal(results[0].offset, 0)
       assert.equal(results[0].size, 32857)
+      assert.equal(results[0].path, infile)
       assert.equal(results[1].hash.toString('hex'), '13f6a4c6d42df2b76c138c13e86e1379c203445055c2b5f043a5f6c291fa520d')
       assert.equal(results[1].offset, 32857)
       assert.equal(results[1].size, 16408)
+      assert.equal(results[1].path, infile)
       assert.equal(results[2].hash.toString('hex'), '0fe7305ba21a5a5ca9f89962c5a6f3e29cd3e2b36f00e565858e0012e5f8df36')
       assert.equal(results[2].offset, 49265)
       assert.equal(results[2].size, 60201)
+      assert.equal(results[2].path, infile)
+    })
+
+    it('should find 64k chunk boundaries', async function () {
+      const infile = './test/fixtures/SekienAkashita.jpg'
+      const results = await core.findFileChunks(infile, 65536)
+      assert.lengthOf(results, 2)
+      assert.equal(results[0].hash.toString('hex'), '5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d')
+      assert.equal(results[0].offset, 0)
+      assert.equal(results[0].size, 32857)
+      assert.equal(results[0].path, infile)
+      assert.equal(results[1].hash.toString('hex'), '5420a3bcc7d57eaf5ca9bb0ab08a1bd3e4d89ae019b1ffcec39b1a5905641115')
+      assert.equal(results[1].offset, 32857)
+      assert.equal(results[1].size, 76609)
+      assert.equal(results[1].path, infile)
     })
   })
 })
