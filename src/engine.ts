@@ -277,6 +277,12 @@ function waitForUpload(emitter: store.StoreEmitter): Promise<string> {
   })
 }
 
+/**
+ * Filter out the chunks that are already in the database.
+ *
+ * @param chunks all chunks from a particular file.
+ * @returns chunks that are _not_ already in the database.
+ */
 async function filterKnownChunks(chunks: core.Chunk[]): Promise<core.Chunk[]> {
   const results: core.Chunk[] = []
   for (let chunk of chunks) {

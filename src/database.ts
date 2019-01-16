@@ -8,7 +8,7 @@ import * as PouchDB from 'pouchdb'
 
 const dbPath: string = config.get('database.path')
 fx.ensureDirSync(dbPath)
-const db = new PouchDB(dbPath)
+let db = new PouchDB(dbPath)
 
 declare function emit(value: any, count: number): void
 
@@ -80,18 +80,13 @@ export async function initDatabase(): Promise<boolean> {
 }
 
 /**
- * Remove all documents from the database and initialize again.
+ * Destroy the database and initialize again.
  *
  * @returns whatever `initDatabase` returns.
  */
 export async function clearDatabase(): Promise<boolean> {
-  let allDocs = await db.allDocs({ include_docs: true })
-  let promises = allDocs.rows.map((row) => db.remove(row.doc))
-  let results = await Promise.all(promises)
-  logger.info(`removed all ${results.length} documents`)
-  // clean up stale indices after removing everything
-  // (yes, this is necessary here, otherwise tests fail)
-  await db.viewCleanup()
+  await db.destroy()
+  db = new PouchDB(dbPath)
   return initDatabase()
 }
 
