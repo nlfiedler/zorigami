@@ -2,8 +2,9 @@
 
 ## Features
 
+* Unlimited backup: all files of any size
 * Maintains multiple versions, not just the most recent
-* Efficiency (de-duplication, large file splitting)
+* Efficiency (compression, de-duplication, block-level incremental backup)
 * Encryption (all remotely stored data is encrypted with 256-bit AES)
     - Uses unique 256-bit key and IV for each remotely stored pack
 * Service agnostic (SFTP, Amazon, Google, etc)
@@ -15,11 +16,14 @@
 * Amazon Glacier support (this seems to be uncommon at best)
 * Fault tolerant (automatically recovers from crashes)
 * Ransomware protection
-    - Figure out what this means...
 
 > CloudBerry Backup detects encryption changes in files and prevents existing
 > backups from being overwritten until an administrator confirms if there is an
 > issue.
+
+Arq backup describes this as:
+
+> Ransomware protection - point-in-time recovery of files
 
 ## Interface
 
@@ -385,6 +389,9 @@ Remove the snapshot record to be deleted, then garbage collect.
 ### Arq
 
 * https://www.arqbackup.com
+* Mac and Windows apps
+* Uses a single master password
+* Supports numerous backends
 
 ### CloudBerry
 
@@ -400,10 +407,31 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Does not support Glacier
     - Their design depends on accessing chunks by their checksum
 
+### JungleDisk
+
+* https://www.jungledisk.com/encrypted-backups/
+* Primarily business oriented
+* Seems to rely on their servers
+* Probably stores data elsewhere
+
 ### qBackup
 
 * https://www.qualeed.com/en/qbackup/
+* Mac, Linux, Windows
+* Supports numerous backends
+* Has copious documentation with screen shots
 
 ### restic
 
 * https://restic.net
+* Open source command line tool
+* Supports numerous backends
+
+### tarsnap
+
+* https://www.tarsnap.com
+* Free client
+* Uses public key encryption rather than a password
+* Stores data in Amazon S3
+* Relies on tarsnap servers
+* 10x the price of Google Cloud or Amazon Glacier

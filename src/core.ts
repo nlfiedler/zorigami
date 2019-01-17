@@ -433,8 +433,9 @@ async function maybeCompress(infile: string) {
  *
  * @param infile path of pack file to read.
  * @param outdir path to which chunks are written.
+ * @returns checksums of all the extracted chunks.
  */
-export async function unpackChunks(infile: string, outdir: string) {
+export async function unpackChunks(infile: string, outdir: string): Promise<string[]> {
   await maybeDecompress(infile)
   const infd = await fopen(infile, 'r')
   const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
@@ -449,8 +450,9 @@ export async function unpackChunks(infile: string, outdir: string) {
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
-    await unpackChunksV1(infd, outdir)
+    const results = await unpackChunksV1(infd, outdir)
     fs.closeSync(infd)
+    return results
   } else {
     fs.closeSync(infd)
     throw new verr.VError(`pack version unsupported: ${version}`)
@@ -482,27 +484,31 @@ async function maybeDecompress(infile: string) {
  *
  * @param infd input file descriptor.
  * @param outdir directory to which chunks are written.
+ * @returns checksums of all the extracted chunks.
  */
-async function unpackChunksV1(infd: number, outdir: string) {
+async function unpackChunksV1(infd: number, outdir: string): Promise<string[]> {
   const buffer = Buffer.allocUnsafe(BUFFER_SIZE)
   let fpos = PACK_HEADER_SIZE
   await readBytes(infd, buffer, 0, 4, fpos)
   fpos += 4
   const count = buffer.readUInt32BE(0)
   let index = 0
+  const results: string[] = []
   while (index < count) {
     // read chunk size (4 bytes) and sha256 (32 bytes)
     await readBytes(infd, buffer, 0, 36, fpos)
     fpos += 36
     const chunkSize = buffer.readUInt32BE(0)
-    const fname = checksumFromBuffer(buffer.slice(4, 36), 'sha256')
-    const outfile = path.join(outdir, fname)
+    const checksum = checksumFromBuffer(buffer.slice(4, 36), 'sha256')
+    const outfile = path.join(outdir, checksum)
     const outfd = await fopen(outfile, 'w')
     await copyBytes(infd, fpos, buffer, outfd, chunkSize)
     fpos += chunkSize
     fs.closeSync(outfd)
+    results.push(checksum)
     index++
   }
+  return results
 }
 
 /**
@@ -558,8 +564,9 @@ export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys
  * @param infile path of encrypted pack file.
  * @param outdir path to contain chunk files.
  * @param keys master encryption keys.
+ * @returns checksums of all the extracted chunks.
  */
-export async function unpackChunksEncrypted(infile: string, outdir: string, keys: MasterKeys) {
+export async function unpackChunksEncrypted(infile: string, outdir: string, keys: MasterKeys): Promise<string[]> {
   const infd = await fopen(infile, 'r')
   const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
   await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
@@ -573,7 +580,7 @@ export async function unpackChunksEncrypted(infile: string, outdir: string, keys
   }
   fx.ensureDirSync(outdir)
   if (version === 1) {
-    await unpackChunksEncryptedV1(infd, outdir, keys)
+    return unpackChunksEncryptedV1(infd, outdir, keys)
   } else {
     fs.closeSync(infd)
     throw new verr.VError(`pack version unsupported: ${version}`)
@@ -586,8 +593,9 @@ export async function unpackChunksEncrypted(infile: string, outdir: string, keys
  * @param infd input file descriptor.
  * @param outdir path to contain chunk files.
  * @param keys master encryption keys.
+ * @returns checksums of all the extracted chunks.
  */
-async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: MasterKeys) {
+async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: MasterKeys): Promise<string[]> {
   // read the encrypted pack file header
   const header = Buffer.allocUnsafe(96)
   let fpos = PACK_HEADER_SIZE
@@ -615,8 +623,9 @@ async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: Maste
     const input = fs.createReadStream(null, { fd: infd, start: fpos })
     const output = fs.createWriteStream(packfile)
     await decryptStream(input, output, sessionKey, sessionIV)
-    await unpackChunks(packfile, outdir)
+    const results = await unpackChunks(packfile, outdir)
     fs.unlinkSync(packfile)
+    return results
   } else {
     throw new verr.VError('stored HMAC and computed HMAC do not match')
   }

@@ -14,6 +14,7 @@ import * as store from './store'
 
 const freaddir = util.promisify(fs.readdir)
 const flstat = util.promisify(fs.lstat)
+const funlink = util.promisify(fs.unlink)
 const xlist = util.promisify(xattr.list)
 const xget = util.promisify(xattr.get)
 export const NULL_SHA1 = 'sha1-0000000000000000000000000000000000000000'
@@ -116,12 +117,19 @@ class PackBuilder {
       const hash = core.bufferFromChecksum(checksum)
       fileChunks = [{ path: filepath, hash, offset: 0, size: stat.size }]
     }
-    const newChunks = await filterKnownChunks(fileChunks)
-    for (let chunk of newChunks) {
-      this.chunks.push(chunk)
-      this.chunksSize += chunk.size
+    for (let chunk of fileChunks) {
+      const key = core.checksumFromBuffer(chunk.hash, 'sha256')
+      const chunkrec = await database.getChunk(key)
+      if (chunkrec === null) {
+        this.chunks.push(chunk)
+        this.chunksSize += chunk.size
+      } else {
+        // an identical chunk was uploaded previously
+        chunk.uploaded = true
+      }
     }
-    this.fileChunks.set(checksum, newChunks)
+    // track _all_ of the chunks in this file, not just the "new" ones
+    this.fileChunks.set(checksum, fileChunks)
   }
 
   hasChunks(): boolean {
@@ -228,6 +236,68 @@ export async function performBackup(dataset: Dataset, keys: core.MasterKeys): Pr
   return snapshot
 }
 
+interface FileChunk {
+  /** file position for this chunk */
+  offset: number,
+  /** chunk SHA256 with algo prefix */
+  digest: string
+}
+
+/**
+ * 
+ * @param dataset the dataset for which to perform a backup.
+ * @param keys master keys for decrypting pack files.
+ * @param checksum SHA256 checksum of the file to be restored.
+ * @param outfile path to which file will be written.
+ */
+export async function restoreFile(
+  dataset: Dataset,
+  keys: core.MasterKeys,
+  checksum: string,
+  outfile: string
+): Promise<void> {
+  // look up the file record to get chunks
+  const filerec = await database.getFile(checksum)
+  if (filerec === null) {
+    throw new Error('missing file record for ' + checksum)
+  }
+  // create an index of all the chunks we want to collect
+  const desiredChunks: Set<string> = new Set()
+  for (let chunk of filerec.chunks) {
+    desiredChunks.add(chunk.digest)
+  }
+  // track pack files that have already been processed
+  const finishedPacks: Set<string> = new Set()
+  // look up chunk records to get pack record(s)
+  for (let chunk of filerec.chunks) {
+    const chunkrec = await database.getChunk(chunk.digest)
+    if (!finishedPacks.has(chunkrec.pack)) {
+      const packrec = await database.getPack(chunkrec.pack)
+      // retrieve the pack file
+      const packfile = tmp.fileSync({ dir: dataset.workspace }).name
+      const emitter = store.retrievePack(dataset.store, packrec.bucket, packrec.object, packfile)
+      await store.waitForDone(emitter)
+      // extract chunks from pack
+      const extractedChunks = await core.unpackChunksEncrypted(packfile, dataset.workspace, keys)
+      // remove unrelated chunks to conserve space
+      for (let ec of extractedChunks) {
+        if (!desiredChunks.has(ec)) {
+          await funlink(path.join(dataset.workspace, ec))
+        }
+      }
+      await funlink(packfile)
+      // remember this pack as being completed
+      finishedPacks.add(chunkrec.pack)
+    }
+  }
+  // sort the chunks by offset to produce ordered file list
+  filerec.chunks.sort((a: FileChunk, b: FileChunk) => a.offset - b.offset)
+  const chunkFiles: string[] = filerec.chunks.map(
+    (e: FileChunk) => path.join(dataset.workspace, e.digest)
+  )
+  return core.assembleChunks(chunkFiles, outfile)
+}
+
 /**
  * A generator that yields [filepath, checksum] pairs for files within
  * the given snapshot. Descends into directories in a bread-first fashion.
@@ -275,24 +345,6 @@ function waitForUpload(emitter: store.StoreEmitter): Promise<string> {
       resolve(object)
     })
   })
-}
-
-/**
- * Filter out the chunks that are already in the database.
- *
- * @param chunks all chunks from a particular file.
- * @returns chunks that are _not_ already in the database.
- */
-async function filterKnownChunks(chunks: core.Chunk[]): Promise<core.Chunk[]> {
-  const results: core.Chunk[] = []
-  for (let chunk of chunks) {
-    const key = core.checksumFromBuffer(chunk.hash, 'sha256')
-    const chunkrec = await database.getChunk(key)
-    if (chunkrec === null) {
-      results.push(chunk)
-    }
-  }
-  return results
 }
 
 /**

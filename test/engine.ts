@@ -18,8 +18,6 @@ const assert = chai.assert
 describe('Engine Functionality', function () {
   describe('basic encryption', function () {
     it('should generate master keys and save to database', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       // ensure the encryption record does not yet exist
       let result = await database.fetchDocument('encryption')
@@ -41,8 +39,6 @@ describe('Engine Functionality', function () {
 
   describe('basic snapshots', function () {
     it('should record a snapshot to database', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -85,8 +81,6 @@ describe('Engine Functionality', function () {
     })
 
     it('should detect differences with mixed ordering', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -124,8 +118,6 @@ describe('Engine Functionality', function () {
     })
 
     it('should detect entry type changes', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -150,8 +142,6 @@ describe('Engine Functionality', function () {
 
   describe('snapshots and symbolic links', function () {
     it('should encode symbolic links in the tree', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -165,8 +155,6 @@ describe('Engine Functionality', function () {
     })
 
     it('should track links becoming files/dirs', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -189,8 +177,6 @@ describe('Engine Functionality', function () {
     })
 
     it('should ignore files/dirs becoming links', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -214,8 +200,6 @@ describe('Engine Functionality', function () {
 
   describe('basic backup', function () {
     it('should produce pack files for initial backup', async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
       fx.removeSync(basepath)
@@ -252,10 +236,7 @@ describe('Engine Functionality', function () {
     })
 
     it('should produce pack files for second backup', async function () {
-      // await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
-      // fx.removeSync(basepath)
-      // fx.ensureDirSync(basepath)
       const password = 'keyboard cat'
       const keys = await engine.getMasterKeys(password)
       const dataset = await database.getConfiguration()
@@ -276,10 +257,7 @@ describe('Engine Functionality', function () {
     })
 
     it('should ignore duplicate files', async function () {
-      // await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
-      // fx.removeSync(basepath)
-      // fx.ensureDirSync(basepath)
       const password = 'keyboard cat'
       const keys = await engine.getMasterKeys(password)
       const dataset = await database.getConfiguration()
@@ -295,10 +273,7 @@ describe('Engine Functionality', function () {
     })
 
     it('should ignore duplicate chunks within large files', async function () {
-      // await database.clearDatabase()
       const basepath = 'test/tmp/fixtures'
-      // fx.removeSync(basepath)
-      // fx.ensureDirSync(basepath)
       const password = 'keyboard cat'
       const keys = await engine.getMasterKeys(password)
       const dataset = await database.getConfiguration()
@@ -306,7 +281,7 @@ describe('Engine Functionality', function () {
       let chunks = await database.countChunks()
       assert.equal(chunks, 7)
       // add another file
-      core.copyFileWithPrefix(
+      await core.copyFileWithPrefix(
         Buffer.from('mary had a little lamb'),
         'test/fixtures/SekienAkashita.jpg',
         path.join(basepath, 'SekienShifted.jpg')
@@ -340,7 +315,41 @@ describe('Engine Functionality', function () {
         path.join(outdir, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1'), 'sha256')
       assert.equal(chunkDigest, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1')
     })
-    // TODO: restore the lorem-ipsum.txt file using its sha256
-    // TODO: restore the SekienAkashita.jpg file using its sha256
+
+    it('should restore a single chunk file', async function () {
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // restore the lorem-ipsum.txt file using its sha256
+      const outfile = tmp.fileSync().name
+      const checksum = 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f'
+      await engine.restoreFile(dataset, keys, checksum, outfile)
+      const actual = await core.checksumFile(outfile, 'sha256')
+      assert.equal(actual, checksum, 'restored lorem-ipsum.txt file')
+    })
+
+    it('should restore a file with multiple chunks', async function () {
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // restore the SekienAkashita.jpg file using its sha256
+      const outfile = tmp.fileSync().name
+      const checksum = 'sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed'
+      await engine.restoreFile(dataset, keys, checksum, outfile)
+      const actual = await core.checksumFile(outfile, 'sha256')
+      assert.equal(actual, checksum, 'restored SekienAkashita.jpg file')
+    })
+
+    it('should restore a file with chunks in different packs', async function () {
+      const password = 'keyboard cat'
+      const keys = await engine.getMasterKeys(password)
+      const dataset = await database.getConfiguration()
+      // restore the SekienShifted.jpg file using its sha256
+      const outfile = tmp.fileSync().name
+      const checksum = 'sha256-b2c67e90a01f5d7aca48835b8ad8f0902ef03288aa4083e742bccbd96d8590a4'
+      await engine.restoreFile(dataset, keys, checksum, outfile)
+      const actual = await core.checksumFile(outfile, 'sha256')
+      assert.equal(actual, checksum, 'restored SekienShifted.jpg file')
+    })
   })
 })

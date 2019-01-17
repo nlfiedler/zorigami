@@ -57,7 +57,6 @@ async function createIndices(index: any): Promise<boolean> {
  */
 async function primeIndices(index: any): Promise<void> {
   for (const view in index.views) {
-    // this takes a bit longer with PouchDB 7.0
     await db.query(`queries/${view}`, {
       limit: 0
     })
@@ -287,13 +286,13 @@ export async function insertPack(checksum: string, doc: any): Promise<void> {
 }
 
 /**
- * Retrieve the chunk record by the given checksum.
+ * Retrieve the pack record by the given checksum.
  *
- * @param checksum checksum of the desired chunk.
+ * @param checksum checksum of the desired pack.
  * @returns document object, or null if not found.
  */
-export async function getChunk(checksum: string): Promise<any> {
-  return fetchDocument('chunk/' + checksum)
+export async function getPack(checksum: string): Promise<any> {
+  return fetchDocument('pack/' + checksum)
 }
 
 /**
@@ -315,6 +314,16 @@ export async function insertChunk(checksum: string, doc: any): Promise<void> {
       throw err
     }
   }
+}
+
+/**
+ * Retrieve the chunk record by the given checksum.
+ *
+ * @param checksum checksum of the desired chunk.
+ * @returns document object, or null if not found.
+ */
+export async function getChunk(checksum: string): Promise<any> {
+  return fetchDocument('chunk/' + checksum)
 }
 
 /**

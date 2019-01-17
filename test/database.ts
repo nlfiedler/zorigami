@@ -13,8 +13,6 @@ const assert = chai.assert
 setTimeout(function () {
   describe('Database Functionality', function () {
     before(async function () {
-      // PouchDB 7.0 takes more than 2 seconds to prime the index
-      this.timeout(10000)
       await database.clearDatabase()
     })
 
