@@ -299,8 +299,8 @@ export async function restoreFile(
 }
 
 /**
- * A generator that yields [filepath, checksum] pairs for files within
- * the given snapshot. Descends into directories in a bread-first fashion.
+ * A generator that yields [filepath, checksum] pairs for files within the given
+ * snapshot. Descends into directories in a breadth-first fashion.
  *
  * @param snapshot checksum of the snapshot to process.
  * @returns tuple of file path and SHA256 checksum.
