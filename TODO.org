@@ -57,13 +57,13 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** DONE Produce and upload pack files containing new/changed files
 **** DONE Remove chunks already in database before building pack file
 *** DONE Need a reliable means of deleting the test database every time
-*** TODO Restore files from snapshot
+*** DONE Restore files from snapshot
 **** DONE File content
-**** TODO File mode
-**** TODO File user/group
-**** TODO File extended attributes
-*** TODO Manage datasets, defaults, saving updated snapshot to database
-*** TODO Specifically exclude the database from the data set
+*** DONE Use [[https://www.minio.io/][Minio]] to develop another remote store implementation
+**** c.f. https://docs.minio.io/docs/javascript-client-quickstart-guide.html
+**** DONE Install the =minio= npm
+**** DONE Develop the minio store implementation
+**** DONE Test using docker container
 *** TODO Consider if =findChangedFiles()= should be an async generator
 *** TODO Store needs to support deleting objects and buckets
 *** TODO Consider how to implement "transactions" to recover from failed operations
@@ -85,13 +85,19 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** TODO Set up =gulp= and =webpack= to build the front-end code
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
+*** TODO Manage datasets, defaults, saving updated snapshot to database
+*** TODO Exclude the database files from the data set(s)
 ** Phase 4
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Store database in a bucket named after the "computer UUID"
 *** TODO Store pack files in Google Cloud Storage
-- https://github.com/googleapis/nodejs-storage/
-*** TODO Use [[https://www.minio.io/][Minio]] (an S3 clone) to test S3 functionality locally
+**** c.f. https://github.com/googleapis/nodejs-storage/
+*** TODO Use this to replace =akashita= for online backups
 ** Phase 5
+*** TODO Restore file attributes from tree entry
+**** TODO File mode
+**** TODO File user/group
+**** TODO File extended attributes
 *** TODO Restore directories from snapshot
 **** TODO Directory mode
 **** TODO Directory user/group
@@ -101,6 +107,8 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 *** TODO Detect file deletion during backup, mark file record as skipped
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
+*** TODO Restore the backup database
+**** TODO Restore to a different directory, then copy over records
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 **** Use the express support in [[https://github.com/pouchdb/pouchdb-server][pouchdb-server]] to serve up chunks/packs db
@@ -112,6 +120,7 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** For Google and Amazon, anything older than 90 days is free to remove
 **** This would be a configuration setting, with defaults and path-specific
 ** Phase 6
+*** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
 *** TODO =tarsnap= author suggests compression is vulnerable to exploit
 : To protect against an attacker who has a zlib exploit and can tamper with
 : our backups, we append a "physical" HMAC to the end of each block.

@@ -30,6 +30,7 @@
     "fs-extra": "^7.0.1",
     "fs-xattr": "^0.2.1",
     "http-errors": "~1.7.1",
+    "minio": "^7.0.3",
     "morgan": "~1.9.0",
     "posix-ext": "^0.4.5",
     "pouchdb": "^7.0.0",
