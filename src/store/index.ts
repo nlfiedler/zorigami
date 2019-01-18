@@ -78,6 +78,24 @@ export interface Store {
   retrievePack(bucket: string, object: string, outfile: string): StoreEmitter
 
   /**
+   * Delete the named object from the given bucket.
+   *
+   * @param bucket name of the bucket containing the object.
+   * @param object expected name of the object in the bucket.
+   * @returns emits `done` and `error` events.
+   */
+  deleteObject(bucket: string, object: string): StoreEmitter
+
+  /**
+   * Delete the named bucket. It almost certainly needs to be empty first, so
+   * use `listObjects()` and `deleteObject()` to remove the objects.
+   *
+   * @param bucket name of the bucket to be removed.
+   * @returns emits `done` and `error` events.
+   */
+  deleteBucket(bucket: string): StoreEmitter
+
+  /**
    * Returns a list of all buckets via `bucket` events. Emits `done`
    * when all buckets have been returned.
    *
@@ -153,6 +171,45 @@ export function retrievePack(key: string, bucket: string, object: string, outfil
   if (stores.has(key)) {
     const store: Store = stores.get(key)
     return store.retrievePack(bucket, object, outfile)
+  } else {
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
+  }
+}
+
+/**
+ * Delete the named object from the given bucket.
+ *
+ * @param key the key for the store to store the pack.
+ * @param bucket name of the bucket containing the object.
+ * @param object expected name of the object in the bucket.
+ * @returns emits `done` and `error` events.
+ */
+export function deleteObject(key: string, bucket: string, object: string): StoreEmitter {
+  if (stores.has(key)) {
+    const store: Store = stores.get(key)
+    return store.deleteObject(bucket, object)
+  } else {
+    throw new verr.VError({
+      name: 'IllegalArgumentError',
+      info: { key }
+    }, `no store registered for ${key}`)
+  }
+}
+
+/**
+ * Delete the named bucket. It almost certainly needs to be empty first, so
+ * use `listObjects()` and `deleteObject()` to remove the objects.
+ *
+ * @param bucket name of the bucket to be removed.
+ * @returns emits `done` and `error` events.
+ */
+export function deleteBucket(key: string, bucket: string): StoreEmitter {
+  if (stores.has(key)) {
+    const store: Store = stores.get(key)
+    return store.deleteBucket(bucket)
   } else {
     throw new verr.VError({
       name: 'IllegalArgumentError',

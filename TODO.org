@@ -65,7 +65,7 @@ $ awk '{ total += $1 } END { print total }' /tmp/4kfiles.txt
 **** DONE Develop the minio store implementation
 **** DONE Test using docker container
 *** TODO Consider if =findChangedFiles()= should be an async generator
-*** TODO Store needs to support deleting objects and buckets
+*** DONE Store needs to support deleting objects and buckets
 *** TODO Consider how to implement "transactions" to recover from failed operations
 ** Phase 3
 *** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript

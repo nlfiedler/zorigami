@@ -99,6 +99,36 @@ export class SecureFtpStore {
     return emitter
   }
 
+  deleteObject(bucket: string, object: string): StoreEmitter {
+    const emitter = new events.EventEmitter()
+    let sftp = new Client()
+    sftp.connect(this.makeConnectOptions()).then(() => {
+      return sftp.delete(path.join(this.basepath, bucket, object))
+    }).then((msg) => {
+      sftp.end()
+      emitter.emit('done', msg)
+    }).catch((err) => {
+      sftp.end()
+      emitter.emit('error', err)
+    })
+    return emitter
+  }
+
+  deleteBucket(bucket: string): StoreEmitter {
+    const emitter = new events.EventEmitter()
+    let sftp = new Client()
+    sftp.connect(this.makeConnectOptions()).then(() => {
+      return sftp.rmdir(path.join(this.basepath, bucket))
+    }).then((msg) => {
+      sftp.end()
+      emitter.emit('done', msg)
+    }).catch((err) => {
+      sftp.end()
+      emitter.emit('error', err)
+    })
+    return emitter
+  }
+
   listBuckets(): StoreEmitter {
     const emitter = new events.EventEmitter()
     let sftp = new Client()

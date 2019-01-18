@@ -84,6 +84,53 @@ export class LocalStore {
     return emitter
   }
 
+  deleteObject(bucket: string, object: string): StoreEmitter {
+    const buckdir = path.join(this.basepath, bucket)
+    const objfile = path.join(buckdir, object)
+    if (!fs.existsSync(objfile)) {
+      throw new verr.VError({
+        name: 'RuntimeError',
+        info: {
+          path: objfile
+        }
+      }, `missing object file: ${objfile}`)
+    }
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      fs.unlink(objfile, err => {
+        if (err) {
+          emitter.emit('error', err)
+        } else {
+          emitter.emit('done')
+        }
+      })
+    })
+    return emitter
+  }
+
+  deleteBucket(bucket: string): StoreEmitter {
+    const buckdir = path.join(this.basepath, bucket)
+    if (!fs.existsSync(buckdir)) {
+      throw new verr.VError({
+        name: 'RuntimeError',
+        info: {
+          path: buckdir
+        }
+      }, `missing bucket directory: ${buckdir}`)
+    }
+    const emitter = new events.EventEmitter()
+    process.nextTick(() => {
+      fs.rmdir(buckdir, err => {
+        if (err) {
+          emitter.emit('error', err)
+        } else {
+          emitter.emit('done')
+        }
+      })
+    })
+    return emitter
+  }
+
   listBuckets(): StoreEmitter {
     const entries = fs.readdirSync(this.basepath, { withFileTypes: true })
     const dirs = entries.filter((entry) => entry.isDirectory())

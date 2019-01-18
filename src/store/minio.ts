@@ -53,6 +53,30 @@ export class MinioStore {
     return emitter
   }
 
+  deleteObject(bucket: string, object: string): StoreEmitter {
+    const emitter = new events.EventEmitter()
+    this.client.removeObject(bucket, object, (err: Error) => {
+      if (err) {
+        emitter.emit('error', err)
+      } else {
+        emitter.emit('done')
+      }
+    })
+    return emitter
+  }
+
+  deleteBucket(bucket: string): StoreEmitter {
+    const emitter = new events.EventEmitter()
+    this.client.removeBucket(bucket, (err: Error) => {
+      if (err) {
+        emitter.emit('error', err)
+      } else {
+        emitter.emit('done')
+      }
+    })
+    return emitter
+  }
+
   listBuckets(): StoreEmitter {
     const emitter = new events.EventEmitter()
     this.client.listBuckets((err: Error, buckets: any[]) => {
