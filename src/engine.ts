@@ -215,19 +215,16 @@ export async function performBackup(dataset: Dataset, keys: core.MasterKeys): Pr
       }
     }
   }
-  if (dataset.latest === NULL_SHA1) {
-    // no previous snapshot, visit every file in the new snapshot
-    for await (let [filepath, filesha] of walkTree(snapshot)) {
-      const fullpath = path.join(dataset.basepath, filepath)
-      await handleFile(fullpath, filesha)
-    }
-  } else {
-    // find those files that changed from the previous snapshot
-    const changes = await findChangedFiles(dataset.latest, snapshot)
-    for (let [filepath, filesha] of changes.entries()) {
-      const fullpath = path.join(dataset.basepath, filepath)
-      await handleFile(fullpath, filesha)
-    }
+  // if no previous snapshot, visit every file in the new snapshot
+  // otherwise, find those files that changed from the previous snapshot
+  const fileGenerator = (
+    dataset.latest === NULL_SHA1
+      ? walkTree(snapshot)
+      : findChangedFiles(dataset.latest, snapshot)
+  )
+  for await (let [filepath, filesha] of fileGenerator) {
+    const fullpath = path.join(dataset.basepath, filepath)
+    await handleFile(fullpath, filesha)
   }
   // empty the last pack file
   while (builder.hasChunks()) {
@@ -429,21 +426,21 @@ export async function takeSnapshot(basepath: string, parent = NULL_SHA1): Promis
 }
 
 /**
- * Find those files that were added or changed between the two snapshots. Only
- * files are considered, as changes to directories are already recorded in the
- * database and saved separately. Ignores anything that is not a file or a
- * directory. May return files that were processed earlier, so the caller must
- * filter out files that have record entries in the database.
+ * A generator that yields [filepath, checksum] pairs for files that were added
+ * or changed between the two snapshots. Only files are considered, as changes
+ * to directories are already recorded in the database and saved separately.
+ * Ignores anything that is not a file or a directory. May return files that
+ * were processed earlier, so the caller must filter out files that have record
+ * entries in the database.
  *
  * @param snapshot1 earlier snapshot.
  * @param snapshot2 later snapshot.
- * @returns map of file paths to sha256 checksum from the tree entry.
+ * @returns tuple of file path and the SHA256 checksum from the tree entry.
  */
-export async function findChangedFiles(
+export async function* findChangedFiles(
   snapshot1: string,
   snapshot2: string
-): Promise<Map<string, string>> {
-  const changed: Map<string, string> = new Map()
+): AsyncIterableIterator<[string, string]> {
   // queue entry is (full path, tree1 sha1, tree2 sha1)
   let entry: [string, string, string]
   // use a queue to perform a breadth-first traversal
@@ -473,9 +470,9 @@ export async function findChangedFiles(
         // file or directory has been added
         if (modeToType(entry2.mode) === FileType.DIR) {
           // tree: add every file under it to 'added'
-          await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
+          yield* addAllFilesUnder(path.join(basedir, entry2.name), entry2.reference)
         } else {
-          changed.set(path.join(basedir, entry2.name), entry2.reference)
+          yield [path.join(basedir, entry2.name), entry2.reference]
         }
         index2++
       } else if (entry1.reference !== entry2.reference) {
@@ -491,10 +488,10 @@ export async function findChangedFiles(
           queue.push([dirpath, entry1.reference, entry2.reference])
         } else if ((is1file || is1dir || is1link) && is2file) {
           // new file or a changed file
-          changed.set(path.join(basedir, entry2.name), entry2.reference)
+          yield [path.join(basedir, entry2.name), entry2.reference]
         } else if ((is1file || is1link) && is2dir) {
           // now a directory, add everything under it
-          await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
+          yield* addAllFilesUnder(path.join(basedir, entry2.name), entry2.reference)
         }
         // ignore everything else
         index1++
@@ -511,31 +508,29 @@ export async function findChangedFiles(
       // file or directory has been added
       if (modeToType(entry2.mode) === FileType.DIR) {
         // tree: add every file under it to 'added'
-        await addAllFilesUnder(changed, path.join(basedir, entry2.name), entry2.reference)
+        yield* addAllFilesUnder(path.join(basedir, entry2.name), entry2.reference)
       } else if (modeToType(entry2.mode) === FileType.REG) {
-        changed.set(path.join(basedir, entry2.name), entry2.reference)
+        yield [path.join(basedir, entry2.name), entry2.reference]
       }
       index2++
     }
   }
-  return changed
 }
 
 /**
  * For the given tree, add every file therein to the `changed` map.
  *
- * @param changed map to which new or changed files are added.
  * @param basepath path prefix for files found under the tree.
  * @param ref database document identifier of the tree record.
  */
-async function addAllFilesUnder(changed: Map<string, string>, basepath: string, ref: string) {
+async function* addAllFilesUnder(basepath: string, ref: string): AsyncIterableIterator<[string, string]> {
   const tree = await database.getTree(ref)
   const entries: TreeEntry[] = tree.entries
   for (let entry of entries) {
     if (modeToType(entry.mode) === FileType.DIR) {
-      await addAllFilesUnder(changed, path.join(basepath, entry.name), entry.reference)
+      yield* addAllFilesUnder(path.join(basepath, entry.name), entry.reference)
     } else if (modeToType(entry.mode) === FileType.REG) {
-      changed.set(path.join(basepath, entry.name), entry.reference)
+      yield [path.join(basepath, entry.name), entry.reference]
     }
   }
 }

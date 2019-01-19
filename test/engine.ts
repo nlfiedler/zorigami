@@ -62,7 +62,7 @@ describe('Engine Functionality', function () {
       assert.notEqual(snapSha2, snapSha1, 'created a different snapshot')
       assert.notEqual(snapshot2.tree, snapshot1.tree, 'created a different tree')
       // compute the differences
-      const changes = await engine.findChangedFiles(snapSha1, snapSha2)
+      const changes = await collectChanges(engine.findChangedFiles(snapSha1, snapSha2))
       // should see new file record
       assert.equal(
         changes.get('SekienAkashita.jpg'),
@@ -101,7 +101,7 @@ describe('Engine Functionality', function () {
       fs.writeFileSync(path.join(basepath, 'nnn', 'nnn.txt'), 'nice neanderthals noodling')
       fs.writeFileSync(path.join(basepath, 'zzz', 'zzz.txt'), 'zebras riding on a zephyr')
       const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
-      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      const changes1 = await collectChanges(engine.findChangedFiles(snapSha1, snapSha2))
       assert.equal(changes1.size, 4, '4 changed files')
       assert.isTrue(changes1.has('bbb/bbb.txt'), 'bbb.txt has changed')
       assert.isTrue(changes1.has('mmm/mmm.txt'), 'mmm.txt has changed')
@@ -112,7 +112,7 @@ describe('Engine Functionality', function () {
       fs.unlinkSync(path.join(basepath, 'yyy', 'yyy.txt'))
       fs.writeFileSync(path.join(basepath, 'zzz', 'zzz.txt'), 'zippy zip ties zooming')
       const snapSha3 = await engine.takeSnapshot(basepath, snapSha2)
-      const changes2 = await engine.findChangedFiles(snapSha2, snapSha3)
+      const changes2 = await collectChanges(engine.findChangedFiles(snapSha2, snapSha3))
       assert.equal(changes2.size, 1, '1 changed file')
       assert.isTrue(changes2.has('zzz/zzz.txt'), 'zzz.txt has changed')
     })
@@ -133,7 +133,7 @@ describe('Engine Functionality', function () {
       fs.mkdirSync(path.join(basepath, 'ccc'))
       fs.writeFileSync(path.join(basepath, 'ccc', 'ccc.txt'), 'catastrophic catastrophes')
       const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
-      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      const changes1 = await collectChanges(engine.findChangedFiles(snapSha1, snapSha2))
       assert.equal(changes1.size, 2, '2 changed files')
       assert.isTrue(changes1.has('mmm'), 'mmm has changed')
       assert.isTrue(changes1.has('ccc/ccc.txt'), 'ccc.txt has changed')
@@ -170,7 +170,7 @@ describe('Engine Functionality', function () {
       fs.mkdirSync(path.join(basepath, 'ccc'))
       fs.writeFileSync(path.join(basepath, 'ccc', 'ccc.txt'), 'catastrophic catastrophes')
       const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
-      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      const changes1 = await collectChanges(engine.findChangedFiles(snapSha1, snapSha2))
       assert.equal(changes1.size, 2, '2 changed files')
       assert.isTrue(changes1.has('bbb'), 'bbb has changed')
       assert.isTrue(changes1.has('ccc/ccc.txt'), 'ccc.txt has changed')
@@ -192,7 +192,7 @@ describe('Engine Functionality', function () {
       fx.removeSync(path.join(basepath, 'ccc'))
       fs.symlinkSync('mmm.txt', path.join(basepath, 'ccc'))
       const snapSha2 = await engine.takeSnapshot(basepath, snapSha1)
-      const changes1 = await engine.findChangedFiles(snapSha1, snapSha2)
+      const changes1 = await collectChanges(engine.findChangedFiles(snapSha1, snapSha2))
       assert.equal(changes1.size, 1, '1 changed files')
       assert.isTrue(changes1.has('mmm.txt'), 'mmm.txt has changed')
     })
@@ -353,3 +353,11 @@ describe('Engine Functionality', function () {
     })
   })
 })
+
+async function collectChanges(generator: AsyncIterableIterator<[string, string]>): Promise<Map<string, string>> {
+  const results: Map<string, string> = new Map()
+  for await (let [filepath, filesha] of generator) {
+    results.set(filepath, filesha)
+  }
+  return results
+}
