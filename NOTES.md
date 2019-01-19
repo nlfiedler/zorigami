@@ -220,11 +220,11 @@ that has the most recent `upload_date`.
 
 #### Backup
 
-1. Look for a pending `index` snapshot; if none then:
-    1. Generate the tree objects to represent the state of the dataset.
-    1. Add a special snapshot record named `index` to track work in progress.
+1. Check for a existing snapshot:
+    1. If present but lacking `end_time` value, continue backup procedure
+    1. Otherwise, generate the tree objects to represent the state of the dataset
 1. Find the differences from the previous snapshot.
-1. If there are no changes, delete `index` snapshot record, exit the procedure.
+1. If there are no changes, delete snapshot record, exit the procedure.
 1. Sync with any configured peers to get recent chunk updates.
 1. For each new/changed file, check if record exists; if not:
     1. For small files, treat as a single chunk
@@ -235,43 +235,9 @@ that has the most recent `upload_date`.
     1. If file checksum changed after snapshot, add two records:
         * set `changed` on the record with the checksum at time of snapshot
         * set `chunks` on the record with the checksum at time of packing
-1. Rename the `index` snapshot record to have a correct SHA1 key
-1. Store latest snapshot identifier in `configuration` record
+1. Set the `end_time` of snapshot record to indicate completion.
+1. Store latest snapshot identifier in `configuration` record.
 1. Backup the PouchDB database files.
-
-#### Tree SHA1 computation
-
-The "tree" object implementation has a `toString()` that converts the object to
-a long string, similar to Git. The entries are sorted by name, and the results
-should be deterministic. Then compute the SHA1 of this string.
-
-#### Snapshot SHA1 computation
-
-The "snapshot" object implementation has a `toString()` that converts the object
-to a long string, similar to Git. The root entries are sorted by name, and the
-results should be deterministic. Then compute the SHA1 of this string.
-
-#### Building the snapshot tree
-
-* Depth-first walk of the directory tree
-* Build a tree object for the directory in question
-* Symbolic links are stored base64-encoded as the `reference`
-    - encoded to guard against character encoding issues (file names might not be UTF-8)
-* Insert tree into the database, if it does not already exist
-* Collect the root(s) and build the snapshot object
-* Insert `pending` snapshot into the database, overwrite if it already exists
-
-#### Finding Changes
-
-1. variable: snapshot path
-1. variable: local path
-1. Walk both trees, starting at root
-1. For each tree:
-    1. directory/file: if snapshot but not local, local was removed
-    1. directory/file: if not snapshot but local, local was added
-    1. file: if SHA256 differs, file changed
-    1. Descend into common directories
-1. Somehow compute new tree SHA1, then recompute all parents
 
 #### Duplicate chunk detection
 
@@ -297,8 +263,7 @@ working buffer of fairly large size must be allocated.
 
 #### Crash Recovery
 
-1. If there is an `index` snapshot, there is pending work to finish.
-1. Go through the usual backup procedure.
+If the latest snapshot is missing an end time, there is pending work to finish.
 
 #### File Restore
 
@@ -392,6 +357,13 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Mac and Windows apps
 * Uses a single master password
 * Supports numerous backends
+
+### Attic
+
+* https://attic-backup.org
+* Open source, development stopped in 2015
+* Seems to use an old chunking algorithm
+* Only supports SSH remote host
 
 ### CloudBerry
 
