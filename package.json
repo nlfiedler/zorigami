@@ -19,7 +19,7 @@
   "license": "UNLICENSED",
   "homepage": "https://bitbucket.org/nlfiedler/zorigami/",
   "dependencies": {
-    "@ronomon/deduplication": "github:nlfiedler/deduplication#types",
+    "@ronomon/deduplication": "^2.0.4",
     "config": "^3.0.1",
     "cookie-parser": "~1.4.3",
     "debug": "~4.1.0",

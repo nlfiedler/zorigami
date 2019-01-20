@@ -7,9 +7,6 @@
 **** DONE Add build/clean/watch steps to =gulpfile.js=
 **** DONE Update =package.json= to invoke compiled server
 **** DONE Translate the routes
-*** TODO Maybe rewrite =gulpfile.ts= in TypeScript
-***** c.f. https://github.com/TypeStrong/ts-node
-***** https://github.com/vvakame/typescript-project-sample/blob/master/gulpfile.ts
 *** TODO Introduce GraphQL backend and schema
 **** TODO Define the schema
 **** TODO Write a simple resolver
