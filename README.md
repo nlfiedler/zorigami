@@ -36,3 +36,21 @@ $ npm test
 [Docker](https://www.docker.com) is used for testing some features of the
 application (e.g. SFTP). Change to the `test/docker` directory and start the
 SFTP server via `docker-compose up -d` (requires Docker Compose).
+
+## Testing
+
+### Mocha and Chai
+
+This application uses [Mocha](https://mochajs.org) and
+[Chai](https://www.chaijs.com) for testing. Mocha runs tests in serial which is
+very useful for writing tests that build on previous tests in the order in which
+they appear. Chai has a very rich API for assertions.
+
+### Why not Jest
+
+[Jest](https://jestjs.io) seems very appealing on paper, but getting started is
+not well documented, and there are no obvious, complete examples of how to write
+Jest tests in TypeScript. Migrating from Mocha is supposedly very easy, but
+again nothing concrete on how to do this. The critical hit, however, was that
+Jest runs tests in parallel, which foils our attempts for crafting tests that
+build on previous tests.
