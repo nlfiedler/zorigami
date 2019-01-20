@@ -1,9 +1,14 @@
 * Zorigami
 ** Phase 3
-*** TODO Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
-***** TODO Look more at how https://github.com/TypeStrong/ts-node can be used
-***** TODO Is rewriting =app.js= worthwhile or necessary?
-***** TODO Translate the routes
+*** DONE Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
+**** DONE Look more at how https://github.com/TypeStrong/ts-node can be used
+**** DONE Translate =bin/www= to =src/server.ts=
+**** DONE Translate =app.js= to =src/app.ts=
+**** DONE Add build/clean/watch steps to =gulpfile.js=
+**** DONE Update =package.json= to invoke compiled server
+**** DONE Translate the routes
+*** TODO Why am I not using Jest? Write it down once and for all
+**** Has code coverage built-in
 *** TODO Maybe rewrite =gulpfile.ts= in TypeScript
 ***** c.f. https://github.com/TypeStrong/ts-node
 ***** https://github.com/vvakame/typescript-project-sample/blob/master/gulpfile.ts

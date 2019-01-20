@@ -1,9 +1,10 @@
-#!/usr/bin/env node
-
-// Module dependencies.
-const app = require('../app')
+//
+// Copyright (c) 2018 Nathan Fiedler
+//
+require('dotenv').config()
+import app from "./app"
 const debug = require('debug')('zorigami:server')
-const http = require('http')
+import * as http from 'http'
 
 // Get port from environment and store in Express.
 const port = normalizePort(process.env.PORT || '3000')
@@ -18,7 +19,7 @@ server.on('error', onError)
 server.on('listening', onListening)
 
 // Normalize a port into a number, string, or false.
-function normalizePort (val) {
+function normalizePort (val: any) {
   const port = parseInt(val, 10)
   if (isNaN(port)) {
     // named pipe
@@ -32,7 +33,7 @@ function normalizePort (val) {
 }
 
 // Event listener for HTTP server "error" event.
-function onError (error) {
+function onError (error: any) {
   if (error.syscall !== 'listen') {
     throw error
   }
@@ -62,3 +63,5 @@ function onListening () {
     : 'port ' + addr.port
   debug('Listening on ' + bind)
 }
+
+export default server
