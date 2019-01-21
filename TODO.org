@@ -7,6 +7,7 @@
 **** DONE Add build/clean/watch steps to =gulpfile.js=
 **** DONE Update =package.json= to invoke compiled server
 **** DONE Translate the routes
+*** DONE Look for code coverage tools that work well with Mocha
 *** TODO Introduce GraphQL backend and schema
 **** TODO Define the schema
 **** TODO Write a simple resolver

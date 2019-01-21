@@ -37,7 +37,11 @@ $ npm test
 application (e.g. SFTP). Change to the `test/docker` directory and start the
 SFTP server via `docker-compose up -d` (requires Docker Compose).
 
-## Testing
+### dotenv
+
+This application uses [dotenv](https://github.com/motdotla/dotenv) to configure
+the tests. For instance, the tests related to SFTP are enabled by the presence
+of certain environment variables, which is easily accomplished using dotenv.
 
 ### Mocha and Chai
 
@@ -52,5 +56,17 @@ they appear. Chai has a very rich API for assertions.
 not well documented, and there are no obvious, complete examples of how to write
 Jest tests in TypeScript. Migrating from Mocha is supposedly very easy, but
 again nothing concrete on how to do this. The critical hit, however, was that
-Jest runs tests in parallel, which foils our attempts for crafting tests that
+Jest runs tests in parallel, which foils our attempts at crafting tests that
 build on previous tests.
+
+### Code Coverage
+
+The code coverage requirement is achieved using [c8](https://github.com/bcoe/c8).
+Install c8 globally (`npm -g install c8`) and invoke the tests like so:
+
+```shell
+$ c8 npm test
+```
+
+However, either with TypeScript or the current implementation of c8, the output
+is rather inaccurate.
