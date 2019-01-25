@@ -1,0 +1,10 @@
+#
+# Copyright (c) 2019 Nathan Fiedler
+#
+
+type Query {
+  # Return the total number of unique chunks in the system.
+  chunkCount: Int!
+  # Return the total number of unique files in the system.
+  fileCount: Int!
+}

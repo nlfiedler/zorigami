@@ -1,5 +1,13 @@
 {
+  "database": {
+    "path": "tmp/database/leveldb"
+  },
   "logging": {
     "level": "debug"
+  },
+  "morgan": {
+    "logger": {
+      "logPath": "tmp"
+    }
   }
 }

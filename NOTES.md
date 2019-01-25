@@ -111,7 +111,6 @@ Arq backup describes this as:
         + SHA256 checksum (32 bytes)
         + data
     - compressed using gzip, if the result is smaller
-    - name is SHA256 of everything above ++ `.pack`
 * encrypted pack file format
     - header: `C4PX` (rot13 of `P4CK`)
     - version number (4 bytes)

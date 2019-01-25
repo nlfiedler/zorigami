@@ -2,7 +2,7 @@
 // Copyright (c) 2018 Nathan Fiedler
 //
 require('dotenv').config()
-import app from "./app"
+import app from './app'
 const debug = require('debug')('zorigami:server')
 import * as http from 'http'
 
@@ -19,7 +19,7 @@ server.on('error', onError)
 server.on('listening', onListening)
 
 // Normalize a port into a number, string, or false.
-function normalizePort (val: any) {
+function normalizePort(val: any) {
   const port = parseInt(val, 10)
   if (isNaN(port)) {
     // named pipe
@@ -33,7 +33,7 @@ function normalizePort (val: any) {
 }
 
 // Event listener for HTTP server "error" event.
-function onError (error: any) {
+function onError(error: any) {
   if (error.syscall !== 'listen') {
     throw error
   }
@@ -56,7 +56,7 @@ function onError (error: any) {
 }
 
 // Event listener for HTTP server "listening" event.
-function onListening () {
+function onListening() {
   const addr = server.address()
   const bind = typeof addr === 'string'
     ? 'pipe ' + addr

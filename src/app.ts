@@ -3,11 +3,20 @@
 //
 const createError = require('http-errors')
 import * as express from 'express'
-const cookieParser = require('cookie-parser')
 import * as morgan from 'morgan'
-require('./logging')
+import * as database from './database'
+import * as config from 'config'
+import logger from './logging'
+const rfs = require('rotating-file-stream')
+import indexRouter from './routes/index'
+import gqlRouter from './routes/graphql'
 
-import * as indexRouter from './routes/index'
+// Initialize the database asynchronously.
+database.initDatabase().then((res: any) => {
+  logger.info('database initialization result:', res)
+}).catch((err: Error) => {
+  logger.error('database initialization error:', err)
+})
 
 const app = express()
 
@@ -15,21 +24,31 @@ const app = express()
 app.set('views', 'views')
 app.set('view engine', 'ejs')
 
-app.use(morgan('dev'))
-app.use(express.json())
-app.use(express.urlencoded({ extended: false }))
-app.use(cookieParser())
-app.use(express.static('public'))
+// Configure the HTTP logging.
+if (config.has('morgan.logger.logPath')) {
+  const logDirectory = config.get('morgan.logger.logPath')
+  const accessLogStream = rfs('access.log', {
+    size: '1M',
+    maxFiles: 4,
+    path: logDirectory
+  })
+  app.use(morgan('combined', { stream: accessLogStream }))
+} else if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'))
+} else {
+  app.use(morgan('combined'))
+}
 
-app.use('/', indexRouter.index)
+app.use('/graphql', gqlRouter)
+app.use('/', indexRouter)
 
 // catch 404 and forward to error handler
-app.use(function (req: express.Request, res: express.Response, next: Function) {
+app.use((req: express.Request, res: express.Response, next: Function) => {
   next(createError(404))
 })
 
 // error handler
-app.use(function (err: any, req: express.Request, res: express.Response, next: Function) {
+app.use((err: any, req: express.Request, res: express.Response, next: Function) => {
   // set locals, only providing error in development
   res.locals.message = err.message
   res.locals.error = req.app.get('env') === 'development' ? err : {}

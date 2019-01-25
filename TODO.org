@@ -8,14 +8,24 @@
 **** DONE Update =package.json= to invoke compiled server
 **** DONE Translate the routes
 *** DONE Look for code coverage tools that work well with Mocha
-*** TODO Introduce GraphQL backend and schema
-**** TODO Define the schema
-**** TODO Write a simple resolver
-**** TODO Write a unit test
+*** DONE Introduce GraphQL backend and schema
+**** DONE Add apollo server dependency
+**** DONE Add a route for graphql
+**** DONE Get the GraphQL playground working
+**** DONE Try to get =graphql.ts= to be a proper TypeScript module
+**** DONE Read https://www.apollographql.com/docs/apollo-server/
+**** DONE Define the schema
+**** DONE Write a simple resolver
+**** DONE Write a unit test
+*** TODO Consider using a standard format for pack files (e.g. tar)
+**** A standard file format alleviates concern about support
+**** Rust tar: https://github.com/alexcrichton/tar-rs
+**** Also employ some standard encryption format
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
 **** TODO Set up =gulp= and =webpack= to build the front-end code
+**** TODO Set up apollo client dependency and schema tooling
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
 *** TODO Recover from unfinished backup procedure
@@ -25,6 +35,8 @@
 **** If there are no changes at all (tree or file), delete the snapshot
 *** TODO Manage datasets, defaults, saving updated snapshot to database
 *** TODO Exclude the database files from the data set(s)
+*** TODO Add something that will run scheduled jobs
+**** that is, an easy way to trigger backups according to the configuration
 ** Phase 4
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
@@ -66,6 +78,7 @@
 *** TODO =tarsnap= author suggests compression is vulnerable to exploit
 : To protect against an attacker who has a zlib exploit and can tamper with
 : our backups, we append a "physical" HMAC to the end of each block.
+*** TODO Read cross platform Node.js guide: https://github.com/ehmicky/portable-node-guide
 *** TODO Support Windows file types
 **** ReadOnly
 **** Hidden
@@ -87,6 +100,19 @@
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
+*** TODO Consider rewriting parts of core in Rust and compile to WebAssembly
+**** Node.js runs WebAssembly since v8
+**** deduplication module can be replaced with Rust version
+***** https://crates.io/crates/quickcdc
+**** The core module would especially benefit with all of the file handling
+**** c.f. https://rustwasm.github.io/book/introduction.html
+**** c.f. https://github.com/yushulx/webassembly-nodejs
+**** Rust bcrypt: https://github.com/Keats/rust-bcrypt
+**** Rust HMAC: https://www.crates.io/crates/hmac
+**** Rust pbkdf2: https://crates.io/crates/pbkdf2
+**** Rust stream ciphers: https://github.com/RustCrypto/stream-ciphers
+**** Rust crypto option: https://github.com/miscreant/miscreant
+**** Rust tool: https://github.com/rust-lang/rust-clippy
 * Electron App
 ** Phase N
 *** TODO Write it in TypeScript

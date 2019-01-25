@@ -375,7 +375,23 @@ export async function countChunks(): Promise<number> {
     group: true
   })
   if (res.rows === undefined || res.rows.length === 0) {
-    throw new Error('invalid query response')
+    return 0
+  }
+  return res['rows'][0].value
+}
+
+/**
+ * Return the number of unique files in the database.
+ *
+ * @returns count of `file` records.
+ */
+export async function countFiles(): Promise<number> {
+  const res = await db.query('queries/all_types', {
+    key: 'file',
+    group: true
+  })
+  if (res.rows === undefined || res.rows.length === 0) {
+    return 0
   }
   return res['rows'][0].value
 }
