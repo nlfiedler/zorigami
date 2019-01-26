@@ -130,18 +130,13 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunks(chunks, packfile)
-      assert.equal(digest, 'sha256-ba75dbf315348a3d869fc9cd7e7e0acef28e9de9a9490b2b2901efd700db8c0a')
-      // due to possible pack compression, we cannot verify the checksum of the pack file
-      // but, we can verify by unpacking the chunks again
+      await core.packChunks(chunks, packfile)
+      // because tar file entries have date/time, the checksum will vary every time
       const outdir = tmp.dirSync().name
-      await core.unpackChunks(packfile, outdir)
-      const entries = fs.readdirSync(outdir, { withFileTypes: true })
+      const entries = await core.unpackChunks(packfile, outdir)
       assert.lengthOf(entries, 1, 'one chunk unpacked')
-      assert.isTrue(entries[0].isFile())
-      assert.equal(entries[0].name, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
-      const chunkDigest = await core.checksumFile(
-        path.join(outdir, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f'), 'sha1')
+      assert.equal(entries[0], 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
+      const chunkDigest = await core.checksumFile(path.join(outdir, entries[0]), 'sha1')
       assert.equal(chunkDigest, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
     })
 
@@ -167,12 +162,10 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunks(chunks, packfile)
-      assert.equal(digest, 'sha256-d2a1a62c35c3478825cba3b850c0a3a50db4c35f12d2c38fdbf0fdd532f6608d')
-      // verify unpacking
+      await core.packChunks(chunks, packfile)
+      // verify by unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunks(packfile, outdir)
-      const entries = fs.readdirSync(outdir)
+      const entries = await core.unpackChunks(packfile, outdir)
       assert.lengthOf(entries, 3, 'three files unpacked')
       assert.isTrue(entries.includes('sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317'))
       assert.isTrue(entries.includes('sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b'))
@@ -206,17 +199,13 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
-      assert.equal(digest, 'sha256-ba75dbf315348a3d869fc9cd7e7e0acef28e9de9a9490b2b2901efd700db8c0a')
-      // verify unpacking
+      await core.packChunksEncrypted(chunks, packfile, keys)
+      // verify by unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, outdir, keys)
-      const entries = fs.readdirSync(outdir, { withFileTypes: true })
+      const entries = await core.unpackChunksEncrypted(packfile, outdir, keys)
       assert.lengthOf(entries, 1, 'one file unpacked')
-      assert.isTrue(entries[0].isFile())
-      assert.equal(entries[0].name, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
-      const chunkDigest = await core.checksumFile(
-        path.join(outdir, 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f'), 'sha1')
+      assert.equal(entries[0], 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f')
+      const chunkDigest = await core.checksumFile(path.join(outdir, entries[0]), 'sha1')
       assert.equal(chunkDigest, 'sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96')
     })
 
@@ -243,12 +232,10 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
-      assert.equal(digest, 'sha256-d2a1a62c35c3478825cba3b850c0a3a50db4c35f12d2c38fdbf0fdd532f6608d')
-      // verify unpacking
+      await core.packChunksEncrypted(chunks, packfile, keys)
+      // verify by unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, outdir, keys)
-      const entries = fs.readdirSync(outdir)
+      const entries = await core.unpackChunksEncrypted(packfile, outdir, keys)
       assert.lengthOf(entries, 3, 'three chunks unpacked')
       assert.isTrue(entries.includes('sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317'))
       assert.isTrue(entries.includes('sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b'))
@@ -282,12 +269,10 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      const digest = await core.packChunksEncrypted(chunks, packfile, keys)
-      assert.equal(digest, 'sha256-aadd83ad008a8c3cbdf0c0b5f3f8c3d6ff52a3346559c9e4d5e198380704c7c1')
-      // verify unpacking
+      await core.packChunksEncrypted(chunks, packfile, keys)
+      // verify by unpacking
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, outdir, keys)
-      const entries = fs.readdirSync(outdir)
+      const entries = await core.unpackChunksEncrypted(packfile, outdir, keys)
       assert.lengthOf(entries, 2, 'two chunks unpacked')
       assert.isTrue(entries.includes('sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f'))
       assert.isTrue(entries.includes('sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed'))

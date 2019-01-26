@@ -103,14 +103,8 @@ Arq backup describes this as:
     - allow configuring pack file size, since it is inconsequential
     - restrict pack files to between 16 to 256 MB in size
 * pack file format
-    - pack starts with `P4CK`
-    - version number (4 bytes)
-    - number of entries (4 bytes)
-    - entries:
-        + byte length (4 bytes)
-        + SHA256 checksum (32 bytes)
-        + data
-    - compressed using gzip, if the result is smaller
+    - tar file format
+    - entry names are the chunk hash digest plus prefix
 * encrypted pack file format
     - header: `C4PX` (rot13 of `P4CK`)
     - version number (4 bytes)

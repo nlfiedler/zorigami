@@ -13,6 +13,8 @@ import * as verr from 'verror'
 import * as dedupe from '@ronomon/deduplication'
 import * as uuidv5 from 'uuid/v5'
 import * as ULID from 'ulid'
+const archiver = require('archiver')
+const tar = require('tar')
 
 const fopen = util.promisify(fs.open)
 const fread = util.promisify(fs.read)
@@ -375,140 +377,54 @@ export async function packChunks(chunks: Chunk[], outfile: string): Promise<stri
       }, 'chunk has invalid hash length')
     }
   }
-  const writeAndHash = async (data: Buffer, fd: number, hash: crypto.Hash) => {
-    await fwrite(fd, data)
-    hash.update(data)
-  }
-  const outfd = await fopen(outfile, 'w')
-  const packHash = crypto.createHash('sha256')
-  // Write the pack header: P4CK, version, chunk count
-  const header = Buffer.allocUnsafe(12)
-  header.write('P4CK')
-  header.writeUInt32BE(1, 4)
-  header.writeUInt32BE(chunks.length, 8)
-  await writeAndHash(header, outfd, packHash)
-  // Write each of the chunks into the pack, hashing the overall pack.
-  const buffer = Buffer.allocUnsafe(BUFFER_SIZE)
-  const buf4 = Buffer.allocUnsafe(4)
-  for (let chunk of chunks) {
-    buf4.writeUInt32BE(chunk.size, 0)
-    await writeAndHash(buf4, outfd, packHash)
-    await writeAndHash(chunk.hash, outfd, packHash)
-    const infd = await fopen(chunk.path, 'r')
-    await copyBytes(infd, chunk.offset, buffer, outfd, chunk.size, (data: Buffer) => {
-      packHash.update(data)
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(outfile)
+    // we need to use archiver because it allows us to append
+    // streams, that way we can add portions of larger files
+    const archive = archiver('tar')
+    output.on('close', () => {
+      resolve()
     })
-    fs.closeSync(infd)
-  }
-  fs.closeSync(outfd)
-  await maybeCompress(outfile)
-  return 'sha256-' + packHash.digest('hex')
-}
-
-/**
- * Compress the specified file, and if the result is smaller then keep that
- * file, removing the original, and renaming the new one. Otherwise discard the
- * compressed version.
- *
- * @param infile file to be tentatively compressed.
- */
-async function maybeCompress(infile: string) {
-  const outfile = tmp.fileSync({ dir: path.dirname(infile) }).name
-  await compressFile(infile, outfile)
-  const istat = fs.statSync(infile)
-  const ostat = fs.statSync(outfile)
-  if (istat.size > ostat.size) {
-    fs.unlinkSync(infile)
-    fs.renameSync(outfile, infile)
-  } else {
-    fs.unlinkSync(outfile)
-  }
+    archive.on('error', (err: Error) => {
+      reject(err)
+    })
+    archive.pipe(output)
+    for (let chunk of chunks) {
+      const input = fs.createReadStream(chunk.path, {
+        start: chunk.offset,
+        end: chunk.offset + chunk.size - 1
+      })
+      const name = checksumFromBuffer(chunk.hash, 'sha256')
+      archive.append(input, { name })
+    }
+    archive.finalize()
+  }).then(() => {
+    return checksumFile(outfile, 'sha256')
+  })
 }
 
 /**
  * Extract the chunks from the given pack file, writing them to the output
  * directory, with the names being the original SHA256 of the chunk (with a
- * "sha256-" prefix). If the file is compressed, it will be decompressed in
- * place.
+ * "sha256-" prefix).
  *
  * @param infile path of pack file to read.
  * @param outdir path to which chunks are written.
  * @returns checksums of all the extracted chunks.
  */
 export async function unpackChunks(infile: string, outdir: string): Promise<string[]> {
-  await maybeDecompress(infile)
-  const infd = await fopen(infile, 'r')
-  const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
-  await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
-  const magic = header.toString('utf8', 0, 4)
-  if (magic !== 'P4CK') {
-    throw new verr.VError(`pack magic number invalid: ${magic}`)
-  }
-  const version = header.readUInt32BE(4)
-  if (version < 1) {
-    throw new verr.VError(`pack version invalid: ${version}`)
-  }
   fx.ensureDirSync(outdir)
-  if (version === 1) {
-    const results = await unpackChunksV1(infd, outdir)
-    fs.closeSync(infd)
-    return results
-  } else {
-    fs.closeSync(infd)
-    throw new verr.VError(`pack version unsupported: ${version}`)
-  }
-}
-
-/**
- * Check if the specified file is compressed using gzip, and decompress if that
- * is the case, replacing the file in the process.
- *
- * @param infile file that may or may not be compressed.
- */
-async function maybeDecompress(infile: string) {
-  const infd = await fopen(infile, 'r')
-  const magic = Buffer.allocUnsafe(2)
-  await readBytes(infd, magic, 0, 2, 0)
-  fs.closeSync(infd)
-  const value = magic.readUInt16BE(0)
-  if (value === 0x1f8b) {
-    const outfile = tmp.fileSync({ dir: path.dirname(infile) }).name
-    await decompressFile(infile, outfile)
-    fs.unlinkSync(infile)
-    fs.renameSync(outfile, infile)
-  }
-}
-
-/**
- * Unpack the chunks to a directory for version 1 of the pack file.
- *
- * @param infd input file descriptor.
- * @param outdir directory to which chunks are written.
- * @returns checksums of all the extracted chunks.
- */
-async function unpackChunksV1(infd: number, outdir: string): Promise<string[]> {
-  const buffer = Buffer.allocUnsafe(BUFFER_SIZE)
-  let fpos = PACK_HEADER_SIZE
-  await readBytes(infd, buffer, 0, 4, fpos)
-  fpos += 4
-  const count = buffer.readUInt32BE(0)
-  let index = 0
   const results: string[] = []
-  while (index < count) {
-    // read chunk size (4 bytes) and sha256 (32 bytes)
-    await readBytes(infd, buffer, 0, 36, fpos)
-    fpos += 36
-    const chunkSize = buffer.readUInt32BE(0)
-    const checksum = checksumFromBuffer(buffer.slice(4, 36), 'sha256')
-    const outfile = path.join(outdir, checksum)
-    const outfd = await fopen(outfile, 'w')
-    await copyBytes(infd, fpos, buffer, outfd, chunkSize)
-    fpos += chunkSize
-    fs.closeSync(outfd)
-    results.push(checksum)
-    index++
-  }
-  return results
+  // archiver can create tar files, but cannot extract them
+  return tar.extract({
+    cwd: outdir,
+    file: infile,
+    onentry: (entry: any) => {
+      results.push(path.basename(entry.path))
+    }
+  }).then((): string[] => {
+    return results
+  })
 }
 
 /**

@@ -17,10 +17,20 @@
 **** DONE Define the schema
 **** DONE Write a simple resolver
 **** DONE Write a unit test
-*** TODO Consider using a standard format for pack files (e.g. tar)
-**** A standard file format alleviates concern about support
-**** Rust tar: https://github.com/alexcrichton/tar-rs
-**** Also employ some standard encryption format
+*** TODO Use a standard format for pack files (e.g. tar)
+**** Using open standards satisfies long term support
+**** Standard file archive format: tar
+***** entry names are the =<algo>-<checksum>= values
+***** https://github.com/archiverjs/node-archiver (can do streams)
+**** Standard encryption format: PGP
+***** c.f. RFC 4880 for OpenPGP definition
+***** uses public key to encrypt session keys, session keys encrypt data
+***** option to compress data
+***** supports message authentication
+***** keys are stored in database
+***** user password is the private key passphrase
+***** JavaScript LGPL: https://github.com/openpgpjs/openpgpjs
+***** JavaScript BSD-3: https://github.com/keybase/kbpgp/
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -75,9 +85,6 @@
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
 ** Phase 6
 *** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
-*** TODO =tarsnap= author suggests compression is vulnerable to exploit
-: To protect against an attacker who has a zlib exploit and can tamper with
-: our backups, we append a "physical" HMAC to the end of each block.
 *** TODO Read cross platform Node.js guide: https://github.com/ehmicky/portable-node-guide
 *** TODO Support Windows file types
 **** ReadOnly
@@ -101,10 +108,10 @@
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
 *** TODO Consider rewriting parts of core in Rust and compile to WebAssembly
+**** Need to wait until WASM supports Rust std lib and file access
 **** Node.js runs WebAssembly since v8
 **** deduplication module can be replaced with Rust version
 ***** https://crates.io/crates/quickcdc
-**** The core module would especially benefit with all of the file handling
 **** c.f. https://rustwasm.github.io/book/introduction.html
 **** c.f. https://github.com/yushulx/webassembly-nodejs
 **** Rust bcrypt: https://github.com/Keats/rust-bcrypt

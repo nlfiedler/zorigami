@@ -112,8 +112,7 @@ async function runStoreTests(key: string) {
     }
   ]
   const packfile = tmp.fileSync().name
-  const digest = await core.packChunks(chunks, packfile)
-  assert.equal(digest, 'sha256-ba75dbf315348a3d869fc9cd7e7e0acef28e9de9a9490b2b2901efd700db8c0a')
+  await core.packChunks(chunks, packfile)
   // store the pack
   const bucket = core.generateBucketName(core.generateUniqueId('charlie', 'localhost'))
   const object = path.basename(packfile)
