@@ -389,13 +389,16 @@ export async function packChunks(chunks: Chunk[], outfile: string): Promise<stri
       reject(err)
     })
     archive.pipe(output)
+    // set the date so the tar file produces the same results for the same
+    // inputs every time; the date for chunks is completely irrelevant
+    const epoch = new Date(0)
     for (let chunk of chunks) {
       const input = fs.createReadStream(chunk.path, {
         start: chunk.offset,
         end: chunk.offset + chunk.size - 1
       })
       const name = checksumFromBuffer(chunk.hash, 'sha256')
-      archive.append(input, { name })
+      archive.append(input, { name, date: epoch })
     }
     archive.finalize()
   }).then(() => {

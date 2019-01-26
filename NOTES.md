@@ -105,6 +105,7 @@ Arq backup describes this as:
 * pack file format
     - tar file format
     - entry names are the chunk hash digest plus prefix
+    - entry dates are always UTC epoch to yield consistent results
 * encrypted pack file format
     - header: `C4PX` (rot13 of `P4CK`)
     - version number (4 bytes)

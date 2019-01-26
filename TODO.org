@@ -120,8 +120,17 @@
 **** Rust stream ciphers: https://github.com/RustCrypto/stream-ciphers
 **** Rust crypto option: https://github.com/miscreant/miscreant
 **** Rust tool: https://github.com/rust-lang/rust-clippy
-* Electron App
-** Phase N
+* Desktop App
+** Phase N: Revery?
+*** https://github.com/revery-ui/revery
+*** ReasonML
+*** React-like UI
+*** Redux-like state management
+*** Compiles to native
+*** Would not be using CSS, presumably
+*** Does it have support for systray?
+*** Does it have support for dock icons?
+** Phase N: Electron
 *** TODO Write it in TypeScript
 *** TODO Create a system tray icon/widget
 **** Popup menu like Time Machine

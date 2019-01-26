@@ -130,7 +130,8 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      await core.packChunks(chunks, packfile)
+      const digest = await core.packChunks(chunks, packfile)
+      assert.equal(digest, 'sha256-5601fcf610883f445da646ff53e28bbf39382fca3705063e99429ca571b1af3d')
       // because tar file entries have date/time, the checksum will vary every time
       const outdir = tmp.dirSync().name
       const entries = await core.unpackChunks(packfile, outdir)
@@ -162,7 +163,8 @@ describe('Core Functionality', function () {
         }
       ]
       const packfile = tmp.fileSync().name
-      await core.packChunks(chunks, packfile)
+      const digest = await core.packChunks(chunks, packfile)
+      assert.equal(digest, 'sha256-8dc147a645378984e5cbb1a318aab7af407ff6029ef82d1fb0cf871779a93a86')
       // verify by unpacking
       const outdir = tmp.dirSync().name
       const entries = await core.unpackChunks(packfile, outdir)
