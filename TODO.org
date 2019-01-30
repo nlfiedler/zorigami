@@ -1,4 +1,104 @@
 * Zorigami
+** Exploring other languages
+*** Compile to native for easy deployment
+*** [[https://github.com/revery-ui/revery][Revery]] for desktop interface
+*** OCaml
+**** Advantages
+***** Compile to native
+***** Expressive type system
+**** Disadvantages
+***** Dearth of libraries for many things
+**** Configuration
+**** =getpwuid= and =getgrgid= support
+**** GraphQL server
+***** https://github.com/andreas/ocaml-graphql-server (MIT)
+**** test library
+**** build tool
+**** UUID support
+***** type 3, 4, 5: https://github.com/dbuenzli/uuidm (ISC)
+**** xattr support
+**** CDC
+**** Web framework
+**** Tar file
+**** Database
+**** PGP
+**** Crypto
+**** ULID
+**** SFTP client
+**** AWS client
+**** Google Cloud client
+**** Minio client
+*** Go
+**** Advantages
+***** compiles to a single native binary
+***** better resource utilization than Node
+***** stdlib has a lot of functionality
+**** dotenv
+***** https://github.com/joho/godotenv (MIT)
+**** Configuration
+***** https://github.com/spf13/viper (MIT)
+***** https://github.com/micro/go-config (Apache 2.0)
+**** =getpwuid= and =getgrgid= support
+***** stdlib =import "os/user"=
+**** test library
+***** mocha style BDD: https://github.com/franela/goblin (MIT)
+****** uses [[https://github.com/onsi/gomega][gomega]] for BDD-style assertions
+***** simple assertions: https://labix.org/gocheck (BSD)
+**** build tool (e.g. gulp, webpack)
+**** UUID support
+***** https://github.com/satori/go.uuid (MIT)
+**** xattr support
+***** https://github.com/pkg/xattr (BSD); no Windows support
+**** GraphQL server
+***** TODO Make sure it can generate a schema.json
+***** TODO Should be able to parse schema definition (for docs)
+***** [[https://github.com/99designs/gqlgen][gqlgen]] (MIT)
+****** supports everything and is type-safe
+****** docs: https://gqlgen.com/getting-started/
+****** c.f. https://hackernoon.com/graphql-with-golang-6e8da2054c25
+***** [[https://github.com/graph-gophers/graphql-go][graph-gophers/graphql-go]] (BSD)
+****** schema-first
+***** [[https://github.com/graphql-go/graphql][graphql-go/graphql]] (MIT)
+****** code-defined schema
+**** CDC
+***** [[https://github.com/restic/chunker][restic/chunker]] (BSD)
+***** consider implementing FastCDC in Go
+***** Maybe convert JS https://github.com/ronomon/deduplication to Go
+***** Maybe convert Rust https://github.com/jrobhoward/quickcdc to Go
+***** no golang FastCDC implementations
+**** Web framework
+***** [[https://revel.github.io][revel]] looks pretty good
+***** [[https://echo.labstack.com][echo]] minimalist
+***** [[https://iris-go.com][iris]] looks easy to use
+**** Tar file
+***** stdlib: https://golang.org/pkg/archive/tar/
+**** Database
+***** ideally want something well maintained, reliable (e.g. LevelDB)
+***** schema is pretty simple, could use key/value store
+***** TODO look for a robust K/V store
+***** [[https://github.com/dgraph-io/badger][dgraph-io/badger]] (Apache 2.0) seems very reliable
+****** TODO read https://blog.dgraph.io/post/badger/
+***** [[http://ledisdb.com][LedisDB]] supports LevelDB, has HTTP and CLI
+***** [[https://github.com/syndtr/goleveldb][goleveldb]] is "LevelDB" written in Go
+***** maybe SQLite would work
+***** https://github.com/HouzuoGuo/tiedot (BSD)
+**** PGP
+***** x/stdlib https://godoc.org/golang.org/x/crypto/openpgp
+***** use =Encrypt= to encrypt and =ReadMessage= to decrypt
+***** e.g. https://gist.github.com/stuart-warren/93750a142d3de4e8fdd2
+**** Crypto
+***** public key: stdlib https://golang.org/pkg/crypto/rsa/
+***** random: stdlib https://golang.org/pkg/crypto/rand/
+***** digest: stdlib https://golang.org/pkg/crypto/sha256/
+***** HMAC: stdlib https://golang.org/pkg/crypto/hmac/
+***** bcrypt: https://godoc.org/golang.org/x/crypto/bcrypt
+***** scrypt: https://godoc.org/golang.org/x/crypto/scrypt
+***** stream cipher: https://golang.org/pkg/crypto/cipher/ (=NewCTR=)
+**** ULID: https://github.com/oklog/ulid (Apache 2.0)
+**** SFTP client: https://github.com/pkg/sftp (BSD)
+**** AWS client: https://github.com/aws/aws-sdk-go
+**** Google Cloud client: https://github.com/googleapis/google-cloud-go
+**** Minio client: https://www.minio.io/downloads.html#download-sdk
 ** Phase 3
 *** DONE Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
 **** DONE Look more at how https://github.com/TypeStrong/ts-node can be used
@@ -17,7 +117,7 @@
 **** DONE Define the schema
 **** DONE Write a simple resolver
 **** DONE Write a unit test
-*** TODO Use a standard format for pack files (e.g. tar)
+*** DONE Use a standard format for pack files (e.g. tar)
 **** Using open standards satisfies long term support
 **** Standard file archive format: tar
 ***** entry names are the =<algo>-<checksum>= values
@@ -29,8 +129,39 @@
 ***** supports message authentication
 ***** keys are stored in database
 ***** user password is the private key passphrase
-***** JavaScript LGPL: https://github.com/openpgpjs/openpgpjs
-***** JavaScript BSD-3: https://github.com/keybase/kbpgp/
+***** https://github.com/openpgpjs/openpgpjs (LGPL)
+***** DONE Get encryption and decryption with generated keys working
+***** DONE Generate keys once and store in database, load on demand
+***** DONE Evaluate which core functions are now redundant
+****** encrypt/decrypt file
+****** compress/decompress file
+** Phase 4
+*** TODO Rewrite everything in Go
+**** DONE go through tour of go
+**** DONE look for equivalent of "virtual environments"
+**** DONE brush up on weak aspects of go
+**** TODO set up project and build environment
+***** /not/ going to use vgo/mod at this time, much too unstable in 1.11
+***** TODO Use https://github.com/GetStream/vg to set up virtual environments
+***** TODO Use https://github.com/golang/dep to manage dependencies
+**** TODO write a core package with a few functions
+**** TODO set up configuration for dev and testing
+**** TODO write unit tests for core package
+**** TODO get pack files working
+**** TODO get encryption working
+**** TODO get basic database working
+**** TODO get CDC working
+**** TODO implement pack stores
+***** TODO local
+***** TODO minio
+***** TODO sftp
+**** TODO convert engine code
+***** TODO build tree objects
+***** TODO find differences between snapshots
+***** TODO produce pack files from changes
+***** TODO restore files from backup
+**** TODO set up web framework
+**** TODO set up GraphQL server
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -47,7 +178,7 @@
 *** TODO Exclude the database files from the data set(s)
 *** TODO Add something that will run scheduled jobs
 **** that is, an easy way to trigger backups according to the configuration
-** Phase 4
+** Phase 5
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Support multiple roots per dataset
@@ -56,7 +187,7 @@
 *** TODO Store pack files in Google Cloud Storage
 **** c.f. https://github.com/googleapis/nodejs-storage/
 *** TODO Use this to replace =akashita= for online backups
-** Phase 5
+** Phase 6
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
@@ -83,7 +214,7 @@
 **** For Google and Amazon, anything older than 90 days is free to remove
 **** This would be a configuration setting, with defaults and path-specific
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
-** Phase 6
+** Phase 7
 *** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
 *** TODO Read cross platform Node.js guide: https://github.com/ehmicky/portable-node-guide
 *** TODO Support Windows file types
@@ -92,7 +223,6 @@
 **** System
 *** TODO Support Amazon S3
 *** TODO Support Amazon Glacier
-**** c.f. https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/welcome.html
 **** Offer user option to use "expedited" retrievals so they go faster
 *** TODO Support Microsoft Azure blob storage
 *** TODO Support Backblaze B2
@@ -107,20 +237,8 @@
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
-*** TODO Consider rewriting parts of core in Rust and compile to WebAssembly
-**** Need to wait until WASM supports Rust std lib and file access
-**** Node.js runs WebAssembly since v8
-**** deduplication module can be replaced with Rust version
-***** https://crates.io/crates/quickcdc
-**** c.f. https://rustwasm.github.io/book/introduction.html
-**** c.f. https://github.com/yushulx/webassembly-nodejs
-**** Rust bcrypt: https://github.com/Keats/rust-bcrypt
-**** Rust HMAC: https://www.crates.io/crates/hmac
-**** Rust pbkdf2: https://crates.io/crates/pbkdf2
-**** Rust stream ciphers: https://github.com/RustCrypto/stream-ciphers
-**** Rust crypto option: https://github.com/miscreant/miscreant
-**** Rust tool: https://github.com/rust-lang/rust-clippy
 * Desktop App
+** TODO Read https://youngdynasty.net/posts/writing-mac-apps-in-go/
 ** Phase N: Revery?
 *** https://github.com/revery-ui/revery
 *** ReasonML

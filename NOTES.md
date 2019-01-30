@@ -107,12 +107,8 @@ Arq backup describes this as:
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
 * encrypted pack file format
-    - header: `C4PX` (rot13 of `P4CK`)
-    - version number (4 bytes)
-    - HMAC-SHA256 (32 bytes)
-    - master init vector (16 bytes)
-    - encrypted data init vector and session key (48 bytes)
-    - encrypted pack data
+    - encrypted using pgp (RFC 4880)
+    - encrypt with public key, decrypt with private key
 
 ### PouchDB
 

@@ -6,7 +6,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as stream from 'stream'
 import * as util from 'util'
-import * as zlib from 'zlib'
 import * as fx from 'fs-extra'
 import * as tmp from 'tmp'
 import * as verr from 'verror'
@@ -14,33 +13,21 @@ import * as dedupe from '@ronomon/deduplication'
 import * as uuidv5 from 'uuid/v5'
 import * as ULID from 'ulid'
 const archiver = require('archiver')
+const openpgp = require('openpgp')
+const kbpgp = require('kbpgp')
 const tar = require('tar')
 
+const F = kbpgp['const'].openpgp
 const fopen = util.promisify(fs.open)
 const fread = util.promisify(fs.read)
 const fwrite = util.promisify(fs.write)
 
-// size of the pack file header, which is not expected to change;
-// has 'P4CK' (UTF-8, 4 bytes) and the version (4 byte LE integer)
-// for plaintext packs, and 'C4PX' and a version with encryption
-const PACK_HEADER_SIZE = 8
 // use the same buffer size that Node uses for file streams
 const BUFFER_SIZE = 65536
 
-export interface MasterKeys {
-  readonly master1: Buffer
-  readonly master2: Buffer
-}
-
-export interface EncryptionData {
-  /** Salt for hasing the user password. */
-  readonly salt: Buffer
-  /** Initialization vector for encrypting the master keys. */
-  readonly iv: Buffer
-  /** HMAC-SHA256 of the iv and encrypted master keys. */
-  readonly hmac: Buffer
-  /** The encrypted master keys. */
-  readonly encrypted: Buffer
+export interface EncryptionKeys {
+  readonly publicKey: string
+  readonly privateKey: string
 }
 
 export interface Chunk {
@@ -78,176 +65,84 @@ export function generateBucketName(uniqueId: string): string {
 }
 
 /**
- * Generate the master keys.
+ * Generate the public and private keys for encrypting pack files.
  *
- * @returns the generated master key values.
+ * @param userid identifier for the user to incorporate into the keys.
+ * @param passphrase password for locking and unlocking the private key.
+ * @param bits number of bits for the key (e.g. 4096).
  */
-export function generateMasterKeys(): MasterKeys {
-  const master1 = Buffer.allocUnsafe(32)
-  crypto.randomFillSync(master1)
-  const master2 = Buffer.allocUnsafe(32)
-  crypto.randomFillSync(master2)
-  return { master1, master2 }
-}
-
-/**
- * Encrypt the given plain text using the key and initialization vector.
- *
- * @param plaintext data to be encrypted.
- * @param key encryption key.
- * @param iv initialization vector.
- * @returns cipher text.
- */
-function encrypt(plaintext: Buffer, key: Buffer, iv: Buffer): Buffer {
-  const cipher = crypto.createCipheriv('aes-256-ctr', key, iv)
-  const enc1 = cipher.update(plaintext)
-  const enc2 = cipher.final()
-  return Buffer.concat([enc1, enc2])
-}
-
-/**
- * Decrypt the given cipher text using the key and initialization vector.
- *
- * @param ciphertext data to be decrypted.
- * @param key encryption key.
- * @param iv initialization vector.
- * @returns decrypted data.
- */
-function decrypt(ciphertext: Buffer, key: Buffer, iv: Buffer): Buffer {
-  const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv)
-  const dec1 = decipher.update(ciphertext)
-  const dec2 = decipher.final()
-  return Buffer.concat([dec1, dec2])
-}
-
-/**
- * Hash the given user password with the salt value using scrypt.
- *
- * @param password user password.
- * @param salt random salt value.
- * @returns 32 byte key value.
- */
-function hashPassword(password: string, salt: Buffer): Buffer {
-  return crypto.scryptSync(password, salt, 32)
-}
-
-/**
- * Compute the HMAC-SHA256 of the given data.
- *
- * @param key hashed user password.
- * @param data buffer to be digested.
- * @returns HMAC digest value.
- */
-function computeHmac(key: Buffer, data: Buffer): Buffer {
-  const hmac = crypto.createHmac('sha256', key)
-  hmac.update(data)
-  return hmac.digest()
-}
-
-/**
- * Use the user password and the two master keys to produce the encryption data
- * that will be stored in the database. This generates a random salt and
- * initialization vector, then derives a key from the user password and salt,
- * encrypts the master keys, computes the HMAC, and returns the results.
- *
- * @param password user-provided master password.
- * @param keys the master keys.
- * @returns the new encryption data.
- */
-export function newMasterEncryptionData(password: string, keys: MasterKeys): EncryptionData {
-  const salt = Buffer.allocUnsafe(16)
-  crypto.randomFillSync(salt)
-  // AES uses 128-bit initialization vectors
-  const iv = Buffer.allocUnsafe(16)
-  crypto.randomFillSync(iv)
-  const key = hashPassword(password, salt)
-  const masters = Buffer.concat([keys.master1, keys.master2])
-  const encrypted = encrypt(masters, key, iv)
-  const hmac = computeHmac(key, Buffer.concat([iv, encrypted]))
-  return { salt, iv, hmac, encrypted }
-}
-
-/**
- * Decrypt the master keys from the data originally produced by
- * newMasterEncryptionData().
- *
- * @param data encryption data.
- * @param password user password.
- * @returns decrypted master key values.
- */
-export function decryptMasterKeys(data: EncryptionData, password: string): MasterKeys {
-  const key = hashPassword(password, data.salt)
-  const hmac2 = computeHmac(key, Buffer.concat([data.iv, data.encrypted]))
-  if (data.hmac.compare(hmac2) !== 0) {
-    throw new verr.VError('HMAC does not match records')
+export async function generateEncryptionKeys(
+  userid: string,
+  passphrase: string,
+  bits: number
+): Promise<EncryptionKeys> {
+  //
+  // use kbpgp to generate the keys because it is much faster than openpgpjs
+  // (see issue https://github.com/openpgpjs/openpgpjs/issues/449)
+  // (see issue https://github.com/openpgpjs/openpgpjs/issues/530)
+  //
+  // TODO: openpgpjs has an encoding issue with userid, should be base64 encoded for safety
+  //
+  const opts = {
+    userid,
+    primary: {
+      nbits: bits,
+      flags: F.certify_keys | F.sign_data | F.auth | F.encrypt_comm | F.encrypt_storage,
+      expire_in: 0
+    },
+    subkeys: [
+      {
+        nbits: bits / 2,
+        flags: F.sign_data,
+        expire_in: 0
+      }, {
+        nbits: bits / 2,
+        flags: F.encrypt_comm | F.encrypt_storage,
+        expire_in: 0
+      }
+    ]
   }
-  const plaintext = decrypt(data.encrypted, key, data.iv)
-  const middle = plaintext.length / 2
-  const master1 = plaintext.slice(0, middle)
-  const master2 = plaintext.slice(middle)
-  return { master1, master2 }
-}
-
-/**
- * Encrypt a file.
- *
- * @param infile path of input file.
- * @param outfile path of output file.
- * @param key encryption key.
- * @param iv initialization vector.
- */
-export function encryptFile(infile: string, outfile: string, key: Buffer, iv: Buffer) {
-  const cipher = crypto.createCipheriv('aes-256-ctr', key, iv)
-  const input = fs.createReadStream(infile)
-  const output = fs.createWriteStream(outfile)
-  return new Promise((resolve, reject) => {
-    const cleanup = (err: Error) => {
-      input.destroy()
-      output.destroy()
-      reject(err)
-    }
-    input.on('error', (err) => cleanup(err))
-    output.on('error', (err) => cleanup(err))
-    output.on('finish', () => resolve())
-    input.pipe(cipher).pipe(output)
+  // generate the key manager instance
+  const keymgr: any = await new Promise((resolve, reject) => {
+    kbpgp.KeyManager.generate(opts, (err: Error, keymgr: any) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(keymgr)
+      }
+    })
   })
-}
-
-/**
- * Decrypt a file.
- *
- * @param infile path of input file.
- * @param outfile path of output file.
- * @param key encryption key.
- * @param iv initialization vector.
- */
-export function decryptFile(infile: string, outfile: string, key: Buffer, iv: Buffer) {
-  const input = fs.createReadStream(infile)
-  const output = fs.createWriteStream(outfile)
-  return decryptStream(input, output, key, iv)
-}
-
-/**
- * Decrypt a stream of bytes.
- *
- * @param input stream from which to read.
- * @param output stream to receive decrypted data.
- * @param key encryption key.
- * @param iv initialization vector.
- */
-function decryptStream(input: stream.Readable, output: stream.Writable, key: Buffer, iv: Buffer) {
-  const cipher = crypto.createDecipheriv('aes-256-ctr', key, iv)
-  return new Promise((resolve, reject) => {
-    const cleanup = (err: Error) => {
-      input.destroy()
-      output.destroy()
-      reject(err)
-    }
-    input.on('error', (err) => cleanup(err))
-    output.on('error', (err) => cleanup(err))
-    output.on('finish', () => resolve())
-    input.pipe(cipher).pipe(output)
+  // sign it
+  await new Promise((resolve, reject) => {
+    keymgr.sign({}, (err: Error) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve()
+      }
+    })
   })
+  // get the ascii armor version of the private key
+  const privateKey: string = await new Promise((resolve, reject) => {
+    keymgr.export_pgp_private({ passphrase }, (err: Error, privateKey: string) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(privateKey)
+      }
+    })
+  })
+  // get the public key string
+  const publicKey: string = await new Promise((resolve, reject) => {
+    keymgr.export_pgp_public({}, (err: Error, publicKey: string) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(publicKey)
+      }
+    })
+  })
+  return { publicKey, privateKey }
 }
 
 /**
@@ -312,52 +207,6 @@ export function checksumFile(infile: string, algo: string): Promise<string> {
       input.destroy()
       reject(err)
     })
-  })
-}
-
-/**
- * Compress a file using GZip.
- *
- * @param infile path of input file.
- * @param outfile path of output file.
- */
-export function compressFile(infile: string, outfile: string) {
-  const input = fs.createReadStream(infile)
-  const zip = zlib.createGzip()
-  const output = fs.createWriteStream(outfile)
-  return new Promise((resolve, reject) => {
-    const cleanup = (err: Error) => {
-      input.destroy()
-      output.destroy()
-      reject(err)
-    }
-    input.on('error', (err) => cleanup(err))
-    output.on('error', (err) => cleanup(err))
-    output.on('finish', () => resolve())
-    input.pipe(zip).pipe(output)
-  })
-}
-
-/**
- * Decompress a file previously compressed using GZip.
- *
- * @param infile path of input file.
- * @param outfile path of output file.
- */
-export function decompressFile(infile: string, outfile: string) {
-  const input = fs.createReadStream(infile)
-  const unzip = zlib.createGunzip()
-  const output = fs.createWriteStream(outfile)
-  return new Promise((resolve, reject) => {
-    const cleanup = (err: Error) => {
-      input.destroy()
-      output.destroy()
-      reject(err)
-    }
-    input.on('error', (err) => cleanup(err))
-    output.on('error', (err) => cleanup(err))
-    output.on('finish', () => resolve())
-    input.pipe(unzip).pipe(output)
   })
 }
 
@@ -440,39 +289,57 @@ export async function unpackChunks(infile: string, outdir: string): Promise<stri
  * @param keys master keys for encrypting the pack.
  * @returns hex string of pack digest with prefix 'sha256-'.
  */
-export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys: MasterKeys): Promise<string> {
-  // produce the pack file and encrypt it using a new key and iv
-  const sessionKey = Buffer.allocUnsafe(32)
-  crypto.randomFillSync(sessionKey)
-  // AES uses 128-bit initialization vectors
-  const sessionIV = Buffer.allocUnsafe(16)
-  crypto.randomFillSync(sessionIV)
+export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys: EncryptionKeys): Promise<string> {
   const packfile = tmp.fileSync({ dir: path.dirname(outfile) }).name
-  const encfile = tmp.fileSync({ dir: path.dirname(outfile) }).name
   const results = await packChunks(chunks, packfile)
-  await encryptFile(packfile, encfile, sessionKey, sessionIV)
+  const input = fs.createReadStream(packfile)
+  const output = fs.createWriteStream(outfile)
+  const options = {
+    message: openpgp.message.fromBinary(input),
+    publicKeys: (await openpgp.key.readArmored(keys.publicKey)).keys,
+    armor: false,
+    compression: openpgp.enums.compression.zlib
+  };
+  output.on('error', (err: Error) => {
+    input.destroy()
+    output.destroy()
+  })
+  const ciphertext = await openpgp.encrypt(options)
+  const encrypted = ciphertext.message.packets.write()
+  const reader = openpgp.stream.getReader(encrypted)
+  await readerToStream(reader, output)
   fs.unlinkSync(packfile)
-
-  // prepare to encrypt the new key and iv using yet another new key, then HMAC
-  // those values and the entire encrypted file
-  const masterIV = Buffer.allocUnsafe(16)
-  crypto.randomFillSync(masterIV)
-  const encryptedKeys = encrypt(Buffer.concat([sessionIV, sessionKey]), keys.master1, masterIV)
-  const hmac = crypto.createHmac('sha256', keys.master2)
-  hmac.update(masterIV)
-  hmac.update(encryptedKeys)
-  const input = fs.createReadStream(encfile)
-  const mac = await hmacStream(input, hmac)
-
-  // write the encryption data to the output file followed by the contents of
-  // the encrypted pack file
-  const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
-  header.write('C4PX')
-  header.writeUInt32BE(1, 4)
-  const prefix = Buffer.concat([header, mac, masterIV, encryptedKeys])
-  await copyFileWithPrefix(prefix, encfile, outfile)
-  fs.unlinkSync(encfile)
   return results
+}
+
+/**
+ * Read from the reader until it is done, writing the data to the output stream.
+ *
+ * @param reader from which bytes are copied.
+ * @param output writable stream to which bytes are written.
+ */
+async function readerToStream(reader: any, output: stream.Writable): Promise<void> {
+  const promisedWrite = (value: any, output: stream.Writable) => {
+    return new Promise((resolve, reject) => {
+      if (!output.write(value)) {
+        output.once('drain', resolve)
+      } else {
+        resolve()
+      }
+    })
+  }
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      await new Promise((resolve, reject) => {
+        output.end(() => {
+          resolve()
+        })
+      })
+      break
+    }
+    await promisedWrite(value, output)
+  }
 }
 
 /**
@@ -483,112 +350,35 @@ export async function packChunksEncrypted(chunks: Chunk[], outfile: string, keys
  * @param infile path of encrypted pack file.
  * @param outdir path to contain chunk files.
  * @param keys master encryption keys.
+ * @param passphrase pass phrase to unlock private key.
  * @returns checksums of all the extracted chunks.
  */
-export async function unpackChunksEncrypted(infile: string, outdir: string, keys: MasterKeys): Promise<string[]> {
-  const infd = await fopen(infile, 'r')
-  const header = Buffer.allocUnsafe(PACK_HEADER_SIZE)
-  await readBytes(infd, header, 0, PACK_HEADER_SIZE, 0)
-  const magic = header.toString('utf8', 0, 4)
-  if (magic !== 'C4PX') {
-    throw new verr.VError(`pack magic number invalid: ${magic}`)
-  }
-  const version = header.readUInt32BE(4)
-  if (version < 1) {
-    throw new verr.VError(`pack version invalid: ${version}`)
-  }
-  fx.ensureDirSync(outdir)
-  if (version === 1) {
-    return unpackChunksEncryptedV1(infd, outdir, keys)
-  } else {
-    fs.closeSync(infd)
-    throw new verr.VError(`pack version unsupported: ${version}`)
-  }
-}
-
-/**
- * Unpack the chunks from an encrypted (version 1) pack file.
- *
- * @param infd input file descriptor.
- * @param outdir path to contain chunk files.
- * @param keys master encryption keys.
- * @returns checksums of all the extracted chunks.
- */
-async function unpackChunksEncryptedV1(infd: number, outdir: string, keys: MasterKeys): Promise<string[]> {
-  // read the encrypted pack file header
-  const header = Buffer.allocUnsafe(96)
-  let fpos = PACK_HEADER_SIZE
-  await readBytes(infd, header, 0, header.length, fpos)
-  fpos += header.length
-  // 32-byte HMAC digest
-  const expectedMac = header.slice(0, 32)
-  // 16-byte "master" init vector
-  const masterIV = header.slice(32, 48)
-  // 48-byte encrypted session key and data iv
-  const encryptedKeys = header.slice(48, 96)
-  // compute the HMAC and compare with the file
-  const hmac = crypto.createHmac('sha256', keys.master2)
-  hmac.update(masterIV)
-  hmac.update(encryptedKeys)
-  const input = fs.createReadStream(null, { fd: infd, start: fpos, autoClose: false })
-  const actualMac = await hmacStream(input, hmac)
-  if (actualMac.equals(expectedMac)) {
-    // decrypt the key and iv used to encrypt this pack file, then decrypt and
-    // extract the chunks into the output directory
-    const decryptedKeys = decrypt(encryptedKeys, keys.master1, masterIV)
-    const sessionIV = decryptedKeys.slice(0, 16)
-    const sessionKey = decryptedKeys.slice(16)
-    const packfile = tmp.fileSync({ dir: outdir }).name
-    const input = fs.createReadStream(null, { fd: infd, start: fpos })
-    const output = fs.createWriteStream(packfile)
-    await decryptStream(input, output, sessionKey, sessionIV)
-    const results = await unpackChunks(packfile, outdir)
-    fs.unlinkSync(packfile)
-    return results
-  } else {
-    throw new verr.VError('stored HMAC and computed HMAC do not match')
-  }
-}
-
-/**
- * Compute the HMAC digest of a stream of bytes.
- *
- * @param input stream of bytes to be processed.
- * @param hmac HMAC compute utility.
- */
-function hmacStream(input: stream.Readable, hmac: crypto.Hmac): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    input.on('error', (err) => {
-      input.destroy()
-      reject(err)
-    })
-    input.on('readable', () => {
-      const data = input.read()
-      if (data) {
-        hmac.update(data)
-      } else {
-        resolve(hmac.digest())
-      }
-    })
+export async function unpackChunksEncrypted(
+  infile: string,
+  outdir: string,
+  keys: EncryptionKeys,
+  passphrase: string
+): Promise<string[]> {
+  const privKeyObj = (await openpgp.key.readArmored(keys.privateKey)).keys[0]
+  await privKeyObj.decrypt(passphrase)
+  const packfile = tmp.fileSync({ dir: outdir }).name
+  const input = fs.createReadStream(infile)
+  const output = fs.createWriteStream(packfile)
+  const options = {
+    message: await openpgp.message.read(input),
+    privateKeys: [privKeyObj],
+    format: 'binary'
+  };
+  output.on('error', (err: Error) => {
+    input.destroy()
+    output.destroy()
   })
-}
-
-/**
- * Read from the input file into the buffer.
- *
- * @param {number} fd input file descriptor.
- * @param {Buffer} buffer buffer to which data is read.
- * @param {number} offset offset within buffer.
- * @param {number} length number of bytes to be read.
- * @param {number} fpos position from which to read file.
- */
-async function readBytes(fd: number, buffer: Buffer, offset: number, length: number, fpos: number) {
-  let count = 0
-  while (count < length) {
-    const { bytesRead } = await fread(fd, buffer, offset + count, length - count, fpos)
-    count += bytesRead
-    fpos += bytesRead
-  }
+  const plaintext = await openpgp.decrypt(options)
+  const reader = openpgp.stream.getReader(plaintext.data)
+  await readerToStream(reader, output)
+  const results = await unpackChunks(packfile, outdir)
+  fs.unlinkSync(packfile)
+  return results
 }
 
 /**
@@ -615,30 +405,6 @@ async function copyBytes(infd: number, fpos: number, buffer: Buffer, outfd: numb
       cb(data)
     }
   }
-}
-
-/**
- * Copy the one file to another, with a prefix.
- *
- * @param header bytes to write to output before copying.
- * @param infile input file path.
- * @param outfile output file path.
- */
-export function copyFileWithPrefix(header: Buffer, infile: string, outfile: string) {
-  const input = fs.createReadStream(infile)
-  const output = fs.createWriteStream(outfile)
-  return new Promise((resolve, reject) => {
-    const cleanup = (err: Error) => {
-      input.destroy()
-      output.destroy()
-      reject(err)
-    }
-    input.on('error', (err) => cleanup(err))
-    output.on('error', (err) => cleanup(err))
-    output.on('finish', () => resolve())
-    output.write(header)
-    input.pipe(output)
-  })
 }
 
 /**

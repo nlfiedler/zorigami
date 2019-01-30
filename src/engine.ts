@@ -4,6 +4,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
+import * as config from 'config'
 import * as fx from 'fs-extra'
 const posix = require('posix-ext')
 const xattr = require('fs-xattr')
@@ -21,35 +22,32 @@ export const NULL_SHA1 = 'sha1-0000000000000000000000000000000000000000'
 // Chunks will be sized relative to pack files, up to this maximum.
 const MAX_CHUNK_SIZE = 4194304
 
+const KEY_BITS: number = config.get('encryption.bits')
+
 /**
  * Get the master keys for encrypting the pack files. They will be loaded from
  * the database, or generated if they are missing.
  *
- * @param password user master password.
+ * @param userid identifier for the user (added to keys).
+ * @param passphrase user pass phrase to (un)lock private key.
  * @returns the master keys.
  */
-export async function getMasterKeys(password: string): Promise<core.MasterKeys> {
+export async function getMasterKeys(userid: string, passphrase: string): Promise<core.EncryptionKeys> {
   let encryptDoc = await database.fetchDocument('encryption')
   let keys = null
   if (encryptDoc === null) {
-    keys = core.generateMasterKeys()
-    const data = core.newMasterEncryptionData(password, keys)
+    keys = await core.generateEncryptionKeys(userid, passphrase, KEY_BITS)
     encryptDoc = {
       _id: 'encryption',
-      salt: data.salt,
-      iv: data.iv,
-      hmac: data.hmac,
-      keys: data.encrypted
+      public: keys.publicKey,
+      private: keys.privateKey
     }
     await database.updateDocument(encryptDoc)
   } else {
-    const data = {
-      salt: encryptDoc.salt,
-      iv: encryptDoc.iv,
-      hmac: encryptDoc.hmac,
-      encrypted: encryptDoc.keys
+    keys = {
+      publicKey: encryptDoc.public,
+      privateKey: encryptDoc.private
     }
-    keys = core.decryptMasterKeys(data, password)
   }
   return keys
 }
@@ -140,7 +138,7 @@ class PackBuilder {
     return this.chunksSize > this.packSize
   }
 
-  async buildPack(outfile: string, keys: core.MasterKeys): Promise<PackBuildResults> {
+  async buildPack(outfile: string, keys: core.EncryptionKeys): Promise<PackBuildResults> {
     let size = 0
     let index = 0
     while (size < this.packSize && index < this.chunks.length) {
@@ -189,7 +187,7 @@ class PackBuilder {
  * @param keys master keys for encrypting the pack.
  * @returns checksum of the new snapshot.
  */
-export async function performBackup(dataset: Dataset, keys: core.MasterKeys): Promise<string> {
+export async function performBackup(dataset: Dataset, keys: core.EncryptionKeys): Promise<string> {
   fx.ensureDirSync(dataset.workspace)
   const snapshot = await takeSnapshot(dataset.basepath)
   const bucket = core.generateBucketName(dataset.uniqueId)
@@ -244,12 +242,14 @@ interface FileChunk {
  * 
  * @param dataset the dataset for which to perform a backup.
  * @param keys master keys for decrypting pack files.
+ * @param passphrase pass phrase to unlock private key.
  * @param checksum SHA256 checksum of the file to be restored.
  * @param outfile path to which file will be written.
  */
 export async function restoreFile(
   dataset: Dataset,
-  keys: core.MasterKeys,
+  keys: core.EncryptionKeys,
+  passphrase: string,
   checksum: string,
   outfile: string
 ): Promise<void> {
@@ -275,7 +275,7 @@ export async function restoreFile(
       const emitter = store.retrievePack(dataset.store, packrec.bucket, packrec.object, packfile)
       await store.waitForDone(emitter)
       // extract chunks from pack
-      const extractedChunks = await core.unpackChunksEncrypted(packfile, dataset.workspace, keys)
+      const extractedChunks = await core.unpackChunksEncrypted(packfile, dataset.workspace, keys, passphrase)
       // remove unrelated chunks to conserve space
       for (let ec of extractedChunks) {
         if (!desiredChunks.has(ec)) {

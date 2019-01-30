@@ -24,16 +24,16 @@ describe('Engine Functionality', function () {
       assert.isNull(result, 'encryption record does not exist')
       const password = 'keyboard cat'
       // will generate keys if they are missing
-      const keys1 = await engine.getMasterKeys(password)
-      assert.property(keys1, 'master1', 'has master1 key')
-      assert.property(keys1, 'master2', 'has master2 key')
+      const keys1 = await engine.getMasterKeys('fluffy', password)
+      assert.property(keys1, 'publicKey', 'has publicKey key')
+      assert.property(keys1, 'privateKey', 'has privateKey key')
       // a bit of white box testing, but check if db record exists now
       result = await database.fetchDocument('encryption')
       assert.isNotNull(result, 'encryption record now exists')
       // will return the same keys as the first time
-      const keys2 = await engine.getMasterKeys(password)
-      assert.isTrue(keys2.master1.equals(keys1.master1), 'master1 keys match')
-      assert.isTrue(keys2.master2.equals(keys1.master2), 'master2 keys match')
+      const keys2 = await engine.getMasterKeys('fluffy', password)
+      assert.isTrue(keys2.publicKey === keys1.publicKey, 'public keys match')
+      assert.isTrue(keys2.privateKey === keys1.privateKey, 'private keys match')
     })
   })
 
@@ -208,7 +208,7 @@ describe('Engine Functionality', function () {
       // take a snapshot of the test data
       const uniqId = core.generateUniqueId('charlie', 'localhost')
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const packdir = 'test/tmp/packs'
       fx.removeSync(packdir)
       const workdir = 'test/tmp/workspace'
@@ -238,7 +238,7 @@ describe('Engine Functionality', function () {
     it('should produce pack files for second backup', async function () {
       const basepath = 'test/tmp/fixtures'
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // add another file
       fx.copySync('test/fixtures/SekienAkashita.jpg', path.join(basepath, 'SekienAkashita.jpg'))
@@ -259,7 +259,7 @@ describe('Engine Functionality', function () {
     it('should ignore duplicate files', async function () {
       const basepath = 'test/tmp/fixtures'
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // add another file
       fx.copySync('test/fixtures/lorem-ipsum.txt', path.join(basepath, 'lorem-copy.txt'))
@@ -275,13 +275,13 @@ describe('Engine Functionality', function () {
     it('should ignore duplicate chunks within large files', async function () {
       const basepath = 'test/tmp/fixtures'
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // count number of existing chunks in database
       let chunks = await database.countChunks()
       assert.equal(chunks, 7)
       // add another file
-      await core.copyFileWithPrefix(
+      await copyFileWithPrefix(
         Buffer.from('mary had a little lamb'),
         'test/fixtures/SekienAkashita.jpg',
         path.join(basepath, 'SekienShifted.jpg')
@@ -307,7 +307,7 @@ describe('Engine Functionality', function () {
       const packfile = tmp.fileSync().name
       await store.waitForDone(store.retrievePack('local', buckets[2], objects[0], packfile))
       const outdir = tmp.dirSync().name
-      await core.unpackChunksEncrypted(packfile, outdir, keys)
+      await core.unpackChunksEncrypted(packfile, outdir, keys, password)
       const entries = fs.readdirSync(outdir, { withFileTypes: true })
       assert.lengthOf(entries, 1, 'one chunk unpacked')
       assert.equal(entries[0].name, 'sha256-7b5b11492f7ea00907fa9afcdacb2c92ec20f3879c6bce1f11a7cff8e1fa34a1')
@@ -318,36 +318,36 @@ describe('Engine Functionality', function () {
 
     it('should restore a single chunk file', async function () {
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // restore the lorem-ipsum.txt file using its sha256
       const outfile = tmp.fileSync().name
       const checksum = 'sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f'
-      await engine.restoreFile(dataset, keys, checksum, outfile)
+      await engine.restoreFile(dataset, keys, password, checksum, outfile)
       const actual = await core.checksumFile(outfile, 'sha256')
       assert.equal(actual, checksum, 'restored lorem-ipsum.txt file')
     })
 
     it('should restore a file with multiple chunks', async function () {
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // restore the SekienAkashita.jpg file using its sha256
       const outfile = tmp.fileSync().name
       const checksum = 'sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed'
-      await engine.restoreFile(dataset, keys, checksum, outfile)
+      await engine.restoreFile(dataset, keys, password, checksum, outfile)
       const actual = await core.checksumFile(outfile, 'sha256')
       assert.equal(actual, checksum, 'restored SekienAkashita.jpg file')
     })
 
     it('should restore a file with chunks in different packs', async function () {
       const password = 'keyboard cat'
-      const keys = await engine.getMasterKeys(password)
+      const keys = await engine.getMasterKeys('fluffy', password)
       const dataset = await database.getConfiguration()
       // restore the SekienShifted.jpg file using its sha256
       const outfile = tmp.fileSync().name
       const checksum = 'sha256-b2c67e90a01f5d7aca48835b8ad8f0902ef03288aa4083e742bccbd96d8590a4'
-      await engine.restoreFile(dataset, keys, checksum, outfile)
+      await engine.restoreFile(dataset, keys, password, checksum, outfile)
       const actual = await core.checksumFile(outfile, 'sha256')
       assert.equal(actual, checksum, 'restored SekienShifted.jpg file')
     })
@@ -360,4 +360,28 @@ async function collectChanges(generator: AsyncIterableIterator<[string, string]>
     results.set(filepath, filesha)
   }
   return results
+}
+
+/**
+ * Copy the one file to another, with a prefix.
+ *
+ * @param header bytes to write to output before copying.
+ * @param infile input file path.
+ * @param outfile output file path.
+ */
+function copyFileWithPrefix(header: Buffer, infile: string, outfile: string) {
+  const input = fs.createReadStream(infile)
+  const output = fs.createWriteStream(outfile)
+  return new Promise((resolve, reject) => {
+    const cleanup = (err: Error) => {
+      input.destroy()
+      output.destroy()
+      reject(err)
+    }
+    input.on('error', (err) => cleanup(err))
+    output.on('error', (err) => cleanup(err))
+    output.on('finish', () => resolve())
+    output.write(header)
+    input.pipe(output)
+  })
 }

@@ -2,6 +2,9 @@
   "database": {
     "path": "tmp/database/leveldb"
   },
+  "encryption": {
+    "bits": 4096
+  },
   "logging": {
     "level": "debug"
   },
