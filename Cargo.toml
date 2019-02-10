@@ -1,0 +1,13 @@
+[package]
+name = "zorigami"
+version = "0.1.0"
+authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+edition = "2018"
+description = "Backup and restore application."
+repository = "https://github.com/nlfiedler/zorigami"
+readme = "README.md"
+keywords = ["backup", "archival"]
+
+[dependencies]
+uuid = { version = "0.7", features = ["v5"] }
+ulid = "0.3.1"

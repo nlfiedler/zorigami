@@ -9,6 +9,10 @@ pids
 *.seed
 *.pid.lock
 
+# Build artifacts
+Cargo.lock
+target
+
 # Dependency directories
 node_modules/
 

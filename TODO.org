@@ -2,54 +2,105 @@
 ** Exploring other languages
 *** Compile to native for easy deployment
 *** [[https://github.com/revery-ui/revery][Revery]] for desktop interface
-*** OCaml
+*** Rust
 **** Advantages
-***** Compile to native
-***** Expressive type system
+***** compile to native
+***** expressive, safe type system
+***** good dependency management
+***** lots of useful tools (e.g. clippy)
 **** Disadvantages
-***** Dearth of libraries for many things
-**** Configuration
-**** =getpwuid= and =getgrgid= support
-**** GraphQL server
-***** https://github.com/andreas/ocaml-graphql-server (MIT)
-**** test library
-**** build tool
-**** UUID support
-***** type 3, 4, 5: https://github.com/dbuenzli/uuidm (ISC)
-**** xattr support
-**** CDC
-**** Web framework
-**** Tar file
-**** Database
-**** PGP
-**** Crypto
-**** ULID
-**** SFTP client
-**** AWS client
-**** Google Cloud client
-**** Minio client
+***** fewer libraries compared to Go
+**** DONE GraphQL server
+***** Make sure it can generate a schema.json
+***** Should be able to parse schema definition (for docs)
+***** https://github.com/graphql-rust/juniper (BSD)
+****** supports entire GraphQL specification
+****** does /not/ read GraphQL schema language
+****** supports GraphiQL and Playground
+****** is not the HTTP server, but integrates with them
+****** uses macros for schema documentation
+***** tutorial at [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][alex.amiran.it]] that uses warp web framework
+***** old https://github.com/nrc/graphql (MIT/Apache)
+**** DONE Web framework
+***** our needs are simple, so a simple framework is best
+***** Rocket https://rocket.rs (Apache 2.0)
+****** requires Rust nightly because of fancy macros
+****** routing using macros
+****** streams input and output
+****** cookies
+****** json
+****** environment configuration
+****** testing library
+***** Gotham https://gotham.rs (MIT/Apache 2.0)
+****** targets stable Rust
+****** routing
+****** middleware
+****** sessions
+****** cookies
+****** templates
+****** testing library
+***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
+****** pretty basic compared to Rocket
+***** Iron http://ironframework.io (MIT)
+****** everything is middleware that must be added in
+***** Actix https://actix.rs (Apache 2.0)
+***** pretty basic https://github.com/carllerche/tower-web (MIT)
+***** pretty basic https://github.com/seanmonstar/warp (MIT)
+**** DONE Database
+***** ideally want something well maintained, reliable
+***** schema is pretty simple, could use key/value store
+***** RocksDB https://github.com/rust-rocksdb/rust-rocksdb (Apache)
+****** statically links everything, including compression support
+***** SQLite https://github.com/jgallagher/rusqlite (MIT)
+***** Rust wrapper to LevelDB https://github.com/skade/leveldb
+***** LevelDB in Rust (active?) https://bitbucket.org/dermesser/leveldb-rs/overview
+**** DONE dotenv
+***** the canonical crate repo has been emptied, there are many forks of the old code
+***** most-up-to-date https://github.com/apiraino/rust-dotenv (MIT)
+**** DONE Configuration
+***** https://github.com/mehcode/config-rs (MIT/Apache)
+**** DONE =getpwuid= and =getgrgid= support
+***** libc: https://crates.io/crates/libc (MIT/Apache 2.0)
+**** DONE test library: for now just use Rust built-in testing
+**** DONE UUID support
+***** https://github.com/uuid-rs/uuid (MIT/Apache 2.0)
+**** DONE xattr support
+***** Unix only: https://github.com/Stebalien/xattr (MIT/Apache 2.0)
+**** DONE CDC
+***** https://github.com/jrobhoward/quickcdc (MIT/Apache 2.0)
+****** not quite FastCDC, given dates of paper, but should be close enough
+****** use a constant salt value for predictable results
+****** example uses =memmap= crate to read large files
+**** DONE Tar file
+***** https://github.com/alexcrichton/tar-rs (MIT/Apache 2.0)
+**** DONE PGP/Encryption
+***** https://github.com/gpg-rs/gpgme (LGPL)
+****** just bundle the =gpg= binary (https://gnupg.org/download/)
+***** cryptostream https://github.com/neosmart/cryptostream (MIT)
+***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
+***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
+**** DONE ULID
+***** https://github.com/dylanhart/ulid-rs (MIT)
+**** DONE SFTP client
+***** https://github.com/alexcrichton/ssh2-rs (MIT/Apache 2.0)
+**** DONE AWS client
+***** Rusoto https://www.rusoto.org (MIT)
+**** DONE Google Cloud client
+***** https://github.com/Byron/google-apis-rs (MIT/Apache 2.0)
+**** DONE Minio client
+***** Rusoto supports Minio https://github.com/rusoto/rusoto (MIT)
 *** Go
 **** Advantages
 ***** compiles to a single native binary
 ***** better resource utilization than Node
 ***** stdlib has a lot of functionality
-**** dotenv
-***** https://github.com/joho/godotenv (MIT)
-**** Configuration
-***** https://github.com/spf13/viper (MIT)
-***** https://github.com/micro/go-config (Apache 2.0)
-**** =getpwuid= and =getgrgid= support
-***** stdlib =import "os/user"=
-**** test library
-***** mocha style BDD: https://github.com/franela/goblin (MIT)
-****** uses [[https://github.com/onsi/gomega][gomega]] for BDD-style assertions
-***** simple assertions: https://labix.org/gocheck (BSD)
-**** build tool (e.g. gulp, webpack)
-**** UUID support
-***** https://github.com/satori/go.uuid (MIT)
-**** xattr support
-***** https://github.com/pkg/xattr (BSD); no Windows support
-**** GraphQL server
+***** first-class support with cloud services
+**** Disadvantages
+***** Primitive type system
+***** Verbose error handling
+***** Dependency management story is still developing
+***** New module support is not well supported in editors yet
+**** DONE GraphQL server
 ***** TODO Make sure it can generate a schema.json
 ***** TODO Should be able to parse schema definition (for docs)
 ***** [[https://github.com/99designs/gqlgen][gqlgen]] (MIT)
@@ -60,97 +111,157 @@
 ****** schema-first
 ***** [[https://github.com/graphql-go/graphql][graphql-go/graphql]] (MIT)
 ****** code-defined schema
-**** CDC
+**** DONE Web framework
+***** [[https://revel.github.io][revel]] looks pretty good
+***** [[https://echo.labstack.com][echo]] minimalist
+***** [[https://iris-go.com][iris]] looks easy to use
+**** DONE Database
+***** [[https://github.com/dgraph-io/badger][dgraph-io/badger]] (Apache 2.0) seems very reliable
+****** DONE read https://blog.dgraph.io/post/badger/
+***** [[http://ledisdb.com][LedisDB]] supports LevelDB, has HTTP and CLI
+***** [[https://github.com/syndtr/goleveldb][goleveldb]] is "LevelDB" written in Go
+***** https://github.com/HouzuoGuo/tiedot (BSD)
+**** DONE dotenv
+***** https://github.com/joho/godotenv (MIT)
+**** DONE Configuration
+***** https://github.com/spf13/viper (MIT)
+***** https://github.com/micro/go-config (Apache 2.0)
+**** DONE =getpwuid= and =getgrgid= support
+***** stdlib =import "os/user"=
+**** DONE test library
+***** mocha style BDD: https://github.com/franela/goblin (MIT)
+****** uses [[https://github.com/onsi/gomega][gomega]] for BDD-style assertions
+***** simple assertions: https://labix.org/gocheck (BSD)
+**** DONE UUID support
+***** https://github.com/satori/go.uuid (MIT)
+**** DONE xattr support
+***** https://github.com/pkg/xattr (BSD); no Windows support
+**** DONE CDC
 ***** [[https://github.com/restic/chunker][restic/chunker]] (BSD)
 ***** consider implementing FastCDC in Go
 ***** Maybe convert JS https://github.com/ronomon/deduplication to Go
 ***** Maybe convert Rust https://github.com/jrobhoward/quickcdc to Go
 ***** no golang FastCDC implementations
-**** Web framework
-***** [[https://revel.github.io][revel]] looks pretty good
-***** [[https://echo.labstack.com][echo]] minimalist
-***** [[https://iris-go.com][iris]] looks easy to use
-**** Tar file
+**** DONE Tar file
 ***** stdlib: https://golang.org/pkg/archive/tar/
-**** Database
-***** ideally want something well maintained, reliable (e.g. LevelDB)
-***** schema is pretty simple, could use key/value store
-***** TODO look for a robust K/V store
-***** [[https://github.com/dgraph-io/badger][dgraph-io/badger]] (Apache 2.0) seems very reliable
-****** TODO read https://blog.dgraph.io/post/badger/
-***** [[http://ledisdb.com][LedisDB]] supports LevelDB, has HTTP and CLI
-***** [[https://github.com/syndtr/goleveldb][goleveldb]] is "LevelDB" written in Go
-***** maybe SQLite would work
-***** https://github.com/HouzuoGuo/tiedot (BSD)
-**** PGP
+**** DONE PGP/Encryption
 ***** x/stdlib https://godoc.org/golang.org/x/crypto/openpgp
 ***** use =Encrypt= to encrypt and =ReadMessage= to decrypt
 ***** e.g. https://gist.github.com/stuart-warren/93750a142d3de4e8fdd2
-**** Crypto
-***** public key: stdlib https://golang.org/pkg/crypto/rsa/
-***** random: stdlib https://golang.org/pkg/crypto/rand/
-***** digest: stdlib https://golang.org/pkg/crypto/sha256/
-***** HMAC: stdlib https://golang.org/pkg/crypto/hmac/
-***** bcrypt: https://godoc.org/golang.org/x/crypto/bcrypt
-***** scrypt: https://godoc.org/golang.org/x/crypto/scrypt
-***** stream cipher: https://golang.org/pkg/crypto/cipher/ (=NewCTR=)
-**** ULID: https://github.com/oklog/ulid (Apache 2.0)
-**** SFTP client: https://github.com/pkg/sftp (BSD)
-**** AWS client: https://github.com/aws/aws-sdk-go
-**** Google Cloud client: https://github.com/googleapis/google-cloud-go
-**** Minio client: https://www.minio.io/downloads.html#download-sdk
-** Phase 3
-*** DONE Use starter [[https://github.com/Microsoft/TypeScript-Node-Starter][guide]] to get Node set up with TypeScript
-**** DONE Look more at how https://github.com/TypeStrong/ts-node can be used
-**** DONE Translate =bin/www= to =src/server.ts=
-**** DONE Translate =app.js= to =src/app.ts=
-**** DONE Add build/clean/watch steps to =gulpfile.js=
-**** DONE Update =package.json= to invoke compiled server
-**** DONE Translate the routes
-*** DONE Look for code coverage tools that work well with Mocha
-*** DONE Introduce GraphQL backend and schema
-**** DONE Add apollo server dependency
-**** DONE Add a route for graphql
-**** DONE Get the GraphQL playground working
-**** DONE Try to get =graphql.ts= to be a proper TypeScript module
-**** DONE Read https://www.apollographql.com/docs/apollo-server/
-**** DONE Define the schema
-**** DONE Write a simple resolver
-**** DONE Write a unit test
-*** DONE Use a standard format for pack files (e.g. tar)
-**** Using open standards satisfies long term support
-**** Standard file archive format: tar
-***** entry names are the =<algo>-<checksum>= values
-***** https://github.com/archiverjs/node-archiver (can do streams)
-**** Standard encryption format: PGP
-***** c.f. RFC 4880 for OpenPGP definition
-***** uses public key to encrypt session keys, session keys encrypt data
-***** option to compress data
-***** supports message authentication
-***** keys are stored in database
-***** user password is the private key passphrase
-***** https://github.com/openpgpjs/openpgpjs (LGPL)
-***** DONE Get encryption and decryption with generated keys working
-***** DONE Generate keys once and store in database, load on demand
-***** DONE Evaluate which core functions are now redundant
-****** encrypt/decrypt file
-****** compress/decompress file
+**** DONE ULID: https://github.com/oklog/ulid (Apache 2.0)
+**** DONE SFTP client: https://github.com/pkg/sftp (BSD)
+**** DONE AWS client: https://github.com/aws/aws-sdk-go
+**** DONE Google Cloud client: https://github.com/googleapis/google-cloud-go
+**** DONE Minio client: https://www.minio.io/downloads.html#download-sdk
+*** Go vs Rust
+**** Go: first class support for cloud services
+**** Go: statically linked OpenPGP readily available
+**** Go: easy to read and write language
+**** Rust: mature dependency management tooling
+**** Rust: cargo has good editor support
+**** Rust: expressive type system
+**** Rust: nominal subtyping is much easier to follow
+**** Rust: streamlined error handling
+**** Rust: fine-grained namespaces and visibility control
+*** OCaml
+**** DONE GraphQL server
+***** https://github.com/andreas/ocaml-graphql-server (MIT)
+**** DONE Web framework
+***** https://github.com/rgrinberg/opium (MIT)
+**** DONE Database
+***** git-like kv store: https://github.com/mirage/irmin (ISC)
+***** leveldb bindings: https://github.com/mfp/ocaml-leveldb (LGPL)
+**** TODO Configuration
+**** TODO =getpwuid= and =getgrgid= support
+**** DONE test library
+***** https://github.com/mirage/alcotest (ISC)
+**** DONE UUID
+***** https://github.com/dbuenzli/uuidm (ISC)
+**** DONE ULID
+***** TODO https://github.com/stripedpajamas/ocaml-ulid (MIT)
+**** DONE xattr
+***** https://github.com/dsheets/ocaml-osx-xattr (ISC)
+**** TODO CDC: nothing, would have to write it
+**** DONE tar
+***** https://github.com/mirage/ocaml-tar (ISC)
+**** TODO PGP
+***** incomplete: https://github.com/cfcs/ocaml-openpgp
+**** TODO SFTP
+***** incomplete: https://github.com/avsm/ocaml-ssh
+**** TODO AWS
+**** TODO Google
+**** TODO Minio
 ** Phase 4
-*** TODO Rewrite everything in Go
-**** DONE go through tour of go
-**** DONE look for equivalent of "virtual environments"
-**** DONE brush up on weak aspects of go
-**** TODO set up project and build environment
-***** /not/ going to use vgo/mod at this time, much too unstable in 1.11
-***** TODO Use https://github.com/GetStream/vg to set up virtual environments
-***** TODO Use https://github.com/golang/dep to manage dependencies
+*** TODO Rewrite everything in Rust
+**** DONE Decide on a web framework: Gotham
+**** DONE Look for useful tools and VS Code support
+***** https://github.com/rust-lang/rustfmt
+***** https://github.com/rust-lang/rust-clippy
+***** https://github.com/kbknapp/cargo-outdated (MIT)
+***** https://github.com/nabijaczleweli/cargo-update (MIT)
+**** DONE Learn about Rust again, catch up on new things
+***** DONE =static= holds a value, =const= is a compile-time constant
+***** DONE futures for async stuff, https://rust-lang-nursery.github.io/futures-rs/
+***** DONE with =main.rs= and =lib.rs= you get both a binary and library
+***** DONE =format!= creates a string, =write!= writes to a buffer
+***** DONE how does the =?= operator work? replaces =try!= macro
+***** DONE How to have code run when a module starts up (a la Go's =init()=)
+****** https://crates.io/crates/lazy_static/
+**** TODO Learn how to manage application state (e.g. db object, config, etc)
+***** https://github.com/SergioBenitez/state (MIT/Apache)
+***** https://github.com/rust-redux/rust-redux (MIT)
+***** https://github.com/jaredonline/redux-rs (???)
+**** DONE Consider translating FastCDC to Rust to get some practice
+**** TODO Determine the code layout
+***** web framework seems to have no say in the matter
+***** DONE can Rust live alongside TypeScript for the time being? yes
+**** DONE write a core package with a few functions
+**** TODO set up configuration for dev and testing
+**** TODO write integration tests using speculate.rs
+***** https://github.com/utkarshkukreti/speculate.rs (MIT)
+***** https://github.com/rust-rspec/rspec (MPL)
+****** do not understand how to use this with =cargo test=
+**** TODO set up web framework to serve a static page
+***** learn how to serve static assets
+**** TODO set up GraphQL server to serve a simple query
+**** TODO get chunk checksums working
+***** https://crates.io/crates/crypto-hash (MIT)
+****** use the =digest()= helper to get the hash as bytes
+**** TODO get pack files working
+**** TODO get encryption working
+***** use https://github.com/gpg-rs/gpgme (LGPL)
+**** TODO Add crate license checker: https://github.com/Nemo157/cargo-lichking
+**** TODO get basic database working
+**** TODO get CDC working
+**** TODO implement pack stores
+***** TODO local
+***** TODO minio
+***** TODO sftp
+**** TODO convert engine code
+***** TODO build tree objects
+****** detect files and directories using =fs::metadata=
+#+BEGIN_SRC rust
+let metadata = fs::metadata(path)?;
+if !metadata.file_type().is_file() {
+...
+#+END_SRC
+***** TODO find differences between snapshots
+***** TODO produce pack files from changes
+***** TODO restore files from backup
+**** TODO Update =README.md= wrt to Rust and requirements
+*** TODO Rewrite everything in Go if Rust doesn't work out
+**** TODO Decide on a web framework
+**** TODO Look for useful tools and VS Code support
+**** TODO Determine the code layout (web framework probably dictates to some extent)
+**** TODO use =go mod= for dependency management and project isolation
 **** TODO write a core package with a few functions
 **** TODO set up configuration for dev and testing
 **** TODO write unit tests for core package
 **** TODO get pack files working
-**** TODO get encryption working
+**** TODO get encryption working with OpenPGP
+**** TODO Add license checker: https://github.com/src-d/go-license-detector
 **** TODO get basic database working
-**** TODO get CDC working
+**** TODO get CDC working (probably translate ronomon's code)
 **** TODO implement pack stores
 ***** TODO local
 ***** TODO minio
