@@ -2,7 +2,9 @@
 // Copyright (c) 2019 Nathan Fiedler
 //
 use crypto_hash::{Algorithm, hex_digest, Hasher};
+use fastcdc;
 use hex;
+use memmap::MmapOptions;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -101,6 +103,37 @@ pub fn bytes_from_checksum(value: &str) -> Result<Vec<u8>, hex::FromHexError> {
     }
 }
 
+/// Some chunk of a file.
+pub struct Chunk {
+    /// The SHA256 checksum of the chunk, with algo prefix.
+    pub digest: String,
+    /// The byte offset of this chunk within the file.
+    pub offset: usize,
+    /// The byte length of this chunk.
+    pub length: usize
+}
+
+///
+/// Find the chunk boundaries within the given file, using the FastCDC
+/// algorithm. The given `size` is the desired average size in bytes for the
+/// chunks, but they may be between half and twice that size.
+///
+pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
+    let file = File::open(infile)?;
+    let mmap = unsafe { MmapOptions::new().map(&file).expect("cannot create mmap?") };
+    let avg_size = size as usize;
+    let min_size = avg_size / 2;
+    let max_size = avg_size * 2;
+    let chunker = fastcdc::FastCDC::new(&mmap[..], min_size, avg_size, max_size);
+    let mut results = Vec::new();
+    for entry in chunker {
+        let end = entry.offset + entry.length;
+        let digest = hex_digest(Algorithm::SHA256, &mmap[entry.offset..end]);
+        results.push(Chunk { digest, offset: entry.offset, length: entry.length })
+    }
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,6 +213,52 @@ mod tests {
         let bytes = bytes_from_checksum(checksum)?;
         let roundtrip = checksum_from_bytes(&bytes, "sha256");
         assert_eq!(roundtrip, checksum);
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_chunking_16k() -> io::Result<()> {
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(infile, 16384)?;
+        assert_eq!(results.len(), 6);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 22366);
+        assert_eq!(results[1].offset, 22366);
+        assert_eq!(results[1].length, 8282);
+        assert_eq!(results[2].offset, 30648);
+        assert_eq!(results[2].length, 16303);
+        assert_eq!(results[3].offset, 46951);
+        assert_eq!(results[3].length, 18696);
+        assert_eq!(results[4].offset, 65647);
+        assert_eq!(results[4].length, 32768);
+        assert_eq!(results[5].offset, 98415);
+        assert_eq!(results[5].length, 11051);
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_chunking_32k() -> io::Result<()> {
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(infile, 32768)?;
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 32857);
+        assert_eq!(results[1].offset, 32857);
+        assert_eq!(results[1].length, 16408);
+        assert_eq!(results[2].offset, 49265);
+        assert_eq!(results[2].length, 60201);
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_chunking_64k() -> io::Result<()> {
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(infile, 65536)?;
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 32857);
+        assert_eq!(results[1].offset, 32857);
+        assert_eq!(results[1].length, 76609);
         Ok(())
     }
 }

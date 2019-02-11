@@ -238,7 +238,7 @@
 ***** use https://github.com/gpg-rs/gpgme (LGPL)
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
-**** TODO get CDC working
+**** DONE get CDC working
 **** TODO implement pack stores
 ***** TODO local
 ***** TODO minio
