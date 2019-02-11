@@ -218,6 +218,10 @@
 ***** put integration tests in =tests= as =modname.rs=
 ***** put helper test code in =tests/modname/mod.rs=
 **** DONE write a core package with a few functions
+***** DONE checksum data
+***** DONE checksum file
+***** DONE checksum string from bytes
+***** DONE checksum bytes from string
 **** TODO set up configuration for dev and testing
 **** TODO write integration tests using speculate.rs
 ***** https://github.com/utkarshkukreti/speculate.rs (MIT)
@@ -232,7 +236,7 @@
 **** TODO get pack files working
 **** TODO get encryption working
 ***** use https://github.com/gpg-rs/gpgme (LGPL)
-**** TODO Add crate license checker: https://github.com/Nemo157/cargo-lichking
+**** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
 **** TODO get CDC working
 **** TODO implement pack stores

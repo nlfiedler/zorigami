@@ -10,5 +10,7 @@ keywords = ["backup", "archival"]
 license = "BSD-2-Clause"
 
 [dependencies]
+crypto-hash = "0.3.3"
+hex = "0.3.2"
 uuid = { version = "0.7", features = ["v5"] }
 ulid = "0.3.1"
