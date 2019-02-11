@@ -70,3 +70,26 @@ $ c8 npm test
 
 However, either with TypeScript or the current implementation of c8, the output
 is rather inaccurate.
+
+## Tools
+
+### License checking
+
+Use the https://github.com/Nemo157/cargo-lichking `cargo` utility. To install:
+
+```shell
+$ OPENSSL_ROOT_DIR=`brew --prefix openssl` \
+  OPENSSL_LIB_DIR=`brew --prefix openssl`/lib \
+  OPENSSL_INCLUDE_DIR=`brew --prefix openssl`/include \
+  cargo install cargo-lichking
+```
+
+To get the list of licenses, and check for incompatibility:
+
+```shell
+$ cargo lichking list
+$ cargo lichking check
+```
+
+However, need to look for "gpl" manually in the `list` output, as most licenses
+that are compatible with MIT/Apache are also compatible with GPL.

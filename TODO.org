@@ -213,8 +213,10 @@
 ***** https://github.com/jaredonline/redux-rs (???)
 **** DONE Consider translating FastCDC to Rust to get some practice
 **** TODO Determine the code layout
-***** web framework seems to have no say in the matter
 ***** DONE can Rust live alongside TypeScript for the time being? yes
+***** web framework seems to have no say in the matter
+***** put integration tests in =tests= as =modname.rs=
+***** put helper test code in =tests/modname/mod.rs=
 **** DONE write a core package with a few functions
 **** TODO set up configuration for dev and testing
 **** TODO write integration tests using speculate.rs
