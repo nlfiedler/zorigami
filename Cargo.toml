@@ -12,6 +12,7 @@ license = "BSD-2-Clause"
 [dependencies]
 crypto-hash = "0.3.3"
 fastcdc = "1.0.1"
+gotham = "0.3.0"
 hex = "0.3.2"
 memmap = "0.7.0"
 uuid = { version = "0.7", features = ["v5"] }

@@ -212,7 +212,7 @@
 ***** https://github.com/rust-redux/rust-redux (MIT)
 ***** https://github.com/jaredonline/redux-rs (???)
 **** DONE Consider translating FastCDC to Rust to get some practice
-**** TODO Determine the code layout
+**** DONE Determine the code layout
 ***** DONE can Rust live alongside TypeScript for the time being? yes
 ***** web framework seems to have no say in the matter
 ***** put integration tests in =tests= as =modname.rs=
@@ -227,9 +227,9 @@
 ***** https://github.com/utkarshkukreti/speculate.rs (MIT)
 ***** https://github.com/rust-rspec/rspec (MPL)
 ****** do not understand how to use this with =cargo test=
-**** TODO set up web framework to serve a static page
-***** TODO use Gotham https://gotham.rs (MIT/Apache 2.0)
-***** TODO learn how to serve static assets
+**** DONE set up web framework to serve a static page
+***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
+***** DONE learn how to serve static assets
 **** TODO set up GraphQL server to serve a simple query
 **** DONE get chunk checksums working
 ***** https://crates.io/crates/crypto-hash (MIT)
@@ -298,6 +298,7 @@ if !metadata.file_type().is_file() {
 *** TODO Add something that will run scheduled jobs
 **** that is, an easy way to trigger backups according to the configuration
 ** Phase 5
+*** TODO See if [[https://rocket.rs][Rocket]] can use Rust stable, if so switch from Gotham
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Support multiple roots per dataset
