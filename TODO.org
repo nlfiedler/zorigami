@@ -227,10 +227,17 @@
 ***** https://github.com/utkarshkukreti/speculate.rs (MIT)
 ***** https://github.com/rust-rspec/rspec (MPL)
 ****** do not understand how to use this with =cargo test=
-**** DONE set up web framework to serve a static page
+**** TODO set up web framework to serve a static page
 ***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
 ***** DONE learn how to serve static assets
+***** TODO switch from gotham.rs to hyper.rs
+***** TODO serve up =index.html=
+***** TODO serve static assets under =public=
 **** TODO set up GraphQL server to serve a simple query
+***** DONE add a simple hello query
+***** DONE add some documentation (using doc comments)
+***** TODO integrate with web framework to expose API
+***** TODO integrate with web framework to expose Playground
 **** DONE get chunk checksums working
 ***** https://crates.io/crates/crypto-hash (MIT)
 ****** use the =digest()= helper to get the hash as bytes
