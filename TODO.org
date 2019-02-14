@@ -23,6 +23,11 @@
 ***** old https://github.com/nrc/graphql (MIT/Apache)
 **** DONE Web framework
 ***** our needs are simple, so a simple framework is best
+***** warp https://github.com/seanmonstar/warp (MIT)
+****** works with stable Rust
+****** powerful and easy to use
+****** testing library
+****** integrates with juniper
 ***** Rocket https://rocket.rs (Apache 2.0)
 ****** requires Rust nightly because of fancy macros
 ****** routing using macros
@@ -31,6 +36,7 @@
 ****** json
 ****** environment configuration
 ****** testing library
+****** integrates with juniper
 ***** Gotham https://gotham.rs (MIT/Apache 2.0)
 ****** targets stable Rust
 ****** routing
@@ -39,13 +45,16 @@
 ****** cookies
 ****** templates
 ****** testing library
+****** how to integrate with juniper is unknown
+***** Iron http://ironframework.io (MIT)
+****** crate has not been updated since 2017
+****** everything is middleware that must be added in
+****** integrates with juniper
 ***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
 ****** pretty basic compared to Rocket
-***** Iron http://ironframework.io (MIT)
-****** everything is middleware that must be added in
 ***** Actix https://actix.rs (Apache 2.0)
 ***** pretty basic https://github.com/carllerche/tower-web (MIT)
-***** pretty basic https://github.com/seanmonstar/warp (MIT)
+****** competing with warp? hyper?
 **** DONE Database
 ***** ideally want something well maintained, reliable
 ***** schema is pretty simple, could use key/value store
@@ -193,7 +202,7 @@
 **** TODO Minio
 ** Phase 4
 *** TODO Rewrite everything in Rust
-**** DONE Decide on a web framework: Gotham
+**** DONE Decide on a web framework: warp
 **** DONE Look for useful tools and VS Code support
 ***** https://github.com/rust-lang/rustfmt
 ***** https://github.com/rust-lang/rust-clippy
@@ -227,15 +236,17 @@
 ***** https://github.com/utkarshkukreti/speculate.rs (MIT)
 ***** https://github.com/rust-rspec/rspec (MPL)
 ****** do not understand how to use this with =cargo test=
-**** TODO set up web framework to serve a static page
+**** DONE set up web framework to serve a static page
 ***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
 ***** DONE learn how to serve static assets
-***** TODO switch from gotham.rs to hyper.rs
-***** TODO serve up =index.html=
-***** TODO serve static assets under =public=
+***** DONE switch from gotham.rs to warp (same developer as hyper.rs)
+***** DONE serve up =index.html=
+***** DONE serve static assets under =public=
 **** TODO set up GraphQL server to serve a simple query
 ***** DONE add a simple hello query
 ***** DONE add some documentation (using doc comments)
+***** c.f. https://graphql-rust.github.io/servers/warp.html
+***** c.f. [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][Rust GraphQL with warp and juniper]] for extensive example
 ***** TODO integrate with web framework to expose API
 ***** TODO integrate with web framework to expose Playground
 **** DONE get chunk checksums working
@@ -305,7 +316,6 @@ if !metadata.file_type().is_file() {
 *** TODO Add something that will run scheduled jobs
 **** that is, an easy way to trigger backups according to the configuration
 ** Phase 5
-*** TODO See if [[https://rocket.rs][Rocket]] can use Rust stable, if so switch from Gotham
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 *** TODO Support multiple roots per dataset

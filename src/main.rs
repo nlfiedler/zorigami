@@ -1,20 +1,13 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-#[macro_use] extern crate juniper;
-use {
-    juniper::{
-        FieldResult,
-        Variables,
-        EmptyMutation
-    },
-    gotham::handler::assets::FileOptions,
-    gotham::router::builder::{
-        build_simple_router,
-        DefineSingleRoute,
-        DrawRoutes
-    }
-};
+#[macro_use]
+extern crate juniper;
+extern crate pretty_env_logger;
+#[macro_use]
+extern crate log;
+extern crate warp;
+use juniper::{EmptyMutation, FieldResult, Variables};
 
 struct Context;
 
@@ -51,35 +44,29 @@ graphql_object!(Query: Context |&self| {
 type Schema = juniper::RootNode<'static, Query, EmptyMutation<Context>>;
 
 pub fn main() {
+    pretty_env_logger::init();
+
     // GraphQL example
-    let ctx = Context{};
+    let ctx = Context {};
     let (res, _errors) = juniper::execute(
         "query { hello(name: \"world\") }",
         None,
         &Schema::new(Query, EmptyMutation::new()),
         &Variables::new(),
         &ctx,
-    ).unwrap();
+    )
+    .unwrap();
     let result = res.as_object_value().unwrap();
     let field = result.get_field_value("hello").unwrap();
-    let value: &str = field.as_scalar_value::<String>().map(|s| s as &str).unwrap();
+    let value: &str = field
+        .as_scalar_value::<String>()
+        .map(|s| s as &str)
+        .unwrap();
     assert_eq!(value, "Hello, world");
     println!("{}", value);
 
-    // Gotham example
-    let path = "public";
-    let addr = "127.0.0.1:7878";
-    println!(
-        "Listening for requests at http://{} from path {:?}",
-        addr, &path
-    );
-    let router = build_simple_router(|route| {
-        route.get("/").to_file("public/index.html");
-        route.get("*").to_dir(
-            FileOptions::new(&path)
-                .with_gzip(true)
-                .build(),
-        );
-    });
-    gotham::start(addr, router)
+    // warp example
+    let public = warp::fs::dir("public/");
+    info!("listening on http://localhost:3030/...");
+    warp::serve(public).run(([127, 0, 0, 1], 3030));
 }
