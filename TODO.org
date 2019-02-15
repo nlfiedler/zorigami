@@ -242,13 +242,13 @@
 ***** DONE switch from gotham.rs to warp (same developer as hyper.rs)
 ***** DONE serve up =index.html=
 ***** DONE serve static assets under =public=
-**** TODO set up GraphQL server to serve a simple query
+**** DONE set up GraphQL server to serve a simple query
 ***** DONE add a simple hello query
 ***** DONE add some documentation (using doc comments)
 ***** c.f. https://graphql-rust.github.io/servers/warp.html
 ***** c.f. [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][Rust GraphQL with warp and juniper]] for extensive example
-***** TODO integrate with web framework to expose API
-***** TODO integrate with web framework to expose Playground
+***** DONE integrate with web framework to expose API
+***** DONE integrate with web framework to expose Playground
 **** DONE get chunk checksums working
 ***** https://crates.io/crates/crypto-hash (MIT)
 ****** use the =digest()= helper to get the hash as bytes

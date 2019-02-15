@@ -3,11 +3,13 @@
 //
 #[macro_use]
 extern crate juniper;
+extern crate juniper_warp;
 extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 extern crate warp;
-use juniper::{EmptyMutation, FieldResult, Variables};
+use juniper::{EmptyMutation, FieldResult};
+use warp::Filter;
 
 struct Context;
 
@@ -45,28 +47,16 @@ type Schema = juniper::RootNode<'static, Query, EmptyMutation<Context>>;
 
 pub fn main() {
     pretty_env_logger::init();
-
-    // GraphQL example
-    let ctx = Context {};
-    let (res, _errors) = juniper::execute(
-        "query { hello(name: \"world\") }",
-        None,
-        &Schema::new(Query, EmptyMutation::new()),
-        &Variables::new(),
-        &ctx,
-    )
-    .unwrap();
-    let result = res.as_object_value().unwrap();
-    let field = result.get_field_value("hello").unwrap();
-    let value: &str = field
-        .as_scalar_value::<String>()
-        .map(|s| s as &str)
-        .unwrap();
-    assert_eq!(value, "Hello, world");
-    println!("{}", value);
-
-    // warp example
-    let public = warp::fs::dir("public/");
+    let schema = Schema::new(Query, EmptyMutation::new());
+    let state = warp::any().map(move || Context {});
+    let graphql_filter = juniper_warp::make_graphql_filter(schema, state.boxed());
     info!("listening on http://localhost:3030/...");
-    warp::serve(public).run(([127, 0, 0, 1], 3030));
+    warp::serve(
+        warp::get2()
+            .and(warp::path("graphiql"))
+            .and(juniper_warp::graphiql_filter("/graphql"))
+            .or(warp::fs::dir("public/"))
+            .or(warp::path("graphql").and(graphql_filter)),
+    )
+    .run(([127, 0, 0, 1], 8080));
 }
