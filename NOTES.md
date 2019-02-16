@@ -369,6 +369,12 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Does not support Glacier
     - Their design depends on accessing chunks by their checksum
 
+### duplicity
+
+* http://duplicity.nongnu.org
+* Uses GnuPG, a tar-like format, and rsync
+* Supports numerous backends
+
 ### JungleDisk
 
 * https://www.jungledisk.com/encrypted-backups/
