@@ -5,10 +5,11 @@ use crypto_hash::{hex_digest, Algorithm, Hasher};
 use fastcdc;
 use hex;
 use memmap::MmapOptions;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
+use tar::{Archive, Builder, Header};
 use ulid::Ulid;
 use uuid::Uuid;
 
@@ -108,13 +109,15 @@ pub fn bytes_from_checksum(value: &str) -> Result<Vec<u8>, hex::FromHexError> {
 }
 
 /// Some chunk of a file.
-pub struct Chunk {
+pub struct Chunk<'a> {
     /// The SHA256 checksum of the chunk, with algo prefix.
     pub digest: String,
     /// The byte offset of this chunk within the file.
     pub offset: usize,
     /// The byte length of this chunk.
     pub length: usize,
+    /// Path of the file from which the chunk is taken.
+    pub filepath: Option<&'a Path>,
 }
 
 ///
@@ -138,14 +141,83 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
             digest,
             offset: entry.offset,
             length: entry.length,
+            filepath: None,
         })
     }
     Ok(results)
 }
 
+///
+/// Write a sequence of chunks into a pack file, returning the SHA256 of the
+/// pack file. The chunks will be written in the order they appear in the array.
+///
+pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
+    let file = File::create(outfile)?;
+    let mut builder = Builder::new(file);
+    for chunk in chunks {
+        let fp = chunk.filepath.expect("chunk requires a filepath");
+        let mut infile = File::open(fp)?;
+        infile.seek(io::SeekFrom::Start(chunk.offset as u64))?;
+        let handle = infile.take(chunk.length as u64);
+        let mut header = Header::new_gnu();
+        header.set_size(chunk.length as u64);
+        // set the date so the tar file produces the same results for the same
+        // inputs every time; the date for chunks is completely irrelevant
+        header.set_mtime(0);
+        header.set_cksum();
+        builder.append_data(&mut header, &chunk.digest, handle)?;
+    }
+    let _output = builder.into_inner()?;
+    checksum_file(outfile, "sha256")
+}
+
+///
+/// Extract the chunks from the given pack file, writing them to the output
+/// directory, with the names being the original SHA256 of the chunk (with a
+/// "sha256-" prefix).
+///
+pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
+    fs::create_dir_all(outdir)?;
+    let mut results = Vec::new();
+    let file = File::open(infile)?;
+    let mut ar = Archive::new(file);
+    for entry in ar.entries()? {
+        let mut file = entry.unwrap();
+        results.push(String::from(file.path().unwrap().to_str().unwrap()));
+        file.unpack_in(outdir)?;
+    }
+    Ok(results)
+}
+
+///
+/// Copy the chunk files to the given output location, deleting the chunks as
+/// each one is copied.
+///
+pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
+    let mut file = File::create(outfile)?;
+    for infile in chunks {
+        let cfile = File::open(infile)?;
+        let mut reader = io::BufReader::with_capacity(BUFFER_SIZE, cfile);
+        loop {
+            let length = {
+                let buffer = reader.fill_buf()?;
+                file.write_all(buffer)?;
+                buffer.len()
+            };
+            if length == 0 {
+                break;
+            }
+            reader.consume(length);
+        }
+        fs::remove_file(infile)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_generate_unique_id() {
@@ -191,7 +263,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_checksum_file_bad_algo() {
-        let infile = Path::new("foobar");
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
         match checksum_file(&infile, "md5") {
             Ok(_) => unreachable!(),
             Err(_) => unreachable!(),
@@ -199,11 +271,18 @@ mod tests {
     }
 
     #[test]
-    fn test_checksum_file() -> Result<(), io::Error> {
+    fn test_checksum_file_sha1() -> Result<(), io::Error> {
         // use a file larger than the buffer size used for hashing
         let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
         let sha1 = checksum_file(&infile, "sha1")?;
         assert_eq!(sha1, "sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
+        Ok(())
+    }
+
+    #[test]
+    fn test_checksum_file_sha256() -> Result<(), io::Error> {
+        // use a file larger than the buffer size used for hashing
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
         let sha256 = checksum_file(&infile, "sha256")?;
         assert_eq!(
             sha256,
@@ -234,7 +313,7 @@ mod tests {
     #[test]
     fn test_file_chunking_16k() -> io::Result<()> {
         let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(infile, 16384)?;
+        let results = find_file_chunks(&infile, 16384)?;
         assert_eq!(results.len(), 6);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 22366);
@@ -278,7 +357,7 @@ mod tests {
     #[test]
     fn test_file_chunking_32k() -> io::Result<()> {
         let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(infile, 32768)?;
+        let results = find_file_chunks(&infile, 32768)?;
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 32857);
@@ -304,7 +383,7 @@ mod tests {
     #[test]
     fn test_file_chunking_64k() -> io::Result<()> {
         let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(infile, 65536)?;
+        let results = find_file_chunks(&infile, 65536)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 32857);
@@ -318,6 +397,103 @@ mod tests {
             results[1].digest,
             "sha256-5420a3bcc7d57eaf5ca9bb0ab08a1bd3e4d89ae019b1ffcec39b1a5905641115"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_file_one_chunk() -> io::Result<()> {
+        let chunks = [Chunk {
+            digest: String::from(
+                "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+            ),
+            offset: 0,
+            length: 3129,
+            filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+        }];
+        let outdir = tempdir()?;
+        let packfile = outdir.path().join("pack.tar");
+        let digest = pack_chunks(&chunks, &packfile)?;
+        assert_eq!(
+            digest,
+            "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
+        );
+        // verify by unpacking
+        let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0],
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
+        let sha256 = checksum_file(&outdir.path().join(&entries[0]), "sha1")?;
+        assert_eq!(sha256, "sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96");
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_file_multiple_chunks() -> io::Result<()> {
+        let chunks = [
+            Chunk {
+                digest: String::from(
+                    "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317",
+                ),
+                offset: 0,
+                length: 1000,
+                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+            },
+            Chunk {
+                digest: String::from(
+                    "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b",
+                ),
+                offset: 1000,
+                length: 1000,
+                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+            },
+            Chunk {
+                digest: String::from(
+                    "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3",
+                ),
+                offset: 2000,
+                length: 1129,
+                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+            },
+        ];
+        let outdir = tempdir()?;
+        let packfile = outdir.path().join("pack.tar");
+        let digest = pack_chunks(&chunks, &packfile)?;
+        assert_eq!(
+            digest,
+            "sha256-d5712b9bd3358dd7ed632806d3d79b1035452415c592d35886aec88e24ccc19e"
+        );
+        // verify by unpacking
+        let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
+        assert_eq!(entries.len(), 3);
+        assert_eq!(
+            entries[0],
+            "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317"
+        );
+        assert_eq!(
+            entries[1],
+            "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b"
+        );
+        assert_eq!(
+            entries[2],
+            "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3"
+        );
+        let part1sum = checksum_file(&outdir.path().join(&entries[0]), "sha1")?;
+        assert_eq!(part1sum, "sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5");
+        let part2sum = checksum_file(&outdir.path().join(&entries[1]), "sha1")?;
+        assert_eq!(part2sum, "sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603");
+        let part3sum = checksum_file(&outdir.path().join(&entries[2]), "sha1")?;
+        assert_eq!(part3sum, "sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576");
+        // test reassembling the file again
+        let outfile = outdir.path().join("lorem-ipsum.txt");
+        let part1 = outdir.path().join(&entries[0]);
+        let part2 = outdir.path().join(&entries[1]);
+        let part3 = outdir.path().join(&entries[2]);
+        let parts = [part1.as_path(), part2.as_path(), part3.as_path()];
+        assemble_chunks(&parts[..], &outfile)?;
+        let allsum = checksum_file(&outfile, "sha1")?;
+        assert_eq!(allsum, "sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96");
         Ok(())
     }
 }
