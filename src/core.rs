@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-use crypto_hash::{hex_digest, Algorithm, Hasher};
 use fastcdc;
 use hex;
 use memmap::MmapOptions;
@@ -39,34 +38,38 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
 }
 
 ///
-/// Compute the hash digest of the given data. The algorithm must be either
-/// "sha1" or "sha256", anything else will panic.
+/// Compute the SHA1 hash digest of the given data.
 ///
-pub fn checksum_data(data: &[u8], algo: &str) -> String {
-    let algorithm = match algo {
-        "sha1" => Algorithm::SHA1,
-        "sha256" => Algorithm::SHA256,
-        _ => panic!("invalid digest algorithm {}", algo),
-    };
-    let digest = hex_digest(algorithm, data);
-    let mut result = String::from(algo);
-    result.push('-');
-    result.push_str(&digest);
+pub fn checksum_data_sha1(data: &[u8]) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.input(data);
+    let digest = hasher.result();
+    let mut result = String::from("sha1-");
+    result.push_str(&hex::encode(&digest));
     result
 }
 
 ///
-/// Compute the hash digest of the given file. The algorithm must be either
-/// "sha1" or "sha256", anything else will panic.
+/// Compute the SHA256 hash digest of the given data.
 ///
-pub fn checksum_file(infile: &Path, algo: &str) -> io::Result<String> {
-    let algorithm = match algo {
-        "sha1" => Algorithm::SHA1,
-        "sha256" => Algorithm::SHA256,
-        _ => panic!("invalid digest algorithm {}", algo),
-    };
+pub fn checksum_data_sha256(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.input(data);
+    let digest = hasher.result();
+    let mut result = String::from("sha256-");
+    result.push_str(&hex::encode(&digest));
+    result
+}
+
+///
+/// Compute the SHA256 hash digest of the given file.
+///
+pub fn checksum_file(infile: &Path) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
     let file = File::open(infile)?;
-    let mut hasher = Hasher::new(algorithm);
+    let mut hasher = Sha256::new();
     let mut reader = io::BufReader::with_capacity(BUFFER_SIZE, file);
     loop {
         let length = {
@@ -79,8 +82,8 @@ pub fn checksum_file(infile: &Path, algo: &str) -> io::Result<String> {
         }
         reader.consume(length);
     }
-    let digest = hasher.finish();
-    Ok(checksum_from_bytes(&digest, algo))
+    let digest = hasher.result();
+    Ok(checksum_from_bytes(&digest, "sha256"))
 }
 
 ///
@@ -126,6 +129,7 @@ pub struct Chunk<'a> {
 /// chunks, but they may be between half and twice that size.
 ///
 pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
+    use sha2::{Digest, Sha256};
     let file = File::open(infile)?;
     let mmap = unsafe { MmapOptions::new().map(&file).expect("cannot create mmap?") };
     let avg_size = size as usize;
@@ -136,7 +140,8 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
     for entry in chunker {
         let end = entry.offset + entry.length;
         let mut digest = String::from("sha256-");
-        digest.push_str(&hex_digest(Algorithm::SHA256, &mmap[entry.offset..end]));
+        let sum = Sha256::digest(&mmap[entry.offset..end]);
+        digest.push_str(&hex::encode(sum));
         results.push(Chunk {
             digest,
             offset: entry.offset,
@@ -168,7 +173,7 @@ pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
         builder.append_data(&mut header, &chunk.digest, handle)?;
     }
     let _output = builder.into_inner()?;
-    checksum_file(outfile, "sha256")
+    checksum_file(outfile)
 }
 
 ///
@@ -242,18 +247,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_checksum_data_bad_algo() {
-        let data = b"crypto-hash";
-        checksum_data(data, "md5");
-    }
-
-    #[test]
     fn test_checksum_data() {
         let data = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
-        let sha1 = checksum_data(data, "sha1");
+        let sha1 = checksum_data_sha1(data);
         assert_eq!(sha1, "sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c");
-        let sha256 = checksum_data(data, "sha256");
+        let sha256 = checksum_data_sha256(data);
         assert_eq!(
             sha256,
             "sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433"
@@ -261,29 +259,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_checksum_file_bad_algo() {
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        match checksum_file(&infile, "md5") {
-            Ok(_) => unreachable!(),
-            Err(_) => unreachable!(),
-        }
-    }
-
-    #[test]
-    fn test_checksum_file_sha1() -> Result<(), io::Error> {
+    fn test_checksum_file() -> Result<(), io::Error> {
         // use a file larger than the buffer size used for hashing
         let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        let sha1 = checksum_file(&infile, "sha1")?;
-        assert_eq!(sha1, "sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
-        Ok(())
-    }
-
-    #[test]
-    fn test_checksum_file_sha256() -> Result<(), io::Error> {
-        // use a file larger than the buffer size used for hashing
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
-        let sha256 = checksum_file(&infile, "sha256")?;
+        let sha256 = checksum_file(&infile)?;
         assert_eq!(
             sha256,
             "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
@@ -424,8 +403,11 @@ mod tests {
             entries[0],
             "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
         );
-        let sha256 = checksum_file(&outdir.path().join(&entries[0]), "sha1")?;
-        assert_eq!(sha256, "sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96");
+        let sha256 = checksum_file(&outdir.path().join(&entries[0]))?;
+        assert_eq!(
+            sha256,
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
         Ok(())
     }
 
@@ -479,12 +461,21 @@ mod tests {
             entries[2],
             "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3"
         );
-        let part1sum = checksum_file(&outdir.path().join(&entries[0]), "sha1")?;
-        assert_eq!(part1sum, "sha1-824fdcb9fe191e98f0eba2bbb016f3cd95f236c5");
-        let part2sum = checksum_file(&outdir.path().join(&entries[1]), "sha1")?;
-        assert_eq!(part2sum, "sha1-7bb96ad562d2b5e99c6d6b4ff87f7380609c5603");
-        let part3sum = checksum_file(&outdir.path().join(&entries[2]), "sha1")?;
-        assert_eq!(part3sum, "sha1-418eacb05e0fea53ae7f889ab5aa6a95de049576");
+        let part1sum = checksum_file(&outdir.path().join(&entries[0]))?;
+        assert_eq!(
+            part1sum,
+            "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317"
+        );
+        let part2sum = checksum_file(&outdir.path().join(&entries[1]))?;
+        assert_eq!(
+            part2sum,
+            "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b"
+        );
+        let part3sum = checksum_file(&outdir.path().join(&entries[2]))?;
+        assert_eq!(
+            part3sum,
+            "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3"
+        );
         // test reassembling the file again
         let outfile = outdir.path().join("lorem-ipsum.txt");
         let part1 = outdir.path().join(&entries[0]);
@@ -492,8 +483,11 @@ mod tests {
         let part3 = outdir.path().join(&entries[2]);
         let parts = [part1.as_path(), part2.as_path(), part3.as_path()];
         assemble_chunks(&parts[..], &outfile)?;
-        let allsum = checksum_file(&outfile, "sha1")?;
-        assert_eq!(allsum, "sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96");
+        let allsum = checksum_file(&outfile)?;
+        assert_eq!(
+            allsum,
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
         Ok(())
     }
 }

@@ -252,10 +252,12 @@
 **** DONE get chunk checksums working
 ***** https://crates.io/crates/crypto-hash (MIT)
 ****** use the =digest()= helper to get the hash as bytes
-**** TODO get pack files working using tar
-**** TODO get encryption working using pgp
-***** TODO generate public/private keys with passphrase locking
-***** TODO use https://github.com/gpg-rs/gpgme (LGPL) for files
+**** DONE get pack files working using tar
+**** TODO encrypt pack files using the arq procedure
+***** DONE replace =crypto-hash= with =sha2= crate
+***** https://github.com/RustCrypto
+****** see KDFs, password-hashing, hashes, stream-ciphers
+***** TODO compress the file before encrypting
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
 **** DONE get CDC working
