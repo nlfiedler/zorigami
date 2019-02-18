@@ -258,6 +258,17 @@
 ***** DONE compress the file before encrypting
 ***** https://github.com/RustCrypto
 ****** see KDFs, password-hashing, hashes, stream-ciphers
+***** TODO create master keys
+***** TODO encrypt data block
+***** TODO decrypt data block
+***** TODO hash a password
+***** TODO compute HMAC of data block
+***** TODO produce the master encryption data
+***** TODO decrypt master keys from encryption data
+***** TODO encrypt a file
+***** TODO decrypt a file
+***** TODO encrypt a pack file; start with header and version
+***** TODO decrypt a pack file (for initial format)
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
 **** DONE get CDC working

@@ -12,8 +12,6 @@ use tar::{Archive, Builder, Header};
 use ulid::Ulid;
 use uuid::Uuid;
 
-const BUFFER_SIZE: usize = 65536;
-
 ///
 /// Generate a type 5 UUID based on the given values.
 ///
@@ -68,20 +66,9 @@ pub fn checksum_data_sha256(data: &[u8]) -> String {
 ///
 pub fn checksum_file(infile: &Path) -> io::Result<String> {
     use sha2::{Digest, Sha256};
-    let file = File::open(infile)?;
+    let mut file = File::open(infile)?;
     let mut hasher = Sha256::new();
-    let mut reader = io::BufReader::with_capacity(BUFFER_SIZE, file);
-    loop {
-        let length = {
-            let buffer = reader.fill_buf()?;
-            hasher.write_all(buffer)?;
-            buffer.len()
-        };
-        if length == 0 {
-            break;
-        }
-        reader.consume(length);
-    }
+    io::copy(&mut file, &mut hasher)?;
     let digest = hasher.result();
     Ok(checksum_from_bytes(&digest, "sha256"))
 }
@@ -206,19 +193,8 @@ pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
 pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
     let mut file = File::create(outfile)?;
     for infile in chunks {
-        let cfile = File::open(infile)?;
-        let mut reader = io::BufReader::with_capacity(BUFFER_SIZE, cfile);
-        loop {
-            let length = {
-                let buffer = reader.fill_buf()?;
-                file.write_all(buffer)?;
-                buffer.len()
-            };
-            if length == 0 {
-                break;
-            }
-            reader.consume(length);
-        }
+        let mut cfile = File::open(infile)?;
+        io::copy(&mut cfile, &mut file)?;
         fs::remove_file(infile)?;
     }
     Ok(())
