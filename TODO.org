@@ -255,9 +255,9 @@
 **** DONE get pack files working using tar
 **** TODO encrypt pack files using the arq procedure
 ***** DONE replace =crypto-hash= with =sha2= crate
+***** DONE compress the file before encrypting
 ***** https://github.com/RustCrypto
 ****** see KDFs, password-hashing, hashes, stream-ciphers
-***** TODO compress the file before encrypting
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
 **** DONE get CDC working

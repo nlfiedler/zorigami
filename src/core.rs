@@ -157,8 +157,11 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
 /// pack file. The chunks will be written in the order they appear in the array.
 ///
 pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
     let file = File::create(outfile)?;
-    let mut builder = Builder::new(file);
+    let enc = GzEncoder::new(file, Compression::default());
+    let mut builder = Builder::new(enc);
     for chunk in chunks {
         let fp = chunk.filepath.expect("chunk requires a filepath");
         let mut infile = File::open(fp)?;
@@ -182,10 +185,12 @@ pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
 /// "sha256-" prefix).
 ///
 pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
+    use flate2::read::GzDecoder;
     fs::create_dir_all(outdir)?;
     let mut results = Vec::new();
     let file = File::open(infile)?;
-    let mut ar = Archive::new(file);
+    let tar = GzDecoder::new(file);
+    let mut ar = Archive::new(tar);
     for entry in ar.entries()? {
         let mut file = entry.unwrap();
         results.push(String::from(file.path().unwrap().to_str().unwrap()));
@@ -394,7 +399,7 @@ mod tests {
         let digest = pack_chunks(&chunks, &packfile)?;
         assert_eq!(
             digest,
-            "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
+            "sha256-217feb1e7490015dd0a2b231b9cea45804df3d2a9b37287ac861bb45b8c0de55"
         );
         // verify by unpacking
         let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
@@ -416,27 +421,27 @@ mod tests {
         let chunks = [
             Chunk {
                 digest: String::from(
-                    "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317",
+                    "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1",
                 ),
                 offset: 0,
-                length: 1000,
-                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+                length: 40000,
+                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
             },
             Chunk {
                 digest: String::from(
-                    "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b",
+                    "sha256-cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f",
                 ),
-                offset: 1000,
-                length: 1000,
-                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+                offset: 40000,
+                length: 40000,
+                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
             },
             Chunk {
                 digest: String::from(
-                    "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3",
+                    "sha256-e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464",
                 ),
-                offset: 2000,
-                length: 1129,
-                filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+                offset: 80000,
+                length: 29466,
+                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
             },
         ];
         let outdir = tempdir()?;
@@ -444,40 +449,40 @@ mod tests {
         let digest = pack_chunks(&chunks, &packfile)?;
         assert_eq!(
             digest,
-            "sha256-d5712b9bd3358dd7ed632806d3d79b1035452415c592d35886aec88e24ccc19e"
+            "sha256-afbcdaed96cfdbb70674f0b138b719f5b0abbc321e7c9ca76f15dd1e3a5baa1d"
         );
         // verify by unpacking
         let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
         assert_eq!(entries.len(), 3);
         assert_eq!(
             entries[0],
-            "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317"
+            "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
         );
         assert_eq!(
             entries[1],
-            "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b"
+            "sha256-cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f"
         );
         assert_eq!(
             entries[2],
-            "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3"
+            "sha256-e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464"
         );
         let part1sum = checksum_file(&outdir.path().join(&entries[0]))?;
         assert_eq!(
             part1sum,
-            "sha256-60ffbe37b0be6fd565939e6ea4ef21a292f7021d7768080da4c37571805bb317"
+            "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
         );
         let part2sum = checksum_file(&outdir.path().join(&entries[1]))?;
         assert_eq!(
             part2sum,
-            "sha256-0c94de18d6f240390e09df75e700680fd64f19e3a6719d2e0879bb534a3dac0b"
+            "sha256-cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f"
         );
         let part3sum = checksum_file(&outdir.path().join(&entries[2]))?;
         assert_eq!(
             part3sum,
-            "sha256-cb3986714d58c1bf722b77da049ce22693ece44148b70b6c9a9e405bd684d0f3"
+            "sha256-e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464"
         );
         // test reassembling the file again
-        let outfile = outdir.path().join("lorem-ipsum.txt");
+        let outfile = outdir.path().join("SekienAkashita.jpg");
         let part1 = outdir.path().join(&entries[0]);
         let part2 = outdir.path().join(&entries[1]);
         let part3 = outdir.path().join(&entries[2]);
@@ -486,7 +491,7 @@ mod tests {
         let allsum = checksum_file(&outfile)?;
         assert_eq!(
             allsum,
-            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
         Ok(())
     }
