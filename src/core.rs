@@ -2,6 +2,7 @@
 // Copyright (c) 2019 Nathan Fiedler
 //
 use fastcdc;
+use gpgme;
 use hex;
 use memmap::MmapOptions;
 use std::fs::{self, File};
@@ -144,11 +145,8 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
 /// pack file. The chunks will be written in the order they appear in the array.
 ///
 pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
-    use flate2::Compression;
-    use flate2::write::GzEncoder;
     let file = File::create(outfile)?;
-    let enc = GzEncoder::new(file, Compression::default());
-    let mut builder = Builder::new(enc);
+    let mut builder = Builder::new(file);
     for chunk in chunks {
         let fp = chunk.filepath.expect("chunk requires a filepath");
         let mut infile = File::open(fp)?;
@@ -172,12 +170,10 @@ pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
 /// "sha256-" prefix).
 ///
 pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
-    use flate2::read::GzDecoder;
     fs::create_dir_all(outdir)?;
     let mut results = Vec::new();
     let file = File::open(infile)?;
-    let tar = GzDecoder::new(file);
-    let mut ar = Archive::new(tar);
+    let mut ar = Archive::new(file);
     for entry in ar.entries()? {
         let mut file = entry.unwrap();
         results.push(String::from(file.path().unwrap().to_str().unwrap()));
@@ -197,6 +193,58 @@ pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
         io::copy(&mut cfile, &mut file)?;
         fs::remove_file(infile)?;
     }
+    Ok(())
+}
+
+///
+/// Encrypt the given file using the OpenPGP (RFC 4880) format, with the
+/// provided passphrase as the seed for the encryption key.
+///
+pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), gpgme::Error> {
+    let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
+    // need to set pinentry mode to avoid user interaction
+    // n.b. this setting is cached in memory somehow
+    ctx.set_pinentry_mode(gpgme::PinentryMode::Loopback)?;
+    let recipients = Vec::new();
+    let mut input = File::open(infile)?;
+    let mut cipher = File::create(outfile)?;
+    // need a passphrase provider otherwise nothing is output;
+    // n.b. this and/or the passphrase is cached in memory somehow
+    ctx.with_passphrase_provider(
+        |_: gpgme::PassphraseRequest, out: &mut Write| {
+            out.write_all(passphrase.as_bytes())?;
+            Ok(())
+        },
+        |ctx| match ctx.encrypt(&recipients, &mut input, &mut cipher) {
+            Ok(v) => v,
+            Err(err) => panic!("operation failed {}", err),
+        },
+    );
+    Ok(())
+}
+
+///
+/// Decrypt the OpenPGP-encrypted file using the given passphrase.
+///
+pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), gpgme::Error> {
+    let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
+    // need to set pinentry mode to avoid user interaction
+    // n.b. this setting is cached in memory somehow
+    ctx.set_pinentry_mode(gpgme::PinentryMode::Loopback)?;
+    let mut input = File::open(infile)?;
+    let mut plain = File::create(outfile)?;
+    // need a passphrase provider otherwise nothing is output;
+    // n.b. this and/or the passphrase is cached in memory somehow
+    ctx.with_passphrase_provider(
+        |_: gpgme::PassphraseRequest, out: &mut Write| {
+            out.write_all(passphrase.as_bytes())?;
+            Ok(())
+        },
+        |ctx| match ctx.decrypt(&mut input, &mut plain) {
+            Ok(v) => v,
+            Err(err) => panic!("operation failed {}", err),
+        },
+    );
     Ok(())
 }
 
@@ -375,7 +423,7 @@ mod tests {
         let digest = pack_chunks(&chunks, &packfile)?;
         assert_eq!(
             digest,
-            "sha256-217feb1e7490015dd0a2b231b9cea45804df3d2a9b37287ac861bb45b8c0de55"
+            "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
         );
         // verify by unpacking
         let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
@@ -425,7 +473,7 @@ mod tests {
         let digest = pack_chunks(&chunks, &packfile)?;
         assert_eq!(
             digest,
-            "sha256-afbcdaed96cfdbb70674f0b138b719f5b0abbc321e7c9ca76f15dd1e3a5baa1d"
+            "sha256-0715334707315e0b16e1786d0a76ff70929b5671a2081da78970a652431b4a74"
         );
         // verify by unpacking
         let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
@@ -467,6 +515,25 @@ mod tests {
         let allsum = checksum_file(&outfile)?;
         assert_eq!(
             allsum,
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_encryption() -> Result<(), gpgme::Error> {
+        let passphrase = "some passphrase";
+        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let outdir = tempdir()?;
+        let ciphertext = outdir.path().join("SekienAkashita.jpg.enc");
+        encrypt_file(passphrase, infile, &ciphertext)?;
+        // cannot do much validation of the encrypted file, it is always
+        // going to be different because of random keys and init vectors
+        let plaintext = outdir.path().join("SekienAkashita.jpg");
+        decrypt_file(passphrase, &ciphertext, &plaintext)?;
+        let plainsum = checksum_file(&plaintext)?;
+        assert_eq!(
+            plainsum,
             "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
         Ok(())

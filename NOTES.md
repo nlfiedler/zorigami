@@ -106,9 +106,7 @@ Arq backup describes this as:
     - tar file format
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
-* encrypted pack file format
-    - encrypted using pgp (RFC 4880)
-    - encrypt with public key, decrypt with private key
+    - encrypted using OpenPGP (RFC 4880) using passphrase
 
 ### PouchDB
 
@@ -296,48 +294,12 @@ Remove the snapshot record to be deleted, then garbage collect.
 #### Master Password
 
 * Need to prompt the user for their password when starting up
-    - Once decrypted, hold the master keys in process state
 * If available, use a "secret vault" provided by the OS
     - macOS Keychain
     - Windows Data Protection API
     - Linux gnome-keyring
 * If an environment variable is set, can use that
     - c.f. https://forum.duplicacy.com/t/passwords-credentials-and-environment-variables/1094
-
-#### Generating Encryption Data
-
-1. Generate a random salt.
-1. Generate a random initialization vector (IV).
-1. Generate two random "master keys".
-1. Derive encryption key from user provided password and the salt.
-1. Encrypt the master keys with AES/CTR using the the derived key and the IV.
-1. Calculate the HMAC-SHA256 of (IV + encrypted master keys) using the derived key.
-1. Store everything in the PouchDB encryption record.
-
-#### Extracting Master Keys
-
-1. Retrieve salt from the encryption record.
-1. Derive encryption key from user-supplied password using scrypt and the salt.
-1. Calculate HMAC-SHA256 of (IV + encrypted master keys) the key.
-1. Verify computed HMAC against HMAC-SHA256 in the encryption record.
-1. Decrypt the encrypted master keys using the derived key.
-
-#### Encrypting Pack Files
-
-1. Generate a random session key.
-1. Generate a random "data IV".
-1. Encrypt pack data with AES/CTR using session key and data IV.
-1. Generate a random "master IV".
-1. Encrypt (data IV + session key) with AES/CTR using the first master key and the "master IV".
-1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key".
-1. Write as described in the pack file data format.
-
-#### Decrypting Pack Files
-
-1. Calculate HMAC-SHA256 of (master IV + "encrypted data IV + session key" + ciphertext) using the second "master key".
-1. Ensure the calculated HMAC-SHA256 matches the value in the object header.
-1. Decrypt "encrypted data IV + session key" using the first "master key" and the "master IV".
-1. Decrypt the ciphertext with AES/CTR using the session key and data IV.
 
 ## Alternatives
 
