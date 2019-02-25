@@ -109,6 +109,32 @@ pub struct Chunk {
     pub length: usize,
     /// Path of the file from which the chunk is taken.
     pub filepath: Option<PathBuf>,
+    /// Digest of packfile this chunk is stored within.
+    pub packfile: Option<String>,
+}
+
+impl Chunk {
+    pub fn new(digest: &str, offset: usize, length: usize) -> Self {
+        Self {
+            digest: digest.to_owned(),
+            offset,
+            length,
+            filepath: None,
+            packfile: None,
+        }
+    }
+
+    /// Add the filepath property.
+    pub fn filepath(mut self, filepath: &Path) -> Self {
+        self.filepath = Some(filepath.to_owned());
+        self
+    }
+
+    /// Add the packfile property.
+    pub fn packfile(mut self, packfile: &str) -> Self {
+        self.packfile = Some(packfile.to_owned());
+        self
+    }
 }
 
 ///
@@ -130,12 +156,7 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
         let mut digest = String::from("sha256-");
         let sum = Sha256::digest(&mmap[entry.offset..end]);
         digest.push_str(&hex::encode(sum));
-        results.push(Chunk {
-            digest,
-            offset: entry.offset,
-            length: entry.length,
-            filepath: None,
-        })
+        results.push(Chunk::new(&digest, entry.offset, entry.length))
     }
     Ok(results)
 }
@@ -410,17 +431,15 @@ mod tests {
 
     #[test]
     fn test_pack_file_one_chunk() -> io::Result<()> {
-        let chunks = [Chunk {
-            digest: String::from(
-                "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
-            ),
-            offset: 0,
-            length: 3129,
-            filepath: Some(PathBuf::from("./test/fixtures/lorem-ipsum.txt")),
-        }];
+        let chunks = [Chunk::new(
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+            0,
+            3129,
+        )
+        .filepath(Path::new("./test/fixtures/lorem-ipsum.txt"))];
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
-        let digest = pack_chunks(&chunks, &packfile)?;
+        let digest = pack_chunks(&chunks[..], &packfile)?;
         assert_eq!(
             digest,
             "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
@@ -443,30 +462,24 @@ mod tests {
     #[test]
     fn test_pack_file_multiple_chunks() -> io::Result<()> {
         let chunks = [
-            Chunk {
-                digest: String::from(
-                    "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1",
-                ),
-                offset: 0,
-                length: 40000,
-                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
-            },
-            Chunk {
-                digest: String::from(
-                    "sha256-cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f",
-                ),
-                offset: 40000,
-                length: 40000,
-                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
-            },
-            Chunk {
-                digest: String::from(
-                    "sha256-e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464",
-                ),
-                offset: 80000,
-                length: 29466,
-                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
-            },
+            Chunk::new(
+                "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1",
+                0,
+                40000,
+            )
+            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
+            Chunk::new(
+                "sha256-cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f",
+                40000,
+                40000,
+            )
+            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
+            Chunk::new(
+                "sha256-e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464",
+                80000,
+                29466,
+            )
+            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
         ];
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
