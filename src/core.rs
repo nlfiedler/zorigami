@@ -8,7 +8,7 @@ use memmap::MmapOptions;
 use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tar::{Archive, Builder, Header};
 use ulid::Ulid;
 use uuid::Uuid;
@@ -100,7 +100,7 @@ pub fn bytes_from_checksum(value: &str) -> Result<Vec<u8>, hex::FromHexError> {
 }
 
 /// Some chunk of a file.
-pub struct Chunk<'a> {
+pub struct Chunk {
     /// The SHA256 checksum of the chunk, with algo prefix.
     pub digest: String,
     /// The byte offset of this chunk within the file.
@@ -108,7 +108,7 @@ pub struct Chunk<'a> {
     /// The byte length of this chunk.
     pub length: usize,
     /// Path of the file from which the chunk is taken.
-    pub filepath: Option<&'a Path>,
+    pub filepath: Option<PathBuf>,
 }
 
 ///
@@ -148,7 +148,7 @@ pub fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> io::Result<String> {
     let file = File::create(outfile)?;
     let mut builder = Builder::new(file);
     for chunk in chunks {
-        let fp = chunk.filepath.expect("chunk requires a filepath");
+        let fp = chunk.filepath.as_ref().expect("chunk requires a filepath");
         let mut infile = File::open(fp)?;
         infile.seek(io::SeekFrom::Start(chunk.offset as u64))?;
         let handle = infile.take(chunk.length as u64);
@@ -416,7 +416,7 @@ mod tests {
             ),
             offset: 0,
             length: 3129,
-            filepath: Some(Path::new("./test/fixtures/lorem-ipsum.txt")),
+            filepath: Some(PathBuf::from("./test/fixtures/lorem-ipsum.txt")),
         }];
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
@@ -449,7 +449,7 @@ mod tests {
                 ),
                 offset: 0,
                 length: 40000,
-                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
+                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
             },
             Chunk {
                 digest: String::from(
@@ -457,7 +457,7 @@ mod tests {
                 ),
                 offset: 40000,
                 length: 40000,
-                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
+                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
             },
             Chunk {
                 digest: String::from(
@@ -465,7 +465,7 @@ mod tests {
                 ),
                 offset: 80000,
                 length: 29466,
-                filepath: Some(Path::new("./test/fixtures/SekienAkashita.jpg")),
+                filepath: Some(PathBuf::from("./test/fixtures/SekienAkashita.jpg")),
             },
         ];
         let outdir = tempdir()?;
