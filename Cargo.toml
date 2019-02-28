@@ -10,6 +10,7 @@ keywords = ["backup", "archival"]
 license = "BSD-2-Clause"
 
 [dependencies]
+failure = "0.1.5"
 fastcdc = "1.0.1"
 gpgme = "0.8.0"
 hex = "0.3.2"
@@ -18,6 +19,9 @@ juniper_warp = "0.2.0"
 log = "0.4.6"
 memmap = "0.7.0"
 pretty_env_logger = "0.3.0"
+rocksdb = "0.11.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_cbor = "0.9.0"
 sha-1 = "0.8.1"
 sha2 = "0.8.0"
 tar = "0.4.20"
@@ -26,4 +30,5 @@ ulid = "0.3.1"
 warp = "0.1.13"
 
 [dev-dependencies]
+lazy_static = "1.2.0"
 tempfile = "3.0.6"

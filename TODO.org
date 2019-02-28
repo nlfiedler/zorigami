@@ -1,6 +1,7 @@
 * Zorigami
 ** Exploring other languages
 *** Compile to native for easy deployment
+*** Compile to native for code obfuscation
 *** [[https://github.com/revery-ui/revery][Revery]] for desktop interface
 *** Rust
 **** Advantages
@@ -84,7 +85,7 @@
 ***** https://github.com/alexcrichton/tar-rs (MIT/Apache 2.0)
 **** DONE PGP/Encryption
 ***** https://github.com/gpg-rs/gpgme (LGPL)
-****** just bundle the =gpg= binary (https://gnupg.org/download/)
+****** will need to bundle the =gpgme= library (unless statically linked)
 ***** cryptostream https://github.com/neosmart/cryptostream (MIT)
 ***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
 ***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
@@ -266,11 +267,39 @@
 ****** seems like =gpg= caches the secret key somewhere
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
 **** TODO get basic database working
+***** DONE read https://github.com/facebook/rocksdb/wiki/RocksDB-Basics
+***** DONE write an "insert if missing" function
+****** does not write if the key is already present
+***** DONE decide how to store "documents" in the database
+****** use [[https://github.com/serde-rs/serde][serde]] to efficiently de/serialize to many formats
+****** can =skip= fields that do not need serde
+****** can write custom serde functionality as needed
+****** DONE how to manage versioning of the data structures?
+******* can use =#[serde(default)]= and =Default= to fill in blanks
+****** =serde_json= is maintained by serde community
+****** [[https://github.com/pyfisch/cbor][pyfisch/cbor]]; CBOR is an internet standard (RFC 7049)
+****** [[https://github.com/3Hren/msgpack-rust][3Hren/msgpack-rust]] is not actively developed
+***** DONE Use serde ~rename~ feature to make short field names
+***** TODO write functions for insert/get tree
+***** TODO write functions for insert/get snapshot
+***** TODO write functions for insert/get configuration
+***** TODO write functions for insert/get xattr
+***** TODO write functions for insert/get file
+***** DONE write functions for insert/get chunk
+***** TODO write functions for insert/get pack
+***** TODO work out how to support the counts of each type of document
+***** TODO decide how the chunk and pack records will be stored to facilitate multi-host dedupe
+***** TODO replace hard-coded values with configuration settings
+****** TODO path to database files
 **** DONE get CDC working
 **** TODO implement pack stores
 ***** TODO local
 ***** TODO minio
 ***** TODO sftp
+**** TODO consider approaches for managing the database instance
+***** engine opens at start of backup procedure, drops when done
+***** what about web server? does warp have state management?
+***** maybe use =Arc= and =Mutex= to manage concurrent access
 **** TODO convert engine code
 ***** TODO build tree objects
 ****** detect files and directories using =fs::metadata=
@@ -364,6 +393,7 @@ if !metadata.file_type().is_file() {
 : some APIs that can be used as building blocks to support replication.
 : For instance, GetUpdatesSince() allows developers to iterate though all
 : updates since a specific point in time.
+***** see =GetUpdatesSince()= and =PutLogData()= functions
 **** Use the express support in [[https://github.com/pouchdb/pouchdb-server][pouchdb-server]] to serve up chunks/packs db
 **** User configures the host name of the ~peer~ installation
 ***** Use that to form the URL with which to =sync=

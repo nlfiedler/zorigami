@@ -5,8 +5,7 @@
 * Unlimited backup: all files of any size
 * Maintains multiple versions, not just the most recent
 * Efficiency (compression, de-duplication, block-level incremental backup)
-* Encryption (all remotely stored data is encrypted with 256-bit AES)
-    - Uses unique 256-bit key and IV for each remotely stored pack
+* Encryption (all remotely stored data is encrypted with OpenPGP)
 * Service agnostic (SFTP, Amazon, Google, etc)
 * Full restore or file-level restore
 * Restore to dissimilar hardware
@@ -135,12 +134,6 @@ Arq backup describes this as:
         + ignore overrides
         + pack size overrides
         + storage overrides (e.g. `local` vs `aws`)
-* encryption record
-    - database key: `encryption`
-    - random salt (16 bytes)
-    - random init vector (16 bytes)
-    - HMAC-SHA256 of user password and salt
-    - encrypted master keys
 * snapshot records
     - key: `snapshot/` + SHA1 of snapshot (with "sha1-" prefix) or `index` for pending
     - parent: SHA1 of previous snapshot (`null` if first snapshot)

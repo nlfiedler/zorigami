@@ -5,6 +5,7 @@ use fastcdc;
 use gpgme;
 use hex;
 use memmap::MmapOptions;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
@@ -100,16 +101,22 @@ pub fn bytes_from_checksum(value: &str) -> Result<Vec<u8>, hex::FromHexError> {
 }
 
 /// Some chunk of a file.
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Chunk {
     /// The SHA256 checksum of the chunk, with algo prefix.
+    #[serde(rename = "di")]
     pub digest: String,
     /// The byte offset of this chunk within the file.
+    #[serde(rename = "of")]
     pub offset: usize,
     /// The byte length of this chunk.
+    #[serde(rename = "le")]
     pub length: usize,
     /// Path of the file from which the chunk is taken.
+    #[serde(skip)]
     pub filepath: Option<PathBuf>,
     /// Digest of packfile this chunk is stored within.
+    #[serde(rename = "pf")]
     pub packfile: Option<String>,
 }
 
@@ -134,6 +141,18 @@ impl Chunk {
     pub fn packfile(mut self, packfile: &str) -> Self {
         self.packfile = Some(packfile.to_owned());
         self
+    }
+}
+
+impl Default for Chunk {
+    fn default() -> Self {
+        Self {
+            digest: String::from(""),
+            offset: 0,
+            length: 0,
+            filepath: None,
+            packfile: None,
+        }
     }
 }
 
@@ -196,8 +215,10 @@ pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
     let file = File::open(infile)?;
     let mut ar = Archive::new(file);
     for entry in ar.entries()? {
-        let mut file = entry.unwrap();
-        results.push(String::from(file.path().unwrap().to_str().unwrap()));
+        let mut file = entry?;
+        let fp = file.path()?;
+        // we know the names are valid UTF-8, we created them
+        results.push(String::from(fp.to_str().unwrap()));
         file.unpack_in(outdir)?;
     }
     Ok(results)
@@ -272,6 +293,7 @@ pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_cbor;
     use tempfile::tempdir;
 
     #[test]
@@ -550,5 +572,28 @@ mod tests {
             "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_serde_chunk() {
+        let chunk = Chunk::new(
+            "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1",
+            0,
+            40000,
+        )
+        .packfile("sha1-bc1a3198db79036e56b30f0ab307cee55e845907");
+        let encoded: Vec<u8> = serde_cbor::to_vec(&chunk).unwrap();
+        let result: Chunk = serde_cbor::from_slice(&encoded).unwrap();
+        assert_eq!(
+            result.digest,
+            "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
+        );
+        assert_eq!(result.offset, 0);
+        assert_eq!(result.length, 40000);
+        assert!(result.packfile.is_some());
+        assert_eq!(
+            result.packfile.unwrap(),
+            "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
+        );
     }
 }
