@@ -583,6 +583,9 @@ mod tests {
         )
         .packfile("sha1-bc1a3198db79036e56b30f0ab307cee55e845907");
         let encoded: Vec<u8> = serde_cbor::to_vec(&chunk).unwrap();
+        // serde_json produces a string that is about 10% larger than CBOR,
+        // and CBOR is a (pending) internet standard, making it a good choice
+        assert_eq!(encoded.len(), 137);
         let result: Chunk = serde_cbor::from_slice(&encoded).unwrap();
         assert_eq!(
             result.digest,
