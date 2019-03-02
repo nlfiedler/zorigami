@@ -73,8 +73,8 @@ Arq backup describes this as:
     - Small files are stored in whole
     - Pack files are used to minimize the number of files stored remotely
 * Pack files are stored remotely
-* PouchDB is used to store metadata
-    - PouchDB database is saved just like any other file
+* Database is used to store metadata
+    - Database is saved just like any other file
 
 ### Computer UUID
 
@@ -107,7 +107,7 @@ Arq backup describes this as:
     - entry dates are always UTC epoch to yield consistent results
     - encrypted using OpenPGP (RFC 4880) using passphrase
 
-### PouchDB
+### Database Schema
 
 #### Primary Database
 
@@ -218,17 +218,7 @@ that has the most recent `upload_date`.
         * set `chunks` on the record with the checksum at time of packing
 1. Set the `end_time` of snapshot record to indicate completion.
 1. Store latest snapshot identifier in `configuration` record.
-1. Backup the PouchDB database files.
-
-#### Duplicate chunk detection
-
-The [datproject/rabin](https://github.com/datproject/rabin) project is ISC
-licensed (according to the `package.json`) and is easy to use. It works for
-small and large chunk sizes. However, it is slow compared to the FastCDC
-implementation in
-[ronomon/deduplication](https://github.com/ronomon/deduplication) which has the
-advantage of being actively maintained. The drawback of this package is that a
-working buffer of fairly large size must be allocated.
+1. Backup the database files.
 
 #### Uploading Packs
 
@@ -262,7 +252,7 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 1. Find all buckets with type 5 UUID for a name
 1. Fetch metadata object/archive for those buckets
 1. Present the list to the user to choose which to recover
-1. Retrieve the most recent PouchDB database
+1. Retrieve the most recent database
     * For Glacier, this means listing archives of master vault to find database pack
 1. Iterate entries in database, fetching packs and extracting files
 

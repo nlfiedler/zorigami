@@ -63,3 +63,24 @@ fn test_chunk_records() {
         "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
     );
 }
+
+#[test]
+fn test_prefix_counting() {
+    assert!(insert_document(&DBASE, b"punk/cafebabe", b"madoka magic").is_ok());
+    assert!(insert_document(&DBASE, b"punk/deadbeef", b"made in abyss").is_ok());
+    assert!(insert_document(&DBASE, b"punk/cafed00d", b"houseki no kuni").is_ok());
+    assert!(insert_document(&DBASE, b"punk/1badb002", b"eureka seven").is_ok());
+    assert!(insert_document(&DBASE, b"punk/abadbabe", b"last exile").is_ok());
+    assert!(insert_document(&DBASE, b"kree/cafebabe", b"hibeke! euphonium").is_ok());
+    assert!(insert_document(&DBASE, b"kree/deadbeef", b"flip flappers").is_ok());
+    assert!(insert_document(&DBASE, b"kree/abadbabe", b"koe no katachi").is_ok());
+    assert!(insert_document(&DBASE, b"kree/cafefeed", b"toradora!").is_ok());
+    let result = count_prefix(&DBASE, "punk");
+    assert!(result.is_ok());
+    let count: usize = result.unwrap();
+    assert_eq!(count, 5);
+    let result = count_prefix(&DBASE, "kree");
+    assert!(result.is_ok());
+    let count: usize = result.unwrap();
+    assert_eq!(count, 4);
+}

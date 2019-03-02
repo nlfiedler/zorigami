@@ -50,3 +50,21 @@ pub fn get_chunk(db: &DB, digest: &str) -> Result<Option<Chunk>, Error> {
         None => Ok(None)
     }
 }
+
+///
+/// Count those keys that start with the given prefix.
+///
+pub fn count_prefix(db: &DB, prefix: &str) -> Result<usize, Error> {
+    let pre_bytes = prefix.as_bytes();
+    // this only gets us started, we then have to check for the end of the range
+    let iter = db.prefix_iterator(pre_bytes);
+    let mut count = 0;
+    for (key, _value) in iter {
+        let pre = &key[..pre_bytes.len()];
+        if pre != pre_bytes {
+            break
+        }
+        count += 1;
+    }
+    Ok(count)
+}

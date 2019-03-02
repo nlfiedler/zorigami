@@ -217,7 +217,7 @@
 ***** DONE how does the =?= operator work? replaces =try!= macro
 ***** DONE How to have code run when a module starts up (a la Go's =init()=)
 ****** https://crates.io/crates/lazy_static/
-**** TODO Learn how to manage application state (e.g. db object, config, etc)
+**** TODO Learn how to manage application state
 ***** https://github.com/SergioBenitez/state (MIT/Apache)
 ***** https://github.com/rust-redux/rust-redux (MIT)
 ***** https://github.com/jaredonline/redux-rs (???)
@@ -233,10 +233,7 @@
 ***** DONE checksum string from bytes
 ***** DONE checksum bytes from string
 **** TODO set up configuration for dev and testing
-**** TODO write integration tests using speculate.rs
-***** https://github.com/utkarshkukreti/speculate.rs (MIT)
-***** https://github.com/rust-rspec/rspec (MPL)
-****** do not understand how to use this with =cargo test=
+***** TODO replace hard-coded db_path in integration test
 **** DONE set up web framework to serve a static page
 ***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
 ***** DONE learn how to serve static assets
@@ -287,10 +284,8 @@
 ***** TODO write functions for insert/get file
 ***** DONE write functions for insert/get chunk
 ***** TODO write functions for insert/get pack
-***** TODO work out how to support the counts of each type of document
-***** TODO decide how the chunk and pack records will be stored to facilitate multi-host dedupe
-***** TODO replace hard-coded values with configuration settings
-****** TODO path to database files
+***** DONE work out how to support the counts of each type of document
+***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 **** DONE get CDC working
 **** TODO implement pack stores
 ***** TODO local
@@ -309,17 +304,20 @@ if !metadata.file_type().is_file() {
 ...
 #+END_SRC
 ***** TODO find differences between snapshots
+***** TODO open database instance and pass =DB= around
 ***** TODO produce pack files from changes
 ***** TODO restore files from backup
 **** TODO Update =README.md= wrt to Rust and requirements
 **** TODO Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=
 **** TODO Update =NOTES.md= for several things
-***** Chunk deduplication; still refers to other algorithms
-***** If using PGP, then the whole encryption section is wrong
 ***** Rust vs TypeScript/JavaScript
 ***** RocksDB vs PouchDB
 **** TODO Try building on Windows
+**** TODO Remove everything in TODO and NOTES related to the old stack
+***** PouchDB
+***** TypeScript
+***** Node.js
 *** TODO Rewrite everything in Go if Rust doesn't work out
 **** TODO Decide on a web framework
 **** TODO Look for useful tools and VS Code support
@@ -344,6 +342,11 @@ if !metadata.file_type().is_file() {
 ***** TODO restore files from backup
 **** TODO set up web framework
 **** TODO set up GraphQL server
+*** TODO Document the database schema
+**** [[http://cbor.io][RocksDB]] key/value store
+**** [[http://cbor.io][CBOR]] values
+**** keys have type prefixes (e.g. =chunk/=)
+**** values are name/value pairs of object properties
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -387,6 +390,7 @@ if !metadata.file_type().is_file() {
 **** TODO Restore to a different directory, then copy over records
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
+***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
 **** RocksDB replication story as of 2019-02-20:
 : Q: Does RocksDB support replication?
 : A: No, RocksDB does not directly support replication. However, it offers
@@ -403,6 +407,7 @@ if !metadata.file_type().is_file() {
 **** For Google and Amazon, anything older than 90 days is free to remove
 **** This would be a configuration setting, with defaults and path-specific
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
+*** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
 ** Phase 7
 *** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
 *** TODO Read cross platform Node.js guide: https://github.com/ehmicky/portable-node-guide
@@ -439,6 +444,7 @@ if !metadata.file_type().is_file() {
 *** Does it have support for dock icons?
 ** Phase N: Electron
 *** TODO Write it in TypeScript
+*** TODO Consider using [[https://github.com/neon-bindings/neon][Neon bindings]] to write some parts in Rust
 *** TODO Create a system tray icon/widget
 **** Popup menu like Time Machine
 **** Show current status, last backup
