@@ -2,7 +2,6 @@
 ** Exploring other languages
 *** Compile to native for easy deployment
 *** Compile to native for code obfuscation
-*** [[https://github.com/revery-ui/revery][Revery]] for desktop interface
 *** Rust
 **** Advantages
 ***** compile to native
@@ -288,9 +287,21 @@
 ***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 **** DONE get CDC working
 **** TODO implement pack stores
+***** DONE design the module directory structure
+****** =src/store.rs= contains trait and convenience functions
+****** =src/store/local.rs= contains local store implementation
+****** =src/store/sftp.rs= contains SFTP store implementation
+***** DONE define the =Store= trait
+***** TODO will stores be registered globally?
+***** DONE set up config for defining sftp parameters
+***** DONE make the sftp tests conditional on config settings
+***** TODO turn the store tests into integration test, have a common testing fn
 ***** TODO local
 ***** TODO minio
 ***** TODO sftp
+****** TODO implement support for private key
+****** TODO implement support for passphrase locked private key
+****** DONE is =~= a sensible default base path for sftp? no must be =.=
 **** TODO consider approaches for managing the database instance
 ***** engine opens at start of backup procedure, drops when done
 ***** what about web server? does warp have state management?
