@@ -70,7 +70,11 @@
 ***** https://github.com/mehcode/config-rs (MIT/Apache)
 **** DONE =getpwuid= and =getgrgid= support
 ***** libc: https://crates.io/crates/libc (MIT/Apache 2.0)
-**** DONE test library: for now just use Rust built-in testing
+**** DONE test library
+***** https://github.com/rust-rspec/rspec (MPL-2.0)
+****** appears to be dead
+***** https://github.com/utkarshkukreti/speculate.rs (MIT)
+****** works well for integration tests
 **** DONE UUID support
 ***** https://github.com/uuid-rs/uuid (MIT/Apache 2.0)
 **** DONE xattr support
@@ -297,10 +301,8 @@
 ***** DONE make the sftp tests conditional on config settings
 ***** TODO turn the store tests into integration test, have a common testing fn
 ***** TODO local
-***** TODO minio
-***** TODO sftp
-****** TODO implement support for private key
-****** TODO implement support for passphrase locked private key
+***** DONE minio
+***** DONE sftp
 ****** DONE is =~= a sensible default base path for sftp? no must be =.=
 **** TODO consider approaches for managing the database instance
 ***** engine opens at start of backup procedure, drops when done
@@ -353,6 +355,7 @@ if !metadata.file_type().is_file() {
 ***** TODO restore files from backup
 **** TODO set up web framework
 **** TODO set up GraphQL server
+*** TODO Could replace uses of =hex= with =format!("{:x}", ...)=
 *** TODO Document the database schema
 **** [[http://cbor.io][RocksDB]] key/value store
 **** [[http://cbor.io][CBOR]] values
@@ -426,6 +429,8 @@ if !metadata.file_type().is_file() {
 **** ReadOnly
 **** Hidden
 **** System
+*** TODO Support SFTP with private key authentication
+**** TODO allow private key locked with passprhase
 *** TODO Support Amazon S3
 *** TODO Support Amazon Glacier
 **** Offer user option to use "expedited" retrievals so they go faster

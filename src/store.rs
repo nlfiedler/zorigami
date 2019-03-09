@@ -4,6 +4,7 @@
 use failure::Error;
 use std::path::Path;
 
+pub mod minio;
 pub mod sftp;
 
 pub trait Store {
