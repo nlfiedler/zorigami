@@ -14,7 +14,8 @@
 * Cross Platform (macOS, Windows, Linux)
 * Amazon Glacier support (this seems to be uncommon at best)
 * Fault tolerant (automatically recovers from crashes)
-* Ransomware protection
+
+### Ransomware protection
 
 > CloudBerry Backup detects encryption changes in files and prevents existing
 > backups from being overwritten until an administrator confirms if there is an
@@ -23,6 +24,14 @@
 Arq backup describes this as:
 
 > Ransomware protection - point-in-time recovery of files
+
+https://ruderich.org/simon/notes/append-only-backups-with-restic-and-rclone
+
+> One issue with most backup solutions is that an attacker controlling the local
+> system can also wipe its old backups. To prevent this the backup must permit
+> append-only backups (also called add-only backups).
+
+They change the SSH config to run the backup command with "append only" flag.
 
 ## Interface
 
@@ -38,7 +47,7 @@ Arq backup describes this as:
 * Web frontend as GraphQL client
 * Desktop application as GraphQL client
 * Document-oriented database for metadata
-* Local or Remote file store for pack storage
+* Local or Remote file store(s) for pack storage
 
 ## Design
 

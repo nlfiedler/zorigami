@@ -299,8 +299,8 @@
 ***** TODO will stores be registered globally?
 ***** DONE set up config for defining sftp parameters
 ***** DONE make the sftp tests conditional on config settings
-***** TODO turn the store tests into integration test, have a common testing fn
-***** TODO local
+***** DONE turn the store tests into integration test, have a common testing fn
+***** DONE local
 ***** DONE minio
 ***** DONE sftp
 ****** DONE is =~= a sensible default base path for sftp? no must be =.=

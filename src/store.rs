@@ -4,6 +4,7 @@
 use failure::Error;
 use std::path::Path;
 
+pub mod local;
 pub mod minio;
 pub mod sftp;
 
