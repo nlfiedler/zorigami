@@ -7,8 +7,10 @@ extern crate lazy_static;
 use rocksdb::DB;
 use std::fs;
 use std::ops::Deref;
+use std::time::SystemTime;
 use zorigami::core::*;
 use zorigami::database::*;
+use zorigami::engine::*;
 
 static DB_PATH: &str = "test/tmp/database/rocksdb";
 lazy_static! {
@@ -62,6 +64,59 @@ fn test_chunk_records() {
         actual.packfile.unwrap(),
         "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
     );
+}
+
+#[test]
+fn test_tree_records() {
+    let entry1 = TreeEntry {
+        name: String::from("regu"),
+        fstype: EntryType::FILE,
+        mode: Some(0o644),
+        uid: Some(100),
+        gid: Some(100),
+        user: Some(String::from("user")),
+        group: Some(String::from("group")),
+        ctime: SystemTime::UNIX_EPOCH,
+        mtime: SystemTime::UNIX_EPOCH,
+        reference: Some(String::from("sha1-cafebabe")),
+    };
+    let entry2 = TreeEntry {
+        name: String::from("riko"),
+        fstype: EntryType::FILE,
+        mode: Some(0o644),
+        uid: Some(100),
+        gid: Some(100),
+        user: Some(String::from("user")),
+        group: Some(String::from("group")),
+        ctime: SystemTime::UNIX_EPOCH,
+        mtime: SystemTime::UNIX_EPOCH,
+        reference: Some(String::from("sha1-babecafe")),
+    };
+    let entry3 = TreeEntry {
+        name: String::from("nanachi"),
+        fstype: EntryType::FILE,
+        mode: Some(0o644),
+        uid: Some(100),
+        gid: Some(100),
+        user: Some(String::from("user")),
+        group: Some(String::from("group")),
+        ctime: SystemTime::UNIX_EPOCH,
+        mtime: SystemTime::UNIX_EPOCH,
+        reference: Some(String::from("sha1-babebabe")),
+    };
+    let tree = vec![entry1, entry2, entry3];
+    let sum = checksum_tree(&tree);
+    let result = insert_tree(&DBASE, &sum, &tree);
+    assert!(result.is_ok());
+    let result = get_tree(&DBASE, &sum);
+    assert!(result.is_ok());
+    let maybe = result.unwrap();
+    assert!(maybe.is_some());
+    let entries = maybe.unwrap();
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().any(|e| e.name == "nanachi"));
+    assert!(entries.iter().any(|e| e.name == "regu"));
+    assert!(entries.iter().any(|e| e.name == "riko"));
 }
 
 #[test]

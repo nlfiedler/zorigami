@@ -304,22 +304,23 @@
 ***** DONE minio
 ***** DONE sftp
 ****** DONE is =~= a sensible default base path for sftp? no must be =.=
+***** TODO write test for the local store implementation
 **** TODO consider approaches for managing the database instance
 ***** engine opens at start of backup procedure, drops when done
 ***** what about web server? does warp have state management?
 ***** maybe use =Arc= and =Mutex= to manage concurrent access
 **** TODO convert engine code
-***** TODO build tree objects
-****** detect files and directories using =fs::metadata=
-#+BEGIN_SRC rust
-let metadata = fs::metadata(path)?;
-if !metadata.file_type().is_file() {
-...
-#+END_SRC
+***** DONE insert trees into the database using their checksum
+***** TODO translate =processPath()=
+***** TODO translate =scantree()=
 ***** TODO find differences between snapshots
 ***** TODO open database instance and pass =DB= around
 ***** TODO produce pack files from changes
 ***** TODO restore files from backup
+***** TODO insert xattr records for each tree entry (see =process_path()=)
+**** TODO Look for calls to =unwrap= that maybe should be converted to errors
+e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
+**** TODO Chunk serde should skip digest and database must set digest using key (minus prefix)
 **** TODO Update =README.md= wrt to Rust and requirements
 **** TODO Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=

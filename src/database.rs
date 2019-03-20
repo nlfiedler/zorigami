@@ -3,7 +3,7 @@
 //
 use failure::Error;
 use rocksdb::{DBVector, DB};
-use super::core::Chunk;
+use super::core::{Chunk, TreeEntry};
 
 ///
 /// Insert the value if the database does not already contain the given key.
@@ -45,6 +45,34 @@ pub fn get_chunk(db: &DB, digest: &str) -> Result<Option<Chunk>, Error> {
     match encoded {
         Some(dbv) => {
             let serde_result: Chunk = serde_cbor::from_slice(&dbv)?;
+            Ok(Some(serde_result))
+        },
+        None => Ok(None)
+    }
+}
+
+///
+/// Insert the a tree into the database, using the given digest as part of the
+/// key (plus a fixed prefix for namespacing). Trees with the same digest are
+/// assumed to be identical.
+///
+pub fn insert_tree(db: &DB, digest: &str, tree: &[TreeEntry]) -> Result<(), Error> {
+    let mut key = String::from("tree/");
+    key.push_str(&digest);
+    let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
+    insert_document(db, key.as_bytes(), &encoded)
+}
+
+///
+/// Retrieve the tree by the given digest, returning None if not found.
+///
+pub fn get_tree(db: &DB, digest: &str) -> Result<Option<Vec<TreeEntry>>, Error> {
+    let mut key = String::from("tree/");
+    key.push_str(digest);
+    let encoded = get_document(db, key.as_bytes())?;
+    match encoded {
+        Some(dbv) => {
+            let serde_result: Vec<TreeEntry> = serde_cbor::from_slice(&dbv)?;
             Ok(Some(serde_result))
         },
         None => Ok(None)

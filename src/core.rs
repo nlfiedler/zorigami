@@ -1,15 +1,18 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use failure::{err_msg, Error};
 use fastcdc;
 use gpgme;
 use hex;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File};
+use std::fmt;
+use std::fs::{self, File, FileType};
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use tar::{Archive, Builder, Header};
 use ulid::Ulid;
 use uuid::Uuid;
@@ -288,6 +291,195 @@ pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
         },
     );
     Ok(())
+}
+
+//
+// Below are type definitions that live here to avoid circular dependencies with
+// the database module, which for the sake of convenience, handles these types.
+//
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum EntryType {
+    /// Anything that is not a directory or symlink.
+    FILE,
+    /// Definitely a directory.
+    DIR,
+    /// Definitely a symbolic link.
+    SYMLINK
+}
+
+impl From<FileType> for EntryType {
+    fn from(fstype: FileType) -> Self {
+        if fstype.is_dir() {
+            EntryType::DIR
+        } else if fstype.is_symlink() {
+            EntryType::SYMLINK
+        } else {
+            // default to file type for everything else
+            EntryType::FILE
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TreeEntry {
+    /// Name of the file, directory, or symbolic link.
+    #[serde(rename = "nm")]
+    pub name: String,
+    /// Basic type of the entry, e.g. file or directory.
+    #[serde(rename = "ty")]
+    pub fstype: EntryType,
+    /// Unix file mode of the entry.
+    #[serde(rename = "mo")]
+    pub mode: Option<u32>,
+    /// Unix user identifier
+    #[serde(rename = "ui")]
+    pub uid: Option<u32>,
+    /// Name of the owning user.
+    #[serde(rename = "us")]
+    pub user: Option<String>,
+    /// Unix group identifier
+    #[serde(rename = "gi")]
+    pub gid: Option<u32>,
+    /// Name of the owning group.
+    #[serde(rename = "gr")]
+    pub group: Option<String>,
+    /// Created time.
+    #[serde(rename = "ct")]
+    pub ctime: SystemTime,
+    /// Modified time.
+    #[serde(rename = "mt")]
+    pub mtime: SystemTime,
+    /// SHA1 for trees, SHA256 for files, base64 encoded value for symlinks.
+    #[serde(rename = "re")]
+    pub reference: Option<String>,
+}
+
+impl TreeEntry {
+    ///
+    /// Create an instance of `TreeEntry` based on the given path.
+    ///
+    pub fn new(path: &Path) -> Result<Self, Error> {
+        let attr = fs::metadata(path)?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| err_msg("invalid file path"))?;
+        Ok(Self {
+            name: name.to_str().unwrap().to_owned(),
+            fstype: EntryType::from(attr.file_type()),
+            mode: None,
+            uid: None,
+            gid: None,
+            user: None,
+            group: None,
+            ctime: attr.created()?,
+            mtime: attr.modified()?,
+            reference: None,
+        })
+    }
+
+    ///
+    /// Add the reference property.
+    ///
+    pub fn reference(mut self, reference: &str) -> Self {
+        self.reference = Some(reference.to_owned());
+        self
+    }
+
+    ///
+    /// Set the `mode` property to either the Unix file mode or the
+    /// Windows attributes value, both of which are u32 values.
+    ///
+    pub fn mode(mut self, path: &Path) -> Self {
+        // Either mode or file attributes will be sufficient to cover all
+        // supported systems; the "permissions" field only has one bit,
+        // read-only, and that is already in mode and file attributes.
+        #[cfg(target_family = "unix")]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let result = fs::metadata(path);
+            if let Ok(meta) = result {
+                self.mode = Some(meta.mode());
+            }
+        }
+        #[cfg(target_family = "windows")]
+        {
+            use std::os::windows::prelude::*;
+            let result = fs::metadata(path);
+            if let Ok(meta) = result {
+                self.mode = Some(metadata.file_attributes());
+            }
+        }
+        self
+    }
+
+    ///
+    /// Set the user and group ownership of the given path. At present, only
+    /// Unix systems have this information.
+    ///
+    pub fn owners(mut self, path: &Path) -> Self {
+        #[cfg(target_family = "unix")]
+        {
+            use libc;
+            use std::ffi::CStr;
+            use std::os::unix::fs::MetadataExt;
+            let result = fs::metadata(path);
+            if let Ok(meta) = result {
+                self.uid = Some(meta.uid());
+                self.gid = Some(meta.gid());
+                // get the user name
+                let c_str = unsafe {
+                    let passwd = libc::getpwuid(meta.uid());
+                    let c_buf = (*passwd).pw_name;
+                    CStr::from_ptr(c_buf)
+                };
+                let str_slice: &str = c_str.to_str().unwrap();
+                self.user = Some(str_slice.to_owned());
+                // get the group name
+                let c_str = unsafe {
+                    let group = libc::getgrgid(meta.gid());
+                    let c_buf = (*group).gr_name;
+                    CStr::from_ptr(c_buf)
+                };
+                let str_slice: &str = c_str.to_str().unwrap();
+                self.group = Some(str_slice.to_owned());
+            }
+        }
+        self
+    }
+}
+
+impl fmt::Display for TreeEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ctime = self
+            .ctime
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mtime = self
+            .mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let refr: &str = match &self.reference {
+            Some(v) => v.as_ref(),
+            None => "none",
+        };
+        // Format in a manner similar to git tree entries; this forms part of
+        // the digest value for the overall tree, so it should remain relatively
+        // stable over time.
+        write!(
+            f,
+            "{:o} {}:{} {} {} {} {}",
+            self.mode.unwrap_or(0),
+            self.uid.unwrap_or(0),
+            self.gid.unwrap_or(0),
+            ctime,
+            mtime,
+            refr,
+            self.name
+        )
+    }
 }
 
 #[cfg(test)]
@@ -598,5 +790,35 @@ mod tests {
             result.packfile.unwrap(),
             "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
         );
+    }
+
+    #[test]
+    fn test_tree_entry() {
+        let path = Path::new("./test/fixtures/lorem-ipsum.txt");
+        let result = TreeEntry::new(&path);
+        assert!(result.is_ok());
+        let mut entry = result.unwrap();
+        entry = entry.reference("sha1-cafebabe");
+        entry = entry.mode(&path);
+        entry = entry.owners(&path);
+        match &entry.reference {
+            Some(v) => assert_eq!(v, "sha1-cafebabe"),
+            None => assert!(false)
+        }
+        assert_eq!(entry.name, "lorem-ipsum.txt");
+        #[cfg(target_family = "unix")]
+        {
+            assert_eq!(entry.mode.unwrap(), 0o100_644);
+            assert!(entry.uid.is_some());
+            assert!(entry.gid.is_some());
+            assert!(entry.user.is_some());
+            assert!(entry.group.is_some());
+        }
+        let formed = format!("{}", &entry);
+        // formatted tree entry should look something like this:
+        // "100644 501:20 1545525436 1545525436 sha1-cafebabe lorem-ipsum.txt"
+        assert!(formed.contains("100644"));
+        assert!(formed.contains("sha1-cafebabe"));
+        assert!(formed.contains("lorem-ipsum.txt"));
     }
 }
