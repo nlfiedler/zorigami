@@ -7,6 +7,7 @@ use gpgme;
 use hex;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::{self, File, FileType};
 use std::io;
@@ -305,7 +306,7 @@ pub enum EntryType {
     /// Definitely a directory.
     DIR,
     /// Definitely a symbolic link.
-    SYMLINK
+    SYMLINK,
 }
 
 impl From<FileType> for EntryType {
@@ -321,6 +322,9 @@ impl From<FileType> for EntryType {
     }
 }
 
+///
+/// A `TreeEntry` represents a file, directory, or symbolic link within a tree.
+///
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TreeEntry {
     /// Name of the file, directory, or symbolic link.
@@ -353,6 +357,11 @@ pub struct TreeEntry {
     /// SHA1 for trees, SHA256 for files, base64 encoded value for symlinks.
     #[serde(rename = "re")]
     pub reference: Option<String>,
+    /// Set of extended file attributes, if any. The key is the name of the
+    /// extended attribute, and the value is the database key for the value
+    /// already recorded. Each unique value is meant to be stored once.
+    #[serde(rename = "xa")]
+    pub xattrs: HashMap<String, String>,
 }
 
 impl TreeEntry {
@@ -375,6 +384,7 @@ impl TreeEntry {
             ctime: attr.created()?,
             mtime: attr.modified()?,
             reference: None,
+            xattrs: HashMap::new(),
         })
     }
 
@@ -478,6 +488,153 @@ impl fmt::Display for TreeEntry {
             mtime,
             refr,
             self.name
+        )
+    }
+}
+
+///
+/// A Tree represents a set of file system entries, including files,
+/// directories, symbolic links, etc.
+///
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Tree {
+    /// Set of entries making up this tree.
+    #[serde(rename = "en")]
+    pub entries: Vec<TreeEntry>,
+    /// The number of files contained within this tree and its subtrees.
+    #[serde(skip)]
+    pub file_count: u32,
+}
+
+impl Tree {
+    ///
+    /// Create an instance of Tree that takes ownership of the given entries.
+    /// The entries will be sorted by name, hence must be mutable.
+    ///
+    pub fn new(mut entries: Vec<TreeEntry>, file_count: u32) -> Self {
+        entries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+        Self {
+            entries,
+            file_count,
+        }
+    }
+
+    ///
+    /// Calculate the SHA1 digest for the tree.
+    ///
+    pub fn checksum(&self) -> String {
+        let formed = format!("{}", self);
+        checksum_data_sha1(formed.as_bytes())
+    }
+}
+
+impl fmt::Display for Tree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for entry in &self.entries {
+            writeln!(f, "{}", entry)?;
+        }
+        Ok(())
+    }
+}
+
+///
+/// A `Snapshot` represents a single backup, either in progress or completed.
+/// It references a possible parent snapshot, and a tree representing the files
+/// contained in the snapshot.
+///
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Snapshot {
+    /// Digest of the parent snapshot, if any.
+    #[serde(rename = "pa")]
+    pub parent: Option<String>,
+    /// Time when the snapshot was first created.
+    #[serde(rename = "st")]
+    pub start_time: SystemTime,
+    /// Time when the snapshot completed its upload. Will be `None` until
+    /// the backup has completed.
+    #[serde(rename = "et")]
+    pub end_time: Option<SystemTime>,
+    /// Total number of files contained in this snapshot.
+    #[serde(rename = "fc")]
+    pub file_count: u32,
+    /// Digest of the root tree for this snapshot.
+    #[serde(rename = "tr")]
+    pub tree: String,
+}
+
+impl Snapshot {
+    ///
+    /// Construct a new `Snapshot` for the given tree, and optional parent.
+    /// Use the builder-style functions to set the other fields.
+    ///
+    pub fn new(parent: Option<String>, tree: String) -> Self {
+        Self {
+            parent,
+            start_time: SystemTime::UNIX_EPOCH,
+            end_time: None,
+            file_count: 0,
+            tree
+        }
+    }
+
+    /// Add the start_time property.
+    pub fn start_time(mut self, start_time: SystemTime) -> Self {
+        self.start_time = start_time;
+        self
+    }
+
+    /// Add the end_time property.
+    pub fn end_time(mut self, end_time: SystemTime) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// Add the file_count property.
+    pub fn file_count(mut self, file_count: u32) -> Self {
+        self.file_count = file_count;
+        self
+    }
+
+    ///
+    /// Calculate the SHA1 digest for the snapshot.
+    ///
+    pub fn checksum(&self) -> String {
+        let formed = format!("{}", self);
+        checksum_data_sha1(formed.as_bytes())
+    }
+}
+
+pub static NULL_SHA1: &str = "sha1-0000000000000000000000000000000000000000";
+
+impl fmt::Display for Snapshot {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let stime = self
+            .start_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let etime = self
+            .end_time
+            .unwrap_or(std::time::UNIX_EPOCH)
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        // Format in a manner similar to git commit entries; this forms part of
+        // the digest value for the snapshot, so it should remain relatively
+        // stable over time.
+        let parent = if self.parent.is_none() {
+            NULL_SHA1
+        } else {
+            self.parent.as_ref().unwrap()
+        };
+        write!(
+            f,
+            "tree {}\nparent {}\nnumFiles {}\nstartTime {}\nendTime {}",
+            self.tree,
+            parent,
+            self.file_count,
+            stime,
+            etime
         )
     }
 }
@@ -803,7 +960,7 @@ mod tests {
         entry = entry.owners(&path);
         match &entry.reference {
             Some(v) => assert_eq!(v, "sha1-cafebabe"),
-            None => assert!(false)
+            None => assert!(false),
         }
         assert_eq!(entry.name, "lorem-ipsum.txt");
         #[cfg(target_family = "unix")]
@@ -820,5 +977,27 @@ mod tests {
         assert!(formed.contains("100644"));
         assert!(formed.contains("sha1-cafebabe"));
         assert!(formed.contains("lorem-ipsum.txt"));
+    }
+
+    #[test]
+    fn test_tree() {
+        let path = Path::new("./test/fixtures/lorem-ipsum.txt");
+        let result = TreeEntry::new(&path);
+        let mut entry1 = result.unwrap();
+        entry1 = entry1.reference("sha1-b14c4909c3fce2483cd54b328ada88f5ef5e8f96");
+        let path = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let result = TreeEntry::new(&path);
+        let mut entry2 = result.unwrap();
+        entry2 = entry2.reference("sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
+        let tree = Tree::new(vec![entry1, entry2], 2);
+        let sha1 = tree.checksum();
+        // with file timestamps, the digest always changes
+        assert!(sha1.starts_with("sha1-"));
+        assert_eq!(sha1.len(), 45);
+        let mut entries = tree.entries.iter();
+        assert_eq!(entries.next().unwrap().name, "SekienAkashita.jpg");
+        assert_eq!(entries.next().unwrap().name, "lorem-ipsum.txt");
+        assert!(entries.next().is_none());
+        assert_eq!(tree.file_count, 2);
     }
 }

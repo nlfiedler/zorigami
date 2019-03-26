@@ -280,10 +280,10 @@
 ****** [[https://github.com/pyfisch/cbor][pyfisch/cbor]]; CBOR is an internet standard (RFC 7049)
 ****** [[https://github.com/3Hren/msgpack-rust][3Hren/msgpack-rust]] is not actively developed
 ***** DONE Use serde ~rename~ feature to make short field names
-***** TODO write functions for insert/get tree
-***** TODO write functions for insert/get snapshot
+***** DONE write functions for insert/get tree
+***** DONE write functions for insert/get snapshot
 ***** TODO write functions for insert/get configuration
-***** TODO write functions for insert/get xattr
+***** DONE write functions for insert/get xattr
 ***** TODO write functions for insert/get file
 ***** DONE write functions for insert/get chunk
 ***** TODO write functions for insert/get pack
@@ -311,16 +311,32 @@
 ***** maybe use =Arc= and =Mutex= to manage concurrent access
 **** TODO convert engine code
 ***** DONE insert trees into the database using their checksum
-***** TODO translate =processPath()=
-***** TODO translate =scantree()=
+***** DONE translate =processPath()=
+***** DONE change code and tests to use =Tree= instead of slice of =TreeEntry=
+***** DONE make =Tree= serializable with file count
+***** DONE translate =scantree()=
+***** DONE model the snapshot structure, add db operations
+***** DONE translate =takeSnapshot()=
+***** TODO =TreeEntry.reference= should be a sum type to represent link, tree, file
+****** should probably not be an =Option= either
+***** TODO seems like checksums and digests should be a struct
+****** TODO implement =TryFrom= for =&str=
+****** TODO derive =Eq= trait
+****** TODO what about ordering?
 ***** TODO find differences between snapshots
+***** TODO write integ tests for =take_snapshot()=
+****** TODO with xattrs, if supported
+****** TODO with symlinks
+****** TODO with nested directories
+****** TODO with files changing to dirs, links, vice versa
 ***** TODO open database instance and pass =DB= around
 ***** TODO produce pack files from changes
 ***** TODO restore files from backup
-***** TODO insert xattr records for each tree entry (see =process_path()=)
+***** TODO should struct fields be =pub= or not and have accessors?
+***** DONE insert xattr records for each tree entry (see =process_path()=)
 **** TODO Look for calls to =unwrap= that maybe should be converted to errors
 e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
-**** TODO Chunk serde should skip digest and database must set digest using key (minus prefix)
+**** TODO Chunk serde should skip digest and database must set digest using key (sans =chunk/= prefix)
 **** TODO Update =README.md= wrt to Rust and requirements
 **** TODO Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=

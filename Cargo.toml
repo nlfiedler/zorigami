@@ -39,6 +39,7 @@ tar = "0.4.20"
 uuid = { version = "0.7", features = ["v5"] }
 ulid = "0.3.1"
 warp = "0.1.13"
+xattr = "0.2.2"
 
 [dev-dependencies]
 lazy_static = "1.2.0"
