@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-use super::core::{Chunk, Tree, Snapshot};
+use super::core::{Checksum, Chunk, Snapshot, Tree};
 use failure::Error;
 use rocksdb::{DBVector, DB};
 use std::path::Path;
@@ -47,8 +47,7 @@ impl Database {
     /// not already exist. Chunks with the same digest are assumed to be identical.
     ///
     pub fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
-        let mut key = String::from("chunk/");
-        key.push_str(&chunk.digest);
+        let key = format!("chunk/{}", chunk.digest);
         let encoded: Vec<u8> = serde_cbor::to_vec(&chunk)?;
         self.insert_document(key.as_bytes(), &encoded)
     }
@@ -56,9 +55,8 @@ impl Database {
     ///
     /// Retrieve the chunk by the given digest, returning None if not found.
     ///
-    pub fn get_chunk(&self, digest: &str) -> Result<Option<Chunk>, Error> {
-        let mut key = String::from("chunk/");
-        key.push_str(digest);
+    pub fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error> {
+        let key = format!("chunk/{}", digest);
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
@@ -73,9 +71,8 @@ impl Database {
     /// Insert the extended file attributes value into the database. Values with
     /// the same digest are assumed to be identical.
     ///
-    pub fn insert_xattr(&self, digest: &str, xattr: &[u8]) -> Result<(), Error> {
-        let mut key = String::from("xattr/");
-        key.push_str(&digest);
+    pub fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
+        let key = format!("xattr/{}", digest);
         self.insert_document(key.as_bytes(), xattr)
     }
 
@@ -83,9 +80,8 @@ impl Database {
     /// Retrieve the extended attributes by the given digest, returning None if
     /// not found.
     ///
-    pub fn get_xattr(&self, digest: &str) -> Result<Option<Vec<u8>>, Error> {
-        let mut key = String::from("xattr/");
-        key.push_str(&digest);
+    pub fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
+        let key = format!("xattr/{}", digest);
         let result = self.get_document(key.as_bytes())?;
         Ok(result.map(|v| v.to_vec()))
     }
@@ -95,9 +91,8 @@ impl Database {
     /// key (plus a fixed prefix for namespacing). Trees with the same digest are
     /// assumed to be identical.
     ///
-    pub fn insert_tree(&self, digest: &str, tree: &Tree) -> Result<(), Error> {
-        let mut key = String::from("tree/");
-        key.push_str(&digest);
+    pub fn insert_tree(&self, digest: &Checksum, tree: &Tree) -> Result<(), Error> {
+        let key = format!("tree/{}", digest);
         let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
         self.insert_document(key.as_bytes(), &encoded)
     }
@@ -105,9 +100,8 @@ impl Database {
     ///
     /// Retrieve the tree by the given digest, returning None if not found.
     ///
-    pub fn get_tree(&self, digest: &str) -> Result<Option<Tree>, Error> {
-        let mut key = String::from("tree/");
-        key.push_str(digest);
+    pub fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
+        let key = format!("tree/{}", digest);
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
@@ -123,9 +117,8 @@ impl Database {
     /// key (plus a fixed prefix for namespacing). Snapshots with the same digest are
     /// assumed to be identical.
     ///
-    pub fn insert_snapshot(&self, digest: &str, snapshot: &Snapshot) -> Result<(), Error> {
-        let mut key = String::from("snapshot/");
-        key.push_str(&digest);
+    pub fn insert_snapshot(&self, digest: &Checksum, snapshot: &Snapshot) -> Result<(), Error> {
+        let key = format!("snapshot/{}", digest);
         let encoded: Vec<u8> = serde_cbor::to_vec(&snapshot)?;
         self.insert_document(key.as_bytes(), &encoded)
     }
@@ -133,9 +126,8 @@ impl Database {
     ///
     /// Retrieve the snapshot by the given digest, returning None if not found.
     ///
-    pub fn get_snapshot(&self, digest: &str) -> Result<Option<Snapshot>, Error> {
-        let mut key = String::from("snapshot/");
-        key.push_str(digest);
+    pub fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
+        let key = format!("snapshot/{}", digest);
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {

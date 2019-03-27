@@ -45,20 +45,17 @@ fn run_store_tests(store: &Store) {
     let bucket = generate_bucket_name(&unique_id);
 
     // create a pack file with a checksum name
-    let chunks = [Chunk::new(
-        "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
-        0,
-        3129,
-    )
-    .filepath(Path::new("./test/fixtures/lorem-ipsum.txt"))];
+    let chnksum = Checksum::SHA256("095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f".to_owned());
+    let chunks = [Chunk::new(chnksum, 0, 3129).filepath(Path::new("./test/fixtures/lorem-ipsum.txt"))];
     let outdir = tempdir().unwrap();
     let ptmpfile = outdir.path().join("pack.tar");
     let digest = pack_chunks(&chunks[..], &ptmpfile).unwrap();
-    let packfile = outdir.path().join(&digest);
+    let digest_sum = &digest.to_string();
+    let packfile = outdir.path().join(&digest_sum);
     std::fs::rename(&ptmpfile, &packfile).unwrap();
 
     // store the pack file on the remote side
-    let result = store.store_pack(&packfile, &bucket, &digest);
+    let result = store.store_pack(&packfile, &bucket, &digest_sum);
     assert!(result.is_ok());
 
     // check for bucket(s) being present; may be more from previous runs
@@ -73,14 +70,14 @@ fn run_store_tests(store: &Store) {
     assert!(result.is_ok());
     let listing = result.unwrap();
     assert!(!listing.is_empty());
-    assert!(listing.contains(&digest));
+    assert!(listing.contains(&digest_sum));
 
     // retrieve the file and verify by checksum
-    let result = store.retrieve_pack(&bucket, &digest, &ptmpfile);
+    let result = store.retrieve_pack(&bucket, &digest_sum, &ptmpfile);
     assert!(result.is_ok());
     let sha256 = checksum_file(&ptmpfile);
     assert_eq!(
-        sha256.unwrap(),
+        sha256.unwrap().to_string(),
         "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
     );
 

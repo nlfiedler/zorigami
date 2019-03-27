@@ -317,12 +317,14 @@
 ***** DONE translate =scantree()=
 ***** DONE model the snapshot structure, add db operations
 ***** DONE translate =takeSnapshot()=
-***** TODO =TreeEntry.reference= should be a sum type to represent link, tree, file
+***** DONE seems like checksums and digests should be a struct
+****** DONE =TreeEntry.xattrs= should be map of String to Checksum
+****** DONE derive =Eq= trait
+****** DONE remove =checksum_from_bytes()=
+****** DONE remove =bytes_from_checksum()=
+***** DONE Why implement =Default= for =Chunk=?
+***** DONE =TreeEntry.reference= should be a sum type to represent link, tree, file
 ****** should probably not be an =Option= either
-***** TODO seems like checksums and digests should be a struct
-****** TODO implement =TryFrom= for =&str=
-****** TODO derive =Eq= trait
-****** TODO what about ordering?
 ***** TODO find differences between snapshots
 ***** TODO write integ tests for =take_snapshot()=
 ****** TODO with xattrs, if supported

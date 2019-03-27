@@ -17,9 +17,9 @@ use xattr;
 ///
 pub fn take_snapshot(
     basepath: &Path,
-    parent: Option<String>,
+    parent: Option<core::Checksum>,
     dbase: &Database,
-) -> Result<String, Error> {
+) -> Result<core::Checksum, Error> {
     let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase)?;
     let mut snap = core::Snapshot::new(parent, tree.checksum());
@@ -58,15 +58,18 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
             let scan = scan_tree(&path, dbase)?;
             file_count += scan.file_count;
             let digest = scan.checksum();
-            let ent = process_path(&path, &digest, dbase)?;
+            let tref = core::TreeReference::TREE(digest);
+            let ent = process_path(&path, tref, dbase)?;
             entries.push(ent);
         } else if file_type.is_symlink() {
-            let reference = read_link(&path)?;
-            let ent = process_path(&path, &reference, dbase)?;
+            let link = read_link(&path)?;
+            let tref = core::TreeReference::LINK(link);
+            let ent = process_path(&path, tref, dbase)?;
             entries.push(ent);
         } else if file_type.is_file() {
             let digest = core::checksum_file(&path)?;
-            let ent = process_path(&path, &digest, dbase)?;
+            let tref = core::TreeReference::FILE(digest);
+            let ent = process_path(&path, tref, dbase)?;
             entries.push(ent);
             file_count += 1;
         }
@@ -81,14 +84,12 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
 /// Create a `TreeEntry` record for this path, which may include storing
 /// extended attributes in the database.
 ///
-#[allow(dead_code)]
 fn process_path(
     fullpath: &Path,
-    reference: &str,
+    reference: core::TreeReference,
     dbase: &Database,
 ) -> Result<core::TreeEntry, Error> {
-    let mut entry = core::TreeEntry::new(fullpath)?;
-    entry = entry.reference(reference);
+    let mut entry = core::TreeEntry::new(fullpath, reference)?;
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
     if xattr::SUPPORTED_PLATFORM {
@@ -110,6 +111,7 @@ fn process_path(
 
 #[cfg(test)]
 mod tests {
+    use super::core::*;
     use super::*;
     use std::collections::HashMap;
     #[cfg(target_family = "unix")]
@@ -137,6 +139,7 @@ mod tests {
 
     #[test]
     fn test_checksum_tree() {
+        let tref1 = TreeReference::FILE(Checksum::SHA1("cafebabe".to_owned()));
         let entry1 = core::TreeEntry {
             name: String::from("madoka.kaname"),
             fstype: core::EntryType::FILE,
@@ -147,9 +150,10 @@ mod tests {
             group: Some(String::from("group")),
             ctime: SystemTime::UNIX_EPOCH,
             mtime: SystemTime::UNIX_EPOCH,
-            reference: Some(String::from("sha1-cafebabe")),
+            reference: tref1,
             xattrs: HashMap::new(),
         };
+        let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
         let entry2 = core::TreeEntry {
             name: String::from("homura.akemi"),
             fstype: core::EntryType::FILE,
@@ -160,9 +164,10 @@ mod tests {
             group: Some(String::from("group")),
             ctime: SystemTime::UNIX_EPOCH,
             mtime: SystemTime::UNIX_EPOCH,
-            reference: Some(String::from("sha1-babecafe")),
+            reference: tref2,
             xattrs: HashMap::new(),
         };
+        let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
         let entry3 = core::TreeEntry {
             name: String::from("sayaka.miki"),
             fstype: core::EntryType::FILE,
@@ -173,7 +178,7 @@ mod tests {
             group: Some(String::from("group")),
             ctime: SystemTime::UNIX_EPOCH,
             mtime: SystemTime::UNIX_EPOCH,
-            reference: Some(String::from("sha1-babebabe")),
+            reference: tref3,
             xattrs: HashMap::new(),
         };
         let tree = core::Tree::new(vec![entry1, entry2, entry3], 2);
@@ -181,12 +186,15 @@ mod tests {
         // 644 100:100 1552877320 1552877320 sha1-babecafe homura.akemi
         // 644 100:100 1552877320 1552877320 sha1-cafebabe madoka.kaname
         // 644 100:100 1552877320 1552877320 sha1-babebabe sayaka.miki
-        let result = format!("{}", tree);
+        let result = tree.to_string();
         // results should be sorted lexicographically by filename
         assert!(result.find("homura").unwrap() < result.find("madoka").unwrap());
         assert!(result.find("madoka").unwrap() < result.find("sayaka").unwrap());
         let sum = tree.checksum();
         // because the timestamps are always 0, sha1 is always the same
-        assert_eq!(sum, "sha1-5eca657fc20877aa2e75b90b902c55ee69a95139");
+        assert_eq!(
+            sum.to_string(),
+            "sha1-086f6c6ba3e51882c4fd55fc9733316c4ee1b15d"
+        );
     }
 }

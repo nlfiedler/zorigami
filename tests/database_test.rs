@@ -35,16 +35,14 @@ fn test_insert_document() {
 #[test]
 fn test_chunk_records() {
     // test no such record
-    let result = DBASE.get_chunk("sha256-cafebabedeadbeef");
+    let missingsum = Checksum::SHA1("cafebabedeadbeef".to_owned());
+    let result = DBASE.get_chunk(&missingsum);
     assert!(result.is_ok());
     assert!(result.unwrap().is_none());
     // test the happy path
-    let chunk = Chunk::new(
-        "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1",
-        0,
-        40000,
-    )
-    .packfile("sha1-bc1a3198db79036e56b30f0ab307cee55e845907");
+    let chnksum = Checksum::SHA256("ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned());
+    let packsum = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
+    let chunk = Chunk::new(chnksum, 0, 40000).packfile(packsum);
     assert!(chunk.packfile.is_some());
     assert!(DBASE.insert_chunk(&chunk).is_ok());
     let result = DBASE.get_chunk(&chunk.digest);
@@ -53,7 +51,7 @@ fn test_chunk_records() {
     assert!(record.is_some());
     let actual: Chunk = record.unwrap();
     assert_eq!(
-        actual.digest,
+        actual.digest.to_string(),
         "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
     );
     assert_eq!(actual.offset, 0);
@@ -61,13 +59,14 @@ fn test_chunk_records() {
     assert!(actual.filepath.is_none());
     assert!(actual.packfile.is_some());
     assert_eq!(
-        actual.packfile.unwrap(),
+        actual.packfile.unwrap().to_string(),
         "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
     );
 }
 
 #[test]
 fn test_tree_records() {
+    let tref1 = TreeReference::FILE(Checksum::SHA1("cafebabe".to_owned()));
     let entry1 = TreeEntry {
         name: String::from("regu"),
         fstype: EntryType::FILE,
@@ -78,9 +77,10 @@ fn test_tree_records() {
         group: Some(String::from("group")),
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
-        reference: Some(String::from("sha1-cafebabe")),
+        reference: tref1,
         xattrs: HashMap::new()
     };
+    let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
     let entry2 = TreeEntry {
         name: String::from("riko"),
         fstype: EntryType::FILE,
@@ -91,9 +91,10 @@ fn test_tree_records() {
         group: Some(String::from("group")),
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
-        reference: Some(String::from("sha1-babecafe")),
+        reference: tref2,
         xattrs: HashMap::new()
     };
+    let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
     let entry3 = TreeEntry {
         name: String::from("nanachi"),
         fstype: EntryType::FILE,
@@ -104,7 +105,7 @@ fn test_tree_records() {
         group: Some(String::from("group")),
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
-        reference: Some(String::from("sha1-babebabe")),
+        reference: tref3,
         xattrs: HashMap::new()
     };
     let tree = Tree::new(vec![entry1, entry2, entry3], 3);
