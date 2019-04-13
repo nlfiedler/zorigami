@@ -16,7 +16,7 @@ static DB_PATH: &str = "test/tmp/database/rocksdb";
 lazy_static! {
     static ref DBASE: Database = {
         // clear the old test data, otherwise it is very confusing
-        fs::remove_dir_all(DB_PATH).unwrap();
+        let _ = fs::remove_dir_all(DB_PATH);
         Database::new(Path::new(DB_PATH)).unwrap()
     };
 }
@@ -40,7 +40,9 @@ fn test_chunk_records() {
     assert!(result.is_ok());
     assert!(result.unwrap().is_none());
     // test the happy path
-    let chnksum = Checksum::SHA256("ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned());
+    let chnksum = Checksum::SHA256(
+        "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
+    );
     let packsum = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
     let chunk = Chunk::new(chnksum, 0, 40000).packfile(packsum);
     assert!(chunk.packfile.is_some());
@@ -78,7 +80,7 @@ fn test_tree_records() {
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
         reference: tref1,
-        xattrs: HashMap::new()
+        xattrs: HashMap::new(),
     };
     let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
     let entry2 = TreeEntry {
@@ -92,7 +94,7 @@ fn test_tree_records() {
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
         reference: tref2,
-        xattrs: HashMap::new()
+        xattrs: HashMap::new(),
     };
     let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
     let entry3 = TreeEntry {
@@ -106,7 +108,7 @@ fn test_tree_records() {
         ctime: SystemTime::UNIX_EPOCH,
         mtime: SystemTime::UNIX_EPOCH,
         reference: tref3,
-        xattrs: HashMap::new()
+        xattrs: HashMap::new(),
     };
     let tree = Tree::new(vec![entry1, entry2, entry3], 3);
     let sum = tree.checksum();
@@ -128,15 +130,33 @@ fn test_tree_records() {
 
 #[test]
 fn test_prefix_counting() {
-    assert!(DBASE.insert_document(b"punk/cafebabe", b"madoka magic").is_ok());
-    assert!(DBASE.insert_document(b"punk/deadbeef", b"made in abyss").is_ok());
-    assert!(DBASE.insert_document(b"punk/cafed00d", b"houseki no kuni").is_ok());
-    assert!(DBASE.insert_document(b"punk/1badb002", b"eureka seven").is_ok());
-    assert!(DBASE.insert_document(b"punk/abadbabe", b"last exile").is_ok());
-    assert!(DBASE.insert_document(b"kree/cafebabe", b"hibeke! euphonium").is_ok());
-    assert!(DBASE.insert_document(b"kree/deadbeef", b"flip flappers").is_ok());
-    assert!(DBASE.insert_document(b"kree/abadbabe", b"koe no katachi").is_ok());
-    assert!(DBASE.insert_document(b"kree/cafefeed", b"toradora!").is_ok());
+    assert!(DBASE
+        .insert_document(b"punk/cafebabe", b"madoka magic")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"punk/deadbeef", b"made in abyss")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"punk/cafed00d", b"houseki no kuni")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"punk/1badb002", b"eureka seven")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"punk/abadbabe", b"last exile")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"kree/cafebabe", b"hibeke! euphonium")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"kree/deadbeef", b"flip flappers")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"kree/abadbabe", b"koe no katachi")
+        .is_ok());
+    assert!(DBASE
+        .insert_document(b"kree/cafefeed", b"toradora!")
+        .is_ok());
     let result = DBASE.count_prefix("punk");
     assert!(result.is_ok());
     let count: usize = result.unwrap();

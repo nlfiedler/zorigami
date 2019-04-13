@@ -325,16 +325,16 @@
 ***** DONE Why implement =Default= for =Chunk=?
 ***** DONE =TreeEntry.reference= should be a sum type to represent link, tree, file
 ****** should probably not be an =Option= either
-***** TODO find differences between snapshots
+***** DONE implement =walk_tree()=
+***** TODO implement =find_changed_files()=
 ***** TODO write integ tests for =take_snapshot()=
 ****** TODO with xattrs, if supported
 ****** TODO with symlinks
 ****** TODO with nested directories
 ****** TODO with files changing to dirs, links, vice versa
+***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
-***** TODO produce pack files from changes
-***** TODO restore files from backup
-***** TODO should struct fields be =pub= or not and have accessors?
+***** TODO implement =restore_file()=
 ***** DONE insert xattr records for each tree entry (see =process_path()=)
 **** TODO Look for calls to =unwrap= that maybe should be converted to errors
 e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
@@ -374,6 +374,9 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 ***** TODO restore files from backup
 **** TODO set up web framework
 **** TODO set up GraphQL server
+*** TODO Should use =walkdir= crate to traverse directory structure
+**** handles crossing devices
+**** handles symlink loops
 *** TODO Could replace uses of =hex= with =format!("{:x}", ...)=
 *** TODO Document the database schema
 **** [[http://cbor.io][RocksDB]] key/value store
@@ -417,6 +420,8 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO Restore multiple files efficiently
 **** TODO Restore a directory tree efficiently
 *** TODO Detect file deletion during backup, mark file record as skipped
+*** TODO Detect and prune stale snapshots that never completely uploaded
+**** Stale snapshots exist in the database but are not referenced elsewhere
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 *** TODO Restore the backup database

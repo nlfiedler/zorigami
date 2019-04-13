@@ -69,6 +69,15 @@ impl Checksum {
     }
 }
 
+impl Clone for Checksum {
+    fn clone(&self) -> Self {
+        match self {
+            Checksum::SHA1(sum) => Checksum::SHA1(String::from(sum.as_ref())),
+            Checksum::SHA256(sum) => Checksum::SHA256(String::from(sum.as_ref())),
+        }
+    }
+}
+
 impl fmt::Display for Checksum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -289,11 +298,6 @@ pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
     Ok(())
 }
 
-//
-// Below are type definitions that live here to avoid circular dependencies with
-// the database module, which for the sake of convenience, handles these types.
-//
-
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EntryType {
     /// Anything that is not a directory or symlink.
@@ -352,6 +356,15 @@ impl TreeReference {
         match *self {
             TreeReference::FILE(_) => true,
             _ => false,
+        }
+    }
+
+    /// Return the checksum for this reference, if possible.
+    pub fn checksum(&self) -> Option<Checksum> {
+        match self {
+            TreeReference::TREE(sum) => Some(sum.clone()),
+            TreeReference::FILE(sum) => Some(sum.clone()),
+            _ => None,
         }
     }
 }
