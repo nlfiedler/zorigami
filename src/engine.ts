@@ -471,7 +471,7 @@ export async function* findChangedFiles(
         if (modeToType(entry2.mode) === FileType.DIR) {
           // tree: add every file under it to 'added'
           yield* addAllFilesUnder(path.join(basedir, entry2.name), entry2.reference)
-        } else {
+        } else if (modeToType(entry2.mode) === FileType.REG) {
           yield [path.join(basedir, entry2.name), entry2.reference]
         }
         index2++
