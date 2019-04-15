@@ -12,7 +12,7 @@ use std::time::SystemTime;
 use zorigami::core::*;
 use zorigami::database::*;
 
-static DB_PATH: &str = "test/tmp/database/rocksdb";
+static DB_PATH: &str = "tmp/test/database/rocksdb";
 lazy_static! {
     static ref DBASE: Database = {
         // clear the old test data, otherwise it is very confusing

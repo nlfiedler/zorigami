@@ -54,38 +54,176 @@ impl ChangedFile {
 /// Created by calling `find_changed_files()` with the checksum for
 /// two snapshots, one earlier and the other later.
 ///
-pub struct ChangedFilesIter {
+pub struct ChangedFilesIter<'a> {
+    /// Reference to Database for fetching records.
+    dbase: &'a Database,
     /// Queue of pending paths to visit, where the path is relative, the first
-    /// checksum is the left tree (earlier), and the second is the right tree
-    /// (later).
-    queue: Vec<(PathBuf, core::Tree, core::Tree)>,
+    /// checksum is the left tree (earlier in time), and the second is the right
+    /// tree (later in time).
+    queue: VecDeque<(PathBuf, core::Checksum, core::Checksum)>,
+    /// Nested iterator for visiting an entire new subdirectory.
+    walker: Option<TreeWalker<'a>>,
+    /// Current path being visited.
+    path: Option<PathBuf>,
+    /// Left tree currently being visited.
+    left_tree: Option<core::Tree>,
     /// Position within left tree currently being iterated.
     left_idx: usize,
+    /// Right tree currently being visited.
+    right_tree: Option<core::Tree>,
     /// Position within right tree currently being iterated.
     right_idx: usize,
 }
 
-impl ChangedFilesIter {
-    fn new(left_tree: core::Tree, right_tree: core::Tree) -> Self {
-        let queue = vec![(PathBuf::from("."), left_tree, right_tree)];
+impl<'a> ChangedFilesIter<'a> {
+    fn new(dbase: &'a Database, left_tree: core::Checksum, right_tree: core::Checksum) -> Self {
+        let mut queue = VecDeque::new();
+        queue.push_back((PathBuf::from("."), left_tree, right_tree));
         Self {
+            dbase,
             queue,
+            walker: None,
+            path: None,
+            left_tree: None,
             left_idx: 0,
+            right_tree: None,
             right_idx: 0,
         }
     }
 }
 
-impl Iterator for ChangedFilesIter {
+impl<'a> Iterator for ChangedFilesIter<'a> {
     type Item = Result<ChangedFile, Error>;
 
     fn next(&mut self) -> Option<Result<ChangedFile, Error>> {
-        // TODO: how to do the yield* in Rust?
-        //       breadth-first nested iterator (TreeWalker)
-        // TODO: write the TreeWalker iterator first
-        //       convert addAllFilesUnder() to TreeWalker, uses queue for breadth-first traversal
-        // TODO: write unit tests for the tree walker
-        // TODO: convert the rest of findChangedFiles()
+        // loop until we produce a result for the caller
+        loop {
+            // if we are iterating on a new subtree, return the next entry
+            if let Some(iter) = self.walker.as_mut() {
+                let opt = iter.next();
+                if opt.is_some() {
+                    return opt;
+                }
+                // inner iterator is done, carry on with the next step
+                self.walker.take();
+            }
+            // is there a left and right tree? iterate on that
+            if self.left_tree.is_some() && self.right_tree.is_some() {
+                let left_tree = self.left_tree.as_ref().unwrap();
+                let right_tree = self.right_tree.as_ref().unwrap();
+                while self.left_idx < left_tree.entries.len()
+                    && self.right_idx < right_tree.entries.len()
+                {
+                    let base = self.path.as_ref().unwrap();
+                    let left_entry = &left_tree.entries[self.left_idx];
+                    let right_entry = &right_tree.entries[self.right_idx];
+                    if left_entry.name < right_entry.name {
+                        // file or directory has been removed, nothing to do
+                        self.left_idx += 1;
+                    } else if left_entry.name > right_entry.name {
+                        // file or directory has been added
+                        self.right_idx += 1;
+                        if right_entry.fstype.is_dir() {
+                            // a new tree: add every file contained therein
+                            let mut path = PathBuf::from(base);
+                            path.push(&right_entry.name);
+                            let sum = right_entry.reference.checksum().unwrap();
+                            self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
+                        } else if right_entry.fstype.is_file() {
+                            // return the file
+                            let sum = right_entry.reference.checksum().unwrap();
+                            let mut path = PathBuf::from(base);
+                            path.push(&right_entry.name);
+                            let changed = ChangedFile::new(&path, sum);
+                            return Some(Ok(changed));
+                        }
+                    } else if left_entry.reference != right_entry.reference {
+                        // they have the same name but differ somehow
+                        self.left_idx += 1;
+                        self.right_idx += 1;
+                        let left_is_dir = left_entry.fstype.is_dir();
+                        let left_is_file = left_entry.fstype.is_file();
+                        let left_is_link = left_entry.fstype.is_link();
+                        let right_is_dir = right_entry.fstype.is_dir();
+                        let right_is_file = right_entry.fstype.is_file();
+                        if left_is_dir && right_is_dir {
+                            // tree A & B: add both trees to the queue
+                            let left_sum = left_entry.reference.checksum().unwrap();
+                            let right_sum = right_entry.reference.checksum().unwrap();
+                            let mut path = PathBuf::from(base);
+                            path.push(&left_entry.name);
+                            self.queue.push_back((path, left_sum, right_sum));
+                        } else if (left_is_file || left_is_dir || left_is_link) && right_is_file {
+                            // new file or a changed file
+                            let sum = right_entry.reference.checksum().unwrap();
+                            let mut path = PathBuf::from(base);
+                            path.push(&right_entry.name);
+                            let changed = ChangedFile::new(&path, sum);
+                            return Some(Ok(changed));
+                        } else if (left_is_file || left_is_link) && right_is_dir {
+                            // now a directory, add everything under it
+                            let mut path = PathBuf::from(base);
+                            path.push(&right_entry.name);
+                            let sum = right_entry.reference.checksum().unwrap();
+                            self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
+                        }
+                    // ignore everything else
+                    } else {
+                        // they are the same
+                        self.left_idx += 1;
+                        self.right_idx += 1;
+                    }
+                }
+                // catch everything else in the new snapshot
+                while self.right_idx < right_tree.entries.len() {
+                    let base = self.path.as_ref().unwrap();
+                    let right_entry = &right_tree.entries[self.right_idx];
+                    self.right_idx += 1;
+                    if right_entry.fstype.is_dir() {
+                        // a new tree: add every file contained therein
+                        let mut path = PathBuf::from(base);
+                        path.push(&right_entry.name);
+                        let sum = right_entry.reference.checksum().unwrap();
+                        self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
+                    } else if right_entry.fstype.is_file() {
+                        // return the file
+                        let sum = right_entry.reference.checksum().unwrap();
+                        let mut path = PathBuf::from(base);
+                        path.push(&right_entry.name);
+                        let changed = ChangedFile::new(&path, sum);
+                        return Some(Ok(changed));
+                    }
+                }
+            }
+            // Either we just started or we finished these trees, pop the queue
+            // to get the next set and loop around.
+            if let Some((base, left_sum, right_sum)) = self.queue.pop_front() {
+                // dequeue the next entry, fetch the tree
+                let result = self.dbase.get_tree(&left_sum);
+                if result.is_err() {
+                    return Some(Err(err_msg(format!("failed to get tree: {:?}", left_sum))));
+                }
+                let opt = result.unwrap();
+                if opt.is_none() {
+                    return Some(Err(err_msg(format!("missing tree: {:?}", left_sum))));
+                }
+                self.left_tree = opt;
+                self.left_idx = 0;
+                let result = self.dbase.get_tree(&right_sum);
+                if result.is_err() {
+                    return Some(Err(err_msg(format!("failed to get tree: {:?}", right_sum))));
+                }
+                let opt = result.unwrap();
+                if opt.is_none() {
+                    return Some(Err(err_msg(format!("missing tree: {:?}", right_sum))));
+                }
+                self.right_tree = opt;
+                self.right_idx = 0;
+                self.path = Some(base);
+            } else {
+                break;
+            }
+        }
         None
     }
 }
@@ -106,29 +244,12 @@ pub fn find_changed_files(
     let snap1doc = dbase
         .get_snapshot(&snapshot1)?
         .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snapshot1)))?;
-    let tree1doc = dbase
-        .get_tree(&snap1doc.tree)?
-        .ok_or_else(|| err_msg(format!("missing tree: {:?}", snap1doc.tree)))?;
     let snap2doc = dbase
         .get_snapshot(&snapshot2)?
         .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snapshot2)))?;
-    let tree2doc = dbase
-        .get_tree(&snap2doc.tree)?
-        .ok_or_else(|| err_msg(format!("missing tree: {:?}", snap2doc.tree)))?;
-    Ok(ChangedFilesIter::new(tree1doc, tree2doc))
+    Ok(ChangedFilesIter::new(dbase, snap1doc.tree, snap2doc.tree))
 }
 
-// async function* addAllFilesUnder(basepath: string, ref: string): AsyncIterableIterator<[string, string]> {
-//   const tree = await database.getTree(ref)
-//   const entries: TreeEntry[] = tree.entries
-//   for (let entry of entries) {
-//     if (modeToType(entry.mode) === FileType.DIR) {
-//       yield* addAllFilesUnder(path.join(basepath, entry.name), entry.reference)
-//     } else if (modeToType(entry.mode) === FileType.REG) {
-//       yield [path.join(basepath, entry.name), entry.reference]
-//     }
-//   }
-// }
 pub struct TreeWalker<'a> {
     /// Reference to Database for fetching records.
     dbase: &'a Database,
@@ -144,9 +265,9 @@ pub struct TreeWalker<'a> {
 }
 
 impl<'a> TreeWalker<'a> {
-    pub fn new(dbase: &'a Database, basepath: &str, tree: core::Checksum) -> Self {
+    pub fn new(dbase: &'a Database, basepath: &Path, tree: core::Checksum) -> Self {
         let mut queue = VecDeque::new();
-        queue.push_back((PathBuf::from(basepath), tree));
+        queue.push_back((basepath.to_owned(), tree));
         Self {
             dbase,
             queue,
@@ -230,6 +351,7 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
     let mut file_count = 0;
     for entry in fs::read_dir(basepath)? {
         let entry = entry?;
+        // DirEntry.metadata() does not follow symlinks
         let file_type = entry.metadata()?.file_type();
         let path = entry.path();
         if file_type.is_dir() {

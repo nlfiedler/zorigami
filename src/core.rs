@@ -308,6 +308,32 @@ pub enum EntryType {
     SYMLINK,
 }
 
+impl EntryType {
+    /// Return `true` if this entry is for a file.
+    pub fn is_file(&self) -> bool {
+        match *self {
+            EntryType::FILE => true,
+            _ => false,
+        }
+    }
+
+    /// Return `true` if this entry is for a directory.
+    pub fn is_dir(&self) -> bool {
+        match *self {
+            EntryType::DIR => true,
+            _ => false,
+        }
+    }
+
+    /// Return `true` if this entry is for a symbolic link.
+    pub fn is_link(&self) -> bool {
+        match *self {
+            EntryType::SYMLINK => true,
+            _ => false,
+        }
+    }
+}
+
 impl From<FileType> for EntryType {
     fn from(fstype: FileType) -> Self {
         if fstype.is_dir() {
@@ -364,6 +390,14 @@ impl TreeReference {
         match self {
             TreeReference::TREE(sum) => Some(sum.clone()),
             TreeReference::FILE(sum) => Some(sum.clone()),
+            _ => None,
+        }
+    }
+
+    /// Return the base64 encoded value for this symlink, if possible.
+    pub fn symlink(&self) -> Option<String> {
+        match self {
+            TreeReference::LINK(link) => Some(link.clone()),
             _ => None,
         }
     }
@@ -426,7 +460,7 @@ impl TreeEntry {
     /// Create an instance of `TreeEntry` based on the given path.
     ///
     pub fn new(path: &Path, reference: TreeReference) -> Result<Self, Error> {
-        let attr = fs::metadata(path)?;
+        let attr = fs::symlink_metadata(path)?;
         let name = path
             .file_name()
             .ok_or_else(|| err_msg("invalid file path"))?;
@@ -456,7 +490,7 @@ impl TreeEntry {
         #[cfg(target_family = "unix")]
         {
             use std::os::unix::fs::MetadataExt;
-            let result = fs::metadata(path);
+            let result = fs::symlink_metadata(path);
             if let Ok(meta) = result {
                 self.mode = Some(meta.mode());
             }
@@ -464,7 +498,7 @@ impl TreeEntry {
         #[cfg(target_family = "windows")]
         {
             use std::os::windows::prelude::*;
-            let result = fs::metadata(path);
+            let result = fs::symlink_metadata(path);
             if let Ok(meta) = result {
                 self.mode = Some(metadata.file_attributes());
             }
@@ -482,7 +516,7 @@ impl TreeEntry {
             use libc;
             use std::ffi::CStr;
             use std::os::unix::fs::MetadataExt;
-            let result = fs::metadata(path);
+            let result = fs::symlink_metadata(path);
             if let Ok(meta) = result {
                 self.uid = Some(meta.uid());
                 self.gid = Some(meta.gid());

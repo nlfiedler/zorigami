@@ -326,16 +326,18 @@
 ***** DONE =TreeEntry.reference= should be a sum type to represent link, tree, file
 ****** should probably not be an =Option= either
 ***** DONE implement =walk_tree()=
-***** TODO implement =find_changed_files()=
+***** DONE implement =find_changed_files()=
 ***** TODO write integ tests for =take_snapshot()=
-****** TODO with xattrs, if supported
-****** TODO with symlinks
+****** DONE with xattrs, if supported
+****** DONE with symlinks
 ****** TODO with nested directories
 ****** TODO with files changing to dirs, links, vice versa
+***** TODO can remove the =test_tree_walker= test, it will be redundant
 ***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
 ***** TODO implement =restore_file()=
 ***** DONE insert xattr records for each tree entry (see =process_path()=)
+**** TODO Use =tmp/test= instead of =test/tmp= in test code
 **** TODO Look for calls to =unwrap= that maybe should be converted to errors
 e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO Chunk serde should skip digest and database must set digest using key (sans =chunk/= prefix)

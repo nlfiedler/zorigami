@@ -1,24 +1,13 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-#[macro_use]
-extern crate lazy_static;
-
 use failure::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
 use zorigami::engine::*;
-
-static DB_PATH: &str = "test/tmp/engine/rocksdb";
-lazy_static! {
-    static ref DBASE: Database = {
-        // clear the old test data, otherwise it is very confusing
-        let _ = fs::remove_dir_all(DB_PATH);
-        Database::new(Path::new(DB_PATH)).unwrap()
-    };
-}
 
 fn make_entry(pathname: &str, digest: &str) -> TreeEntry {
     let path = Path::new(pathname);
@@ -29,6 +18,10 @@ fn make_entry(pathname: &str, digest: &str) -> TreeEntry {
 
 #[test]
 fn test_tree_walker() {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/walker";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
     // create the a/b/c tree object
     let entry1 = make_entry(
         "./test/fixtures/lorem-ipsum.txt",
@@ -40,7 +33,7 @@ fn test_tree_walker() {
     );
     let tree = Tree::new(vec![entry1, entry2], 2);
     let tree_c = tree.checksum();
-    let result = DBASE.insert_tree(&tree_c, &tree);
+    let result = dbase.insert_tree(&tree_c, &tree);
     assert!(result.is_ok());
 
     // create the a/b tree object
@@ -58,7 +51,7 @@ fn test_tree_walker() {
     );
     let tree = Tree::new(vec![entry_c, entry1, entry2], 4);
     let tree_b = tree.checksum();
-    let result = DBASE.insert_tree(&tree_b, &tree);
+    let result = dbase.insert_tree(&tree_b, &tree);
     assert!(result.is_ok());
 
     // create the a tree object
@@ -75,11 +68,11 @@ fn test_tree_walker() {
     );
     let tree = Tree::new(vec![entry_b, entry1, entry2], 6);
     let tree_a = tree.checksum();
-    let result = DBASE.insert_tree(&tree_a, &tree);
+    let result = dbase.insert_tree(&tree_a, &tree);
     assert!(result.is_ok());
 
     // walk the tree starting at a
-    let walker = TreeWalker::new(&DBASE, "a", tree_a);
+    let walker = TreeWalker::new(&dbase, Path::new("a"), tree_a);
     let collected: Vec<Result<ChangedFile, Error>> = walker.collect();
     assert_eq!(collected.len(), 6);
     assert_eq!(
@@ -108,7 +101,7 @@ fn test_tree_walker() {
     );
 
     // walk the tree starting at a/b
-    let walker = TreeWalker::new(&DBASE, "b", tree_b);
+    let walker = TreeWalker::new(&dbase, Path::new("b"), tree_b);
     let collected: Vec<Result<ChangedFile, Error>> = walker.collect();
     assert_eq!(collected.len(), 4);
     assert_eq!(
@@ -129,7 +122,7 @@ fn test_tree_walker() {
     );
 
     // walk the tree starting at a/b/c
-    let walker = TreeWalker::new(&DBASE, "c", tree_c);
+    let walker = TreeWalker::new(&dbase, Path::new("c"), tree_c);
     let collected: Vec<Result<ChangedFile, Error>> = walker.collect();
     assert_eq!(collected.len(), 2);
     assert_eq!(
@@ -141,3 +134,107 @@ fn test_tree_walker() {
         PathBuf::from("c/lorem-ipsum.txt")
     );
 }
+
+#[test]
+fn test_basic_snapshots() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/snapshots/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let basepath = "tmp/test/engine/snapshots/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    assert!(fs::create_dir_all(basepath).is_ok());
+    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert!(snapshot1.parent.is_none());
+    assert_eq!(snapshot1.file_count, 1);
+    // make a change to the data set
+    let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
+    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    if xattr::SUPPORTED_PLATFORM {
+        xattr::set(&dest, "me.fiedlers.test", b"foobar")?;
+    }
+    // take another snapshot
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
+    assert!(snapshot2.parent.is_some());
+    assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
+    assert_eq!(snapshot2.file_count, 2);
+    assert_ne!(snap1_sha, snap2_sha);
+    assert_ne!(snapshot1.tree, snapshot2.tree);
+    // compute the differences
+    let iter = find_changed_files(&dbase, snap1_sha, snap2_sha)?;
+    let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].is_ok());
+    // should see new file record
+    assert_eq!(
+        changed[0].as_ref().unwrap().digest,
+        Checksum::SHA256(String::from(
+            "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+        ))
+    );
+    // ensure extended attributes are stored in database
+    if xattr::SUPPORTED_PLATFORM {
+        let tree = dbase.get_tree(&snapshot2.tree)?.unwrap();
+        let entries: Vec<&TreeEntry> = tree
+            .entries
+            .iter()
+            .filter(|e| !e.xattrs.is_empty())
+            .collect();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].xattrs.contains_key("me.fiedlers.test"));
+        let x_value = dbase
+            .get_xattr(&entries[0].xattrs["me.fiedlers.test"])?
+            .unwrap();
+        assert_eq!(x_value, b"foobar");
+    }
+    Ok(())
+}
+
+#[test]
+fn test_snapshot_symlinks() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/symlinks/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let basepath = "tmp/test/engine/symlinks/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    assert!(fs::create_dir_all(basepath).is_ok());
+    let dest: PathBuf = [basepath, "meaningless"].iter().collect();
+    let target = "link_target_is_meaningless";
+    // cfg! macro doesn't work for this case it seems so we have this
+    // redundant use of the cfg directive instead
+    {
+        #[cfg(target_family = "unix")]
+        use std::os::unix::fs;
+        #[cfg(target_family = "windows")]
+        use std::os::windows::fs;
+        #[cfg(target_family = "unix")]
+        fs::symlink(&target, &dest)?;
+        #[cfg(target_family = "windows")]
+        fs::symlink_file(&target, &dest)?;
+    }
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert!(snapshot1.parent.is_none());
+    assert_eq!(snapshot1.file_count, 0);
+    let tree = dbase.get_tree(&snapshot1.tree)?.unwrap();
+    // ensure the tree has exactly one symlink entry
+    let entries: Vec<&TreeEntry> = tree
+        .entries
+        .iter()
+        .filter(|e| e.reference.is_link())
+        .collect();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "meaningless");
+    let value = entries[0].reference.symlink().unwrap();
+    assert_eq!(value, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
+    Ok(())
+}
+
+// TODO: copy each of the tests from test/engine.ts that test findChangedFiles()
