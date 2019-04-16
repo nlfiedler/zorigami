@@ -327,12 +327,12 @@
 ****** should probably not be an =Option= either
 ***** DONE implement =walk_tree()=
 ***** DONE implement =find_changed_files()=
-***** TODO write integ tests for =take_snapshot()=
+***** DONE write integ tests for =take_snapshot()=
 ****** DONE with xattrs, if supported
 ****** DONE with symlinks
-****** TODO with nested directories
-****** TODO with files changing to dirs, links, vice versa
-***** TODO can remove the =test_tree_walker= test, it will be redundant
+****** DONE with nested directories
+****** DONE with files changing to dirs, links, vice versa
+***** DONE can remove the =test_tree_walker= test, it will be redundant
 ***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
 ***** TODO implement =restore_file()=
