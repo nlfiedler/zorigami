@@ -34,6 +34,7 @@ pub fn take_snapshot(
 ///
 /// Output from the `find_changed_files()` function.
 ///
+#[derive(Debug)]
 pub struct ChangedFile {
     /// Relative file path of the changed file.
     pub path: PathBuf,
@@ -96,7 +97,11 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
     type Item = Result<ChangedFile, Error>;
 
     fn next(&mut self) -> Option<Result<ChangedFile, Error>> {
-        // loop until we produce a result for the caller
+        //
+        // the flow is slightly complicated because we are sometimes nesting an
+        // iterator inside this iterator, so the control flow will break out of
+        // inner loops to return to this top loop
+        //
         loop {
             // if we are iterating on a new subtree, return the next entry
             if let Some(iter) = self.walker.as_mut() {
@@ -129,6 +134,8 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                             path.push(&right_entry.name);
                             let sum = right_entry.reference.checksum().unwrap();
                             self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
+                            // return to the main loop
+                            break;
                         } else if right_entry.fstype.is_file() {
                             // return the file
                             let sum = right_entry.reference.checksum().unwrap();
@@ -166,6 +173,8 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                             path.push(&right_entry.name);
                             let sum = right_entry.reference.checksum().unwrap();
                             self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
+                            // return to the main loop
+                            break;
                         }
                     // ignore everything else
                     } else {
@@ -174,8 +183,9 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                         self.right_idx += 1;
                     }
                 }
-                // catch everything else in the new snapshot
-                while self.right_idx < right_tree.entries.len() {
+                // catch everything else in the new snapshot as long as we do
+                // not have a nested iterator to process
+                while self.walker.is_none() && self.right_idx < right_tree.entries.len() {
                     let base = self.path.as_ref().unwrap();
                     let right_entry = &right_tree.entries[self.right_idx];
                     self.right_idx += 1;
@@ -194,6 +204,10 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                         return Some(Ok(changed));
                     }
                 }
+            }
+            if self.walker.is_some() {
+                // restart at the top when we have a subtree to iterate
+                continue;
             }
             // Either we just started or we finished these trees, pop the queue
             // to get the next set and loop around.

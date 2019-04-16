@@ -143,7 +143,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let dbase = Database::new(Path::new(db_path)).unwrap();
     let basepath = "tmp/test/engine/snapshots/fixtures";
     let _ = fs::remove_dir_all(basepath);
-    assert!(fs::create_dir_all(basepath).is_ok());
+    fs::create_dir_all(basepath)?;
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
     // take a snapshot of the test data
@@ -203,7 +203,7 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     let dbase = Database::new(Path::new(db_path)).unwrap();
     let basepath = "tmp/test/engine/symlinks/fixtures";
     let _ = fs::remove_dir_all(basepath);
-    assert!(fs::create_dir_all(basepath).is_ok());
+    fs::create_dir_all(basepath)?;
     let dest: PathBuf = [basepath, "meaningless"].iter().collect();
     let target = "link_target_is_meaningless";
     // cfg! macro doesn't work for this case it seems so we have this
@@ -234,6 +234,100 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     assert_eq!(entries[0].name, "meaningless");
     let value = entries[0].reference.symlink().unwrap();
     assert_eq!(value, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
+    Ok(())
+}
+
+#[test]
+fn test_snapshot_ordering() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/ordering/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let basepath = "tmp/test/engine/ordering/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let ccc: PathBuf = [basepath, "ccc", "ccc.txt"].iter().collect();
+    let mmm: PathBuf = [basepath, "mmm", "mmm.txt"].iter().collect();
+    let yyy: PathBuf = [basepath, "yyy", "yyy.txt"].iter().collect();
+    fs::create_dir(ccc.parent().unwrap())?;
+    fs::create_dir(mmm.parent().unwrap())?;
+    fs::create_dir(yyy.parent().unwrap())?;
+    fs::write(&ccc, b"crazy cat clawing chairs")?;
+    fs::write(&mmm, b"morose monkey munching muffins")?;
+    fs::write(&yyy, b"yellow yak yodeling")?;
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert_eq!(snapshot1.file_count, 3);
+    // add new files, change one file
+    let bbb: PathBuf = [basepath, "bbb", "bbb.txt"].iter().collect();
+    let nnn: PathBuf = [basepath, "nnn", "nnn.txt"].iter().collect();
+    let zzz: PathBuf = [basepath, "zzz", "zzz.txt"].iter().collect();
+    fs::create_dir(bbb.parent().unwrap())?;
+    fs::create_dir(nnn.parent().unwrap())?;
+    fs::create_dir(zzz.parent().unwrap())?;
+    fs::write(&bbb, b"blue baboons bouncing balls")?;
+    fs::write(&mmm, b"many mumbling mice moonlight")?;
+    fs::write(&nnn, b"neat newts gnawing noodles")?;
+    fs::write(&zzz, b"zebras riding on a zephyr")?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    // compute the differences
+    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
+    assert_eq!(changed.len(), 4);
+    // The changed mmm/mmm.txt file ends up last because its tree was changed
+    // and is pushed onto the queue, while the new entries are processed
+    // immediately before returning to the queue.
+    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./bbb/bbb.txt"));
+    assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./nnn/nnn.txt"));
+    assert_eq!(changed[2].as_ref().unwrap().path, Path::new("./zzz/zzz.txt"));
+    assert_eq!(changed[3].as_ref().unwrap().path, Path::new("./mmm/mmm.txt"));
+    // remove some files, change another
+    fs::remove_file(&bbb)?;
+    fs::remove_file(&yyy)?;
+    fs::write(&zzz, b"zippy zip ties zooming")?;
+    let snap3_sha = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase)?;
+    // compute the differences
+    let iter = find_changed_files(&dbase, snap2_sha, snap3_sha)?;
+    let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./zzz/zzz.txt"));
+    Ok(())
+}
+
+#[test]
+fn test_snapshot_types() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/types/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let basepath = "tmp/test/engine/types/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let ccc: PathBuf = [basepath, "ccc"].iter().collect();
+    let mmm: PathBuf = [basepath, "mmm", "mmm.txt"].iter().collect();
+    fs::create_dir(mmm.parent().unwrap())?;
+    fs::write(&ccc, b"crazy cat clawing chairs")?;
+    fs::write(&mmm, b"morose monkey munching muffins")?;
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert_eq!(snapshot1.file_count, 2);
+    // change files to dirs and vice versa
+    fs::remove_file(&ccc)?;
+    let ccc: PathBuf = [basepath, "ccc", "ccc.txt"].iter().collect();
+    let mmm: PathBuf = [basepath, "mmm"].iter().collect();
+    fs::create_dir(ccc.parent().unwrap())?;
+    fs::remove_dir_all(&mmm)?;
+    fs::write(&ccc, b"catastrophic catastrophes")?;
+    fs::write(&mmm, b"many mumbling mice moonlight")?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    // compute the differences
+    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
+    assert_eq!(changed.len(), 2);
+    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./ccc/ccc.txt"));
+    assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./mmm"));
     Ok(())
 }
 
