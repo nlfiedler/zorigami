@@ -45,7 +45,7 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
 /// The `Checksum` represents a hash digest for an object, such as a tree,
 /// snapshot, file, chunk, or pack file.
 ///
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
 pub enum Checksum {
     SHA1(String),
     SHA256(String),
@@ -75,6 +75,15 @@ impl Clone for Checksum {
             Checksum::SHA1(sum) => Checksum::SHA1(String::from(sum.as_ref())),
             Checksum::SHA256(sum) => Checksum::SHA256(String::from(sum.as_ref())),
         }
+    }
+}
+
+/// Useful for constructing a meaningless SHA1 value.
+pub static FORTY_ZEROS: &str = "0000000000000000000000000000000000000000";
+
+impl Default for Checksum {
+    fn default() -> Self {
+        Checksum::SHA1(String::from(FORTY_ZEROS))
     }
 }
 
@@ -122,7 +131,7 @@ pub fn checksum_file(infile: &Path) -> io::Result<Checksum> {
 }
 
 /// Some chunk of a file.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Chunk {
     /// The SHA256 checksum of the chunk, with algo prefix.
     #[serde(rename = "di")]
@@ -171,7 +180,7 @@ impl Chunk {
 /// algorithm. The given `size` is the desired average size in bytes for the
 /// chunks, but they may be between half and twice that size.
 ///
-pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
+pub fn find_file_chunks(infile: &Path, size: u64) -> io::Result<Vec<Chunk>> {
     let file = File::open(infile)?;
     let mmap = unsafe { MmapOptions::new().map(&file).expect("cannot create mmap?") };
     let avg_size = size as usize;
@@ -182,7 +191,9 @@ pub fn find_file_chunks(infile: &Path, size: u32) -> io::Result<Vec<Chunk>> {
     for entry in chunker {
         let end = entry.offset + entry.length;
         let chksum = checksum_data_sha256(&mmap[entry.offset..end]);
-        results.push(Chunk::new(chksum, entry.offset, entry.length))
+        let mut chunk = Chunk::new(chksum, entry.offset, entry.length);
+        chunk = chunk.filepath(infile);
+        results.push(chunk);
     }
     Ok(results)
 }
@@ -683,6 +694,7 @@ impl Snapshot {
     }
 }
 
+/// A SHA1 of all zeroes.
 pub static NULL_SHA1: &str = "sha1-0000000000000000000000000000000000000000";
 
 impl fmt::Display for Snapshot {
@@ -711,6 +723,75 @@ impl fmt::Display for Snapshot {
             "tree {}\nparent {}\nnumFiles {}\nstartTime {}\nendTime {}",
             self.tree, parent, self.file_count, stime, etime
         )
+    }
+}
+
+/// Type for database record of saved files.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SavedFile {
+    /// Digest of file at time of snapshot.
+    #[serde(skip)]
+    pub digest: Checksum,
+    /// Length of the file in bytes, or zero if `changed`.
+    #[serde(rename = "len")]
+    pub length: u64,
+    /// The set of the chunks contained in this file; will be empty if the
+    /// `changed` property is some value. There may be many of these for large
+    /// files, so they are represented compactly.
+    #[serde(rename = "cnx")]
+    pub chunks: Vec<(u64, Checksum)>,
+    /// Digest of file at time of backup, if different from `digest`.
+    #[serde(rename = "new")]
+    pub changed: Option<Checksum>,
+}
+
+impl SavedFile {
+    /// Create a new SavedFile to represent the given file and its chunks.
+    pub fn new(digest: Checksum, length: u64, chunks: Vec<(u64, Checksum)>) -> Self {
+        Self {
+            digest,
+            length,
+            chunks,
+            changed: None,
+        }
+    }
+
+    /// Set the changed property and reset certain other fields.
+    pub fn set_changed(mut self, digest: Checksum) -> Self {
+        self.changed = Some(digest);
+        self.length = 0;
+        self.chunks.clear();
+        self
+    }
+}
+
+/// Type for database record of saved packs.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SavedPack {
+    /// Digest of pack file.
+    #[serde(skip)]
+    pub digest: Checksum,
+    /// Remote bucket name.
+    #[serde(rename = "bu")]
+    pub bucket: String,
+    /// Remote object name (for AWS Glacier this will be the archive ID).
+    #[serde(rename = "ob")]
+    pub object: String,
+    /// Date/time of successful upload, for conflict resolution.
+    #[serde(rename = "tm")]
+    pub upload_time: SystemTime,
+}
+
+impl SavedPack {
+    /// Create a new SavedPack record using the given information. Assumes the
+    /// upload time is the current time.
+    pub fn new(digest: Checksum, bucket: &str, object: &str) -> Self {
+        Self {
+            digest,
+            bucket: bucket.to_owned(),
+            object: object.to_owned(),
+            upload_time: SystemTime::now(),
+        }
     }
 }
 

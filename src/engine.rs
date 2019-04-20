@@ -5,7 +5,8 @@ use super::core;
 use super::database::Database;
 use base64::encode;
 use failure::{err_msg, Error};
-use std::collections::VecDeque;
+use std::cmp;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -421,6 +422,247 @@ fn process_path(
         }
     }
     Ok(entry)
+}
+
+/// Builds pack files by splitting incoming files into chunks.
+pub struct PackBuilder<'a> {
+    /// Reference to Database for fetching records.
+    dbase: &'a Database,
+    /// Preferred size of pack files in bytes.
+    pack_size: u64,
+    /// Preferred size of chunks in bytes.
+    chunk_size: u64,
+    /// Map of file checksum to the chunks it contains that have not yet been
+    /// uploaded in a pack file.
+    file_chunks: HashMap<core::Checksum, Vec<core::Chunk>>,
+    /// Those chunks that have been packed using this builder.
+    packed_chunks: HashSet<core::Checksum>,
+    /// Those chunks that have been uploaded previously.
+    done_chunks: HashSet<core::Checksum>,
+}
+
+impl<'a> PackBuilder<'a> {
+    /// Create a new builder with the desired size.
+    pub fn new(dbase: &'a Database, pack_size: u64) -> Self {
+        // Use the pack size as a guide for determining the chunk sizes. Limit
+        // the size of chunks to something reasonable that will keep most files
+        // intact, but also allow for keeping pack files close to their desired
+        // size, whatever that might be.
+        let chunk_size = cmp::max(1_048_576, cmp::min(pack_size / 4, 4_194_304));
+        Self {
+            dbase,
+            pack_size,
+            chunk_size,
+            file_chunks: HashMap::new(),
+            packed_chunks: HashSet::new(),
+            done_chunks: HashSet::new(),
+        }
+    }
+
+    /// Override the calculated chunk size with a non-standard value. Primarily
+    /// used for testing with smaller files.
+    pub fn chunk_size(mut self, chunk_size: u64) -> Self {
+        self.chunk_size = chunk_size;
+        self
+    }
+
+    /// Return number of files in this pack, primarily for testing.
+    pub fn file_count(&self) -> usize {
+        self.file_chunks.len()
+    }
+
+    /// Return number of chunks in this pack, primarily for testing. This does
+    /// not consider done or packed chunks.
+    pub fn chunk_count(&self) -> usize {
+        let mut count: usize = 0;
+        for chunks in self.file_chunks.values() {
+            count += chunks.len();
+        }
+        count
+    }
+
+    /// Add the given file to this builder, splitting into chunks as necessary,
+    /// and using the database to find duplicate chunks.
+    pub fn add_file(&mut self, path: &Path, file_digest: core::Checksum) -> Result<(), Error> {
+        if self.file_chunks.contains_key(&file_digest) {
+            // do not bother processing a file we have already seen; once the
+            // files have been completely uploaded, we rely on the database to
+            // detect duplicate chunks
+            return Ok(());
+        }
+        let attr = fs::metadata(path)?;
+        let file_size = attr.len();
+        let chunks = if file_size > self.chunk_size {
+            // split large files into chunks, add chunks to the list
+            core::find_file_chunks(path, self.chunk_size)?
+        } else {
+            let mut chunk = core::Chunk::new(file_digest.clone(), 0, file_size as usize);
+            chunk = chunk.filepath(path);
+            vec![chunk]
+        };
+        // find chunks that have already been recorded in the database
+        chunks.iter().for_each(|chunk| {
+            let result = self.dbase.get_chunk(&chunk.digest);
+            if let Ok(value) = result {
+                if value.is_some() {
+                    self.done_chunks.insert(chunk.digest.clone());
+                }
+            }
+        });
+        // save the chunks under the digest of the file they came from to make
+        // it easy to save everything to the database later
+        self.file_chunks.insert(file_digest, chunks);
+        Ok(())
+    }
+
+    /// Return true if this builder has chunks to pack.
+    pub fn has_chunks(&self) -> bool {
+        !self.file_chunks.is_empty()
+    }
+
+    /// If the builder has not files and chunks, then clear the cache of
+    /// "packed" and "done" chunks to conserve space.
+    pub fn clear_cache(&mut self) {
+        if self.file_chunks.is_empty() {
+            self.packed_chunks.clear();
+            self.done_chunks.clear();
+        }
+    }
+
+    /// Return true if this builder is ready to produce a pack.
+    pub fn is_full(&self) -> bool {
+        // This approach seemed better than tracking the size as a field, and
+        // possibly making a mistake and not realizing for a long time.
+        let mut total_size: u64 = 0;
+        for chunks in self.file_chunks.values() {
+            for chunk in chunks {
+                let already_done = self.done_chunks.contains(&chunk.digest);
+                let already_packed = self.packed_chunks.contains(&chunk.digest);
+                if !already_done && !already_packed {
+                    total_size += chunk.length as u64;
+                }
+            }
+        }
+        total_size > self.pack_size
+    }
+
+    /// Write a pack file to the given path. If nothing has been added to the
+    /// builder, then nothing is written and an empty pack is returned.
+    pub fn build_pack(&mut self, outfile: &Path) -> Result<Pack, Error> {
+        let mut pack: Pack = Default::default();
+        let mut bytes_packed: u64 = 0;
+        // while there are files to process and the pack is not too big...
+        while !self.file_chunks.is_empty() && bytes_packed < self.pack_size {
+            // get a random file from the map and start putting its chunks into
+            // the pack, ignoring any duplicates
+            let filesum = self.file_chunks.keys().take(1).next().unwrap().to_owned();
+            let mut chunks_processed = 0;
+            let chunks = &self.file_chunks[&filesum];
+            for chunk in chunks {
+                chunks_processed += 1;
+                let already_done = self.done_chunks.contains(&chunk.digest);
+                let already_packed = self.packed_chunks.contains(&chunk.digest);
+                if !already_done && !already_packed {
+                    pack.add_chunk(chunk.clone());
+                    self.packed_chunks.insert(chunk.digest.clone());
+                    bytes_packed += chunk.length as u64;
+                    if bytes_packed > self.pack_size {
+                        break;
+                    }
+                }
+            }
+            // if we successfully visited all of the chunks in this file,
+            // including duplicates, then this file is considered "done"
+            if chunks_processed == chunks.len() {
+                let chunks = self.file_chunks.remove(&filesum).unwrap();
+                pack.add_file(filesum, chunks);
+            }
+        }
+        if bytes_packed > 0 {
+            pack.build_pack(outfile)?;
+        }
+        Ok(pack)
+    }
+}
+
+/// Contains the results of building a pack, and provides functions for saving
+/// the results to the database.
+pub struct Pack {
+    /// Checksum of this pack file once it has been written.
+    digest: Option<core::Checksum>,
+    /// Those files that have been completed with this pack.
+    files: HashMap<core::Checksum, Vec<core::Chunk>>,
+    /// Those chunks that are contained in this pack.
+    chunks: Vec<core::Chunk>,
+}
+
+impl Pack {
+    /// Add a completed file to this pack.
+    pub fn add_file(&mut self, digest: core::Checksum, chunks: Vec<core::Chunk>) {
+        self.files.insert(digest, chunks);
+    }
+
+    /// Add a chunk to this pack.
+    pub fn add_chunk(&mut self, chunk: core::Chunk) {
+        self.chunks.push(chunk);
+    }
+
+    /// Return a reference to this pack's hash digest.
+    pub fn get_digest(&self) -> Option<&core::Checksum> {
+        self.digest.as_ref()
+    }
+
+    /// Write the chunks in this pack to the specified path.
+    pub fn build_pack(&mut self, outfile: &Path) -> Result<(), Error> {
+        let digest = core::pack_chunks(&self.chunks, outfile)?;
+        self.digest = Some(digest);
+        Ok(())
+    }
+
+    /// Record the results of building this pack to the database. This includes
+    /// the completed files, all chunks, and the pack itself.
+    pub fn record_completed(
+        &mut self,
+        dbase: &Database,
+        bucket: &str,
+        object: &str,
+    ) -> Result<(), Error> {
+        // massage the file/chunk data into database records and save
+        for (filesum, parts) in &self.files {
+            let mut length: u64 = 0;
+            let mut chunks: Vec<(u64, core::Checksum)> = Vec::new();
+            for chunk in parts {
+                length += chunk.length as u64;
+                chunks.push((chunk.offset as u64, chunk.digest.clone()));
+            }
+            let file = core::SavedFile::new(filesum.clone(), length, chunks);
+            dbase.insert_file(&file)?;
+        }
+        // save all of the chunks to the database; would have done this while
+        // processing the files, but cannot borrow the files map immutably and
+        // mutably at the same time
+        for chunks in self.files.values_mut() {
+            for chunk in chunks.iter_mut() {
+                // set the pack digest for each chunk record
+                chunk.packfile = Some(self.digest.as_ref().unwrap().clone());
+                dbase.insert_chunk(chunk)?;
+            }
+        }
+        // record the pack in the database
+        let pack = core::SavedPack::new(self.digest.as_ref().unwrap().clone(), bucket, object);
+        dbase.insert_pack(&pack)?;
+        Ok(())
+    }
+}
+
+impl Default for Pack {
+    fn default() -> Self {
+        Self {
+            digest: None,
+            files: HashMap::new(),
+            chunks: Vec::new(),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -284,9 +284,9 @@
 ***** DONE write functions for insert/get snapshot
 ***** TODO write functions for insert/get configuration
 ***** DONE write functions for insert/get xattr
-***** TODO write functions for insert/get file
+***** DONE write functions for insert/get file
 ***** DONE write functions for insert/get chunk
-***** TODO write functions for insert/get pack
+***** DONE write functions for insert/get pack
 ***** DONE work out how to support the counts of each type of document
 ***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 **** DONE get CDC working
@@ -333,6 +333,9 @@
 ****** DONE with nested directories
 ****** DONE with files changing to dirs, links, vice versa
 ***** DONE can remove the =test_tree_walker= test, it will be redundant
+***** DONE implement pack file builder, write unit tests
+***** TODO encrypt the pack files
+***** TODO implement the "dataset" type, write unit tests
 ***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
 ***** TODO implement =restore_file()=
@@ -380,6 +383,9 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** handles crossing devices
 **** handles symlink loops
 *** TODO Could replace uses of =hex= with =format!("{:x}", ...)=
+*** TODO Re-evaluate [[https://actix.rs][Actix]] to see if it is better than warp
+**** TODO Does it have a testing library or integration?
+**** TODO Does it integrate easily with Juniper?
 *** TODO Document the database schema
 **** [[http://cbor.io][RocksDB]] key/value store
 **** [[http://cbor.io][CBOR]] values
@@ -421,6 +427,8 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO Directory extended attributes
 **** TODO Restore multiple files efficiently
 **** TODO Restore a directory tree efficiently
+*** TODO Detect files changing between snapshot and pack building time
+**** use the =changed= record property to track this
 *** TODO Detect file deletion during backup, mark file record as skipped
 *** TODO Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere

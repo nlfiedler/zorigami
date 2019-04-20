@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-use super::core::{Checksum, Chunk, Snapshot, Tree};
+use super::core::{Checksum, Chunk, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use rocksdb::{DBVector, DB};
 use std::path::Path;
@@ -87,7 +87,7 @@ impl Database {
     }
 
     ///
-    /// Insert the a tree into the database, using the given digest as part of the
+    /// Insert the tree into the database, using the given digest as part of the
     /// key (plus a fixed prefix for namespacing). Trees with the same digest are
     /// assumed to be identical.
     ///
@@ -113,7 +113,7 @@ impl Database {
     }
 
     ///
-    /// Insert the a snapshot into the database, using the given digest as part of the
+    /// Insert the snapshot into the database, using the given digest as part of the
     /// key (plus a fixed prefix for namespacing). Snapshots with the same digest are
     /// assumed to be identical.
     ///
@@ -132,6 +132,58 @@ impl Database {
         match encoded {
             Some(dbv) => {
                 let serde_result: Snapshot = serde_cbor::from_slice(&dbv)?;
+                Ok(Some(serde_result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    ///
+    /// Insert the file into the database, using the given digest as part of the
+    /// key (plus a fixed prefix for namespacing). Files with the same digest are
+    /// assumed to be identical.
+    ///
+    pub fn insert_file(&self, file: &SavedFile) -> Result<(), Error> {
+        let key = format!("file/{}", file.digest);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&file)?;
+        self.insert_document(key.as_bytes(), &encoded)
+    }
+
+    ///
+    /// Retrieve the file by the given digest, returning None if not found.
+    ///
+    pub fn get_file(&self, digest: &Checksum) -> Result<Option<SavedFile>, Error> {
+        let key = format!("file/{}", digest);
+        let encoded = self.get_document(key.as_bytes())?;
+        match encoded {
+            Some(dbv) => {
+                let serde_result: SavedFile = serde_cbor::from_slice(&dbv)?;
+                Ok(Some(serde_result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    ///
+    /// Insert the pack into the database, using the given digest as part of the
+    /// key (plus a fixed prefix for namespacing). Packs with the same digest are
+    /// assumed to be identical.
+    ///
+    pub fn insert_pack(&self, pack: &SavedPack) -> Result<(), Error> {
+        let key = format!("pack/{}", pack.digest);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&pack)?;
+        self.insert_document(key.as_bytes(), &encoded)
+    }
+
+    ///
+    /// Retrieve the pack by the given digest, returning None if not found.
+    ///
+    pub fn get_pack(&self, digest: &Checksum) -> Result<Option<SavedPack>, Error> {
+        let key = format!("pack/{}", digest);
+        let encoded = self.get_document(key.as_bytes())?;
+        match encoded {
+            Some(dbv) => {
+                let serde_result: SavedPack = serde_cbor::from_slice(&dbv)?;
                 Ok(Some(serde_result))
             }
             None => Ok(None),

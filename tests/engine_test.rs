@@ -152,10 +152,22 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     // The changed mmm/mmm.txt file ends up last because its tree was changed
     // and is pushed onto the queue, while the new entries are processed
     // immediately before returning to the queue.
-    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./bbb/bbb.txt"));
-    assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./nnn/nnn.txt"));
-    assert_eq!(changed[2].as_ref().unwrap().path, Path::new("./zzz/zzz.txt"));
-    assert_eq!(changed[3].as_ref().unwrap().path, Path::new("./mmm/mmm.txt"));
+    assert_eq!(
+        changed[0].as_ref().unwrap().path,
+        Path::new("./bbb/bbb.txt")
+    );
+    assert_eq!(
+        changed[1].as_ref().unwrap().path,
+        Path::new("./nnn/nnn.txt")
+    );
+    assert_eq!(
+        changed[2].as_ref().unwrap().path,
+        Path::new("./zzz/zzz.txt")
+    );
+    assert_eq!(
+        changed[3].as_ref().unwrap().path,
+        Path::new("./mmm/mmm.txt")
+    );
     // remove some files, change another
     fs::remove_file(&bbb)?;
     fs::remove_file(&yyy)?;
@@ -165,7 +177,10 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     let iter = find_changed_files(&dbase, snap2_sha, snap3_sha)?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
-    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./zzz/zzz.txt"));
+    assert_eq!(
+        changed[0].as_ref().unwrap().path,
+        Path::new("./zzz/zzz.txt")
+    );
     Ok(())
 }
 
@@ -200,7 +215,10 @@ fn test_snapshot_types() -> Result<(), Error> {
     let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
-    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./ccc/ccc.txt"));
+    assert_eq!(
+        changed[0].as_ref().unwrap().path,
+        Path::new("./ccc/ccc.txt")
+    );
     assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./mmm"));
     Ok(())
 }
@@ -300,6 +318,116 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
     assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./bbb"));
-    assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./ccc/ccc.txt"));
+    assert_eq!(
+        changed[1].as_ref().unwrap().path,
+        Path::new("./ccc/ccc.txt")
+    );
+    Ok(())
+}
+
+#[test]
+fn test_pack_builder() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/builder/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let basepath = "tmp/test/engine/builder/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let mut builder = PackBuilder::new(&dbase, 65536);
+    builder = builder.chunk_size(16384);
+    assert_eq!(builder.has_chunks(), false);
+    assert_eq!(builder.is_full(), false);
+    let lorem_path = Path::new("test/fixtures/lorem-ipsum.txt");
+    let lorem_sha = checksum_file(&lorem_path)?;
+    builder.add_file(lorem_path, lorem_sha.clone())?;
+    let sekien_path = Path::new("test/fixtures/SekienAkashita.jpg");
+    let sekien_sha = checksum_file(&sekien_path)?;
+    builder.add_file(sekien_path, sekien_sha.clone())?;
+    let pack_file: PathBuf = [basepath, "pack.001"].iter().collect();
+    assert!(builder.has_chunks());
+    assert!(builder.is_full());
+    let mut pack = builder.build_pack(&pack_file)?;
+    pack.record_completed(&dbase, "bucket1", "object1")?;
+    // the builder should still have some chunks, but not be full either
+    assert!(builder.has_chunks());
+    assert_eq!(builder.is_full(), false);
+    // verify records in the database match expectations
+    let option = dbase.get_pack(pack.get_digest().unwrap())?;
+    assert!(option.is_some());
+    let saved_pack = option.unwrap();
+    assert_eq!(saved_pack.bucket, "bucket1");
+    assert_eq!(saved_pack.object, "object1");
+    // The large file will not have been completed yet, it is too large for the
+    // pack size that we set above; can't be sure about the small file, either.
+    let option = dbase.get_file(&sekien_sha)?;
+    assert!(option.is_none());
+    let mut pack = builder.build_pack(&pack_file)?;
+    pack.record_completed(&dbase, "bucket1", "object2")?;
+    // should be completely empty at this point
+    assert_eq!(builder.has_chunks(), false);
+    assert_eq!(builder.is_full(), false);
+    builder.clear_cache();
+    let option = dbase.get_pack(pack.get_digest().unwrap())?;
+    assert!(option.is_some());
+    let saved_pack = option.unwrap();
+    assert_eq!(saved_pack.bucket, "bucket1");
+    assert_eq!(saved_pack.object, "object2");
+    // the big file should be saved by now
+    let option = dbase.get_file(&sekien_sha)?;
+    assert!(option.is_some());
+    let saved_file = option.unwrap();
+    assert_eq!(saved_file.length, 109_466);
+    // the small file should also be saved
+    let option = dbase.get_file(&lorem_sha)?;
+    assert!(option.is_some());
+    let saved_file = option.unwrap();
+    assert_eq!(saved_file.length, 3_129);
+    Ok(())
+}
+
+#[test]
+fn test_pack_builder_empty() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/ebuilder/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let mut builder = PackBuilder::new(&dbase, 65536);
+    assert_eq!(builder.has_chunks(), false);
+    assert_eq!(builder.is_full(), false);
+    let pack_file = Path::new("pack.001");
+    // empty builder should not create a file or have a digest
+    let pack = builder.build_pack(&pack_file)?;
+    assert!(pack.get_digest().is_none());
+    assert_eq!(pack_file.exists(), false);
+    Ok(())
+}
+
+#[test]
+fn test_pack_builder_dupes() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/dbuilder/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let mut builder = PackBuilder::new(&dbase, 131_072);
+    builder = builder.chunk_size(16384);
+    assert_eq!(builder.file_count(), 0);
+    assert_eq!(builder.chunk_count(), 0);
+    // builder should ignore attempts to add files with the same checksum as
+    // have already been added to this builder prior to emptying into pack files
+    let lorem_path = Path::new("test/fixtures/lorem-ipsum.txt");
+    let lorem_sha = checksum_file(&lorem_path)?;
+    builder.add_file(lorem_path, lorem_sha.clone())?;
+    builder.add_file(lorem_path, lorem_sha.clone())?;
+    builder.add_file(lorem_path, lorem_sha.clone())?;
+    builder.add_file(lorem_path, lorem_sha.clone())?;
+    let sekien_path = Path::new("test/fixtures/SekienAkashita.jpg");
+    let sekien_sha = checksum_file(&sekien_path)?;
+    builder.add_file(sekien_path, sekien_sha.clone())?;
+    builder.add_file(sekien_path, sekien_sha.clone())?;
+    builder.add_file(sekien_path, sekien_sha.clone())?;
+    builder.add_file(sekien_path, sekien_sha.clone())?;
+    assert_eq!(builder.file_count(), 2);
+    assert_eq!(builder.chunk_count(), 7);
     Ok(())
 }
