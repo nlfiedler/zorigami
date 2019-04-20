@@ -795,6 +795,23 @@ impl SavedPack {
     }
 }
 
+/// Represents a directory tree that will be backed up according to a schedule,
+/// with pack files saved to a particular local or remote store.
+pub struct Dataset {
+    /// computer UUID for generating bucket names
+    unique_id: String,
+    /// local base path of dataset to be saved
+    basepath: PathBuf,
+    /// latest snapshot reference, if any
+    latest_snapshot: Option<Checksum>,
+    /// path for temporary pack building
+    workspace: PathBuf,
+    /// target size in bytes for pack files
+    pack_size: u64,
+    /// name of the store to contain pack files
+    store: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

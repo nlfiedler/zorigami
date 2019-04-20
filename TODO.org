@@ -410,6 +410,10 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 ** Phase 5
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
+*** TODO Enable configuring various overrides in a dataset
+**** schedule/frequency overrides
+**** file/dirctory ignore overrides
+**** storage overrides (e.g. `local` vs `aws`)
 *** TODO Support multiple roots per dataset
 *** TODO Verify checksum of downloaded packs during restore
 *** TODO Store database in a bucket named after the "computer UUID"
