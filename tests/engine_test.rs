@@ -347,7 +347,7 @@ fn test_pack_builder() -> Result<(), Error> {
     let pack_file: PathBuf = [basepath, "pack.001"].iter().collect();
     assert!(builder.has_chunks());
     assert!(builder.is_full());
-    let mut pack = builder.build_pack(&pack_file)?;
+    let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
     pack.record_completed(&dbase, "bucket1", "object1")?;
     // the builder should still have some chunks, but not be full either
     assert!(builder.has_chunks());
@@ -362,7 +362,7 @@ fn test_pack_builder() -> Result<(), Error> {
     // pack size that we set above; can't be sure about the small file, either.
     let option = dbase.get_file(&sekien_sha)?;
     assert!(option.is_none());
-    let mut pack = builder.build_pack(&pack_file)?;
+    let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
     pack.record_completed(&dbase, "bucket1", "object2")?;
     // should be completely empty at this point
     assert_eq!(builder.has_chunks(), false);
@@ -397,7 +397,7 @@ fn test_pack_builder_empty() -> Result<(), Error> {
     assert_eq!(builder.is_full(), false);
     let pack_file = Path::new("pack.001");
     // empty builder should not create a file or have a digest
-    let pack = builder.build_pack(&pack_file)?;
+    let pack = builder.build_pack(&pack_file, "keyboard cat")?;
     assert!(pack.get_digest().is_none());
     assert_eq!(pack_file.exists(), false);
     Ok(())

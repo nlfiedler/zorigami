@@ -546,9 +546,10 @@ impl<'a> PackBuilder<'a> {
         total_size > self.pack_size
     }
 
-    /// Write a pack file to the given path. If nothing has been added to the
-    /// builder, then nothing is written and an empty pack is returned.
-    pub fn build_pack(&mut self, outfile: &Path) -> Result<Pack, Error> {
+    /// Write a pack file to the given path, encrypting using OpenPGP with the
+    /// given passphrase. If nothing has been added to the builder, then nothing
+    /// is written and an empty pack is returned.
+    pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<Pack, Error> {
         let mut pack: Pack = Default::default();
         let mut bytes_packed: u64 = 0;
         // while there are files to process and the pack is not too big...
@@ -579,7 +580,7 @@ impl<'a> PackBuilder<'a> {
             }
         }
         if bytes_packed > 0 {
-            pack.build_pack(outfile)?;
+            pack.build_pack(outfile, passphrase)?;
         }
         Ok(pack)
     }
@@ -612,9 +613,14 @@ impl Pack {
         self.digest.as_ref()
     }
 
-    /// Write the chunks in this pack to the specified path.
-    pub fn build_pack(&mut self, outfile: &Path) -> Result<(), Error> {
+    /// Write the chunks in this pack to the specified path, encrypting using
+    /// OpenPGP with the given passphrase.
+    pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
         let digest = core::pack_chunks(&self.chunks, outfile)?;
+        let mut owtfile = outfile.to_path_buf();
+        owtfile.set_extension(".pgp");
+        core::encrypt_file(passphrase, outfile, &owtfile)?;
+        fs::rename(owtfile, outfile)?;
         self.digest = Some(digest);
         Ok(())
     }

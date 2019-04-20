@@ -334,7 +334,7 @@
 ****** DONE with files changing to dirs, links, vice versa
 ***** DONE can remove the =test_tree_walker= test, it will be redundant
 ***** DONE implement pack file builder, write unit tests
-***** TODO encrypt the pack files
+***** DONE encrypt the pack files
 ***** TODO implement the "dataset" type, write unit tests
 ***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
