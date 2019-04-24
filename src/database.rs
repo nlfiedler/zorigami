@@ -61,7 +61,8 @@ impl Database {
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
-                let serde_result: Chunk = serde_cbor::from_slice(&dbv)?;
+                let mut serde_result: Chunk = serde_cbor::from_slice(&dbv)?;
+                serde_result.digest = digest.clone();
                 Ok(Some(serde_result))
             }
             None => Ok(None),
@@ -158,7 +159,8 @@ impl Database {
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
-                let serde_result: SavedFile = serde_cbor::from_slice(&dbv)?;
+                let mut serde_result: SavedFile = serde_cbor::from_slice(&dbv)?;
+                serde_result.digest = digest.clone();
                 Ok(Some(serde_result))
             }
             None => Ok(None),
@@ -184,7 +186,8 @@ impl Database {
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
-                let serde_result: SavedPack = serde_cbor::from_slice(&dbv)?;
+                let mut serde_result: SavedPack = serde_cbor::from_slice(&dbv)?;
+                serde_result.digest = digest.clone();
                 Ok(Some(serde_result))
             }
             None => Ok(None),

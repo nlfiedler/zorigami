@@ -134,7 +134,7 @@ pub fn checksum_file(infile: &Path) -> io::Result<Checksum> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Chunk {
     /// The SHA256 checksum of the chunk, with algo prefix.
-    #[serde(rename = "di")]
+    #[serde(skip)]
     pub digest: Checksum,
     /// The byte offset of this chunk within the file.
     #[serde(rename = "of")]
@@ -1103,12 +1103,10 @@ mod tests {
         let encoded: Vec<u8> = serde_cbor::to_vec(&chunk).unwrap();
         // serde_json produces a string that is about 10% larger than CBOR,
         // and CBOR is a (pending) internet standard, making it a good choice
-        assert_eq!(encoded.len(), 139);
+        assert_eq!(encoded.len(), 62);
         let result: Chunk = serde_cbor::from_slice(&encoded).unwrap();
-        assert_eq!(
-            result.digest.to_string(),
-            "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
-        );
+        // checksum for skipped field is all zeros
+        assert_eq!(result.digest.to_string(), NULL_SHA1);
         assert_eq!(result.offset, 0);
         assert_eq!(result.length, 40000);
         assert!(result.packfile.is_some());

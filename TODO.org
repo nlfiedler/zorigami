@@ -214,12 +214,9 @@
 ****** DONE is =~= a sensible default base path for sftp? no must be =.=
 ***** DONE write integ tests for the save/load/list store functions
 ***** DONE write test for the local store implementation
-**** TODO Need to inject digest when deserializing objects from database
-***** TODO pack objects
-***** TODO file objects
-***** TODO add tests for that
-**** TODO Decide how to store "service provider" configuration
-***** maybe the store implementations get a database handle and read/write their own config
+**** DONE Need to inject digest when deserializing objects from database
+**** DONE Chunk serde should inject digest in database read
+**** DONE Decide how to store "service provider" configuration
 **** TODO consider approaches for managing the database instance
 ***** engine opens at start of backup procedure, drops when done
 ***** what about web server? does warp have state management?
@@ -258,7 +255,6 @@
 **** TODO Use =tmp/test= instead of =test/tmp= in test code
 **** TODO Look for calls to =unwrap= that maybe should be converted to errors
 e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
-**** TODO Chunk serde should skip digest and database must set digest using key (sans =chunk/= prefix)
 **** TODO Update =README.md= wrt to Rust and requirements
 **** TODO Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=

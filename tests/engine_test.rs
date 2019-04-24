@@ -358,6 +358,8 @@ fn test_pack_builder() -> Result<(), Error> {
     let saved_pack = option.unwrap();
     assert_eq!(saved_pack.bucket, "bucket1");
     assert_eq!(saved_pack.object, "object1");
+    // ensure pack digest is _not_ the default
+    assert_ne!(saved_pack.digest.to_string(), NULL_SHA1);
     // The large file will not have been completed yet, it is too large for the
     // pack size that we set above; can't be sure about the small file, either.
     let option = dbase.get_file(&sekien_sha)?;
@@ -373,16 +375,26 @@ fn test_pack_builder() -> Result<(), Error> {
     let saved_pack = option.unwrap();
     assert_eq!(saved_pack.bucket, "bucket1");
     assert_eq!(saved_pack.object, "object2");
+    // ensure pack digest is _not_ the default
+    assert_ne!(saved_pack.digest.to_string(), NULL_SHA1);
     // the big file should be saved by now
     let option = dbase.get_file(&sekien_sha)?;
     assert!(option.is_some());
     let saved_file = option.unwrap();
     assert_eq!(saved_file.length, 109_466);
+    assert_eq!(
+        saved_file.digest.to_string(),
+        "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+    );
     // the small file should also be saved
     let option = dbase.get_file(&lorem_sha)?;
     assert!(option.is_some());
     let saved_file = option.unwrap();
     assert_eq!(saved_file.length, 3_129);
+    assert_eq!(
+        saved_file.digest.to_string(),
+        "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+    );
     Ok(())
 }
 
