@@ -102,70 +102,6 @@
 ***** https://github.com/Byron/google-apis-rs (MIT/Apache 2.0)
 **** DONE Minio client
 ***** Rusoto supports Minio https://github.com/rusoto/rusoto (MIT)
-*** Go
-**** Advantages
-***** compiles to a single native binary
-***** better resource utilization than Node
-***** stdlib has a lot of functionality
-***** first-class support with cloud services
-**** Disadvantages
-***** Primitive type system
-***** Verbose error handling
-***** Dependency management story is still developing
-***** New module support is not well supported in editors yet
-**** DONE GraphQL server
-***** TODO Make sure it can generate a schema.json
-***** TODO Should be able to parse schema definition (for docs)
-***** [[https://github.com/99designs/gqlgen][gqlgen]] (MIT)
-****** supports everything and is type-safe
-****** docs: https://gqlgen.com/getting-started/
-****** c.f. https://hackernoon.com/graphql-with-golang-6e8da2054c25
-***** [[https://github.com/graph-gophers/graphql-go][graph-gophers/graphql-go]] (BSD)
-****** schema-first
-***** [[https://github.com/graphql-go/graphql][graphql-go/graphql]] (MIT)
-****** code-defined schema
-**** DONE Web framework
-***** [[https://revel.github.io][revel]] looks pretty good
-***** [[https://echo.labstack.com][echo]] minimalist
-***** [[https://iris-go.com][iris]] looks easy to use
-**** DONE Database
-***** [[https://github.com/dgraph-io/badger][dgraph-io/badger]] (Apache 2.0) seems very reliable
-****** DONE read https://blog.dgraph.io/post/badger/
-***** [[http://ledisdb.com][LedisDB]] supports LevelDB, has HTTP and CLI
-***** [[https://github.com/syndtr/goleveldb][goleveldb]] is "LevelDB" written in Go
-***** https://github.com/HouzuoGuo/tiedot (BSD)
-**** DONE dotenv
-***** https://github.com/joho/godotenv (MIT)
-**** DONE Configuration
-***** https://github.com/spf13/viper (MIT)
-***** https://github.com/micro/go-config (Apache 2.0)
-**** DONE =getpwuid= and =getgrgid= support
-***** stdlib =import "os/user"=
-**** DONE test library
-***** mocha style BDD: https://github.com/franela/goblin (MIT)
-****** uses [[https://github.com/onsi/gomega][gomega]] for BDD-style assertions
-***** simple assertions: https://labix.org/gocheck (BSD)
-**** DONE UUID support
-***** https://github.com/satori/go.uuid (MIT)
-**** DONE xattr support
-***** https://github.com/pkg/xattr (BSD); no Windows support
-**** DONE CDC
-***** [[https://github.com/restic/chunker][restic/chunker]] (BSD)
-***** consider implementing FastCDC in Go
-***** Maybe convert JS https://github.com/ronomon/deduplication to Go
-***** Maybe convert Rust https://github.com/jrobhoward/quickcdc to Go
-***** no golang FastCDC implementations
-**** DONE Tar file
-***** stdlib: https://golang.org/pkg/archive/tar/
-**** DONE PGP/Encryption
-***** x/stdlib https://godoc.org/golang.org/x/crypto/openpgp
-***** use =Encrypt= to encrypt and =ReadMessage= to decrypt
-***** e.g. https://gist.github.com/stuart-warren/93750a142d3de4e8fdd2
-**** DONE ULID: https://github.com/oklog/ulid (Apache 2.0)
-**** DONE SFTP client: https://github.com/pkg/sftp (BSD)
-**** DONE AWS client: https://github.com/aws/aws-sdk-go
-**** DONE Google Cloud client: https://github.com/googleapis/google-cloud-go
-**** DONE Minio client: https://www.minio.io/downloads.html#download-sdk
 *** Go vs Rust
 **** Go: first class support for cloud services
 **** Go: statically linked OpenPGP readily available
@@ -176,34 +112,6 @@
 **** Rust: nominal subtyping is much easier to follow
 **** Rust: streamlined error handling
 **** Rust: fine-grained namespaces and visibility control
-*** OCaml
-**** DONE GraphQL server
-***** https://github.com/andreas/ocaml-graphql-server (MIT)
-**** DONE Web framework
-***** https://github.com/rgrinberg/opium (MIT)
-**** DONE Database
-***** git-like kv store: https://github.com/mirage/irmin (ISC)
-***** leveldb bindings: https://github.com/mfp/ocaml-leveldb (LGPL)
-**** TODO Configuration
-**** TODO =getpwuid= and =getgrgid= support
-**** DONE test library
-***** https://github.com/mirage/alcotest (ISC)
-**** DONE UUID
-***** https://github.com/dbuenzli/uuidm (ISC)
-**** DONE ULID
-***** TODO https://github.com/stripedpajamas/ocaml-ulid (MIT)
-**** DONE xattr
-***** https://github.com/dsheets/ocaml-osx-xattr (ISC)
-**** TODO CDC: nothing, would have to write it
-**** DONE tar
-***** https://github.com/mirage/ocaml-tar (ISC)
-**** TODO PGP
-***** incomplete: https://github.com/cfcs/ocaml-openpgp
-**** TODO SFTP
-***** incomplete: https://github.com/avsm/ocaml-ssh
-**** TODO AWS
-**** TODO Google
-**** TODO Minio
 ** Phase 4
 *** TODO Rewrite everything in Rust
 **** DONE Decide on a web framework: warp
@@ -290,13 +198,13 @@
 ***** DONE work out how to support the counts of each type of document
 ***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 **** DONE get CDC working
-**** TODO implement pack stores
+**** DONE implement pack stores
 ***** DONE design the module directory structure
 ****** =src/store.rs= contains trait and convenience functions
 ****** =src/store/local.rs= contains local store implementation
 ****** =src/store/sftp.rs= contains SFTP store implementation
 ***** DONE define the =Store= trait
-***** TODO will stores be registered globally?
+***** DONE devise system for store configuration
 ***** DONE set up config for defining sftp parameters
 ***** DONE make the sftp tests conditional on config settings
 ***** DONE turn the store tests into integration test, have a common testing fn
@@ -304,7 +212,14 @@
 ***** DONE minio
 ***** DONE sftp
 ****** DONE is =~= a sensible default base path for sftp? no must be =.=
-***** TODO write test for the local store implementation
+***** DONE write integ tests for the save/load/list store functions
+***** DONE write test for the local store implementation
+**** TODO Need to inject digest when deserializing objects from database
+***** TODO pack objects
+***** TODO file objects
+***** TODO add tests for that
+**** TODO Decide how to store "service provider" configuration
+***** maybe the store implementations get a database handle and read/write their own config
 **** TODO consider approaches for managing the database instance
 ***** engine opens at start of backup procedure, drops when done
 ***** what about web server? does warp have state management?
@@ -355,30 +270,6 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 ***** PouchDB
 ***** TypeScript
 ***** Node.js
-*** TODO Rewrite everything in Go if Rust doesn't work out
-**** TODO Decide on a web framework
-**** TODO Look for useful tools and VS Code support
-**** TODO Determine the code layout (web framework probably dictates to some extent)
-**** TODO use =go mod= for dependency management and project isolation
-**** TODO write a core package with a few functions
-**** TODO set up configuration for dev and testing
-**** TODO write unit tests for core package
-**** TODO get pack files working
-**** TODO get encryption working with OpenPGP
-**** TODO Add license checker: https://github.com/src-d/go-license-detector
-**** TODO get basic database working
-**** TODO get CDC working (probably translate ronomon's code)
-**** TODO implement pack stores
-***** TODO local
-***** TODO minio
-***** TODO sftp
-**** TODO convert engine code
-***** TODO build tree objects
-***** TODO find differences between snapshots
-***** TODO produce pack files from changes
-***** TODO restore files from backup
-**** TODO set up web framework
-**** TODO set up GraphQL server
 *** TODO Should use =walkdir= crate to traverse directory structure
 **** handles crossing devices
 **** handles symlink loops
@@ -386,6 +277,15 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 *** TODO Re-evaluate [[https://actix.rs][Actix]] to see if it is better than warp
 **** TODO Does it have a testing library or integration?
 **** TODO Does it integrate easily with Juniper?
+*** TODO Develop the GraphQL schema to represent everything
+**** snapshots
+**** files
+**** trees
+**** stores
+**** store configuration
+***** model each store config as a type in GraphQL?
+***** devise a custom type that is encoded JSON?
+***** or config is a list of name/value pairs?
 *** TODO Document the database schema
 **** [[http://cbor.io][RocksDB]] key/value store
 **** [[http://cbor.io][CBOR]] values
@@ -471,6 +371,7 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO allow private key locked with passprhase
 *** TODO Support Amazon S3
 *** TODO Support Amazon Glacier
+**** Use S3 to store the database-to-archive mapping of each snapshot
 **** Offer user option to use "expedited" retrievals so they go faster
 *** TODO Support Microsoft Azure blob storage
 *** TODO Support Backblaze B2

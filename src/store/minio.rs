@@ -2,46 +2,84 @@
 // Copyright (c) 2019 Nathan Fiedler
 //
 use failure::{err_msg, Error};
-use futures::Future;
 use futures::stream::Stream;
+use futures::Future;
 use futures_fs::FsPool;
 use rusoto_core::Region;
 use rusoto_s3::{
-    CreateBucketError,
-    CreateBucketRequest,
-    DeleteBucketError,
-    DeleteBucketRequest,
-    DeleteObjectRequest,
-    GetObjectRequest,
-    ListObjectsV2Request,
-    PutObjectRequest,
-    S3Client,
-    S3,
-    StreamingBody
+    CreateBucketError, CreateBucketRequest, DeleteBucketError, DeleteBucketRequest,
+    DeleteObjectRequest, GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client,
+    StreamingBody, S3,
 };
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 
 ///
+/// Configuration for the MinioStore implementation.
+///
+#[derive(Serialize, Deserialize, Debug)]
+struct MinioConfig {
+    name: String,
+    /// The AWS/Minio region to connect to (e.g. "us-east-1").
+    region: String,
+    /// The endpoint should be something like http://192.168.99.100:9000 such
+    /// that it includes the scheme and port number, otherwise the client
+    /// library will default to https and port 80(?).
+    endpoint: String,
+}
+
+impl super::Config for MinioConfig {
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn from_json(&mut self, data: &str) -> Result<(), Error> {
+        let conf: MinioConfig = serde_json::from_str(data)?;
+        self.name = conf.name;
+        self.region = conf.region;
+        self.endpoint = conf.endpoint;
+        Ok(())
+    }
+
+    fn to_json(&self) -> Result<String, Error> {
+        let j = serde_json::to_string(&self)?;
+        Ok(j)
+    }
+}
+
+impl Default for MinioConfig {
+    fn default() -> Self {
+        Self {
+            name: String::from("default"),
+            region: String::from("us-west-1"),
+            endpoint: String::from("http://localhost:9000"),
+        }
+    }
+}
+
+///
 /// A `Store` implementation that uses the Amazon S3 protocol to connect to a
-/// Minio storage server. Use the `new()` function to create an instance.
+/// Minio storage server.
 ///
 pub struct MinioStore {
-    client: S3Client,
+    config: MinioConfig,
+}
+
+impl Default for MinioStore {
+    fn default() -> Self {
+        Self {
+            config: Default::default(),
+        }
+    }
 }
 
 impl MinioStore {
     ///
-    /// Create an instance of `MinioStore` to connect to the Minio server at the
-    /// given region and endpoint.
+    /// Get an S3Client instance.
     ///
-    /// The endpoint should be something like http://192.168.99.100:9000
-    /// such that it includes the scheme and port number, otherwise the
-    /// client library will default to https and port 80(?)
-    ///
-    ///
-    pub fn new(region: &str, endpoint: &str) -> Self {
+    fn connect(&self) -> S3Client {
         //
         // Credentials are picked up in a variety of ways, see the rusoto docs:
         // https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -60,40 +98,30 @@ impl MinioStore {
         // let credentials = AwsCredentials::new(access_key, secret_key, None, None);
         //
         let region = Region::Custom {
-            name: region.to_owned(),
-            endpoint: endpoint.to_owned(),
+            name: self.config.region.clone(),
+            endpoint: self.config.endpoint.clone(),
         };
-        let client = S3Client::new(region);
-        Self {
-            client
-        }
-    }
-
-    ///
-    /// Ensure the named bucket exists.
-    ///
-    fn create_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let request = CreateBucketRequest {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        };
-        let result = self.client.create_bucket(request).sync();
-        // certain error conditions are okay
-        match result {
-            Err(e) => match e {
-                CreateBucketError::BucketAlreadyExists(_) => Ok(()),
-                CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
-                _ => Err(Error::from_boxed_compat(Box::new(e))),
-            },
-            Ok(_) => Ok(()),
-        }
+        S3Client::new(region)
     }
 }
 
 impl super::Store for MinioStore {
+    fn get_type(&self) -> super::StoreType {
+        super::StoreType::MINIO
+    }
+
+    fn get_config(&self) -> &super::Config {
+        &self.config
+    }
+
+    fn get_config_mut(&mut self) -> &mut super::Config {
+        &mut self.config
+    }
+
     fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<(), Error> {
+        let client = self.connect();
         // Ensure the bucket exists
-        self.create_bucket(bucket)?;
+        create_bucket(&client, bucket)?;
         //
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
@@ -108,7 +136,7 @@ impl super::Store for MinioStore {
             body: Some(StreamingBody::new(read_stream.map(|bytes| bytes.to_vec()))),
             ..Default::default()
         };
-        let result = self.client.put_object(req).sync()?;
+        let result = client.put_object(req).sync()?;
         if result.e_tag.is_some() {
             // compute MD5 of file and compare to returned e_tag
             let md5 = checksum_file(packfile)?;
@@ -123,20 +151,24 @@ impl super::Store for MinioStore {
     }
 
     fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {
+        let client = self.connect();
         let request = GetObjectRequest {
             bucket: bucket.to_owned(),
             key: object.to_owned(),
             ..Default::default()
         };
-        let result = self.client.get_object(request).sync()?;
+        let result = client.get_object(request).sync()?;
         let stream = result.body.unwrap();
         let mut file = File::create(outfile)?;
-        stream.for_each(move |chunk| file.write_all(&chunk).map_err(Into::into)).wait()?;
+        stream
+            .for_each(move |chunk| file.write_all(&chunk).map_err(Into::into))
+            .wait()?;
         Ok(())
     }
 
     fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let result = self.client.list_buckets().sync()?;
+        let client = self.connect();
+        let result = client.list_buckets().sync()?;
         let mut results = Vec::new();
         for bucket in result.buckets.unwrap() {
             results.push(bucket.name.unwrap());
@@ -145,6 +177,7 @@ impl super::Store for MinioStore {
     }
 
     fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        let client = self.connect();
         // default AWS S3 max-keys is 1,000
         let mut request = ListObjectsV2Request {
             bucket: bucket.to_owned(),
@@ -153,7 +186,7 @@ impl super::Store for MinioStore {
         let mut results = Vec::new();
         loop {
             // we will be re-using the request, so clone it each time
-            let result = self.client.list_objects_v2(request.clone()).sync()?;
+            let result = client.list_objects_v2(request.clone()).sync()?;
             if let Some(contents) = result.contents {
                 for entry in contents {
                     if let Some(key) = entry.key {
@@ -163,7 +196,7 @@ impl super::Store for MinioStore {
             }
             // check if there are more results to be fetched
             if result.next_continuation_token.is_none() {
-                break
+                break;
             }
             request.continuation_token = result.next_continuation_token;
         }
@@ -171,20 +204,22 @@ impl super::Store for MinioStore {
     }
 
     fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
+        let client = self.connect();
         let request = DeleteObjectRequest {
             bucket: bucket.to_owned(),
             key: object.to_owned(),
             ..Default::default()
         };
-        self.client.delete_object(request).sync()?;
+        client.delete_object(request).sync()?;
         Ok(())
     }
 
     fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
+        let client = self.connect();
         let request = DeleteBucketRequest {
-            bucket: bucket.to_owned()
+            bucket: bucket.to_owned(),
         };
-        let result = self.client.delete_bucket(request).sync();
+        let result = client.delete_bucket(request).sync();
         // certain error conditions are okay
         match result {
             Err(e) => match e {
@@ -193,6 +228,26 @@ impl super::Store for MinioStore {
             },
             Ok(_) => Ok(()),
         }
+    }
+}
+
+///
+/// Ensure the named bucket exists.
+///
+fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
+    let request = CreateBucketRequest {
+        bucket: bucket.to_owned(),
+        ..Default::default()
+    };
+    let result = client.create_bucket(request).sync();
+    // certain error conditions are okay
+    match result {
+        Err(e) => match e {
+            CreateBucketError::BucketAlreadyExists(_) => Ok(()),
+            CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            _ => Err(Error::from_boxed_compat(Box::new(e))),
+        },
+        Ok(_) => Ok(()),
     }
 }
 

@@ -5,6 +5,7 @@ use super::core::{Checksum, Chunk, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use rocksdb::{DBVector, DB};
 use std::path::Path;
+use std::str;
 
 ///
 /// An instance of the database for reading and writing records to disk.
@@ -206,5 +207,24 @@ impl Database {
             count += 1;
         }
         Ok(count)
+    }
+
+    ///
+    /// Find all those keys that start with the given prefix.
+    ///
+    pub fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut results: Vec<String> = Vec::new();
+        for (key, _value) in iter {
+            let pre = &key[..pre_bytes.len()];
+            if pre != pre_bytes {
+                break;
+            }
+            let key_str = str::from_utf8(&key)?;
+            results.push(key_str.to_owned());
+        }
+        Ok(results)
     }
 }
