@@ -4,7 +4,6 @@
 use failure::{err_msg, Error};
 use fastcdc;
 use gpgme;
-use hex;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -104,7 +103,7 @@ pub fn checksum_data_sha1(data: &[u8]) -> Checksum {
     let mut hasher = Sha1::new();
     hasher.input(data);
     let digest = hasher.result();
-    Checksum::SHA1(hex::encode(&digest))
+    Checksum::SHA1(format!("{:x}", digest))
 }
 
 ///
@@ -115,7 +114,7 @@ pub fn checksum_data_sha256(data: &[u8]) -> Checksum {
     let mut hasher = Sha256::new();
     hasher.input(data);
     let digest = hasher.result();
-    Checksum::SHA256(hex::encode(&digest))
+    Checksum::SHA256(format!("{:x}", digest))
 }
 
 ///
@@ -127,7 +126,7 @@ pub fn checksum_file(infile: &Path) -> io::Result<Checksum> {
     let mut hasher = Sha256::new();
     io::copy(&mut file, &mut hasher)?;
     let digest = hasher.result();
-    Ok(Checksum::SHA256(hex::encode(digest)))
+    Ok(Checksum::SHA256(format!("{:x}", digest)))
 }
 
 /// Some chunk of a file.

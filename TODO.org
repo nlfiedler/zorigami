@@ -252,7 +252,6 @@
 ***** TODO open database instance and pass =DB= around
 ***** TODO implement =restore_file()=
 ***** DONE insert xattr records for each tree entry (see =process_path()=)
-**** TODO Use =tmp/test= instead of =test/tmp= in test code
 **** TODO Look for calls to =unwrap= that maybe should be converted to errors
 e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO Update =README.md= wrt to Rust and requirements
@@ -262,14 +261,17 @@ e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 ***** Rust vs TypeScript/JavaScript
 ***** RocksDB vs PouchDB
 **** TODO Try building on Windows
-**** TODO Remove everything in TODO and NOTES related to the old stack
+**** TODO Remove everything related to the old stack
+***** TODO.org
+***** README.md
+***** .gitignore
 ***** PouchDB
 ***** TypeScript
 ***** Node.js
+***** package.json
 *** TODO Should use =walkdir= crate to traverse directory structure
 **** handles crossing devices
 **** handles symlink loops
-*** TODO Could replace uses of =hex= with =format!("{:x}", ...)=
 *** TODO Re-evaluate [[https://actix.rs][Actix]] to see if it is better than warp
 **** TODO Does it have a testing library or integration?
 **** TODO Does it integrate easily with Juniper?
