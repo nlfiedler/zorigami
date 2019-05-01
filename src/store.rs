@@ -77,7 +77,7 @@ pub fn save_store(dbase: &Database, store: &Store) -> Result<(), Error> {
     let conf_name = store.get_config().get_name();
     let key = format!("store/{}/{}", type_name, conf_name);
     let value = store.get_config().to_json()?;
-    dbase.insert_document(key.as_bytes(), value.as_bytes())?;
+    dbase.put_document(key.as_bytes(), value.as_bytes())?;
     Ok(())
 }
 

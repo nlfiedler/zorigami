@@ -28,6 +28,17 @@ fn test_store_config() -> Result<(), Error> {
     let mut store = local::LocalStore::default();
     run_config_tests(&value, &mut store, &dbase)?;
 
+    // test updating the store config (only need this one time)
+    let config_json = json!({
+        "name": "not_default_local",
+        "basepath": "some/other/path",
+    });
+    store.get_config_mut().from_json(&config_json.to_string())?;
+    save_store(&dbase, &store)?;
+    let boxster: Box<Store> = load_store(&dbase, "store/local/not_default_local")?;
+    let json: String = boxster.get_config().to_json()?;
+    assert!(json.contains("some/other/path"));
+
     let config_json = json!({
         "name": "some_sftp_name",
         "remote_addr": "localhost:22",

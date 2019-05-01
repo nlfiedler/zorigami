@@ -30,6 +30,13 @@ fn test_insert_document() {
         Ok(None) => panic!("get document returned None!"),
         Err(e) => panic!("get document error: {}", e),
     }
+    // we can update a value using put_document()
+    assert!(DBASE.put_document(b"charlie", b"remotehost").is_ok());
+    match DBASE.get_document(b"charlie") {
+        Ok(Some(value)) => assert_eq!(value.deref(), b"remotehost"),
+        Ok(None) => panic!("get document returned None!"),
+        Err(e) => panic!("get document error: {}", e),
+    }
 }
 
 #[test]

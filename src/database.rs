@@ -44,6 +44,14 @@ impl Database {
     }
 
     ///
+    /// Put the key/value pair into the database.
+    ///
+    pub fn put_document(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
+        self.db.put(key, value)?;
+        Ok(())
+    }
+
+    ///
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     ///
