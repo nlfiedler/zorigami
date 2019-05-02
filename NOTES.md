@@ -136,13 +136,17 @@ They change the SSH config to run the backup command with "append only" flag.
     - default time ranges in which to upload snapshots
     - default preferred size of pack files (in MB)
     - default ignore file patterns (applies to all datasets)
-    - list of datasets:
-        + root local path
-        + latest snapshot
-        + schedule/frequency overrides
-        + ignore overrides
-        + pack size overrides
-        + storage overrides (e.g. `local` vs `aws`)
+* dataset records:
+    - key: `dataset/` + ULID
+    - root local path
+    - latest snapshot
+    - schedule/frequency
+    - ignore patterns
+    - pack size
+    - store identifier
+* store records:
+    - key: `store/` + type + name (e.g. `store/local/my stuff`)
+    - value: opaque JSON blob of the store configuration
 * snapshot records
     - key: `snapshot/` + SHA1 of snapshot (with "sha1-" prefix) or `index` for pending
     - parent: SHA1 of previous snapshot (`null` if first snapshot)

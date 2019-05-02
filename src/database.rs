@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-use super::core::{Checksum, Chunk, SavedFile, SavedPack, Snapshot, Tree};
+use super::core::{Checksum, Chunk, Dataset, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use rocksdb::{DBVector, DB};
 use std::path::Path;
@@ -49,6 +49,31 @@ impl Database {
     pub fn put_document(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.db.put(key, value)?;
         Ok(())
+    }
+
+    ///
+    /// Put the given dataset into the database.
+    ///
+    pub fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
+        let key = format!("dataset/{}", dataset.key);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&dataset)?;
+        self.put_document(key.as_bytes(), &encoded)
+    }
+
+    ///
+    /// Retrieve the dataset by the given key, returning None if not found.
+    ///
+    pub fn get_dataset(&self, key: &str) -> Result<Option<Dataset>, Error> {
+        let db_key = format!("dataset/{}", key);
+        let encoded = self.get_document(db_key.as_bytes())?;
+        match encoded {
+            Some(dbv) => {
+                let mut serde_result: Dataset = serde_cbor::from_slice(&dbv)?;
+                serde_result.key = key.to_owned();
+                Ok(Some(serde_result))
+            }
+            None => Ok(None),
+        }
     }
 
     ///

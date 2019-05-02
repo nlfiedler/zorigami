@@ -10,6 +10,28 @@ use zorigami::database::*;
 use zorigami::engine::*;
 
 #[test]
+fn test_datasets() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/datasets/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    // pub fn new(unique_id: &str, basepath: &Path, store: &str) -> Dataset {
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let basepath = Path::new("/some/path");
+    let store = "store/local/stuff";
+    let mut dataset = Dataset::new(&unique_id, basepath, store);
+    dbase.put_dataset(&dataset)?;
+    dataset.store = String::from("store/local/futts");
+    dbase.put_dataset(&dataset)?;
+    let setopt = dbase.get_dataset(&dataset.key)?;
+    assert!(setopt.is_some());
+    let setdata = setopt.unwrap();
+    assert_eq!(setdata.key, dataset.key);
+    assert_eq!(setdata.store, "store/local/futts");
+    Ok(())
+}
+
+#[test]
 fn test_basic_snapshots() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = "tmp/test/engine/snapshots/rocksdb";

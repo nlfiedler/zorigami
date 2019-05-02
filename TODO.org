@@ -247,7 +247,7 @@
 ***** DONE can remove the =test_tree_walker= test, it will be redundant
 ***** DONE implement pack file builder, write unit tests
 ***** DONE encrypt the pack files
-***** TODO implement the "dataset" type, write unit tests
+***** DONE implement the "dataset" type, write unit tests
 ***** TODO implement =perform_backup()=
 ***** TODO open database instance and pass =DB= around
 ***** TODO implement =restore_file()=

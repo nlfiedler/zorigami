@@ -796,19 +796,55 @@ impl SavedPack {
 
 /// Represents a directory tree that will be backed up according to a schedule,
 /// with pack files saved to a particular local or remote store.
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Dataset {
+    /// Unique identifier of this dataset for persisting to database.
+    #[serde(skip)]
+    pub key: String,
     /// computer UUID for generating bucket names
-    unique_id: String,
+    #[serde(rename = "id")]
+    pub unique_id: String,
     /// local base path of dataset to be saved
-    basepath: PathBuf,
+    #[serde(rename = "bp")]
+    pub basepath: PathBuf,
     /// latest snapshot reference, if any
-    latest_snapshot: Option<Checksum>,
+    #[serde(rename = "ls")]
+    pub latest_snapshot: Option<Checksum>,
     /// path for temporary pack building
-    workspace: PathBuf,
+    #[serde(rename = "ws")]
+    pub workspace: PathBuf,
     /// target size in bytes for pack files
-    pack_size: u64,
+    #[serde(rename = "ps")]
+    pub pack_size: u64,
     /// name of the store to contain pack files
-    store: String,
+    #[serde(rename = "st")]
+    pub store: String,
+}
+
+// Default pack size is 64mb just because. With a typical ADSL home broadband
+// connection a 64mb pack file should take about 5 minutes to upload.
+const DEFAULT_PACK_SIZE: u64 = 67_108_864;
+
+impl Dataset {
+    ///
+    /// Construct a Dataset with the given unique (computer) identifier, base
+    /// path of the directory structure to be saved, and the identifier for the
+    /// store that will receive the pack files.
+    ///
+    pub fn new(unique_id: &str, basepath: &Path, store: &str) -> Dataset {
+        let key = Ulid::new().to_string().to_lowercase();
+        let mut workspace = basepath.to_owned();
+        workspace.push(".tmp");
+        Self {
+            key,
+            unique_id: unique_id.to_owned(),
+            basepath: basepath.to_owned(),
+            latest_snapshot: None,
+            workspace,
+            pack_size: DEFAULT_PACK_SIZE,
+            store: store.to_owned(),
+        }
+    }
 }
 
 #[cfg(test)]
