@@ -118,7 +118,7 @@ impl super::Store for MinioStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<(), Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
         let client = self.connect();
         // Ensure the bucket exists
         create_bucket(&client, bucket)?;
@@ -147,7 +147,7 @@ impl super::Store for MinioStore {
                 return Err(err_msg("returned e_tag does not match MD5 of pack file"));
             }
         }
-        Ok(())
+        Ok(object.to_owned())
     }
 
     fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {

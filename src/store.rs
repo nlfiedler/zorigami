@@ -154,12 +154,16 @@ pub trait Store {
     fn get_config_mut(&mut self) -> &mut Config;
 
     ///
-    /// Store the pack file the local disk.
+    /// Store the pack file under the named bucket and referenced by the object
+    /// name. Returns the name of the remote object, in case it was assigned a
+    /// new value by the backing store (e.g. Amazon Glacier).
     ///
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<(), Error>;
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error>;
 
     ///
-    /// Retrieve a pack from the given bucket and object name.
+    /// Retrieve a pack from the given bucket and object name. The object name
+    /// must match whatever was returned by `store_pack()`, in case the remote
+    /// store uses its own naming scheme (e.g. Amazon Glacier).
     ///
     fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error>;
 

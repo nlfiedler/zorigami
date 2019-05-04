@@ -120,7 +120,7 @@ impl super::Store for SftpStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<(), Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
         let conn = self.connect()?;
         let sftp = conn.session.sftp()?;
         let mut path: PathBuf = match &self.config.basepath {
@@ -134,7 +134,7 @@ impl super::Store for SftpStore {
         let mut remote = sftp.create(&path)?;
         let mut local = File::open(packfile)?;
         io::copy(&mut local, &mut remote)?;
-        Ok(())
+        Ok(object.to_owned())
     }
 
     fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {

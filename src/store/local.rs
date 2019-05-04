@@ -71,13 +71,13 @@ impl super::Store for LocalStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<(), Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
         let mut path: PathBuf = [&self.config.basepath, bucket].iter().collect();
         fs::create_dir_all(&path)?;
         path.push(object);
         fs::copy(packfile, &path)?;
         fs::remove_file(packfile)?;
-        Ok(())
+        Ok(object.to_owned())
     }
 
     fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {
