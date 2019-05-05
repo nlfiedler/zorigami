@@ -3,6 +3,7 @@
 //
 use super::core;
 use super::database::Database;
+use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
 use std::cmp;
@@ -10,7 +11,130 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tempfile;
 use xattr;
+
+///
+/// Take a snapshot, collect the new/changed files, assemble them into pack
+/// files, upload them to the pack store, and record the results in the
+/// database. Returns the new snapshot checksum which has _not_ been saved in
+/// the dataset record.
+///
+pub fn perform_backup(
+    dataset: &core::Dataset,
+    dbase: &Database,
+    passphrase: &str,
+) -> Result<core::Checksum, Error> {
+    fs::create_dir_all(&dataset.workspace)?;
+    let snap_sha1 = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
+    let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
+    // if no previous snapshot, visit every file in the new snapshot otherwise,
+    // find those files that changed from the previous snapshot (would like to
+    // have a single iterator type for this but seems tricky)
+    if dataset.latest_snapshot.is_none() {
+        let snapshot = dbase.get_snapshot(&snap_sha1)?.unwrap();
+        let tree = snapshot.tree.clone();
+        let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
+        for result in iter {
+            bmaster.handle_file(result)?;
+        }
+    } else {
+        let iter = find_changed_files(
+            dbase,
+            dataset.basepath.clone(),
+            dataset.latest_snapshot.clone().unwrap(),
+            snap_sha1.clone(),
+        )?;
+        for result in iter {
+            bmaster.handle_file(result)?;
+        }
+    }
+    // empty the last pack file
+    bmaster.finish_pack()?;
+    Ok(snap_sha1)
+}
+
+///
+/// Holds the state of the backup process to keep the code slim.
+///
+struct BackupMaster<'a> {
+    dataset: &'a core::Dataset,
+    dbase: &'a Database,
+    builder: PackBuilder<'a>,
+    passphrase: String,
+    bucket_name: String,
+    store: Box<store::Store>,
+}
+
+impl<'a> BackupMaster<'a> {
+    /// Build a BackupMaster.
+    fn new(
+        dataset: &'a core::Dataset,
+        dbase: &'a Database,
+        passphrase: &str,
+    ) -> Result<Self, Error> {
+        let bucket_name = core::generate_bucket_name(&dataset.unique_id);
+        let builder = PackBuilder::new(&dbase, dataset.pack_size);
+        let store_boxed = store::load_store(dbase, &dataset.store)?;
+        Ok(Self {
+            dataset,
+            dbase,
+            builder,
+            passphrase: passphrase.to_owned(),
+            bucket_name,
+            store: store_boxed,
+        })
+    }
+
+    /// Handle a single changed file, adding it to the pack, and possibly
+    /// uploading one or more pack files as needed.
+    fn handle_file(&mut self, changed: Result<ChangedFile, Error>) -> Result<(), Error> {
+        if changed.is_ok() {
+            let entry = changed.unwrap();
+            // ignore files which already have records
+            let filerec = self.dbase.get_file(&entry.digest)?;
+            if filerec.is_none() {
+                self.builder.add_file(&entry.path, entry.digest.clone())?;
+                // loop until pack builder is below desired size
+                // (adding a very large file may require multiple packs)
+                while self.builder.is_full() {
+                    self.send_one_pack()?;
+                }
+            }
+            Ok(())
+        } else {
+            Err(changed.unwrap_err())
+        }
+    }
+
+    /// Build and send a single pack to the pack store. Record the results in
+    /// the database for posterity.
+    fn send_one_pack(&mut self) -> Result<(), Error> {
+        let outfile = tempfile::Builder::new()
+            .prefix("pack")
+            .suffix(".bin")
+            .tempfile_in(&self.dataset.workspace)?;
+        let mut pack = self.builder.build_pack(outfile.path(), &self.passphrase)?;
+        let object_name = format!("{}", pack.digest.as_ref().unwrap());
+        // capture and record the remote object name, in case it differs from
+        // the name we generated ourselves; either value is expected to be
+        // sufficiently unique for our purposes
+        let remote_object =
+            self.store
+                .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
+        pack.record_completed(self.dbase, &self.bucket_name, &remote_object)?;
+        Ok(())
+    }
+
+    /// While the pack builder has chunks to pack, keep building pack files and
+    /// uploading them to the store.
+    fn finish_pack(&mut self) -> Result<(), Error> {
+        while self.builder.has_chunks() {
+            self.send_one_pack()?;
+        }
+        Ok(())
+    }
+}
 
 ///
 /// Take a snapshot of the directory structure at the given path. The parent, if
@@ -33,11 +157,11 @@ pub fn take_snapshot(
 }
 
 ///
-/// Output from the `find_changed_files()` function.
+/// `ChangedFile` represents a new or modified file.
 ///
 #[derive(Debug)]
 pub struct ChangedFile {
-    /// Relative file path of the changed file.
+    /// File path of the changed file relative to the base path.
     pub path: PathBuf,
     /// Hash digest of the changed file.
     pub digest: core::Checksum,
@@ -78,9 +202,14 @@ pub struct ChangedFilesIter<'a> {
 }
 
 impl<'a> ChangedFilesIter<'a> {
-    fn new(dbase: &'a Database, left_tree: core::Checksum, right_tree: core::Checksum) -> Self {
+    fn new(
+        dbase: &'a Database,
+        basepath: PathBuf,
+        left_tree: core::Checksum,
+        right_tree: core::Checksum,
+    ) -> Self {
         let mut queue = VecDeque::new();
-        queue.push_back((PathBuf::from("."), left_tree, right_tree));
+        queue.push_back((basepath, left_tree, right_tree));
         Self {
             dbase,
             queue,
@@ -253,6 +382,7 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
 ///
 pub fn find_changed_files(
     dbase: &Database,
+    basepath: PathBuf,
     snapshot1: core::Checksum,
     snapshot2: core::Checksum,
 ) -> Result<ChangedFilesIter, Error> {
@@ -262,7 +392,12 @@ pub fn find_changed_files(
     let snap2doc = dbase
         .get_snapshot(&snapshot2)?
         .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snapshot2)))?;
-    Ok(ChangedFilesIter::new(dbase, snap1doc.tree, snap2doc.tree))
+    Ok(ChangedFilesIter::new(
+        dbase,
+        basepath,
+        snap1doc.tree,
+        snap2doc.tree,
+    ))
 }
 
 pub struct TreeWalker<'a> {
@@ -520,7 +655,7 @@ impl<'a> PackBuilder<'a> {
         !self.file_chunks.is_empty()
     }
 
-    /// If the builder has not files and chunks, then clear the cache of
+    /// If the builder has no files and chunks, then clear the cache of
     /// "packed" and "done" chunks to conserve space.
     pub fn clear_cache(&mut self) {
         if self.file_chunks.is_empty() {

@@ -1,6 +1,8 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+#[macro_use]
+extern crate serde_json;
 use failure::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +10,7 @@ use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
 use zorigami::engine::*;
+use zorigami::store::*;
 
 #[test]
 fn test_datasets() -> Result<(), Error> {
@@ -15,7 +18,6 @@ fn test_datasets() -> Result<(), Error> {
     let db_path = "tmp/test/engine/datasets/rocksdb";
     let _ = fs::remove_dir_all(db_path);
     let dbase = Database::new(Path::new(db_path)).unwrap();
-    // pub fn new(unique_id: &str, basepath: &Path, store: &str) -> Dataset {
     let unique_id = generate_unique_id("charlie", "localhost");
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
@@ -62,7 +64,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     assert_ne!(snap1_sha, snap2_sha);
     assert_ne!(snapshot1.tree, snapshot2.tree);
     // compute the differences
-    let iter = find_changed_files(&dbase, snap1_sha, snap2_sha)?;
+    let iter = find_changed_files(&dbase, PathBuf::from(basepath), snap1_sha, snap2_sha)?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
     assert!(changed[0].is_ok());
@@ -168,41 +170,31 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     fs::write(&zzz, b"zebras riding on a zephyr")?;
     let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
     // compute the differences
-    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let iter = find_changed_files(
+        &dbase,
+        PathBuf::from(basepath),
+        snap1_sha.clone(),
+        snap2_sha.clone(),
+    )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 4);
     // The changed mmm/mmm.txt file ends up last because its tree was changed
     // and is pushed onto the queue, while the new entries are processed
     // immediately before returning to the queue.
-    assert_eq!(
-        changed[0].as_ref().unwrap().path,
-        Path::new("./bbb/bbb.txt")
-    );
-    assert_eq!(
-        changed[1].as_ref().unwrap().path,
-        Path::new("./nnn/nnn.txt")
-    );
-    assert_eq!(
-        changed[2].as_ref().unwrap().path,
-        Path::new("./zzz/zzz.txt")
-    );
-    assert_eq!(
-        changed[3].as_ref().unwrap().path,
-        Path::new("./mmm/mmm.txt")
-    );
+    assert_eq!(changed[0].as_ref().unwrap().path, bbb);
+    assert_eq!(changed[1].as_ref().unwrap().path, nnn);
+    assert_eq!(changed[2].as_ref().unwrap().path, zzz);
+    assert_eq!(changed[3].as_ref().unwrap().path, mmm);
     // remove some files, change another
     fs::remove_file(&bbb)?;
     fs::remove_file(&yyy)?;
     fs::write(&zzz, b"zippy zip ties zooming")?;
     let snap3_sha = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase)?;
     // compute the differences
-    let iter = find_changed_files(&dbase, snap2_sha, snap3_sha)?;
+    let iter = find_changed_files(&dbase, PathBuf::from(basepath), snap2_sha, snap3_sha)?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
-    assert_eq!(
-        changed[0].as_ref().unwrap().path,
-        Path::new("./zzz/zzz.txt")
-    );
+    assert_eq!(changed[0].as_ref().unwrap().path, zzz);
     Ok(())
 }
 
@@ -234,14 +226,16 @@ fn test_snapshot_types() -> Result<(), Error> {
     fs::write(&mmm, b"many mumbling mice moonlight")?;
     let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
     // compute the differences
-    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let iter = find_changed_files(
+        &dbase,
+        PathBuf::from(basepath),
+        snap1_sha.clone(),
+        snap2_sha.clone(),
+    )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
-    assert_eq!(
-        changed[0].as_ref().unwrap().path,
-        Path::new("./ccc/ccc.txt")
-    );
-    assert_eq!(changed[1].as_ref().unwrap().path, Path::new("./mmm"));
+    assert_eq!(changed[0].as_ref().unwrap().path, ccc);
+    assert_eq!(changed[1].as_ref().unwrap().path, mmm);
     Ok(())
 }
 
@@ -287,10 +281,15 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     }
     let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
     // compute the differences
-    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let iter = find_changed_files(
+        &dbase,
+        PathBuf::from(basepath),
+        snap1_sha.clone(),
+        snap2_sha.clone(),
+    )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
-    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./mmm.txt"));
+    assert_eq!(changed[0].as_ref().unwrap().path, mmm);
     Ok(())
 }
 
@@ -336,14 +335,16 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     fs::write(&ccc, b"crazy cat clawing chairs")?;
     let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
     // compute the differences
-    let iter = find_changed_files(&dbase, snap1_sha.clone(), snap2_sha.clone())?;
+    let iter = find_changed_files(
+        &dbase,
+        PathBuf::from(basepath),
+        snap1_sha.clone(),
+        snap2_sha.clone(),
+    )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
-    assert_eq!(changed[0].as_ref().unwrap().path, Path::new("./bbb"));
-    assert_eq!(
-        changed[1].as_ref().unwrap().path,
-        Path::new("./ccc/ccc.txt")
-    );
+    assert_eq!(changed[0].as_ref().unwrap().path, bbb);
+    assert_eq!(changed[1].as_ref().unwrap().path, ccc);
     Ok(())
 }
 
@@ -463,5 +464,75 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
     builder.add_file(sekien_path, sekien_sha.clone())?;
     assert_eq!(builder.file_count(), 2);
     assert_eq!(builder.chunk_count(), 7);
+    Ok(())
+}
+
+#[test]
+fn test_perform_backup() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/backup/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let pack_path = "tmp/test/engine/backup/packs";
+    let _ = fs::remove_dir_all(pack_path);
+
+    // create a local store
+    let config_json = json!({
+        "name": "test_tmp",
+        "basepath": pack_path,
+    });
+    let value = config_json.to_string();
+    let mut store = local::LocalStore::default();
+    store.get_config_mut().from_json(&value)?;
+    save_store(&dbase, &store)?;
+
+    // create a dataset
+    let basepath = "tmp/test/engine/backup/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let store_name = store_name(&store);
+    let mut dataset = Dataset::new(&unique_id, Path::new(basepath), &store_name);
+    dataset.pack_size = 65536 as u64;
+
+    // perform the first backup
+    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    let first_snap = perform_backup(&dataset, &dbase, "keyboard cat")?;
+    dataset.latest_snapshot = Some(first_snap);
+
+    // check for object(s) being present in the pack store
+    let result = store.list_buckets();
+    assert!(result.is_ok());
+    let buckets = result.unwrap();
+    assert_eq!(buckets.len(), 1);
+    let bucket = &buckets[0];
+    let result = store.list_objects(bucket);
+    assert!(result.is_ok());
+    let listing = result.unwrap();
+    assert!(!listing.is_empty());
+
+    // perform the second backup
+    let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
+    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    let second_snap = perform_backup(&dataset, &dbase, "keyboard cat")?;
+    dataset.latest_snapshot = Some(second_snap);
+
+    // check for more buckets and objects
+    let result = store.list_buckets();
+    assert!(result.is_ok());
+    let buckets = result.unwrap();
+    assert!(buckets.len() > 1);
+    let bucket = &buckets[0];
+    let result = store.list_objects(bucket);
+    assert!(result.is_ok());
+    let listing = result.unwrap();
+    assert!(!listing.is_empty());
+    let bucket = &buckets[1];
+    let result = store.list_objects(bucket);
+    assert!(result.is_ok());
+    let listing = result.unwrap();
+    assert!(!listing.is_empty());
+
     Ok(())
 }

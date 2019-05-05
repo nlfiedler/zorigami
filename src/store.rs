@@ -70,12 +70,21 @@ pub fn find_stores(dbase: &Database) -> Result<Vec<String>, Error> {
 }
 
 ///
+/// Construct the unique name for the given store, which is used as the key to
+/// saving the store configuration in the database, as well as referring to the
+/// store in the `core::Dataset`.
+///
+pub fn store_name(store: &Store) -> String {
+    let type_name = store.get_type().to_string();
+    let conf_name = store.get_config().get_name();
+    format!("store/{}/{}", type_name, conf_name)
+}
+
+///
 /// Save the given store's configuration to the database.
 ///
 pub fn save_store(dbase: &Database, store: &Store) -> Result<(), Error> {
-    let type_name = store.get_type().to_string();
-    let conf_name = store.get_config().get_name();
-    let key = format!("store/{}/{}", type_name, conf_name);
+    let key = store_name(store);
     let value = store.get_config().to_json()?;
     dbase.put_document(key.as_bytes(), value.as_bytes())?;
     Ok(())
