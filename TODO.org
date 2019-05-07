@@ -221,7 +221,7 @@
 ***** engine opens at start of backup procedure, drops when done
 ***** what about web server? does warp have state management?
 ***** maybe use =Arc= and =Mutex= to manage concurrent access
-**** TODO convert engine code
+**** DONE convert engine code
 ***** DONE insert trees into the database using their checksum
 ***** DONE translate =processPath()=
 ***** DONE change code and tests to use =Tree= instead of slice of =TreeEntry=
@@ -248,12 +248,12 @@
 ***** DONE implement pack file builder, write unit tests
 ***** DONE encrypt the pack files
 ***** DONE implement the "dataset" type, write unit tests
-***** TODO implement =perform_backup()=
-***** TODO open database instance and pass =DB= around
-***** TODO implement =restore_file()=
+***** DONE implement =perform_backup()=
+***** DONE open database instance and pass =DB= around
+***** DONE implement =restore_file()=
+***** DONE =perform_backup()= should set =parent= of latest snapshot, if any
+***** DONE =perform_backup()= should set =latest_snapshot= of dataset
 ***** DONE insert xattr records for each tree entry (see =process_path()=)
-**** TODO Look for calls to =unwrap= that maybe should be converted to errors
-e.g. path.file_name().ok_or_else(|| err_msg("invalid file path"))?;
 **** TODO Update =README.md= wrt to Rust and requirements
 **** TODO Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=

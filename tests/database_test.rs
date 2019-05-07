@@ -63,6 +63,7 @@ fn test_chunk_records() {
         actual.digest.to_string(),
         "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
     );
+    // skipped offset is always zero
     assert_eq!(actual.offset, 0);
     assert_eq!(actual.length, 40000);
     assert!(actual.filepath.is_none());

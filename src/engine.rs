@@ -6,7 +6,6 @@ use super::database::Database;
 use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
-use std::cmp;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,20 +16,19 @@ use xattr;
 ///
 /// Take a snapshot, collect the new/changed files, assemble them into pack
 /// files, upload them to the pack store, and record the results in the
-/// database. Returns the new snapshot checksum which has _not_ been saved in
-/// the dataset record.
+/// database. The snapshot and dataset are updated in the database. Returns the
+/// snapshot checksum.
 ///
 pub fn perform_backup(
-    dataset: &core::Dataset,
+    dataset: &mut core::Dataset,
     dbase: &Database,
     passphrase: &str,
 ) -> Result<core::Checksum, Error> {
     fs::create_dir_all(&dataset.workspace)?;
     let snap_sha1 = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
     let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
-    // if no previous snapshot, visit every file in the new snapshot otherwise,
-    // find those files that changed from the previous snapshot (would like to
-    // have a single iterator type for this but seems tricky)
+    // if no previous snapshot, visit every file in the new snapshot, otherwise
+    // find those files that changed from the previous snapshot
     if dataset.latest_snapshot.is_none() {
         let snapshot = dbase.get_snapshot(&snap_sha1)?.unwrap();
         let tree = snapshot.tree.clone();
@@ -49,8 +47,12 @@ pub fn perform_backup(
             bmaster.handle_file(result)?;
         }
     }
-    // empty the last pack file
+    // upload the remaining chunks in the pack builder
     bmaster.finish_pack()?;
+    // commit everything to the database
+    bmaster.update_parent(&snap_sha1)?;
+    dataset.latest_snapshot = Some(snap_sha1.clone());
+    dbase.put_dataset(&dataset)?;
     Ok(snap_sha1)
 }
 
@@ -134,6 +136,16 @@ impl<'a> BackupMaster<'a> {
         }
         Ok(())
     }
+
+    /// Update the current snapshot with a reference to the previous snapshot,
+    /// as well as set the end time value to the current time.
+    fn update_parent(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
+        let mut snapshot = self.dbase.get_snapshot(snap_sha1)?.unwrap();
+        snapshot.parent = self.dataset.latest_snapshot.clone();
+        snapshot.end_time = Some(SystemTime::now());
+        self.dbase.put_snapshot(snap_sha1, &snapshot)?;
+        Ok(())
+    }
 }
 
 ///
@@ -154,6 +166,80 @@ pub fn take_snapshot(
     let sha1 = snap.checksum();
     dbase.insert_snapshot(&sha1, &snap)?;
     Ok(sha1)
+}
+
+///
+/// Restore a single file identified by the given checksum.
+///
+pub fn restore_file(
+    dbase: &Database,
+    dataset: &core::Dataset,
+    passphrase: &str,
+    checksum: core::Checksum,
+    outfile: &Path,
+) -> Result<(), Error> {
+    let store_boxed = store::load_store(dbase, &dataset.store)?;
+    // look up the file record to get chunks
+    let saved_file = dbase
+        .get_file(&checksum)?
+        .ok_or_else(|| err_msg(format!("missing file: {:?}", checksum)))?;
+    // create an index of all the chunks we want to collect (using strings
+    // because the extracted chunks consist of a list of file names)
+    let mut desired_chunks: HashSet<String> = HashSet::new();
+    for (_offset, chunk) in &saved_file.chunks {
+        desired_chunks.insert(chunk.to_string());
+    }
+    // track pack files that have already been processed
+    let mut finished_packs: HashSet<core::Checksum> = HashSet::new();
+    // look up chunk records to get pack record(s)
+    for (_offset, chunk) in &saved_file.chunks {
+        let chunk_rec = dbase
+            .get_chunk(&chunk)?
+            .ok_or_else(|| err_msg(format!("missing chunk: {:?}", chunk)))?;
+        let pack_digest = chunk_rec.packfile.as_ref().unwrap();
+        if !finished_packs.contains(pack_digest) {
+            let saved_pack = dbase
+                .get_pack(pack_digest)?
+                .ok_or_else(|| err_msg(format!("missing pack: {:?}", pack_digest)))?;
+            // retrieve the pack file
+            let packfile = tempfile::Builder::new()
+                .prefix("pack")
+                .suffix(".bin")
+                .tempfile_in(&dataset.workspace)?;
+            store_boxed.retrieve_pack(&saved_pack.bucket, &saved_pack.object, packfile.path())?;
+            // extract chunks from pack (temporarily use the output file path)
+            core::decrypt_file(passphrase, packfile.path(), outfile)?;
+            fs::remove_file(packfile.path())?;
+            let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
+            fs::remove_file(outfile)?;
+            // remove unrelated chunks to conserve space
+            for cname in chunk_names {
+                if !desired_chunks.contains(&cname) {
+                    let mut chunk_path = PathBuf::from(&dataset.workspace);
+                    chunk_path.push(cname);
+                    fs::remove_file(&chunk_path)?;
+                }
+            }
+            // remember this pack as being completed
+            finished_packs.insert(pack_digest.to_owned());
+        }
+    }
+    // sort the chunks by offset to produce the ordered file list
+    let mut chunks = saved_file.chunks.clone();
+    chunks.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    let chunk_bufs: Vec<PathBuf> = chunks
+        .iter()
+        .map(|c| {
+            let mut cpath = PathBuf::from(&dataset.workspace);
+            cpath.push(c.1.to_string());
+            cpath
+        })
+        .collect();
+    // c.f. https://github.com/rust-lang/rust-clippy/issues/3071
+    #[allow(clippy::redundant_closure)]
+    let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
+    core::assemble_chunks(&chunk_paths, outfile)?;
+    Ok(())
 }
 
 ///
@@ -579,11 +665,8 @@ pub struct PackBuilder<'a> {
 impl<'a> PackBuilder<'a> {
     /// Create a new builder with the desired size.
     pub fn new(dbase: &'a Database, pack_size: u64) -> Self {
-        // Use the pack size as a guide for determining the chunk sizes. Limit
-        // the size of chunks to something reasonable that will keep most files
-        // intact, but also allow for keeping pack files close to their desired
-        // size, whatever that might be.
-        let chunk_size = cmp::max(1_048_576, cmp::min(pack_size / 4, 4_194_304));
+        // Use the pack size as a guide for determining the chunk sizes.
+        let chunk_size = pack_size / 4;
         Self {
             dbase,
             pack_size,
@@ -592,13 +675,6 @@ impl<'a> PackBuilder<'a> {
             packed_chunks: HashSet::new(),
             done_chunks: HashSet::new(),
         }
-    }
-
-    /// Override the calculated chunk size with a non-standard value. Primarily
-    /// used for testing with smaller files.
-    pub fn chunk_size(mut self, chunk_size: u64) -> Self {
-        self.chunk_size = chunk_size;
-        self
     }
 
     /// Return number of files in this pack, primarily for testing.
@@ -768,7 +844,19 @@ impl Pack {
         bucket: &str,
         object: &str,
     ) -> Result<(), Error> {
-        // massage the file/chunk data into database records and save
+        let digest = self.digest.as_ref().unwrap();
+        // record the uploaded chunks to the database
+        for chunk in self.chunks.iter_mut() {
+            // set the pack digest for each chunk record
+            chunk.packfile = Some(digest.clone());
+            dbase.insert_chunk(chunk)?;
+        }
+        self.chunks.clear();
+        // record the pack in the database
+        let pack = core::SavedPack::new(digest.clone(), bucket, object);
+        dbase.insert_pack(&pack)?;
+        // massage the file/chunk data into database records for those files
+        // that have been completely uploaded
         for (filesum, parts) in &self.files {
             let mut length: u64 = 0;
             let mut chunks: Vec<(u64, core::Checksum)> = Vec::new();
@@ -779,19 +867,6 @@ impl Pack {
             let file = core::SavedFile::new(filesum.clone(), length, chunks);
             dbase.insert_file(&file)?;
         }
-        // save all of the chunks to the database; would have done this while
-        // processing the files, but cannot borrow the files map immutably and
-        // mutably at the same time
-        for chunks in self.files.values_mut() {
-            for chunk in chunks.iter_mut() {
-                // set the pack digest for each chunk record
-                chunk.packfile = Some(self.digest.as_ref().unwrap().clone());
-                dbase.insert_chunk(chunk)?;
-            }
-        }
-        // record the pack in the database
-        let pack = core::SavedPack::new(self.digest.as_ref().unwrap().clone(), bucket, object);
-        dbase.insert_pack(&pack)?;
         Ok(())
     }
 }

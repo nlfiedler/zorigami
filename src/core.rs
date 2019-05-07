@@ -12,6 +12,7 @@ use std::fs::{self, File, FileType};
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::SystemTime;
 use tar::{Archive, Builder, Header};
 use ulid::Ulid;
@@ -95,6 +96,20 @@ impl fmt::Display for Checksum {
     }
 }
 
+impl FromStr for Checksum {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with("sha1-") {
+            Ok(Checksum::SHA1(s[5..].to_owned()))
+        } else if s.starts_with("sha256-") {
+            Ok(Checksum::SHA256(s[7..].to_owned()))
+        } else {
+            Err(err_msg(format!("not a recognized store type: {}", s)))
+        }
+    }
+}
+
 ///
 /// Compute the SHA1 hash digest of the given data.
 ///
@@ -135,8 +150,10 @@ pub struct Chunk {
     /// The SHA256 checksum of the chunk, with algo prefix.
     #[serde(skip)]
     pub digest: Checksum,
-    /// The byte offset of this chunk within the file.
-    #[serde(rename = "of")]
+    /// The byte offset of this chunk within the file. This is _not_ saved to
+    /// the database since an identical chunk may appear in different files at
+    /// different offsets.
+    #[serde(skip)]
     pub offset: usize,
     /// The byte length of this chunk.
     #[serde(rename = "le")]
@@ -876,6 +893,30 @@ mod tests {
     }
 
     #[test]
+    fn test_checksum_fromstr() {
+        let result = Checksum::from_str("sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c");
+        assert!(result.is_ok());
+        let checksum = result.unwrap();
+        assert_eq!(
+            checksum,
+            Checksum::SHA1(String::from("e7505beb754bed863e3885f73e3bb6866bdd7f8c"))
+        );
+        let result = Checksum::from_str(
+            "sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433",
+        );
+        assert!(result.is_ok());
+        let checksum = result.unwrap();
+        assert_eq!(
+            checksum,
+            Checksum::SHA256(String::from(
+                "a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433"
+            ))
+        );
+        let result = Checksum::from_str("foobar");
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_checksum_data() {
         let data = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
         let sha1 = checksum_data_sha1(data);
@@ -1138,10 +1179,11 @@ mod tests {
         let encoded: Vec<u8> = serde_cbor::to_vec(&chunk).unwrap();
         // serde_json produces a string that is about 10% larger than CBOR,
         // and CBOR is a (pending) internet standard, making it a good choice
-        assert_eq!(encoded.len(), 62);
+        assert_eq!(encoded.len(), 58);
         let result: Chunk = serde_cbor::from_slice(&encoded).unwrap();
         // checksum for skipped field is all zeros
         assert_eq!(result.digest.to_string(), NULL_SHA1);
+        // offset for skipped field is always zero
         assert_eq!(result.offset, 0);
         assert_eq!(result.length, 40000);
         assert!(result.packfile.is_some());

@@ -5,7 +5,9 @@
 extern crate serde_json;
 use failure::Error;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use tempfile::tempdir;
 use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
@@ -358,7 +360,6 @@ fn test_pack_builder() -> Result<(), Error> {
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let mut builder = PackBuilder::new(&dbase, 65536);
-    builder = builder.chunk_size(16384);
     assert_eq!(builder.has_chunks(), false);
     assert_eq!(builder.is_full(), false);
     let lorem_path = Path::new("test/fixtures/lorem-ipsum.txt");
@@ -444,8 +445,7 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
     let db_path = "tmp/test/engine/dbuilder/rocksdb";
     let _ = fs::remove_dir_all(db_path);
     let dbase = Database::new(Path::new(db_path)).unwrap();
-    let mut builder = PackBuilder::new(&dbase, 131_072);
-    builder = builder.chunk_size(16384);
+    let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.file_count(), 0);
     assert_eq!(builder.chunk_count(), 0);
     // builder should ignore attempts to add files with the same checksum as
@@ -498,8 +498,7 @@ fn test_perform_backup() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
-    let first_snap = perform_backup(&dataset, &dbase, "keyboard cat")?;
-    dataset.latest_snapshot = Some(first_snap);
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // check for object(s) being present in the pack store
     let result = store.list_buckets();
@@ -515,8 +514,7 @@ fn test_perform_backup() -> Result<(), Error> {
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let second_snap = perform_backup(&dataset, &dbase, "keyboard cat")?;
-    dataset.latest_snapshot = Some(second_snap);
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // check for more buckets and objects
     let result = store.list_buckets();
@@ -534,5 +532,142 @@ fn test_perform_backup() -> Result<(), Error> {
     let listing = result.unwrap();
     assert!(!listing.is_empty());
 
+    Ok(())
+}
+
+#[test]
+fn test_restore_file() -> Result<(), Error> {
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/restore_file/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let pack_path = "tmp/test/engine/restore_file/packs";
+    let _ = fs::remove_dir_all(pack_path);
+
+    // create a local store
+    let config_json = json!({
+        "name": "test_tmp",
+        "basepath": pack_path,
+    });
+    let value = config_json.to_string();
+    let mut store = local::LocalStore::default();
+    store.get_config_mut().from_json(&value)?;
+    save_store(&dbase, &store)?;
+
+    // create a dataset
+    let basepath = "tmp/test/engine/restore_file/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let store_name = store_name(&store);
+    let mut dataset = Dataset::new(&unique_id, Path::new(basepath), &store_name);
+    dataset.pack_size = 65536 as u64;
+
+    // perform the first backup
+    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+
+    // perform the second backup
+    let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
+    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+
+    // perform the third backup
+    let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
+    assert!(fs::copy("test/fixtures/washington-journal.txt", &dest).is_ok());
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+
+    // should be 8 chunks in database (pack size of 64kb means chunks around
+    // 16kb; testing with two small files and one larger file)
+    let count = dbase.count_prefix("chunk")?;
+    assert_eq!(count, 8);
+
+    // perform the fourth backup with shifted larger file
+    let infile = Path::new("test/fixtures/SekienAkashita.jpg");
+    let outfile: PathBuf = [basepath, "SekienShifted.jpg"].iter().collect();
+    copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+
+    // should be one more chunk in database
+    let count = dbase.count_prefix("chunk")?;
+    assert_eq!(count, 9);
+
+    // restore the file from the first snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
+
+    // restore the file from the second snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
+
+    // restore the file from the third snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
+
+    // restore the file from the fourth snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "b2c67e90a01f5d7aca48835b8ad8f0902ef03288aa4083e742bccbd96d8590a4",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
+
+    Ok(())
+}
+
+///
+/// Copy one file to another, prepending the result with the given text.
+///
+fn copy_with_prefix(header: &str, infile: &Path, outfile: &Path) -> Result<(), Error> {
+    let mut reader: &[u8] = header.as_bytes();
+    let mut writer = fs::File::create(outfile)?;
+    io::copy(&mut reader, &mut writer)?;
+    let mut reader = fs::File::open(infile)?;
+    io::copy(&mut reader, &mut writer)?;
     Ok(())
 }

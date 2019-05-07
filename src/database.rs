@@ -159,6 +159,16 @@ impl Database {
     }
 
     ///
+    /// Update the snapshot in the database, using the given digest as part of
+    /// the key (plus a fixed prefix for namespacing).
+    ///
+    pub fn put_snapshot(&self, digest: &Checksum, snapshot: &Snapshot) -> Result<(), Error> {
+        let key = format!("snapshot/{}", digest);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&snapshot)?;
+        self.put_document(key.as_bytes(), &encoded)
+    }
+
+    ///
     /// Retrieve the snapshot by the given digest, returning None if not found.
     ///
     pub fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
@@ -264,3 +274,23 @@ impl Database {
         Ok(results)
     }
 }
+
+// maybe useful some time...
+// let files = dbase.find_prefix("file/")?;
+// for key in files {
+//     let sum = Checksum::SHA256(key[12..].to_string());
+//     let result = dbase.get_file(&sum)?.unwrap();
+//     println!("file: {:?}", result);
+// }
+// let chunks = dbase.find_prefix("chunk/")?;
+// for key in chunks {
+//     let sum = Checksum::SHA256(key[13..].to_string());
+//     let result = dbase.get_chunk(&sum)?.unwrap();
+//     println!("chunk: {:?}", result);
+// }
+// let packs = dbase.find_prefix("pack/")?;
+// for key in packs {
+//     let sum = Checksum::SHA256(key[12..].to_string());
+//     let result = dbase.get_pack(&sum)?.unwrap();
+//     println!("pack: {:?}", result);
+// }
