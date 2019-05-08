@@ -147,7 +147,7 @@ fn run_store_tests(store: &Store) {
         "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f".to_owned(),
     );
     let chunks =
-        [Chunk::new(chnksum, 0, 3129).filepath(Path::new("./test/fixtures/lorem-ipsum.txt"))];
+        [Chunk::new(chnksum, 0, 3129).filepath(Path::new("./tests/fixtures/lorem-ipsum.txt"))];
     let outdir = tempdir().unwrap();
     let ptmpfile = outdir.path().join("pack.tar");
     let digest = pack_chunks(&chunks[..], &ptmpfile).unwrap();

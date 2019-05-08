@@ -934,7 +934,7 @@ mod tests {
     #[test]
     fn test_checksum_file() -> Result<(), io::Error> {
         // use a file larger than the buffer size used for hashing
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let sha256 = checksum_file(&infile)?;
         assert_eq!(
             sha256.to_string(),
@@ -945,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_file_chunking_16k() -> io::Result<()> {
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 16384)?;
         assert_eq!(results.len(), 6);
         assert_eq!(results[0].offset, 0);
@@ -989,7 +989,7 @@ mod tests {
 
     #[test]
     fn test_file_chunking_32k() -> io::Result<()> {
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 32768)?;
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].offset, 0);
@@ -1015,7 +1015,7 @@ mod tests {
 
     #[test]
     fn test_file_chunking_64k() -> io::Result<()> {
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 65536)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].offset, 0);
@@ -1042,7 +1042,7 @@ mod tests {
             0,
             3129,
         )
-        .filepath(Path::new("./test/fixtures/lorem-ipsum.txt"))];
+        .filepath(Path::new("./tests/fixtures/lorem-ipsum.txt"))];
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
         let digest = pack_chunks(&chunks[..], &packfile)?;
@@ -1075,7 +1075,7 @@ mod tests {
                 0,
                 40000,
             )
-            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
+            .filepath(Path::new("./tests/fixtures/SekienAkashita.jpg")),
             Chunk::new(
                 Checksum::SHA256(
                     "cff5c0c15c6eef98784e8733d21dec87aae170a67e07ab0823024b26cab07b6f".to_owned(),
@@ -1083,7 +1083,7 @@ mod tests {
                 40000,
                 40000,
             )
-            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
+            .filepath(Path::new("./tests/fixtures/SekienAkashita.jpg")),
             Chunk::new(
                 Checksum::SHA256(
                     "e02dd839859aed2783f7aae9b68e1a568d68139bd9d907c1cd5beca056f06464".to_owned(),
@@ -1091,7 +1091,7 @@ mod tests {
                 80000,
                 29466,
             )
-            .filepath(Path::new("./test/fixtures/SekienAkashita.jpg")),
+            .filepath(Path::new("./tests/fixtures/SekienAkashita.jpg")),
         ];
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
@@ -1148,7 +1148,7 @@ mod tests {
     #[test]
     fn test_encryption() -> Result<(), gpgme::Error> {
         let passphrase = "some passphrase";
-        let infile = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let outdir = tempdir()?;
         let ciphertext = outdir.path().join("SekienAkashita.jpg.enc");
         encrypt_file(passphrase, infile, &ciphertext)?;
@@ -1195,7 +1195,7 @@ mod tests {
 
     #[test]
     fn test_tree_entry() {
-        let path = Path::new("./test/fixtures/lorem-ipsum.txt");
+        let path = Path::new("./tests/fixtures/lorem-ipsum.txt");
         let tref = TreeReference::TREE(Checksum::SHA1("cafebabe".to_owned()));
         let result = TreeEntry::new(&path, tref);
         assert!(result.is_ok());
@@ -1222,12 +1222,12 @@ mod tests {
 
     #[test]
     fn test_tree() {
-        let path = Path::new("./test/fixtures/lorem-ipsum.txt");
+        let path = Path::new("./tests/fixtures/lorem-ipsum.txt");
         let sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let tref = TreeReference::FILE(sha1);
         let result = TreeEntry::new(&path, tref);
         let entry1 = result.unwrap();
-        let path = Path::new("./test/fixtures/SekienAkashita.jpg");
+        let path = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let sha1 = Checksum::SHA1("4c009e44fe5794df0b1f828f2a8c868e66644964".to_owned());
         let tref = TreeReference::FILE(sha1);
         let result = TreeEntry::new(&path, tref);

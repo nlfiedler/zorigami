@@ -1,36 +1,11 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+node_modules
 
 # Build artifacts
 Cargo.lock
 target
-
-# Dependency directories
-node_modules/
-
-# Optional npm cache directory
-.npm
-
-# Optional REPL history
-.node_repl_history
-
-# Output of TypeScript
-dist
-
-# Output of 'npm pack'
-*.tgz
 
 # dotenv environment variables file
 .env
 
 # temporary data
 tmp
-test/tmp

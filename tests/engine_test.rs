@@ -45,7 +45,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
-    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
@@ -53,7 +53,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     assert_eq!(snapshot1.file_count, 1);
     // make a change to the data set
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
-    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
     if xattr::SUPPORTED_PLATFORM {
         xattr::set(&dest, "me.fiedlers.test", b"foobar")?;
     }
@@ -362,10 +362,10 @@ fn test_pack_builder() -> Result<(), Error> {
     let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.has_chunks(), false);
     assert_eq!(builder.is_full(), false);
-    let lorem_path = Path::new("test/fixtures/lorem-ipsum.txt");
+    let lorem_path = Path::new("tests/fixtures/lorem-ipsum.txt");
     let lorem_sha = checksum_file(&lorem_path)?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
-    let sekien_path = Path::new("test/fixtures/SekienAkashita.jpg");
+    let sekien_path = Path::new("tests/fixtures/SekienAkashita.jpg");
     let sekien_sha = checksum_file(&sekien_path)?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
     let pack_file: PathBuf = [basepath, "pack.001"].iter().collect();
@@ -450,13 +450,13 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
     assert_eq!(builder.chunk_count(), 0);
     // builder should ignore attempts to add files with the same checksum as
     // have already been added to this builder prior to emptying into pack files
-    let lorem_path = Path::new("test/fixtures/lorem-ipsum.txt");
+    let lorem_path = Path::new("tests/fixtures/lorem-ipsum.txt");
     let lorem_sha = checksum_file(&lorem_path)?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
-    let sekien_path = Path::new("test/fixtures/SekienAkashita.jpg");
+    let sekien_path = Path::new("tests/fixtures/SekienAkashita.jpg");
     let sekien_sha = checksum_file(&sekien_path)?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
@@ -497,7 +497,7 @@ fn test_perform_backup() -> Result<(), Error> {
 
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
-    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // check for object(s) being present in the pack store
@@ -513,7 +513,7 @@ fn test_perform_backup() -> Result<(), Error> {
 
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
-    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // check for more buckets and objects
@@ -565,17 +565,17 @@ fn test_restore_file() -> Result<(), Error> {
 
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
-    assert!(fs::copy("test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
-    assert!(fs::copy("test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // perform the third backup
     let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
-    assert!(fs::copy("test/fixtures/washington-journal.txt", &dest).is_ok());
+    assert!(fs::copy("tests/fixtures/washington-journal.txt", &dest).is_ok());
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;
 
     // should be 8 chunks in database (pack size of 64kb means chunks around
@@ -584,7 +584,7 @@ fn test_restore_file() -> Result<(), Error> {
     assert_eq!(count, 8);
 
     // perform the fourth backup with shifted larger file
-    let infile = Path::new("test/fixtures/SekienAkashita.jpg");
+    let infile = Path::new("tests/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = [basepath, "SekienShifted.jpg"].iter().collect();
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
     perform_backup(&mut dataset, &dbase, "keyboard cat")?;

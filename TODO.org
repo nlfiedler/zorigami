@@ -113,7 +113,7 @@
 **** Rust: streamlined error handling
 **** Rust: fine-grained namespaces and visibility control
 ** Phase 4
-*** TODO Rewrite everything in Rust
+*** DONE Rewrite everything in Rust
 **** DONE Decide on a web framework: warp
 **** DONE Look for useful tools and VS Code support
 ***** https://github.com/rust-lang/rustfmt
@@ -128,10 +128,6 @@
 ***** DONE how does the =?= operator work? replaces =try!= macro
 ***** DONE How to have code run when a module starts up (a la Go's =init()=)
 ****** https://crates.io/crates/lazy_static/
-**** TODO Learn how to manage application state
-***** https://github.com/SergioBenitez/state (MIT/Apache)
-***** https://github.com/rust-redux/rust-redux (MIT)
-***** https://github.com/jaredonline/redux-rs (???)
 **** DONE Consider translating FastCDC to Rust to get some practice
 **** DONE Determine the code layout
 ***** DONE can Rust live alongside TypeScript for the time being? yes
@@ -143,8 +139,6 @@
 ***** DONE checksum file
 ***** DONE checksum string from bytes
 ***** DONE checksum bytes from string
-**** TODO set up configuration for dev and testing
-***** TODO replace hard-coded db_path in integration test
 **** DONE set up web framework to serve a static page
 ***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
 ***** DONE learn how to serve static assets
@@ -174,29 +168,6 @@
 ****** file can be decrypted using =gpg= without a passphrase
 ****** seems like =gpg= caches the secret key somewhere
 **** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
-**** TODO get basic database working
-***** DONE read https://github.com/facebook/rocksdb/wiki/RocksDB-Basics
-***** DONE write an "insert if missing" function
-****** does not write if the key is already present
-***** DONE decide how to store "documents" in the database
-****** use [[https://github.com/serde-rs/serde][serde]] to efficiently de/serialize to many formats
-****** can =skip= fields that do not need serde
-****** can write custom serde functionality as needed
-****** DONE how to manage versioning of the data structures?
-******* can use =#[serde(default)]= and =Default= to fill in blanks
-****** =serde_json= is maintained by serde community
-****** [[https://github.com/pyfisch/cbor][pyfisch/cbor]]; CBOR is an internet standard (RFC 7049)
-****** [[https://github.com/3Hren/msgpack-rust][3Hren/msgpack-rust]] is not actively developed
-***** DONE Use serde ~rename~ feature to make short field names
-***** DONE write functions for insert/get tree
-***** DONE write functions for insert/get snapshot
-***** TODO write functions for insert/get configuration
-***** DONE write functions for insert/get xattr
-***** DONE write functions for insert/get file
-***** DONE write functions for insert/get chunk
-***** DONE write functions for insert/get pack
-***** DONE work out how to support the counts of each type of document
-***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 **** DONE get CDC working
 **** DONE implement pack stores
 ***** DONE design the module directory structure
@@ -217,10 +188,6 @@
 **** DONE Need to inject digest when deserializing objects from database
 **** DONE Chunk serde should inject digest in database read
 **** DONE Decide how to store "service provider" configuration
-**** TODO consider approaches for managing the database instance
-***** engine opens at start of backup procedure, drops when done
-***** what about web server? does warp have state management?
-***** maybe use =Arc= and =Mutex= to manage concurrent access
 **** DONE convert engine code
 ***** DONE insert trees into the database using their checksum
 ***** DONE translate =processPath()=
@@ -254,21 +221,20 @@
 ***** DONE =perform_backup()= should set =parent= of latest snapshot, if any
 ***** DONE =perform_backup()= should set =latest_snapshot= of dataset
 ***** DONE insert xattr records for each tree entry (see =process_path()=)
-**** TODO Update =README.md= wrt to Rust and requirements
-**** TODO Add =gpgme= library dependency to =README.md=
+**** DONE Update =README.md= wrt to Rust and requirements
+**** DONE Add =gpgme= library dependency to =README.md=
 ***** =brew install gpgme=
-**** TODO Update =NOTES.md= for several things
+**** DONE Update =NOTES.md= for several things
 ***** Rust vs TypeScript/JavaScript
 ***** RocksDB vs PouchDB
-**** TODO Try building on Windows
-**** TODO Remove everything related to the old stack
-***** TODO.org
-***** README.md
-***** .gitignore
-***** PouchDB
-***** TypeScript
-***** Node.js
-***** package.json
+**** DONE Remove everything related to the old stack
+***** DONE TODO.org
+***** DONE README.md
+***** DONE .gitignore
+***** DONE PouchDB
+***** DONE TypeScript
+***** DONE Node.js
+***** DONE package.json
 *** TODO Should use =walkdir= crate to traverse directory structure
 **** handles crossing devices
 **** handles symlink loops
@@ -305,9 +271,45 @@
 *** TODO Exclude the database files from the data set(s)
 *** TODO Add something that will run scheduled jobs
 **** that is, an easy way to trigger backups according to the configuration
+*** TODO Loose ends from Rust translation
+**** TODO Learn how to manage application state
+***** https://github.com/SergioBenitez/state (MIT/Apache)
+***** https://github.com/rust-redux/rust-redux (MIT)
+***** https://github.com/jaredonline/redux-rs (???)
+**** TODO set up configuration for dev and testing
+***** TODO replace hard-coded db_path in integration test
+**** TODO get basic database working
+***** DONE read https://github.com/facebook/rocksdb/wiki/RocksDB-Basics
+***** DONE write an "insert if missing" function
+****** does not write if the key is already present
+***** DONE decide how to store "documents" in the database
+****** use [[https://github.com/serde-rs/serde][serde]] to efficiently de/serialize to many formats
+****** can =skip= fields that do not need serde
+****** can write custom serde functionality as needed
+****** DONE how to manage versioning of the data structures?
+******* can use =#[serde(default)]= and =Default= to fill in blanks
+****** =serde_json= is maintained by serde community
+****** [[https://github.com/pyfisch/cbor][pyfisch/cbor]]; CBOR is an internet standard (RFC 7049)
+****** [[https://github.com/3Hren/msgpack-rust][3Hren/msgpack-rust]] is not actively developed
+***** DONE Use serde ~rename~ feature to make short field names
+***** DONE write functions for insert/get tree
+***** DONE write functions for insert/get snapshot
+***** TODO write functions for insert/get configuration
+***** DONE write functions for insert/get xattr
+***** DONE write functions for insert/get file
+***** DONE write functions for insert/get chunk
+***** DONE write functions for insert/get pack
+***** DONE work out how to support the counts of each type of document
+***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
+**** TODO consider approaches for managing the database instance
+***** engine opens at start of backup procedure, drops when done
+***** what about web server? does warp have state management?
+***** maybe use =Arc= and =Mutex= to manage concurrent access
 ** Phase 5
+*** TODO Get encryption password from an environment variable
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
+*** TODO If the new snapshot has no changes from previous, delete it
 *** TODO Enable configuring various overrides in a dataset
 **** schedule/frequency overrides
 **** file/dirctory ignore overrides
@@ -319,6 +321,7 @@
 **** c.f. https://github.com/googleapis/nodejs-storage/
 *** TODO Use this to replace =akashita= for online backups
 ** Phase 6
+*** TODO Try building on Windows
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
@@ -360,7 +363,7 @@
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
 ** Phase 7
 *** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
-*** TODO Read cross platform Node.js guide: https://github.com/ehmicky/portable-node-guide
+*** TODO Design garbage collection solution (see NOTES)
 *** TODO Support Windows file types
 **** ReadOnly
 **** Hidden
@@ -397,6 +400,7 @@
 *** Does it have support for dock icons?
 ** Phase N: Electron
 *** TODO Write it in TypeScript
+**** However, TypeScript and redux might get ugly fast
 *** TODO Consider using [[https://github.com/neon-bindings/neon][Neon bindings]] to write some parts in Rust
 *** TODO Create a system tray icon/widget
 **** Popup menu like Time Machine

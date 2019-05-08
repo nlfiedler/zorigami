@@ -51,10 +51,10 @@ They change the SSH config to run the backup command with "append only" flag.
 
 ## Design
 
-* Backend written in TypeScript, uses Apollo GraphQL server
+* Backend written in Rust, uses Juniper GraphQL server
 * Front-end written in ReasonML, uses Apollo GraphQL client
-* Desktop application written in TypeScript, uses Electron
-* Document-oriented database is PouchDB, with PouchDB Server
+* Desktop application written in JavaScript, uses Electron
+* Key/Value store is RocksDB
 * Storage implementations support local, SFTP, Google, Amazon, etc
 
 ## Use Cases
@@ -114,7 +114,7 @@ They change the SSH config to run the backup command with "append only" flag.
     - tar file format
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
-    - encrypted using OpenPGP (RFC 4880) using passphrase
+    - encrypted with OpenPGP (RFC 4880) using passphrase
 
 ### Database Schema
 
@@ -126,12 +126,6 @@ They change the SSH config to run the backup command with "append only" flag.
     - user name
     - computer UUID
     - peers: list of peer installations for chunk deduplication
-    - default cloud service provider (e.g. `sftp`, `aws`, `gcp`)
-    - default cloud storage type (e.g. "nearline")
-    - default cloud service region (e.g. `us-west1`)
-    - default sftp host and credentials, if any
-    - default local path for local backup, if any
-    - default local path to cloud service credentials file
     - default frequency with which to perform backups (hourly, daily, weekly, monthly)
     - default time ranges in which to upload snapshots
     - default preferred size of pack files (in MB)
@@ -152,8 +146,8 @@ They change the SSH config to run the backup command with "append only" flag.
     - parent: SHA1 of previous snapshot (`null` if first snapshot)
     - start_time: when snapshot started
     - end_time: when snapshot finished
-    - num_files: number of files in this snapshot
-    - root tree reference
+    - file_count: number of files in this snapshot
+    - tree: root tree reference
 * tree records
     - key: `tree/` + SHA1 of tree data (with "sha1-" prefix)
     - entries: (sorted by name)
@@ -188,8 +182,8 @@ Sync with peers for multi-host chunk deduplication.
 * pack records
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
     - remote bucket/vault name
-    - remote archive identifier (e.g. AWS Glacier)
-    - upload_date: date/time of successful upload, for conflict resolution
+    - remote archive identifier (e.g. Amazon Glacier)
+    - upload_time: date/time of successful upload, for conflict resolution
 
 ## Implementation
 
@@ -208,7 +202,7 @@ shifting.
 When the peer(s) are available, sync with their chunk/pack database to get
 recent records. If there are conflicts (which seems unlikely given the pack
 would have to have the exact same chunks) resolve by keeping the pack record
-that has the most recent `upload_date`.
+that has the most recent `upload_time`.
 
 ### Procedure
 
@@ -230,7 +224,7 @@ that has the most recent `upload_date`.
         * set `changed` on the record with the checksum at time of snapshot
         * set `chunks` on the record with the checksum at time of packing
 1. Set the `end_time` of snapshot record to indicate completion.
-1. Store latest snapshot identifier in `configuration` record.
+1. Store latest snapshot identifier in `dataset/` record.
 1. Backup the database files.
 
 #### Uploading Packs
@@ -238,12 +232,9 @@ that has the most recent `upload_date`.
 1. Select an existing bucket, or create a new one.
     * For Amazon, limited to 1,000 vaults, so reuse will be necessary.
     * For Google, no hard limit, but perhaps a practical limit.
-    * Can add new records to the database (and index) to keep track.
-1. Insert `pending` pack record in database to facilitate cleaning up botched backups.
-    * e.g. if the backup crashes, and files changed, old pack will be left dangling forever
+    * Can add new records to the database (and index) to keep track of translations.
 1. Upload the pack file to the cloud.
 1. Update pack record to track bucket/vault and object/archive ID.
-1. Remove `pending` from pack record in database.
 
 #### Crash Recovery
 
@@ -275,7 +266,6 @@ If the latest snapshot is missing an end time, there is pending work to finish.
     - Remove tree and file records that are no longer referenced
     - Find pack files that are no longer referenced
     - Remove the pack files from the remote side, delete the record
-    - Find old `pending` pack records and remove remote file
 * Aggressive garbage collection
     - Retrieve pack files, remove stale entries, repack, upload
     - Remove the old pack files from the remote side
