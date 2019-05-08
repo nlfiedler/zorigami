@@ -1,246 +1,8 @@
 * Zorigami
-** Exploring other languages
-*** Compile to native for easy deployment
-*** Compile to native for code obfuscation
-*** Rust
-**** Advantages
-***** compile to native
-***** expressive, safe type system
-***** good dependency management
-***** lots of useful tools (e.g. clippy)
-**** Disadvantages
-***** fewer libraries compared to Go
-**** DONE GraphQL server
-***** Make sure it can generate a schema.json
-***** Should be able to parse schema definition (for docs)
-***** https://github.com/graphql-rust/juniper (BSD)
-****** supports entire GraphQL specification
-****** does /not/ read GraphQL schema language
-****** supports GraphiQL and Playground
-****** is not the HTTP server, but integrates with them
-****** uses macros for schema documentation
-***** tutorial at [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][alex.amiran.it]] that uses warp web framework
-***** old https://github.com/nrc/graphql (MIT/Apache)
-**** DONE Web framework
-***** our needs are simple, so a simple framework is best
-***** warp https://github.com/seanmonstar/warp (MIT)
-****** works with stable Rust
-****** powerful and easy to use
-****** testing library
-****** integrates with juniper
-***** Rocket https://rocket.rs (Apache 2.0)
-****** requires Rust nightly because of fancy macros
-****** routing using macros
-****** streams input and output
-****** cookies
-****** json
-****** environment configuration
-****** testing library
-****** integrates with juniper
-***** Gotham https://gotham.rs (MIT/Apache 2.0)
-****** targets stable Rust
-****** routing
-****** middleware
-****** sessions
-****** cookies
-****** templates
-****** testing library
-****** how to integrate with juniper is unknown
-***** Iron http://ironframework.io (MIT)
-****** crate has not been updated since 2017
-****** everything is middleware that must be added in
-****** integrates with juniper
-***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
-****** pretty basic compared to Rocket
-***** Actix https://actix.rs (Apache 2.0)
-***** pretty basic https://github.com/carllerche/tower-web (MIT)
-****** competing with warp? hyper?
-**** DONE Database
-***** ideally want something well maintained, reliable
-***** schema is pretty simple, could use key/value store
-***** RocksDB https://github.com/rust-rocksdb/rust-rocksdb (Apache)
-****** statically links everything, including compression support
-***** SQLite https://github.com/jgallagher/rusqlite (MIT)
-***** Rust wrapper to LevelDB https://github.com/skade/leveldb
-***** LevelDB in Rust (active?) https://bitbucket.org/dermesser/leveldb-rs/overview
-**** DONE dotenv
-***** the canonical crate repo has been emptied, there are many forks of the old code
-***** most-up-to-date https://github.com/apiraino/rust-dotenv (MIT)
-**** DONE Configuration
-***** https://github.com/mehcode/config-rs (MIT/Apache)
-**** DONE =getpwuid= and =getgrgid= support
-***** libc: https://crates.io/crates/libc (MIT/Apache 2.0)
-**** DONE test library
-***** https://github.com/rust-rspec/rspec (MPL-2.0)
-****** appears to be dead
-***** https://github.com/utkarshkukreti/speculate.rs (MIT)
-****** works well for integration tests
-**** DONE UUID support
-***** https://github.com/uuid-rs/uuid (MIT/Apache 2.0)
-**** DONE xattr support
-***** Unix only: https://github.com/Stebalien/xattr (MIT/Apache 2.0)
-**** DONE CDC
-***** https://github.com/jrobhoward/quickcdc (MIT/Apache 2.0)
-****** not quite FastCDC, given dates of paper, but should be close enough
-****** use a constant salt value for predictable results
-****** example uses =memmap= crate to read large files
-**** DONE Tar file
-***** https://github.com/alexcrichton/tar-rs (MIT/Apache 2.0)
-**** DONE PGP/Encryption
-***** https://github.com/gpg-rs/gpgme (LGPL)
-****** will need to bundle the =gpgme= library (unless statically linked)
-***** cryptostream https://github.com/neosmart/cryptostream (MIT)
-***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
-***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
-**** DONE ULID
-***** https://github.com/dylanhart/ulid-rs (MIT)
-**** DONE SFTP client
-***** https://github.com/alexcrichton/ssh2-rs (MIT/Apache 2.0)
-**** DONE AWS client
-***** Rusoto https://www.rusoto.org (MIT)
-**** DONE Google Cloud client
-***** https://github.com/Byron/google-apis-rs (MIT/Apache 2.0)
-**** DONE Minio client
-***** Rusoto supports Minio https://github.com/rusoto/rusoto (MIT)
-*** Go vs Rust
-**** Go: first class support for cloud services
-**** Go: statically linked OpenPGP readily available
-**** Go: easy to read and write language
-**** Rust: mature dependency management tooling
-**** Rust: cargo has good editor support
-**** Rust: expressive type system
-**** Rust: nominal subtyping is much easier to follow
-**** Rust: streamlined error handling
-**** Rust: fine-grained namespaces and visibility control
 ** Phase 4
-*** DONE Rewrite everything in Rust
-**** DONE Decide on a web framework: warp
-**** DONE Look for useful tools and VS Code support
-***** https://github.com/rust-lang/rustfmt
-***** https://github.com/rust-lang/rust-clippy
-***** https://github.com/kbknapp/cargo-outdated (MIT)
-***** https://github.com/nabijaczleweli/cargo-update (MIT)
-**** DONE Learn about Rust again, catch up on new things
-***** DONE =static= holds a value, =const= is a compile-time constant
-***** DONE futures for async stuff, https://rust-lang-nursery.github.io/futures-rs/
-***** DONE with =main.rs= and =lib.rs= you get both a binary and library
-***** DONE =format!= creates a string, =write!= writes to a buffer
-***** DONE how does the =?= operator work? replaces =try!= macro
-***** DONE How to have code run when a module starts up (a la Go's =init()=)
-****** https://crates.io/crates/lazy_static/
-**** DONE Consider translating FastCDC to Rust to get some practice
-**** DONE Determine the code layout
-***** DONE can Rust live alongside TypeScript for the time being? yes
-***** web framework seems to have no say in the matter
-***** put integration tests in =tests= as =modname.rs=
-***** put helper test code in =tests/modname/mod.rs=
-**** DONE write a core package with a few functions
-***** DONE checksum data
-***** DONE checksum file
-***** DONE checksum string from bytes
-***** DONE checksum bytes from string
-**** DONE set up web framework to serve a static page
-***** DONE use Gotham https://gotham.rs (MIT/Apache 2.0)
-***** DONE learn how to serve static assets
-***** DONE switch from gotham.rs to warp (same developer as hyper.rs)
-***** DONE serve up =index.html=
-***** DONE serve static assets under =public=
-**** DONE set up GraphQL server to serve a simple query
-***** DONE add a simple hello query
-***** DONE add some documentation (using doc comments)
-***** c.f. https://graphql-rust.github.io/servers/warp.html
-***** c.f. [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][Rust GraphQL with warp and juniper]] for extensive example
-***** DONE integrate with web framework to expose API
-***** DONE integrate with web framework to expose Playground
-**** DONE get chunk checksums working
-***** https://crates.io/crates/crypto-hash (MIT)
-****** use the =digest()= helper to get the hash as bytes
-**** DONE get pack files working using tar
-**** DONE try to get the gpgme thing working
-***** seems like =Context= is the main interface
-***** =Context.encrypt()= can take =File= for both plain and cipher
-***** DONE figure out the basic usae of the gpgme API
-****** DONE use =ctx.with_passphrase_provider()= to avoid user interface
-***** DONE figure out how to encrypt a file
-****** the ~recipient~ can be an empty list
-***** DONE can stop compressing the pack files since pgp does that
-***** DONE somehow the encryption is not really working
-****** file can be decrypted using =gpg= without a passphrase
-****** seems like =gpg= caches the secret key somewhere
-**** DONE Add crate license checker: https://github.com/Nemo157/cargo-lichking
-**** DONE get CDC working
-**** DONE implement pack stores
-***** DONE design the module directory structure
-****** =src/store.rs= contains trait and convenience functions
-****** =src/store/local.rs= contains local store implementation
-****** =src/store/sftp.rs= contains SFTP store implementation
-***** DONE define the =Store= trait
-***** DONE devise system for store configuration
-***** DONE set up config for defining sftp parameters
-***** DONE make the sftp tests conditional on config settings
-***** DONE turn the store tests into integration test, have a common testing fn
-***** DONE local
-***** DONE minio
-***** DONE sftp
-****** DONE is =~= a sensible default base path for sftp? no must be =.=
-***** DONE write integ tests for the save/load/list store functions
-***** DONE write test for the local store implementation
-**** DONE Need to inject digest when deserializing objects from database
-**** DONE Chunk serde should inject digest in database read
-**** DONE Decide how to store "service provider" configuration
-**** DONE convert engine code
-***** DONE insert trees into the database using their checksum
-***** DONE translate =processPath()=
-***** DONE change code and tests to use =Tree= instead of slice of =TreeEntry=
-***** DONE make =Tree= serializable with file count
-***** DONE translate =scantree()=
-***** DONE model the snapshot structure, add db operations
-***** DONE translate =takeSnapshot()=
-***** DONE seems like checksums and digests should be a struct
-****** DONE =TreeEntry.xattrs= should be map of String to Checksum
-****** DONE derive =Eq= trait
-****** DONE remove =checksum_from_bytes()=
-****** DONE remove =bytes_from_checksum()=
-***** DONE Why implement =Default= for =Chunk=?
-***** DONE =TreeEntry.reference= should be a sum type to represent link, tree, file
-****** should probably not be an =Option= either
-***** DONE implement =walk_tree()=
-***** DONE implement =find_changed_files()=
-***** DONE write integ tests for =take_snapshot()=
-****** DONE with xattrs, if supported
-****** DONE with symlinks
-****** DONE with nested directories
-****** DONE with files changing to dirs, links, vice versa
-***** DONE can remove the =test_tree_walker= test, it will be redundant
-***** DONE implement pack file builder, write unit tests
-***** DONE encrypt the pack files
-***** DONE implement the "dataset" type, write unit tests
-***** DONE implement =perform_backup()=
-***** DONE open database instance and pass =DB= around
-***** DONE implement =restore_file()=
-***** DONE =perform_backup()= should set =parent= of latest snapshot, if any
-***** DONE =perform_backup()= should set =latest_snapshot= of dataset
-***** DONE insert xattr records for each tree entry (see =process_path()=)
-**** DONE Update =README.md= wrt to Rust and requirements
-**** DONE Add =gpgme= library dependency to =README.md=
-***** =brew install gpgme=
-**** DONE Update =NOTES.md= for several things
-***** Rust vs TypeScript/JavaScript
-***** RocksDB vs PouchDB
-**** DONE Remove everything related to the old stack
-***** DONE TODO.org
-***** DONE README.md
-***** DONE .gitignore
-***** DONE PouchDB
-***** DONE TypeScript
-***** DONE Node.js
-***** DONE package.json
-*** TODO Should use =walkdir= crate to traverse directory structure
-**** handles crossing devices
-**** handles symlink loops
-*** TODO Re-evaluate [[https://actix.rs][Actix]] to see if it is better than warp
-**** TODO Does it have a testing library or integration?
-**** TODO Does it integrate easily with Juniper?
+*** TODO Switch from warp to [[https://actix.rs][Actix]]
+**** TODO Check for a testing library or integration
+**** TODO Check for integration with Juniper
 *** TODO Develop the GraphQL schema to represent everything
 **** snapshots
 **** files
@@ -267,7 +29,7 @@
 **** If so, try to continue the backup with that snapshot
 **** If not, make a new snapshot
 **** If there are no changes at all (tree or file), delete the snapshot
-*** TODO Manage datasets, defaults, saving updated snapshot to database
+*** TODO Manage stores, datasets, and configuration
 *** TODO Exclude the database files from the data set(s)
 *** TODO Add something that will run scheduled jobs
 **** that is, an easy way to trigger backups according to the configuration
@@ -417,3 +179,117 @@
 ***** also means something in Macedonian
 **** Hawaiian: ~kaukau~
 **** Latin: ~atticae~
+* Technical Information
+** Exploring other languages
+*** Compile to native for easy deployment
+*** Compile to native for code obfuscation
+*** Rust
+**** Advantages
+***** compile to native
+***** expressive, safe type system
+***** good dependency management
+***** lots of useful tools (e.g. clippy)
+**** Disadvantages
+***** fewer libraries compared to Go
+**** DONE GraphQL server
+***** Make sure it can generate a schema.json
+***** Should be able to parse schema definition (for docs)
+***** https://github.com/graphql-rust/juniper (BSD)
+****** supports entire GraphQL specification
+****** does /not/ read GraphQL schema language
+****** supports GraphiQL and Playground
+****** is not the HTTP server, but integrates with them
+****** uses macros for schema documentation
+***** tutorial at [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][alex.amiran.it]] that uses warp web framework
+***** old https://github.com/nrc/graphql (MIT/Apache)
+**** DONE Web framework
+***** our needs are simple, so a simple framework is best
+***** warp https://github.com/seanmonstar/warp (MIT)
+****** works with stable Rust
+****** powerful and easy to use
+****** testing library
+****** integrates with juniper
+***** Rocket https://rocket.rs (Apache 2.0)
+****** requires Rust nightly because of fancy macros
+****** routing using macros
+****** streams input and output
+****** cookies
+****** json
+****** environment configuration
+****** testing library
+****** integrates with juniper
+***** Gotham https://gotham.rs (MIT/Apache 2.0)
+****** targets stable Rust
+****** routing
+****** middleware
+****** sessions
+****** cookies
+****** templates
+****** testing library
+****** how to integrate with juniper is unknown
+***** Iron http://ironframework.io (MIT)
+****** crate has not been updated since 2017
+****** everything is middleware that must be added in
+****** integrates with juniper
+***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
+****** pretty basic compared to Rocket
+***** Actix https://actix.rs (Apache 2.0)
+***** pretty basic https://github.com/carllerche/tower-web (MIT)
+****** competing with warp? hyper?
+**** DONE Database
+***** ideally want something well maintained, reliable
+***** schema is pretty simple, could use key/value store
+***** RocksDB https://github.com/rust-rocksdb/rust-rocksdb (Apache)
+****** statically links everything, including compression support
+***** SQLite https://github.com/jgallagher/rusqlite (MIT)
+***** Rust wrapper to LevelDB https://github.com/skade/leveldb
+***** LevelDB in Rust (active?) https://bitbucket.org/dermesser/leveldb-rs/overview
+**** DONE dotenv
+***** the canonical crate repo has been emptied, there are many forks of the old code
+***** most-up-to-date https://github.com/apiraino/rust-dotenv (MIT)
+**** DONE Configuration
+***** https://github.com/mehcode/config-rs (MIT/Apache)
+**** DONE =getpwuid= and =getgrgid= support
+***** libc: https://crates.io/crates/libc (MIT/Apache 2.0)
+**** DONE test library
+***** https://github.com/rust-rspec/rspec (MPL-2.0)
+****** appears to be dead
+***** https://github.com/utkarshkukreti/speculate.rs (MIT)
+****** works well for integration tests
+**** DONE UUID support
+***** https://github.com/uuid-rs/uuid (MIT/Apache 2.0)
+**** DONE xattr support
+***** Unix only: https://github.com/Stebalien/xattr (MIT/Apache 2.0)
+**** DONE CDC
+***** https://github.com/jrobhoward/quickcdc (MIT/Apache 2.0)
+****** not quite FastCDC, given dates of paper, but should be close enough
+****** use a constant salt value for predictable results
+****** example uses =memmap= crate to read large files
+**** DONE Tar file
+***** https://github.com/alexcrichton/tar-rs (MIT/Apache 2.0)
+**** DONE PGP/Encryption
+***** https://github.com/gpg-rs/gpgme (LGPL)
+****** will need to bundle the =gpgme= library (unless statically linked)
+***** cryptostream https://github.com/neosmart/cryptostream (MIT)
+***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
+***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
+**** DONE ULID
+***** https://github.com/dylanhart/ulid-rs (MIT)
+**** DONE SFTP client
+***** https://github.com/alexcrichton/ssh2-rs (MIT/Apache 2.0)
+**** DONE AWS client
+***** Rusoto https://www.rusoto.org (MIT)
+**** DONE Google Cloud client
+***** https://github.com/Byron/google-apis-rs (MIT/Apache 2.0)
+**** DONE Minio client
+***** Rusoto supports Minio https://github.com/rusoto/rusoto (MIT)
+*** Go vs Rust
+**** Go: first class support for cloud services
+**** Go: statically linked OpenPGP readily available
+**** Go: easy to read and write language
+**** Rust: mature dependency management tooling
+**** Rust: cargo has good editor support
+**** Rust: expressive type system
+**** Rust: nominal subtyping is much easier to follow
+**** Rust: streamlined error handling
+**** Rust: fine-grained namespaces and visibility control
