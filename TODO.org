@@ -1,8 +1,14 @@
 * Zorigami
 ** Phase 4
 *** TODO Switch from warp to [[https://actix.rs][Actix]]
-**** TODO Check for a testing library or integration
-**** TODO Check for integration with Juniper
+**** DONE Check for a testing library or integration
+**** DONE Check for integration with Juniper
+***** c.f. https://github.com/actix/examples/tree/master/juniper
+**** TODO Learn how to do the same things with Actix as we have in =main.rs=
+**** TODO Separate the GraphQL schema code into =schema.rs= (like the example)
+**** TODO Need to use =1.0.0-beta3= to use juniper example
+**** TODO Serve the static files
+**** TODO Add support for GraphQL
 *** TODO Develop the GraphQL schema to represent everything
 **** snapshots
 **** files

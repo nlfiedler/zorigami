@@ -1,15 +1,11 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-#[macro_use]
-extern crate juniper;
-extern crate juniper_warp;
-extern crate pretty_env_logger;
-#[macro_use]
-extern crate log;
-extern crate warp;
-use juniper::{EmptyMutation, FieldResult};
-use warp::Filter;
+use juniper::{graphql_object, EmptyMutation, FieldResult};
+use juniper_warp;
+use log::info;
+use pretty_env_logger;
+use warp::{self, Filter};
 
 struct Context;
 

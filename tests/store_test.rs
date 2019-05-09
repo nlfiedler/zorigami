@@ -1,10 +1,9 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-#[macro_use]
-extern crate serde_json;
 use dotenv::dotenv;
 use failure::Error;
+use serde_json::json;
 use std::env;
 use std::fs;
 use std::path::Path;
