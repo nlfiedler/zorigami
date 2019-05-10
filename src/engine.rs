@@ -117,14 +117,19 @@ impl<'a> BackupMaster<'a> {
             .suffix(".bin")
             .tempfile_in(&self.dataset.workspace)?;
         let mut pack = self.builder.build_pack(outfile.path(), &self.passphrase)?;
-        let object_name = format!("{}", pack.digest.as_ref().unwrap());
-        // capture and record the remote object name, in case it differs from
-        // the name we generated ourselves; either value is expected to be
-        // sufficiently unique for our purposes
-        let remote_object =
-            self.store
-                .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
-        pack.record_completed(self.dbase, &self.bucket_name, &remote_object)?;
+        let pack_rec = self.dbase.get_pack(pack.digest.as_ref().unwrap())?;
+        if pack_rec.is_none() {
+            // new pack file, need to upload this and record to database
+            let object_name = format!("{}", pack.digest.as_ref().unwrap());
+            // capture and record the remote object name, in case it differs from
+            // the name we generated ourselves; either value is expected to be
+            // sufficiently unique for our purposes
+            let remote_object =
+                self.store
+                    .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
+            pack.record_completed_pack(self.dbase, &self.bucket_name, &remote_object)?;
+        }
+        pack.record_completed_files(self.dbase)?;
         Ok(())
     }
 
@@ -837,8 +842,8 @@ impl Pack {
     }
 
     /// Record the results of building this pack to the database. This includes
-    /// the completed files, all chunks, and the pack itself.
-    pub fn record_completed(
+    /// all of the chunks and the pack itself.
+    pub fn record_completed_pack(
         &mut self,
         dbase: &Database,
         bucket: &str,
@@ -855,6 +860,11 @@ impl Pack {
         // record the pack in the database
         let pack = core::SavedPack::new(digest.clone(), bucket, object);
         dbase.insert_pack(&pack)?;
+        Ok(())
+    }
+
+    // Record the set of files completed by uploading this pack file.
+    pub fn record_completed_files(&mut self, dbase: &Database) -> Result<(), Error> {
         // massage the file/chunk data into database records for those files
         // that have been completely uploaded
         for (filesum, parts) in &self.files {

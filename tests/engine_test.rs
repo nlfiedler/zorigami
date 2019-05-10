@@ -371,7 +371,8 @@ fn test_pack_builder() -> Result<(), Error> {
     assert!(builder.has_chunks());
     assert!(builder.is_full());
     let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    pack.record_completed(&dbase, "bucket1", "object1")?;
+    pack.record_completed_pack(&dbase, "bucket1", "object1")?;
+    pack.record_completed_files(&dbase)?;
     // the builder should still have some chunks, but not be full either
     assert!(builder.has_chunks());
     assert_eq!(builder.is_full(), false);
@@ -388,7 +389,8 @@ fn test_pack_builder() -> Result<(), Error> {
     let option = dbase.get_file(&sekien_sha)?;
     assert!(option.is_none());
     let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    pack.record_completed(&dbase, "bucket1", "object2")?;
+    pack.record_completed_pack(&dbase, "bucket1", "object2")?;
+    pack.record_completed_files(&dbase)?;
     // should be completely empty at this point
     assert_eq!(builder.has_chunks(), false);
     assert_eq!(builder.is_full(), false);

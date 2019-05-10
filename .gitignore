@@ -9,3 +9,5 @@ target
 
 # temporary data
 tmp
+
+.DS_Store

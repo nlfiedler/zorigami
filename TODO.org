@@ -11,6 +11,23 @@
 ***** c.f. https://github.com/actix/examples/tree/master/juniper
 **** DONE Use the actix logging middleware
 *** DONE Update to latest rusoto 0.38
+*** TODO Design for storing the same pack to multiple stores
+**** for replicaz, want to store packs to local disk and SFTP
+**** single dataset that stores packs to multiple locations
+***** e.g. one store for local, another for SFTP
+***** need a multi store that has the names for the other stores
+***** =store_pack()= returns a struct that holds remote coordinates
+***** =record_completed()= stores that remote coordinates struct in =SavedPack=
+***** multi store will use simple algorithm to choose best store for retrieval (i.e. local is preferred)
+***** multi store should try to store concurrently
+***** pack records need to have list of remote coordinates, keyed by store name
+*** TODO Should store chunks in pack file in sorted order to produce same results every time
+*** DONE Consider how multiple datasets pointing at the same root will work
+**** What if one file changes for each, producing an identical pack file?
+**** Should check if a pack already exists in the database before storing
+*** TODO Design for database migrations
+**** move the old struct implementations into a separate, versioned module
+**** use the old structs to deserialize and convert to the new struct
 *** TODO Develop the GraphQL schema to represent everything
 **** snapshots
 **** files
@@ -93,6 +110,9 @@
 *** TODO Use this to replace =akashita= for online backups
 ** Phase 6
 *** TODO Try building on Windows
+*** TODO Use this to replace Time Machine (store on server using SFTP)
+**** Need to handle computer shutdown during a backup
+**** Use =launchd= to manage the process, have it start automatically
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
