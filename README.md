@@ -32,6 +32,12 @@ $ cargo build
 $ cargo test
 ```
 
+### Running
+
+```shell
+$ RUST_LOG=debug ./target/debug/zorigami
+```
+
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the
