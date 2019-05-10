@@ -5,11 +5,10 @@ use failure::{err_msg, Error};
 use futures::stream::Stream;
 use futures::Future;
 use futures_fs::FsPool;
-use rusoto_core::Region;
+use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
-    CreateBucketError, CreateBucketRequest, DeleteBucketError, DeleteBucketRequest,
-    DeleteObjectRequest, GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client,
-    StreamingBody, S3,
+    CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
+    GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
@@ -223,7 +222,7 @@ impl super::Store for MinioStore {
         // certain error conditions are okay
         match result {
             Err(e) => match e {
-                DeleteBucketError::Unknown(_) => Ok(()),
+                RusotoError::Unknown(_) => Ok(()),
                 _ => Err(Error::from_boxed_compat(Box::new(e))),
             },
             Ok(_) => Ok(()),
@@ -243,8 +242,10 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     // certain error conditions are okay
     match result {
         Err(e) => match e {
-            CreateBucketError::BucketAlreadyExists(_) => Ok(()),
-            CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            RusotoError::Service(se) => match se {
+                CreateBucketError::BucketAlreadyExists(_) => Ok(()),
+                CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            },
             _ => Err(Error::from_boxed_compat(Box::new(e))),
         },
         Ok(_) => Ok(()),

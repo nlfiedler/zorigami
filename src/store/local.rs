@@ -76,7 +76,6 @@ impl super::Store for LocalStore {
         fs::create_dir_all(&path)?;
         path.push(object);
         fs::copy(packfile, &path)?;
-        fs::remove_file(packfile)?;
         Ok(object.to_owned())
     }
 

@@ -157,6 +157,9 @@ fn run_store_tests(store: &Store) {
     // store the pack file on the remote side
     let result = store.store_pack(&packfile, &bucket, &digest_sum);
     assert!(result.is_ok());
+    // store the same thing again, should not have any error
+    let result = store.store_pack(&packfile, &bucket, &digest_sum);
+    assert!(result.is_ok());
 
     // check for bucket(s) being present; may be more from previous runs
     let result = store.list_buckets();

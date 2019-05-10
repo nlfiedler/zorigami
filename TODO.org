@@ -10,7 +10,7 @@
 **** DONE Add support for GraphQL
 ***** c.f. https://github.com/actix/examples/tree/master/juniper
 **** DONE Use the actix logging middleware
-*** TODO Update to latest rusoto 0.38
+*** DONE Update to latest rusoto 0.38
 *** TODO Develop the GraphQL schema to represent everything
 **** snapshots
 **** files
