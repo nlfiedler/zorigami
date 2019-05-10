@@ -832,6 +832,8 @@ impl Pack {
     /// Write the chunks in this pack to the specified path, encrypting using
     /// OpenPGP with the given passphrase.
     pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
+        // sort the chunks by digest to produce identical results
+        self.chunks.sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
         let digest = core::pack_chunks(&self.chunks, outfile)?;
         let mut owtfile = outfile.to_path_buf();
         owtfile.set_extension(".pgp");

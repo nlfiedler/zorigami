@@ -20,14 +20,15 @@
 ***** =record_completed()= stores that remote coordinates struct in =SavedPack=
 ***** multi store will use simple algorithm to choose best store for retrieval (i.e. local is preferred)
 ***** multi store should try to store concurrently
-***** pack records need to have list of remote coordinates, keyed by store name
-*** TODO Should store chunks in pack file in sorted order to produce same results every time
+*** DONE Should store chunks in pack file in sorted order to produce predictable results
 *** DONE Consider how multiple datasets pointing at the same root will work
 **** What if one file changes for each, producing an identical pack file?
 **** Should check if a pack already exists in the database before storing
 *** TODO Design for database migrations
 **** move the old struct implementations into a separate, versioned module
 **** use the old structs to deserialize and convert to the new struct
+**** each migration module will iterate the database itself
+***** some versions will only need to change certain records
 *** TODO Develop the GraphQL schema to represent everything
 **** snapshots
 **** files

@@ -45,7 +45,7 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
 /// The `Checksum` represents a hash digest for an object, such as a tree,
 /// snapshot, file, chunk, or pack file.
 ///
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub enum Checksum {
     SHA1(String),
     SHA256(String),
@@ -890,6 +890,26 @@ mod tests {
                 assert!(c.is_ascii_lowercase());
             }
         }
+    }
+
+    #[test]
+    fn test_checksum_sort() {
+        use std::cmp::Ordering;
+        let c1a = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let c1b = Checksum::SHA1(String::from("ee76ee57ba2fbc7690a38e125ec6af322288f750"));
+        assert_eq!(Ordering::Less, c1a.partial_cmp(&c1b).unwrap());
+        assert_eq!(Ordering::Greater, c1b.partial_cmp(&c1a).unwrap());
+        let c2a = Checksum::SHA256(String::from(
+            "a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433",
+        ));
+        let c2b = Checksum::SHA256(String::from(
+            "e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82",
+        ));
+        assert_eq!(Ordering::Less, c2a.partial_cmp(&c2b).unwrap());
+        assert_eq!(Ordering::Greater, c2b.partial_cmp(&c2a).unwrap());
+        // all SHA1 values are always less than any SHA256 value
+        assert_eq!(Ordering::Less, c1b.partial_cmp(&c2a).unwrap());
+        assert_eq!(Ordering::Greater, c2a.partial_cmp(&c1b).unwrap());
     }
 
     #[test]
