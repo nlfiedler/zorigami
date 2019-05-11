@@ -1214,6 +1214,19 @@ mod tests {
     }
 
     #[test]
+    fn test_serde_pack() {
+        let digest = Checksum::SHA256(
+            "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
+        );
+        let uuid = generate_unique_id("charlie", "localhost");
+        let bucket = generate_bucket_name(&uuid);
+        let object = "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1";
+        let pack = SavedPack::new(digest, &bucket, object);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&pack).unwrap();
+        assert_eq!(encoded.len(), 189);
+    }
+
+    #[test]
     fn test_tree_entry() {
         let path = Path::new("./tests/fixtures/lorem-ipsum.txt");
         let tref = TreeReference::TREE(Checksum::SHA1("cafebabe".to_owned()));
