@@ -1,35 +1,60 @@
 * Zorigami
 ** Phase 4
-*** DONE Switch from warp to [[https://actix.rs][Actix]]
-**** DONE Check for a testing library or integration
-**** DONE Check for integration with Juniper
-**** DONE Learn how to do the same things with Actix as we have in =main.rs=
-**** DONE Separate the GraphQL schema code into =schema.rs= (like juniper example)
-**** DONE Need to use =1.0.0-beta3= to use juniper example
-**** DONE Serve the static files
-**** DONE Add support for GraphQL
-***** c.f. https://github.com/actix/examples/tree/master/juniper
-**** DONE Use the actix logging middleware
-*** DONE Update to latest rusoto 0.38
-*** TODO Design for storing the same pack to multiple stores
-**** for replicaz, want to store packs to local disk and SFTP
-**** single dataset that stores packs to multiple locations
+*** DONE Should use ULID for the store identifier instead of name
+**** =store= module provides function to find store by ULID only
+**** when creating a new store, generate the ULID
+**** when loading a saved store, replace the generated ULID
+**** remove =get_name()= from =store::Config=
+**** add =get_id()= to =store::Store=
+**** each =default()= implementation will set its id to something
+*** TODO Develop new pack store requirements
+**** Store may need to cycle through buckets
+***** S3 limits to 100 buckets (yes, 100) (unlimited objects)
+***** Glacier limits to 1,000 vaults
+***** Google buckets may collide, requiring rename
+***** May have limits on number of objects per bucket
+**** Each dataset has its own assigned store
+**** Packs from all datasets are stored in the same database
+**** Pack records do not currently identify the store
+**** Peers share their pack records
+**** Peers would also have to share the store configurations
+**** Allow dataset to store packs to multiple locations
 ***** e.g. one store for local, another for SFTP
-***** need a multi store that has the names for the other stores
-***** =store_pack()= returns a struct that holds remote coordinates
-***** =record_completed()= stores that remote coordinates struct in =SavedPack=
-***** multi store will use simple algorithm to choose best store for retrieval (i.e. local is preferred)
-***** multi store should try to store concurrently
-*** DONE Should store chunks in pack file in sorted order to produce predictable results
-*** DONE Consider how multiple datasets pointing at the same root will work
-**** What if one file changes for each, producing an identical pack file?
-**** Should check if a pack already exists in the database before storing
+***** user assigns multiple stores to the dataset
+***** engine loads all of the stores into =BackupMaster=
+***** =send_one_pack()= sends pack to each store
+***** new struct for the store/bucket/object tuple: =PackLocation=
+***** =store_pack()= returns =PackLocation=
+***** =send_one_pack()= saves list of =PackLocation=
+***** =record_completed_pack()= saves =PackLocation= list in pack record
+***** =store= module provides utility functions for delegating to multiple stores
+***** delegator for =retrieve_pack()= will choose most suitable pack store
+****** local is preferred over remote
+****** SFTP is preferred over Glacier
+***** cannot allow user to change store identity otherwise pack records are invalid
+**** Some rough size estimates
+***** packs size of 64mb storing 300gb of data is about 4500 pack files
+***** =SavedPack= with just bucket/object is 189 bytes serialized
+***** 189 bytes times 4,500 records is 850,500 bytes
+***** with store name, SavedPack is 232 bytes, so 1,044,000 bytes
+*** TODO How will the user configure the stores for the dataset?
+**** Interface needs to show the dataset details in full
+**** Even if the store had a name, would still want to see details
+*** TODO Cannot switch/remove a store for a dataset that has snapshots
+**** once packs are stored, moving/removing is non-trivial
+**** GraphQL resolver will enforce this
+**** removing a store means the user must clean up
+**** removing a store would invalidate all of the snapshots
 *** TODO Design for database migrations
+**** store the version information in a =db_version= record
 **** move the old struct implementations into a separate, versioned module
 **** use the old structs to deserialize and convert to the new struct
-**** each migration module will iterate the database itself
+**** decide how to do migration
+***** a) each version iterates entire database, processing records as needed
+***** b) main code iterates database and calls each version with a record to update
 ***** some versions will only need to change certain records
 *** TODO Develop the GraphQL schema to represent everything
+**** TODO do we use the =schema.graphql= file any more, or do it all in code?
 **** snapshots
 **** files
 **** trees
@@ -38,6 +63,8 @@
 ***** model each store config as a type in GraphQL?
 ***** devise a custom type that is encoded JSON?
 ***** or config is a list of name/value pairs?
+**** multi store
+***** resolver will create/delete multi stores as needed
 *** TODO Document the database schema
 **** [[http://cbor.io][RocksDB]] key/value store
 **** [[http://cbor.io][CBOR]] values
@@ -107,7 +134,8 @@
 *** TODO Verify checksum of downloaded packs during restore
 *** TODO Store database in a bucket named after the "computer UUID"
 *** TODO Store pack files in Google Cloud Storage
-**** c.f. https://github.com/googleapis/nodejs-storage/
+**** Check for bucket name collisions and retry in pack store
+**** https://cloud.google.com/storage/docs/best-practices
 *** TODO Use this to replace =akashita= for online backups
 ** Phase 6
 *** TODO Try building on Windows
@@ -156,13 +184,17 @@
 ** Phase 7
 *** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
 *** TODO Design garbage collection solution (see NOTES)
+*** TODO Pack store should recommend pack sizes
+**** e.g. Glacier recommends archives greater than 100mb
 *** TODO Support Windows file types
 **** ReadOnly
 **** Hidden
 **** System
 *** TODO Support SFTP with private key authentication
 **** TODO allow private key locked with passprhase
-*** TODO Support Amazon S3
+*** TODO Support Amazon S3, Minio
+**** Need to limit number of remote buckets to 100
+**** Bucket limit: catch the error and handle by re-using another bucket
 *** TODO Support Amazon Glacier
 **** Use S3 to store the database-to-archive mapping of each snapshot
 **** Offer user option to use "expedited" retrievals so they go faster

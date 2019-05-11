@@ -20,41 +20,38 @@ fn test_store_config() -> Result<(), Error> {
     let dbase = Database::new(Path::new(db_path)).unwrap();
 
     let config_json = json!({
-        "name": "not_default_local",
         "basepath": "some/path/for_local",
     });
     let value = config_json.to_string();
-    let mut store = local::LocalStore::default();
+    let unique_id = "development";
+    let mut store = local::LocalStore::new(unique_id);
     run_config_tests(&value, &mut store, &dbase)?;
 
     // test updating the store config (only need this one time)
     let config_json = json!({
-        "name": "not_default_local",
         "basepath": "some/other/path",
     });
     store.get_config_mut().from_json(&config_json.to_string())?;
     save_store(&dbase, &store)?;
-    let boxster: Box<Store> = load_store(&dbase, "store/local/not_default_local")?;
+    let boxster: Box<Store> = load_store(&dbase, "store/local/development")?;
     let json: String = boxster.get_config().to_json()?;
     assert!(json.contains("some/other/path"));
 
     let config_json = json!({
-        "name": "some_sftp_name",
         "remote_addr": "localhost:22",
         "username": "joe",
         "password": "secret123",
         "basepath": ".",
     });
-    let mut store = sftp::SftpStore::default();
+    let mut store = sftp::SftpStore::new(unique_id);
     let value = config_json.to_string();
     run_config_tests(&value, &mut store, &dbase)?;
 
     let config_json = json!({
-        "name": "mister_minio",
         "region": "us-west-1",
         "endpoint": "http://localhost:9000",
     });
-    let mut store = minio::MinioStore::default();
+    let mut store = minio::MinioStore::new(unique_id);
     let value = config_json.to_string();
     run_config_tests(&value, &mut store, &dbase)?;
 
@@ -67,22 +64,21 @@ fn run_config_tests(config: &str, store: &mut Store, dbase: &Database) -> Result
     let stores: Vec<String> = find_stores(dbase)?;
     assert!(!stores.is_empty());
     let type_name = store.get_type().to_string();
-    let conf_name = store.get_config().get_name();
-    let store_key = format!("store/{}/{}", type_name, conf_name);
+    let unique_id = store.get_id();
+    let store_key = format!("store/{}/{}", type_name, unique_id);
     assert!(stores.contains(&store_key));
     let boxster: Box<Store> = load_store(dbase, &store_key)?;
     assert_eq!(boxster.get_type().to_string(), type_name);
-    assert_eq!(boxster.get_config().get_name(), conf_name);
+    assert_eq!(boxster.get_id(), unique_id);
     Ok(())
 }
 
 #[test]
 fn test_local_roundtrip() -> Result<(), Error> {
     let config_json = json!({
-        "name": "default",
         "basepath": "tmp/test/local_store",
     });
-    let mut store = local::LocalStore::default();
+    let mut store = local::LocalStore::new("testing");
     let value = config_json.to_string();
     store.get_config_mut().from_json(&value)?;
     run_store_tests(&store);
@@ -102,13 +98,12 @@ fn test_sftp_roundtrip() -> Result<(), Error> {
     let password = env::var("SFTP_PASSWORD").unwrap();
     let basepath = env::var("SFTP_BASEPATH").unwrap();
     let config_json = json!({
-        "name": "default",
         "remote_addr": address,
         "username": username,
         "password": password,
         "basepath": basepath,
     });
-    let mut store = sftp::SftpStore::default();
+    let mut store = sftp::SftpStore::new("testing");
     let value = config_json.to_string();
     store.get_config_mut().from_json(&value)?;
     run_store_tests(&store);
@@ -126,11 +121,10 @@ fn test_minio_roundtrip() -> Result<(), Error> {
     let endpoint = endp_var.unwrap();
     let region = env::var("MINIO_REGION").unwrap();
     let config_json = json!({
-        "name": "default",
         "region": region,
         "endpoint": endpoint,
     });
-    let mut store = minio::MinioStore::default();
+    let mut store = minio::MinioStore::new("testing");
     let value = config_json.to_string();
     store.get_config_mut().from_json(&value)?;
     run_store_tests(&store);

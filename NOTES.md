@@ -69,6 +69,15 @@ They change the SSH config to run the backup command with "append only" flag.
 
 * Backend performs backups according to configured schedule
 
+### Full Restore
+
+* Retrieve the database from the pack store.
+* Walk the latest snapshot, restoring all files from packs.
+
+### File Restore
+
+* Given a file digest, retrieve pack to get chunks, reassemble.
+
 ## Data Format
 
 ### Overview
@@ -101,6 +110,8 @@ They change the SSH config to run the backup command with "append only" flag.
         + should be sufficiently unique despite global bucket namespace
     - conforms to Amazon Glacier vault name restrictions
         + https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html
+    - conforms to Amazon S3 bucket name restrictions
+        + https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 * ULID contains the time, so no need for a timestamp
 * UUID makes it easy to find buckets associated with this computer and user
 
@@ -139,7 +150,8 @@ They change the SSH config to run the backup command with "append only" flag.
     - pack size
     - store identifier
 * store records:
-    - key: `store/` + type + name (e.g. `store/local/my stuff`)
+    - key: `store/` + type + ULID (e.g. `store/local/01arz3ndektsv4rrffq69g5fav`)
+    - (the identifier is universally unique even without key prefix)
     - value: opaque JSON blob of the store configuration
 * snapshot records
     - key: `snapshot/` + SHA1 of snapshot (with "sha1-" prefix) or `index` for pending
@@ -181,8 +193,10 @@ Sync with peers for multi-host chunk deduplication.
     - pack: SHA256 of pack
 * pack records
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
-    - remote bucket/vault name
-    - remote archive identifier (e.g. Amazon Glacier)
+    - coordinates:
+        + store ULID
+        + remote bucket/vault name
+        + remote object/archive name
     - upload_time: date/time of successful upload, for conflict resolution
 
 ## Implementation
@@ -230,11 +244,11 @@ that has the most recent `upload_time`.
 #### Uploading Packs
 
 1. Select an existing bucket, or create a new one.
-    * For Amazon, limited to 1,000 vaults, so reuse will be necessary.
+    * For Amazon Glacier, limited to 1,000 vaults, so reuse will be necessary.
+    * For Amazon S3, limited to 100 buckets, so reuse will be necessary.
     * For Google, no hard limit, but perhaps a practical limit.
-    * Can add new records to the database (and index) to keep track of translations.
 1. Upload the pack file to the cloud.
-1. Update pack record to track bucket/vault and object/archive ID.
+1. Update pack record to track remote coordinates.
 
 #### Crash Recovery
 

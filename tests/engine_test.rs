@@ -479,11 +479,10 @@ fn test_perform_backup() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
-        "name": "test_tmp",
         "basepath": pack_path,
     });
     let value = config_json.to_string();
-    let mut store = local::LocalStore::default();
+    let mut store = local::LocalStore::new("testing");
     store.get_config_mut().from_json(&value)?;
     save_store(&dbase, &store)?;
 
@@ -547,11 +546,10 @@ fn test_restore_file() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
-        "name": "test_tmp",
         "basepath": pack_path,
     });
     let value = config_json.to_string();
-    let mut store = local::LocalStore::default();
+    let mut store = local::LocalStore::new("testing");
     store.get_config_mut().from_json(&value)?;
     save_store(&dbase, &store)?;
 

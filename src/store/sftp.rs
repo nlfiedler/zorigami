@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct SftpConfig {
-    name: String,
     /// Host and port of the SFTP server (e.g. "127.0.0.1:22")
     remote_addr: String,
     /// Name of the user account on the SFTP server.
@@ -28,13 +27,8 @@ struct SftpConfig {
 }
 
 impl super::Config for SftpConfig {
-    fn get_name(&self) -> String {
-        self.name.clone()
-    }
-
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: SftpConfig = serde_json::from_str(data)?;
-        self.name = conf.name;
         self.remote_addr = conf.remote_addr;
         self.username = conf.username;
         self.password = conf.password;
@@ -51,7 +45,6 @@ impl super::Config for SftpConfig {
 impl Default for SftpConfig {
     fn default() -> Self {
         Self {
-            name: String::from("default"),
             remote_addr: String::from("127.0.0.1:22"),
             username: String::from("charlie"),
             password: None,
@@ -66,12 +59,15 @@ impl Default for SftpConfig {
 /// instance to connect to a system using various credentials.
 ///
 pub struct SftpStore {
+    unique_id: String,
     config: SftpConfig,
 }
 
-impl Default for SftpStore {
-    fn default() -> Self {
+impl SftpStore {
+    /// Construct a new instance of SftpStore with the given identifier.
+    pub fn new(uuid: &str) -> Self {
         Self {
+            unique_id: uuid.to_owned(),
             config: Default::default(),
         }
     }
@@ -108,6 +104,10 @@ struct Connection {
 }
 
 impl super::Store for SftpStore {
+    fn get_id(&self) -> &str {
+        &self.unique_id
+    }
+
     fn get_type(&self) -> super::StoreType {
         super::StoreType::SFTP
     }

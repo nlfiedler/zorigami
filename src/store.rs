@@ -5,6 +5,7 @@ use super::database::Database;
 use failure::{err_msg, Error};
 use std::path::Path;
 use std::str::{self, FromStr};
+use ulid::Ulid;
 
 pub mod local;
 pub mod minio;
@@ -51,11 +52,16 @@ impl FromStr for StoreType {
 /// in order to function properly (e.g. setting the host for the SFTP store, or
 /// the base directory for the local store).
 ///
-pub fn build_store(store_type: StoreType) -> Box<Store> {
+pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<Store> {
+    let uuid = if id.is_some() {
+        id.unwrap().to_owned()
+    } else {
+        Ulid::new().to_string()
+    };
     match store_type {
-        StoreType::LOCAL => Box::new(local::LocalStore::default()),
-        StoreType::MINIO => Box::new(minio::MinioStore::default()),
-        StoreType::SFTP => Box::new(sftp::SftpStore::default()),
+        StoreType::LOCAL => Box::new(local::LocalStore::new(&uuid)),
+        StoreType::MINIO => Box::new(minio::MinioStore::new(&uuid)),
+        StoreType::SFTP => Box::new(sftp::SftpStore::new(&uuid)),
     }
 }
 
@@ -70,14 +76,30 @@ pub fn find_stores(dbase: &Database) -> Result<Vec<String>, Error> {
 }
 
 ///
+/// Find the store name by the given unique identifier (usually the last part of
+/// the full name, such as "store/local/123ulidxyz"). With the full name the
+/// store can be loaded from the database via `load_store()`.
+///
+pub fn find_store_by_id(dbase: &Database, id: &str) -> Result<Option<String>, Error> {
+    let tail = format!("/{}", id);
+    let candidates = find_stores(dbase)?;
+    for fullname in candidates {
+        if fullname.ends_with(&tail) {
+            return Ok(Some(fullname));
+        }
+    }
+    Ok(None)
+}
+
+///
 /// Construct the unique name for the given store, which is used as the key to
 /// saving the store configuration in the database, as well as referring to the
 /// store in the `core::Dataset`.
 ///
 pub fn store_name(store: &Store) -> String {
     let type_name = store.get_type().to_string();
-    let conf_name = store.get_config().get_name();
-    format!("store/{}/{}", type_name, conf_name)
+    let unique_id = store.get_id();
+    format!("store/{}/{}", type_name, unique_id)
 }
 
 ///
@@ -111,7 +133,7 @@ pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
     match encoded {
         Some(dbv) => {
             let value_str = str::from_utf8(&dbv)?;
-            let mut  store_impl = build_store(store_type);
+            let mut store_impl = build_store(store_type, Some(name_parts[2]));
             store_impl.get_config_mut().from_json(value_str)?;
             Ok(store_impl)
         }
@@ -124,12 +146,6 @@ pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
 /// properties and behavior are specific to each store implementation.
 ///
 pub trait Config {
-    ///
-    /// Return the name for this configuration, permitting multiple instances of
-    /// each type to be stored in the database.
-    ///
-    fn get_name(&self) -> String;
-
     ///
     /// Read the store configuration from the given JSON and update the
     /// properties of this configuration instance.
@@ -147,6 +163,11 @@ pub trait Config {
 /// storage system, such as local disk, SFTP, or cloud-based store.
 ///
 pub trait Store {
+    ///
+    /// Return the unique identifier for this store.
+    ///
+    fn get_id(&self) -> &str;
+
     ///
     /// Return the type of this store.
     ///

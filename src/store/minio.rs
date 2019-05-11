@@ -20,7 +20,6 @@ use std::path::Path;
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct MinioConfig {
-    name: String,
     /// The AWS/Minio region to connect to (e.g. "us-east-1").
     region: String,
     /// The endpoint should be something like http://192.168.99.100:9000 such
@@ -30,13 +29,8 @@ struct MinioConfig {
 }
 
 impl super::Config for MinioConfig {
-    fn get_name(&self) -> String {
-        self.name.clone()
-    }
-
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: MinioConfig = serde_json::from_str(data)?;
-        self.name = conf.name;
         self.region = conf.region;
         self.endpoint = conf.endpoint;
         Ok(())
@@ -51,7 +45,6 @@ impl super::Config for MinioConfig {
 impl Default for MinioConfig {
     fn default() -> Self {
         Self {
-            name: String::from("default"),
             region: String::from("us-west-1"),
             endpoint: String::from("http://localhost:9000"),
         }
@@ -63,12 +56,15 @@ impl Default for MinioConfig {
 /// Minio storage server.
 ///
 pub struct MinioStore {
+    unique_id: String,
     config: MinioConfig,
 }
 
-impl Default for MinioStore {
-    fn default() -> Self {
+impl MinioStore {
+    /// Construct a new instance of MinioStore with the given identifier.
+    pub fn new(uuid: &str) -> Self {
         Self {
+            unique_id: uuid.to_owned(),
             config: Default::default(),
         }
     }
@@ -105,6 +101,10 @@ impl MinioStore {
 }
 
 impl super::Store for MinioStore {
+    fn get_id(&self) -> &str {
+        &self.unique_id
+    }
+
     fn get_type(&self) -> super::StoreType {
         super::StoreType::MINIO
     }

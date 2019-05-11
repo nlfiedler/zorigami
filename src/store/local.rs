@@ -11,18 +11,12 @@ use std::path::{Path, PathBuf};
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct LocalConfig {
-    name: String,
     basepath: String,
 }
 
 impl super::Config for LocalConfig {
-    fn get_name(&self) -> String {
-        self.name.clone()
-    }
-
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: LocalConfig = serde_json::from_str(data)?;
-        self.name = conf.name;
         self.basepath = conf.basepath;
         Ok(())
     }
@@ -36,7 +30,6 @@ impl super::Config for LocalConfig {
 impl Default for LocalConfig {
     fn default() -> Self {
         Self {
-            name: String::from("default"),
             basepath: String::from("."),
         }
     }
@@ -47,18 +40,25 @@ impl Default for LocalConfig {
 /// accessible file sytem.
 ///
 pub struct LocalStore {
+    unique_id: String,
     config: LocalConfig,
 }
 
-impl Default for LocalStore {
-    fn default() -> Self {
+impl LocalStore {
+    /// Construct a new instance of LocalStore with the given identifier.
+    pub fn new(uuid: &str) -> Self {
         Self {
+            unique_id: uuid.to_owned(),
             config: Default::default(),
         }
     }
 }
 
 impl super::Store for LocalStore {
+    fn get_id(&self) -> &str {
+        &self.unique_id
+    }
+
     fn get_type(&self) -> super::StoreType {
         super::StoreType::LOCAL
     }
