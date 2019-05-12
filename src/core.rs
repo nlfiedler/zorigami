@@ -844,7 +844,7 @@ pub struct Dataset {
     pub key: String,
     /// computer UUID for generating bucket names
     #[serde(rename = "id")]
-    pub unique_id: String,
+    pub computer_id: String,
     /// local base path of dataset to be saved
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
@@ -872,13 +872,13 @@ impl Dataset {
     /// path of the directory structure to be saved, and the identifier for the
     /// store that will receive the pack files.
     ///
-    pub fn new(unique_id: &str, basepath: &Path, store: &str) -> Dataset {
+    pub fn new(computer_id: &str, basepath: &Path, store: &str) -> Dataset {
         let key = Ulid::new().to_string().to_lowercase();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {
             key,
-            unique_id: unique_id.to_owned(),
+            computer_id: computer_id.to_owned(),
             basepath: basepath.to_owned(),
             latest_snapshot: None,
             workspace,

@@ -75,7 +75,7 @@ impl<'a> BackupMaster<'a> {
         dbase: &'a Database,
         passphrase: &str,
     ) -> Result<Self, Error> {
-        let bucket_name = core::generate_bucket_name(&dataset.unique_id);
+        let bucket_name = core::generate_bucket_name(&dataset.computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
         let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
         Ok(Self {

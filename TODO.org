@@ -40,7 +40,7 @@
 ***** local is preferred over remote
 ***** SFTP is preferred over Glacier
 **** DONE Write a test with multiple stores, ensure pack is written twice
-*** TODO Rename =Dataset.unique_id= to =computer_id= to be more clear
+*** DONE Rename =Dataset.unique_id= to =computer_id= to be more clear
 *** TODO How will the user configure the stores for the dataset?
 **** Interface needs to show the dataset details in full
 **** Even if the store had a name, would still want to see details
