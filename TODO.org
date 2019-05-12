@@ -1,7 +1,6 @@
 * Zorigami
 ** Phase 4
 *** TODO Develop the GraphQL schema to represent everything
-**** TODO do we use the =schema.graphql= file any more, or do it all in code?
 **** snapshots
 **** trees
 **** files
