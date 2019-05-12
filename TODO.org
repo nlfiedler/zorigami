@@ -1,79 +1,17 @@
 * Zorigami
 ** Phase 4
-*** DONE Should use ULID for the store identifier instead of name
-**** =store= module provides function to find store by ULID only
-**** when creating a new store, generate the ULID
-**** when loading a saved store, replace the generated ULID
-**** remove =get_name()= from =store::Config=
-**** add =get_id()= to =store::Store=
-**** each =default()= implementation will set its id to something
-*** TODO Develop new pack store requirements
-**** Store may need to cycle through buckets
-***** S3 limits to 100 buckets (yes, 100) (unlimited objects)
-***** Glacier limits to 1,000 vaults
-***** Google buckets may collide, requiring rename
-***** May have limits on number of objects per bucket
-**** Each dataset has its own assigned store
-**** Packs from all datasets are stored in the same database
-**** Pack records do not currently identify the store
-**** Peers share their pack records
-**** Peers would also have to share the store configurations
-**** Allow dataset to store packs to multiple locations
-***** e.g. one store for local, another for SFTP
-***** user assigns multiple stores to the dataset
-***** cannot allow user to change store identity otherwise pack records are invalid
-**** Some rough size estimates
-***** packs size of 64mb storing 300gb of data is about 4500 pack files
-***** =SavedPack= with just bucket/object is 189 bytes serialized
-***** 189 bytes times 4,500 records is 850,500 bytes
-***** with store name, SavedPack is 232 bytes, so 1,044,000 bytes
-*** DONE Support multiple stores per dataset
-**** DONE change =Dataset= to have a list of store names
-**** DONE =store= module provides utility functions for delegating to multiple stores
-**** DONE engine loads all of the stores into =BackupMaster=
-**** DONE =send_one_pack()= sends pack to each store
-**** DONE new struct for the store/bucket/object tuple: =PackLocation=
-**** DONE =store_pack()= returns =PackLocation=
-**** DONE =send_one_pack()= saves list of =PackLocation=
-**** DONE =record_completed_pack()= saves =PackLocation= list in pack record
-**** DONE delegator for =retrieve_pack()= will choose most suitable pack store
-***** local is preferred over remote
-***** SFTP is preferred over Glacier
-**** DONE Write a test with multiple stores, ensure pack is written twice
-*** DONE Rename =Dataset.unique_id= to =computer_id= to be more clear
-*** TODO How will the user configure the stores for the dataset?
-**** Interface needs to show the dataset details in full
-**** Even if the store had a name, would still want to see details
-*** TODO Cannot switch/remove a store for a dataset that has snapshots
-**** once packs are stored, moving/removing is non-trivial
-**** GraphQL resolver will enforce this
-**** removing a store means the user must clean up
-**** removing a store would invalidate all of the snapshots
-*** TODO Design for database migrations
-**** store the version information in a =db_version= record
-**** move the old struct implementations into a separate, versioned module
-**** use the old structs to deserialize and convert to the new struct
-**** decide how to do migration
-***** a) each version iterates entire database, processing records as needed
-***** b) main code iterates database and calls each version with a record to update
-***** some versions will only need to change certain records
 *** TODO Develop the GraphQL schema to represent everything
 **** TODO do we use the =schema.graphql= file any more, or do it all in code?
 **** snapshots
-**** files
 **** trees
-**** stores
+**** files
 **** store configuration
 ***** model each store config as a type in GraphQL?
 ***** devise a custom type that is encoded JSON?
 ***** or config is a list of name/value pairs?
-**** multi store
-***** resolver will create/delete multi stores as needed
-*** TODO Document the database schema
-**** [[http://cbor.io][RocksDB]] key/value store
-**** [[http://cbor.io][CBOR]] values
-**** keys have type prefixes (e.g. =chunk/=)
-**** values are name/value pairs of object properties
+**** datasets
+**** datasets and stores
+***** resolver will enforce write-once store assignment to a dataset
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -125,11 +63,11 @@
 ***** engine opens at start of backup procedure, drops when done
 ***** Actix has shared state management
 ***** maybe use =Arc= and =Mutex= to manage concurrent access
+*** TODO If the new snapshot has no changes from previous, delete it
 ** Phase 5
 *** TODO Get encryption password from an environment variable
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
-*** TODO If the new snapshot has no changes from previous, delete it
 *** TODO Enable configuring various overrides in a dataset
 **** schedule/frequency overrides
 **** file/dirctory ignore overrides
@@ -196,8 +134,12 @@
 **** System
 *** TODO Support SFTP with private key authentication
 **** TODO allow private key locked with passprhase
-*** TODO Add a "local" vs "remote" and "slow" vs "fast" attribute to stores
-**** Make it easier for the =store::retrieve_pack()= to find the best store
+*** TODO Permit removing a store from a dataset
+**** would encourage user to clean up the remote files
+**** for local store, could remove the files immediately
+**** must invalidate all of the snapshots effected by the missing store
+*** TODO Permit moving from one store to another
+**** would mean downloading the packs and uploading them to the new store
 *** TODO Support Amazon S3, Minio
 **** Need to limit number of remote buckets to 100
 **** Bucket limit: catch the error and handle by re-using another bucket

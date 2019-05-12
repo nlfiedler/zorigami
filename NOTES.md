@@ -129,6 +129,13 @@ They change the SSH config to run the backup command with "append only" flag.
 
 ### Database Schema
 
+The database is a key/value store (technically a log-structured merge tree)
+provided by [RocksDB](https://rocksdb.org). The records are all stored using
+[CBOR](https://cbor.io) unless noted otherwise, in which case they are probably
+JSON. The records consist of key/value pairs with shortened names, to keep
+storage consumption to a minimum. Each record key has a prefix that indicates
+what type of record it is, such as `chunk/` for chunk records, and so on.
+
 #### Primary Database
 
 * configuration record
@@ -288,6 +295,16 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 #### Deleting Old Backups
 
 Remove the snapshot record to be deleted, then garbage collect.
+
+#### Database Migrations
+
+* Store the version information in a `meta` record.
+* Move the old struct implementations into a separate, versioned module.
+* Use the old structs to deserialize and convert to the new struct.
+* Two choices for migration procedure:
+    1. Each version iterates entire database, processing records as needed
+    1. Main code iterates database and calls each version with a record to update
+* Some versions will only need to change certain records.
 
 ### Encryption
 
