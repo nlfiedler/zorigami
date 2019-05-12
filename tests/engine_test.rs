@@ -1,8 +1,10 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use dotenv::dotenv;
 use failure::Error;
 use serde_json::json;
+use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -24,13 +26,13 @@ fn test_datasets() -> Result<(), Error> {
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
     dbase.put_dataset(&dataset)?;
-    dataset.store = String::from("store/local/futts");
+    dataset.stores[0] = String::from("store/local/futts");
     dbase.put_dataset(&dataset)?;
     let setopt = dbase.get_dataset(&dataset.key)?;
     assert!(setopt.is_some());
     let setdata = setopt.unwrap();
     assert_eq!(setdata.key, dataset.key);
-    assert_eq!(setdata.store, "store/local/futts");
+    assert_eq!(setdata.stores[0], "store/local/futts");
     Ok(())
 }
 
@@ -371,7 +373,8 @@ fn test_pack_builder() -> Result<(), Error> {
     assert!(builder.has_chunks());
     assert!(builder.is_full());
     let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    pack.record_completed_pack(&dbase, "bucket1", "object1")?;
+    let coords = vec![PackLocation::new("acme", "bucket1", "object1")];
+    pack.record_completed_pack(&dbase, coords)?;
     pack.record_completed_files(&dbase)?;
     // the builder should still have some chunks, but not be full either
     assert!(builder.has_chunks());
@@ -380,8 +383,8 @@ fn test_pack_builder() -> Result<(), Error> {
     let option = dbase.get_pack(pack.get_digest().unwrap())?;
     assert!(option.is_some());
     let saved_pack = option.unwrap();
-    assert_eq!(saved_pack.bucket, "bucket1");
-    assert_eq!(saved_pack.object, "object1");
+    assert_eq!(&saved_pack.locations[0].bucket, "bucket1");
+    assert_eq!(&saved_pack.locations[0].object, "object1");
     // ensure pack digest is _not_ the default
     assert_ne!(saved_pack.digest.to_string(), NULL_SHA1);
     // The large file will not have been completed yet, it is too large for the
@@ -389,7 +392,8 @@ fn test_pack_builder() -> Result<(), Error> {
     let option = dbase.get_file(&sekien_sha)?;
     assert!(option.is_none());
     let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    pack.record_completed_pack(&dbase, "bucket1", "object2")?;
+    let coords = vec![PackLocation::new("acme", "bucket1", "object2")];
+    pack.record_completed_pack(&dbase, coords)?;
     pack.record_completed_files(&dbase)?;
     // should be completely empty at this point
     assert_eq!(builder.has_chunks(), false);
@@ -398,8 +402,8 @@ fn test_pack_builder() -> Result<(), Error> {
     let option = dbase.get_pack(pack.get_digest().unwrap())?;
     assert!(option.is_some());
     let saved_pack = option.unwrap();
-    assert_eq!(saved_pack.bucket, "bucket1");
-    assert_eq!(saved_pack.object, "object2");
+    assert_eq!(saved_pack.locations[0].bucket, "bucket1");
+    assert_eq!(saved_pack.locations[0].object, "object2");
     // ensure pack digest is _not_ the default
     assert_ne!(saved_pack.digest.to_string(), NULL_SHA1);
     // the big file should be saved by now
@@ -668,5 +672,89 @@ fn copy_with_prefix(header: &str, infile: &Path, outfile: &Path) -> Result<(), E
     io::copy(&mut reader, &mut writer)?;
     let mut reader = fs::File::open(infile)?;
     io::copy(&mut reader, &mut writer)?;
+    Ok(())
+}
+
+#[test]
+fn test_multiple_stores() -> Result<(), Error> {
+    // set up the environment and remote connection
+    dotenv().ok();
+    let endp_var = env::var("MINIO_ENDPOINT");
+    if endp_var.is_err() {
+        // this requires using a remote store
+        return Ok(());
+    }
+
+    // create a clean database for each test
+    let db_path = "tmp/test/engine/multi_store/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let pack_path = "tmp/test/engine/multi_store/packs";
+    let _ = fs::remove_dir_all(pack_path);
+
+    // create a local store
+    let config_json = json!({
+        "basepath": pack_path,
+    });
+    let value = config_json.to_string();
+    let mut local_store = local::LocalStore::new("local_123");
+    local_store.get_config_mut().from_json(&value)?;
+    save_store(&dbase, &local_store)?;
+
+    // create a remote store (minio will work)
+    let endpoint = endp_var.unwrap();
+    let region = env::var("MINIO_REGION").unwrap();
+    let config_json = json!({
+        "region": region,
+        "endpoint": endpoint,
+    });
+    let mut minio_store = minio::MinioStore::new("minio_345");
+    let value = config_json.to_string();
+    minio_store.get_config_mut().from_json(&value)?;
+    save_store(&dbase, &minio_store)?;
+
+    // create a dataset
+    let basepath = "tmp/test/engine/multi_store/fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let stor_name = store_name(&local_store);
+    let mut dataset = Dataset::new(&unique_id, Path::new(basepath), &stor_name);
+    let stor_name = store_name(&minio_store);
+    dataset = dataset.add_store(&stor_name);
+    dataset.pack_size = 65536 as u64;
+
+    // perform the first backup
+    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
+    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+
+    // ensure the pack record has multiple locations
+    let pack_keys = dbase.find_prefix("pack/")?;
+    for key in pack_keys {
+        // prefix of "pack/sha256-" is 12 characters long
+        let digest = Checksum::SHA256(key[12..].to_string());
+        let pack_rec = dbase.get_pack(&digest)?;
+        assert!(pack_rec.is_some());
+        let pack = pack_rec.unwrap();
+        assert_eq!(pack.locations.len(), 2);
+    }
+
+    // restore the file from the first snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
+
     Ok(())
 }

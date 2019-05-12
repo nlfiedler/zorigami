@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use crate::core::PackLocation;
 use failure::{err_msg, Error};
 use futures::stream::Stream;
 use futures::Future;
@@ -109,6 +110,10 @@ impl super::Store for MinioStore {
         super::StoreType::MINIO
     }
 
+    fn get_speed(&self) -> super::StoreSpeed {
+        super::StoreSpeed::FAST
+    }
+
     fn get_config(&self) -> &super::Config {
         &self.config
     }
@@ -117,7 +122,7 @@ impl super::Store for MinioStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
         let client = self.connect();
         // Ensure the bucket exists
         create_bucket(&client, bucket)?;
@@ -146,14 +151,15 @@ impl super::Store for MinioStore {
                 return Err(err_msg("returned e_tag does not match MD5 of pack file"));
             }
         }
-        Ok(object.to_owned())
+        let loc = PackLocation::new(&self.unique_id, bucket, object);
+        Ok(loc)
     }
 
-    fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
         let client = self.connect();
         let request = GetObjectRequest {
-            bucket: bucket.to_owned(),
-            key: object.to_owned(),
+            bucket: location.bucket.clone(),
+            key: location.object.clone(),
             ..Default::default()
         };
         let result = client.get_object(request).sync()?;

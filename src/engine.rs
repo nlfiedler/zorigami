@@ -65,7 +65,7 @@ struct BackupMaster<'a> {
     builder: PackBuilder<'a>,
     passphrase: String,
     bucket_name: String,
-    store: Box<store::Store>,
+    stores: Vec<Box<store::Store>>,
 }
 
 impl<'a> BackupMaster<'a> {
@@ -77,14 +77,14 @@ impl<'a> BackupMaster<'a> {
     ) -> Result<Self, Error> {
         let bucket_name = core::generate_bucket_name(&dataset.unique_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
-        let store_boxed = store::load_store(dbase, &dataset.store)?;
+        let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
         Ok(Self {
             dataset,
             dbase,
             builder,
             passphrase: passphrase.to_owned(),
             bucket_name,
-            store: store_boxed,
+            stores: stores_boxed,
         })
     }
 
@@ -124,10 +124,13 @@ impl<'a> BackupMaster<'a> {
             // capture and record the remote object name, in case it differs from
             // the name we generated ourselves; either value is expected to be
             // sufficiently unique for our purposes
-            let remote_object =
-                self.store
-                    .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
-            pack.record_completed_pack(self.dbase, &self.bucket_name, &remote_object)?;
+            let locations = store::store_pack(
+                outfile.path(),
+                &self.bucket_name,
+                &object_name,
+                &self.stores,
+            )?;
+            pack.record_completed_pack(self.dbase, locations)?;
         }
         pack.record_completed_files(self.dbase)?;
         Ok(())
@@ -183,7 +186,7 @@ pub fn restore_file(
     checksum: core::Checksum,
     outfile: &Path,
 ) -> Result<(), Error> {
-    let store_boxed = store::load_store(dbase, &dataset.store)?;
+    let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
     // look up the file record to get chunks
     let saved_file = dbase
         .get_file(&checksum)?
@@ -211,7 +214,7 @@ pub fn restore_file(
                 .prefix("pack")
                 .suffix(".bin")
                 .tempfile_in(&dataset.workspace)?;
-            store_boxed.retrieve_pack(&saved_pack.bucket, &saved_pack.object, packfile.path())?;
+            store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
             // extract chunks from pack (temporarily use the output file path)
             core::decrypt_file(passphrase, packfile.path(), outfile)?;
             fs::remove_file(packfile.path())?;
@@ -833,7 +836,8 @@ impl Pack {
     /// OpenPGP with the given passphrase.
     pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
         // sort the chunks by digest to produce identical results
-        self.chunks.sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
+        self.chunks
+            .sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
         let digest = core::pack_chunks(&self.chunks, outfile)?;
         let mut owtfile = outfile.to_path_buf();
         owtfile.set_extension(".pgp");
@@ -848,8 +852,7 @@ impl Pack {
     pub fn record_completed_pack(
         &mut self,
         dbase: &Database,
-        bucket: &str,
-        object: &str,
+        coords: Vec<core::PackLocation>,
     ) -> Result<(), Error> {
         let digest = self.digest.as_ref().unwrap();
         // record the uploaded chunks to the database
@@ -860,7 +863,7 @@ impl Pack {
         }
         self.chunks.clear();
         // record the pack in the database
-        let pack = core::SavedPack::new(digest.clone(), bucket, object);
+        let pack = core::SavedPack::new(digest.clone(), coords);
         dbase.insert_pack(&pack)?;
         Ok(())
     }

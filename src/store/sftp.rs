@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use crate::core::PackLocation;
 use failure::Error;
 use serde::{Deserialize, Serialize};
 use ssh2::{FileStat, Session};
@@ -112,6 +113,10 @@ impl super::Store for SftpStore {
         super::StoreType::SFTP
     }
 
+    fn get_speed(&self) -> super::StoreSpeed {
+        super::StoreSpeed::FAST
+    }
+
     fn get_config(&self) -> &super::Config {
         &self.config
     }
@@ -120,7 +125,7 @@ impl super::Store for SftpStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
         let conn = self.connect()?;
         let sftp = conn.session.sftp()?;
         let mut path: PathBuf = match &self.config.basepath {
@@ -134,15 +139,16 @@ impl super::Store for SftpStore {
         let mut remote = sftp.create(&path)?;
         let mut local = File::open(packfile)?;
         io::copy(&mut local, &mut remote)?;
-        Ok(object.to_owned())
+        let loc = PackLocation::new(&self.unique_id, bucket, object);
+        Ok(loc)
     }
 
-    fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
         let conn = self.connect()?;
         let sftp = conn.session.sftp()?;
         let object_path: PathBuf = match &self.config.basepath {
-            Some(bp) => [bp, bucket, object].iter().collect(),
-            None => [bucket, object].iter().collect(),
+            Some(bp) => [bp, &location.bucket, &location.object].iter().collect(),
+            None => [&location.bucket, &location.object].iter().collect(),
         };
         let mut remote = sftp.open(&object_path)?;
         let mut local = File::create(outfile)?;

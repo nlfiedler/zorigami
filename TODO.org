@@ -21,22 +21,26 @@
 **** Allow dataset to store packs to multiple locations
 ***** e.g. one store for local, another for SFTP
 ***** user assigns multiple stores to the dataset
-***** engine loads all of the stores into =BackupMaster=
-***** =send_one_pack()= sends pack to each store
-***** new struct for the store/bucket/object tuple: =PackLocation=
-***** =store_pack()= returns =PackLocation=
-***** =send_one_pack()= saves list of =PackLocation=
-***** =record_completed_pack()= saves =PackLocation= list in pack record
-***** =store= module provides utility functions for delegating to multiple stores
-***** delegator for =retrieve_pack()= will choose most suitable pack store
-****** local is preferred over remote
-****** SFTP is preferred over Glacier
 ***** cannot allow user to change store identity otherwise pack records are invalid
 **** Some rough size estimates
 ***** packs size of 64mb storing 300gb of data is about 4500 pack files
 ***** =SavedPack= with just bucket/object is 189 bytes serialized
 ***** 189 bytes times 4,500 records is 850,500 bytes
 ***** with store name, SavedPack is 232 bytes, so 1,044,000 bytes
+*** DONE Support multiple stores per dataset
+**** DONE change =Dataset= to have a list of store names
+**** DONE =store= module provides utility functions for delegating to multiple stores
+**** DONE engine loads all of the stores into =BackupMaster=
+**** DONE =send_one_pack()= sends pack to each store
+**** DONE new struct for the store/bucket/object tuple: =PackLocation=
+**** DONE =store_pack()= returns =PackLocation=
+**** DONE =send_one_pack()= saves list of =PackLocation=
+**** DONE =record_completed_pack()= saves =PackLocation= list in pack record
+**** DONE delegator for =retrieve_pack()= will choose most suitable pack store
+***** local is preferred over remote
+***** SFTP is preferred over Glacier
+**** DONE Write a test with multiple stores, ensure pack is written twice
+*** TODO Rename =Dataset.unique_id= to =computer_id= to be more clear
 *** TODO How will the user configure the stores for the dataset?
 **** Interface needs to show the dataset details in full
 **** Even if the store had a name, would still want to see details
@@ -192,6 +196,8 @@
 **** System
 *** TODO Support SFTP with private key authentication
 **** TODO allow private key locked with passprhase
+*** TODO Add a "local" vs "remote" and "slow" vs "fast" attribute to stores
+**** Make it easier for the =store::retrieve_pack()= to find the best store
 *** TODO Support Amazon S3, Minio
 **** Need to limit number of remote buckets to 100
 **** Bucket limit: catch the error and handle by re-using another bucket

@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use crate::core::PackLocation;
 use failure::Error;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -63,6 +64,10 @@ impl super::Store for LocalStore {
         super::StoreType::LOCAL
     }
 
+    fn get_speed(&self) -> super::StoreSpeed {
+        super::StoreSpeed::FAST
+    }
+
     fn get_config(&self) -> &super::Config {
         &self.config
     }
@@ -71,16 +76,17 @@ impl super::Store for LocalStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error> {
+    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
         let mut path: PathBuf = [&self.config.basepath, bucket].iter().collect();
         fs::create_dir_all(&path)?;
         path.push(object);
         fs::copy(packfile, &path)?;
-        Ok(object.to_owned())
+        let loc = PackLocation::new(&self.unique_id, bucket, object);
+        Ok(loc)
     }
 
-    fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error> {
-        let path: PathBuf = [&self.config.basepath, bucket, object].iter().collect();
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
+        let path: PathBuf = [&self.config.basepath, &location.bucket, &location.object].iter().collect();
         fs::copy(&path, outfile)?;
         Ok(())
     }

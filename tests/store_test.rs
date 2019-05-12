@@ -154,6 +154,7 @@ fn run_store_tests(store: &Store) {
     // store the same thing again, should not have any error
     let result = store.store_pack(&packfile, &bucket, &digest_sum);
     assert!(result.is_ok());
+    let pack_loc = result.unwrap();
 
     // check for bucket(s) being present; may be more from previous runs
     let result = store.list_buckets();
@@ -170,7 +171,7 @@ fn run_store_tests(store: &Store) {
     assert!(listing.contains(&digest_sum));
 
     // retrieve the file and verify by checksum
-    let result = store.retrieve_pack(&bucket, &digest_sum, &ptmpfile);
+    let result = store.retrieve_pack(&pack_loc, &ptmpfile);
     assert!(result.is_ok());
     let sha256 = checksum_file(&ptmpfile);
     assert_eq!(

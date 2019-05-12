@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use super::core::PackLocation;
 use super::database::Database;
 use failure::{err_msg, Error};
 use std::path::Path;
@@ -44,6 +45,17 @@ impl FromStr for StoreType {
             _ => Err(err_msg(format!("not a recognized store type: {}", s))),
         }
     }
+}
+
+///
+/// Indicates if a pack store is considered to be "fast" or "slow" with regards
+/// to pack retrieval. Some stores are rather slow. For example, Amazon Glacier
+/// would be very slow, while SFTP or S3 would be fast.
+///
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub enum StoreSpeed {
+    FAST,
+    SLOW,
 }
 
 ///
@@ -142,6 +154,86 @@ pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
 }
 
 ///
+/// Load all of the stores named in the list.
+///
+pub fn load_stores(dbase: &Database, names: &[String]) -> Result<Vec<Box<Store>>, Error> {
+    let mut stores_boxed: Vec<Box<Store>> = Vec::new();
+    for name in names {
+        let boxed = load_store(dbase, name)?;
+        stores_boxed.push(boxed);
+    }
+    Ok(stores_boxed)
+}
+
+///
+/// Store the given pack to all of the provided store implementations. Returns
+/// the list of all pack locations, which can be used to retrieve the pack
+/// at a later time.
+///
+pub fn store_pack(
+    packfile: &Path,
+    bucket: &str,
+    object: &str,
+    stores: &[Box<Store>],
+) -> Result<Vec<PackLocation>, Error> {
+    let mut results: Vec<PackLocation> = Vec::new();
+    for store in stores {
+        let loc = store.store_pack(packfile, bucket, object)?;
+        results.push(loc);
+    }
+    Ok(results)
+}
+
+///
+/// Retrieve the pack from one of the stores provided. The most suitable store
+/// will be utilized, preferring a local store over a remote one, and fast one
+/// over a slow one.
+///
+pub fn retrieve_pack(
+    stores: &[Box<Store>],
+    locations: &[PackLocation],
+    outfile: &Path,
+) -> Result<(), Error> {
+    // look for a local store over a remote one
+    let mut store_index = 0;
+    let mut found_local = false;
+    for (idx, store) in stores.iter().enumerate() {
+        if store.get_type() == StoreType::LOCAL {
+            store_index = idx;
+            found_local = true;
+            break;
+        }
+    }
+    // if no local store is available, look for a "fast" store
+    if !found_local {
+        for (idx, store) in stores.iter().enumerate() {
+            if store.get_speed() == StoreSpeed::FAST {
+                store_index = idx;
+                break;
+            }
+        }
+    }
+    let store = &stores[store_index];
+    // find the pack location whose store id matches the first choice
+    let mut loc_index = 0;
+    let mut found_location = false;
+    for (idx, loc) in locations.iter().enumerate() {
+        if loc.store == store.get_id() {
+            loc_index = idx;
+            found_location = true;
+            break;
+        }
+    }
+    if !found_location {
+        return Err(err_msg(format!(
+            "cannot find store for pack: {}",
+            locations[loc_index].store
+        )));
+    }
+    store.retrieve_pack(&locations[loc_index], outfile)
+}
+
+///
 /// A `Store` configuration can serialize and deserialize using JSON. The
 /// properties and behavior are specific to each store implementation.
 ///
@@ -174,6 +266,11 @@ pub trait Store {
     fn get_type(&self) -> StoreType;
 
     ///
+    /// Return the speed that best represents pack retrieval for this store.
+    ///
+    fn get_speed(&self) -> StoreSpeed;
+
+    ///
     /// Return a reference to the configuration for this store.
     ///
     fn get_config(&self) -> &Config;
@@ -185,17 +282,21 @@ pub trait Store {
 
     ///
     /// Store the pack file under the named bucket and referenced by the object
-    /// name. Returns the name of the remote object, in case it was assigned a
-    /// new value by the backing store (e.g. Amazon Glacier).
+    /// name. Returns the remote location of the pack, in case it was assigned
+    /// new values by the backing store.
     ///
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<String, Error>;
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error>;
 
     ///
-    /// Retrieve a pack from the given bucket and object name. The object name
-    /// must match whatever was returned by `store_pack()`, in case the remote
-    /// store uses its own naming scheme (e.g. Amazon Glacier).
+    /// Retrieve a pack from the given location, writing the contents to the
+    /// given path.
     ///
-    fn retrieve_pack(&self, bucket: &str, object: &str, outfile: &Path) -> Result<(), Error>;
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error>;
 
     ///
     /// List the known buckets in the store.

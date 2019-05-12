@@ -781,18 +781,43 @@ impl SavedFile {
     }
 }
 
+///
+/// Remote coordinates for a pack file, naming the store, bucket, and object by
+/// which the pack file can be retrieved.
+///
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PackLocation {
+    /// ULID of the pack store.
+    #[serde(rename = "st")]
+    pub store: String,
+    /// Remote bucket name.
+    #[serde(rename = "bu")]
+    pub bucket: String,
+    /// Remote object name.
+    #[serde(rename = "ob")]
+    pub object: String,
+}
+
+impl PackLocation {
+    /// Create a new PackLocation record using the given information.
+    pub fn new(store: &str, bucket: &str, object: &str) -> Self {
+        Self {
+            store: store.to_owned(),
+            bucket: bucket.to_owned(),
+            object: object.to_owned(),
+        }
+    }
+}
+
 /// Type for database record of saved packs.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SavedPack {
     /// Digest of pack file.
     #[serde(skip)]
     pub digest: Checksum,
-    /// Remote bucket name.
-    #[serde(rename = "bu")]
-    pub bucket: String,
-    /// Remote object name (for AWS Glacier this will be the archive ID).
-    #[serde(rename = "ob")]
-    pub object: String,
+    /// List of remote pack coordinates.
+    #[serde(rename = "pc")]
+    pub locations: Vec<PackLocation>,
     /// Date/time of successful upload, for conflict resolution.
     #[serde(rename = "tm")]
     pub upload_time: SystemTime,
@@ -801,11 +826,10 @@ pub struct SavedPack {
 impl SavedPack {
     /// Create a new SavedPack record using the given information. Assumes the
     /// upload time is the current time.
-    pub fn new(digest: Checksum, bucket: &str, object: &str) -> Self {
+    pub fn new(digest: Checksum, coords: Vec<PackLocation>) -> Self {
         Self {
             digest,
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
+            locations: coords,
             upload_time: SystemTime::now(),
         }
     }
@@ -833,9 +857,9 @@ pub struct Dataset {
     /// target size in bytes for pack files
     #[serde(rename = "ps")]
     pub pack_size: u64,
-    /// name of the store to contain pack files
+    /// names of the stores to contain pack files
     #[serde(rename = "st")]
-    pub store: String,
+    pub stores: Vec<String>,
 }
 
 // Default pack size is 64mb just because. With a typical ADSL home broadband
@@ -859,8 +883,14 @@ impl Dataset {
             latest_snapshot: None,
             workspace,
             pack_size: DEFAULT_PACK_SIZE,
-            store: store.to_owned(),
+            stores: vec![store.to_owned()],
         }
+    }
+
+    /// Add the named store to the dataset.
+    pub fn add_store(mut self, store: &str) -> Self {
+        self.stores.push(store.to_owned());
+        self
     }
 }
 
@@ -1186,6 +1216,7 @@ mod tests {
 
     #[test]
     fn test_serde_chunk() {
+        // also good for tracking the rough size of a chunk record
         let chunk = Chunk::new(
             Checksum::SHA256(
                 "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
@@ -1193,13 +1224,13 @@ mod tests {
             0,
             40000,
         )
-        .packfile(Checksum::SHA1(
-            "bc1a3198db79036e56b30f0ab307cee55e845907".to_owned(),
+        .packfile(Checksum::SHA256(
+            "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed".to_owned(),
         ));
         let encoded: Vec<u8> = serde_cbor::to_vec(&chunk).unwrap();
         // serde_json produces a string that is about 10% larger than CBOR,
         // and CBOR is a (pending) internet standard, making it a good choice
-        assert_eq!(encoded.len(), 58);
+        assert_eq!(encoded.len(), 84);
         let result: Chunk = serde_cbor::from_slice(&encoded).unwrap();
         // checksum for skipped field is all zeros
         assert_eq!(result.digest.to_string(), NULL_SHA1);
@@ -1209,21 +1240,23 @@ mod tests {
         assert!(result.packfile.is_some());
         assert_eq!(
             result.packfile.unwrap().to_string(),
-            "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
     }
 
     #[test]
     fn test_serde_pack() {
+        // also good for tracking the rough size of a pack record
         let digest = Checksum::SHA256(
             "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
         );
         let uuid = generate_unique_id("charlie", "localhost");
         let bucket = generate_bucket_name(&uuid);
         let object = "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1";
-        let pack = SavedPack::new(digest, &bucket, object);
+        let pacloc = PackLocation::new("01arz3ndektsv4rrffq69g5fav", &bucket, &object);
+        let pack = SavedPack::new(digest, vec![pacloc]);
         let encoded: Vec<u8> = serde_cbor::to_vec(&pack).unwrap();
-        assert_eq!(encoded.len(), 189);
+        assert_eq!(encoded.len(), 225);
     }
 
     #[test]
