@@ -3,25 +3,50 @@
 //
 use super::core::{Checksum, Chunk, Dataset, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
+use lazy_static::lazy_static;
 use rocksdb::{DBVector, DB};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::str;
+use std::sync::{Arc, Mutex, Weak};
+
+lazy_static! {
+    // Keep a map of weakly held references to shared DB instances. RocksDB
+    // itself is thread-safe for get/put/write, and the DB type implements Send
+    // and Sync. We just need to make sure the instance is eventually closed
+    // when the last reference is dropped.
+    //
+    // The key is the path to the database files.
+    static ref DBASE_REFS: Mutex<HashMap<PathBuf, Weak<DB>>> = Mutex::new(HashMap::new());
+}
 
 ///
 /// An instance of the database for reading and writing records to disk.
 ///
 pub struct Database {
     /// RocksDB instance.
-    db: DB,
+    db: Arc<DB>,
 }
 
 impl Database {
     ///
-    /// Create an instance of Database using the given path for storage.
+    /// Create an instance of Database using the given path for storage. Will
+    /// reuse an existing `DB` instance for the given path, if one has already
+    /// been opened.
     ///
     pub fn new(db_path: &Path) -> Result<Self, Error> {
+        // should be able to recover from a poisoned mutex without any problem
+        let mut db_refs = DBASE_REFS.lock().unwrap();
+        if let Some(weak) = db_refs.get(db_path) {
+            if let Some(arc) = weak.upgrade() {
+                return Ok(Self { db: arc });
+            }
+        }
+        let buf = db_path.to_path_buf();
         let db = DB::open_default(db_path)?;
-        Ok(Self { db })
+        let arc = Arc::new(db);
+        db_refs.insert(buf, Arc::downgrade(&arc));
+        Ok(Self { db: arc })
     }
 
     ///

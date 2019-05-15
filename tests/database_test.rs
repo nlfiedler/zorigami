@@ -1,11 +1,13 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+use failure::Error;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Deref;
 use std::path::Path;
+use std::thread;
 use std::time::SystemTime;
 use zorigami::core::*;
 use zorigami::database::*;
@@ -171,4 +173,49 @@ fn test_prefix_counting() {
     assert!(result.is_ok());
     let count: usize = result.unwrap();
     assert_eq!(count, 4);
+}
+
+#[test]
+fn test_db_threads_uniq_paths() -> Result<(), Error> {
+    let mut children = vec![];
+    for ii in 0..10 {
+        children.push(thread::spawn(move || {
+            // create a clean database for each thread
+            let db_path = format!("tmp/test/engine/thread_{}/rocksdb", ii);
+            let _ = fs::remove_dir_all(&db_path);
+            let dbase = Database::new(Path::new(&db_path)).unwrap();
+            let key = format!("thread_test_key_{}", ii);
+            let result = dbase.insert_document(key.as_bytes(), b"foo bar baz quux");
+            assert!(result.is_ok());
+        }));
+    }
+    for child in children {
+        let _ = child.join();
+    }
+    Ok(())
+}
+
+#[test]
+fn test_db_threads_one_path() -> Result<(), Error> {
+    let db_path = "tmp/test/engine/threads/rocksdb";
+    let _ = fs::remove_dir_all(db_path);
+    let mut children = vec![];
+    for ii in 0..10 {
+        children.push(thread::spawn(move || {
+            // create a clean database for each thread
+            let dbase = Database::new(Path::new(db_path)).unwrap();
+            let key = format!("thread_test_key_{}", ii);
+            let result = dbase.insert_document(key.as_bytes(), b"foo bar baz quux");
+            assert!(result.is_ok());
+        }));
+    }
+    for child in children {
+        let _ = child.join();
+    }
+    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let result = dbase.count_prefix("thread_test_key_");
+    assert!(result.is_ok());
+    let count: usize = result.unwrap();
+    assert_eq!(count, 10);
+    Ok(())
 }

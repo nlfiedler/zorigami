@@ -305,6 +305,8 @@ Remove the snapshot record to be deleted, then garbage collect.
     1. Each version iterates entire database, processing records as needed
     1. Main code iterates database and calls each version with a record to update
 * Some versions will only need to change certain records.
+* Could use `#[serde(default)]` and `Default` to fill in blanks of new fields.
+    - i.e. avoid writing a migration for simple things like adding a new optional field
 
 ### Encryption
 
