@@ -105,7 +105,7 @@ impl FromStr for Checksum {
         } else if s.starts_with("sha256-") {
             Ok(Checksum::SHA256(s[7..].to_owned()))
         } else {
-            Err(err_msg(format!("not a recognized store type: {}", s)))
+            Err(err_msg(format!("not a recognized algorithm: {}", s)))
         }
     }
 }
