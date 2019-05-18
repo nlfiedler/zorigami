@@ -32,8 +32,10 @@ graphql_scalar!(Digest where Scalar = <S> {
     }
 });
 
-// Define a larger integer type so we can handle extra large file sizes. This is
-// formatted as a string over the wire.
+// Define a larger integer type so we can represent those larger values, such as
+// file sizes and epoch time in milliseconds. Some of the core types define
+// properties that are unsigned 32-bit integers, so to be certain we can
+// represent those values in GraphQL, we will use this type.
 struct BigInt(i64);
 
 // need `where Scalar = <S>` parameterization to use this with objects
@@ -88,11 +90,11 @@ struct Snapshot {
     #[graphql(description = "The snapshot before this one, if any.")]
     parent: Option<Digest>,
     #[graphql(description = "Time when the snapshot was first created.")]
-    start_time: i32,
+    start_time: BigInt,
     #[graphql(description = "Time when the snapshot completely finished.")]
-    end_time: Option<i32>,
+    end_time: Option<BigInt>,
     #[graphql(description = "Total number of files contained in this snapshot.")]
-    file_count: i32,
+    file_count: BigInt,
     #[graphql(description = "Reference to the tree containing all of the files.")]
     tree: Digest,
 }
@@ -120,7 +122,7 @@ struct Dataset {
     #[graphql(description = "Path to temporary workspace for backup process.")]
     workspace: String,
     #[graphql(description = "Desired byte length of pack files.")]
-    pack_size: i32,
+    pack_size: BigInt,
     #[graphql(description = "Identifiers of stores used for saving packs.")]
     stores: Vec<String>,
 }

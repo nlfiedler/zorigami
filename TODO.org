@@ -2,15 +2,14 @@
 ** Phase 4
 *** TODO Develop the GraphQL schema to represent everything
 **** DONE snapshots
-**** TODO need a custom type for the =SystemTime= in =Snapshot=
-***** consider using https://github.com/chronotope/chrono
-***** juniper has built-in support for chrono types
+**** DONE need a custom type for the =SystemTime= in =Snapshot=; just use =BigInt=
 **** DONE define a custom type for =Checksum= values called =Digest=
 **** DONE =Digest= should check that input value is well-formed
 **** DONE =BigInt= should handle parse errors properly
 **** DONE define a custom type for file size
 ***** at best it will be 53-bit integers, because JavaScript on front-end
 ***** see the =BigInt= code in tanuki
+***** 2^31 is kinda small: 2,147,483,647
 ***** 2^53 is a pretty big number: 9,007,199,254,740,992
 ***** 2^63 has a maximum value of: 9,223,372,036,854,775,807
 **** DONE use =graphql_scalar!= macro to define serde functions for new types
