@@ -52,6 +52,10 @@ of certain environment variables, which is easily accomplished using dotenv.
 
 ## Tools
 
+### Finding Outdated Crates
+
+Use https://github.com/kbknapp/cargo-outdated and run `cargo outdated`
+
 ### License checking
 
 Use the https://github.com/Nemo157/cargo-lichking `cargo` utility. To install:
