@@ -21,7 +21,6 @@
 ***** resolver will enforce write-once store assignment to a dataset
 **** TODO just call =Database::new= every time, to ensure db is flushed
 ***** connection pooling sounds neat, but will it ever close the database?
-*** TODO Bump up the number of concurrent threads in database test
 *** TODO Test the GraphQL schema and resolvers
 **** TODO digests that lack the proper algorithm prefix
 **** TODO querying for things when there is nothing in the database

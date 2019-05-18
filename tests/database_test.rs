@@ -200,7 +200,7 @@ fn test_db_threads_one_path() -> Result<(), Error> {
     let db_path = "tmp/test/engine/threads/rocksdb";
     let _ = fs::remove_dir_all(db_path);
     let mut children = vec![];
-    for ii in 0..10 {
+    for ii in 0..50 {
         children.push(thread::spawn(move || {
             // create a clean database for each thread
             let dbase = Database::new(Path::new(db_path)).unwrap();
@@ -216,6 +216,6 @@ fn test_db_threads_one_path() -> Result<(), Error> {
     let result = dbase.count_prefix("thread_test_key_");
     assert!(result.is_ok());
     let count: usize = result.unwrap();
-    assert_eq!(count, 10);
+    assert_eq!(count, 50);
     Ok(())
 }
