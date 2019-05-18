@@ -1,17 +1,30 @@
 * Zorigami
 ** Phase 4
 *** TODO Develop the GraphQL schema to represent everything
-**** snapshots
-**** trees
-**** files
-**** store configuration
-***** model each store config as a type in GraphQL?
-***** devise a custom type that is encoded JSON?
-***** or config is a list of name/value pairs?
-**** datasets
-**** datasets and stores
+**** DONE snapshots
+**** TODO need a custom type for the =SystemTime= in =Snapshot=
+***** consider using https://github.com/chronotope/chrono
+***** juniper has built-in support for chrono types
+**** DONE define a custom type for =Checksum= values called =Digest=
+**** DONE =Digest= should check that input value is well-formed
+**** DONE =BigInt= should handle parse errors properly
+**** DONE define a custom type for file size
+***** at best it will be 53-bit integers, because JavaScript on front-end
+***** see the =BigInt= code in tanuki
+***** 2^53 is a pretty big number: 9,007,199,254,740,992
+***** 2^63 has a maximum value of: 9,223,372,036,854,775,807
+**** DONE use =graphql_scalar!= macro to define serde functions for new types
+**** DONE trees
+**** DONE files
+**** TODO store configuration: use json blobs?
+**** DONE datasets
+**** TODO datasets and stores
 ***** resolver will enforce write-once store assignment to a dataset
+**** TODO just call =Database::new= every time, to ensure db is flushed
+***** connection pooling sounds neat, but will it ever close the database?
+*** TODO Bump up the number of concurrent threads in database test
 *** TODO Test the GraphQL schema and resolvers
+**** TODO digests that lack the proper algorithm prefix
 **** TODO querying for things when there is nothing in the database
 **** TODO querying snapshots
 **** TODO querying trees
@@ -21,6 +34,8 @@
 **** TODO querying stores
 **** TODO mutating stores
 **** TODO cannot change stores assigned to dataset once there are snapshots
+*** TODO Read the db path from an environment variable
+*** TODO Read the HTTP port from an environment variable
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
