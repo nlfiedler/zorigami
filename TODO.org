@@ -1,6 +1,6 @@
 * Zorigami
 ** Phase 4
-*** TODO Develop the GraphQL schema to represent everything
+*** DONE Develop the GraphQL schema to represent everything
 **** DONE snapshots
 **** DONE need a custom type for the =SystemTime= in =Snapshot=; just use =BigInt=
 **** DONE define a custom type for =Checksum= values called =Digest=
@@ -15,13 +15,12 @@
 **** DONE use =graphql_scalar!= macro to define serde functions for new types
 **** DONE trees
 **** DONE files
-**** TODO store configuration: use json blobs?
 **** DONE datasets
-**** TODO datasets and stores
-***** resolver will enforce write-once store assignment to a dataset
-**** TODO just call =Database::new= every time, to ensure db is flushed
+**** DONE store configuration: base64 encoded json
+**** DONE just call =Database::new= every time, to ensure db is flushed
 ***** connection pooling sounds neat, but will it ever close the database?
 *** TODO Test the GraphQL schema and resolvers
+**** TODO "integers" that are not radix 10 integers
 **** TODO digests that lack the proper algorithm prefix
 **** TODO querying for things when there is nothing in the database
 **** TODO querying snapshots
@@ -29,11 +28,14 @@
 **** TODO querying files
 **** TODO querying datasets
 **** TODO mutating datasets
-**** TODO querying stores
-**** TODO mutating stores
+***** resolver will enforce write-once store assignment to a dataset
+**** DONE querying stores
+**** DONE mutating stores
 **** TODO cannot change stores assigned to dataset once there are snapshots
-*** TODO Read the db path from an environment variable
-*** TODO Read the HTTP port from an environment variable
+*** TODO How to document arguments to mutations in GraphQL?
+*** TODO Need a way to handle error in getting Database ref in graphql handler
+*** DONE Read the db path from an environment variable
+*** DONE Read the HTTP port from an environment variable
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -41,6 +43,17 @@
 **** TODO Set up apollo client dependency and schema tooling
 **** TODO Set up the routing
 **** TODO Write a simple home page that shows something
+**** TODO Store configuration is base64 encoded JSON values
+***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
+#+BEGIN_SRC
+external btoa : string -> string = "" [@@bs.val]
+external atob : string -> string = "" [@@bs.val]
+
+let () =
+  let text = "Hello World!" in
+  Js.log (text |> btoa);
+  Js.log (text |> btoa |> atob)
+#+END_SRC
 *** TODO Recover from unfinished backup procedure
 **** When performing backup, check if latest snapshot exists and lacks an end time
 **** If so, try to continue the backup with that snapshot

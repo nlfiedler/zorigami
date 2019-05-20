@@ -68,7 +68,7 @@ pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<Store> {
     let uuid = if id.is_some() {
         id.unwrap().to_owned()
     } else {
-        Ulid::new().to_string()
+        Ulid::new().to_string().to_lowercase()
     };
     match store_type {
         StoreType::LOCAL => Box::new(local::LocalStore::new(&uuid)),
@@ -125,9 +125,11 @@ pub fn save_store(dbase: &Database, store: &Store) -> Result<(), Error> {
 }
 
 ///
-/// Instantiate a store and read its saved configuration from the database. The
-/// `name` has the format `store/<type>/<name>`, where `<name>` may contain
-/// additional slashes. The store keys are retrieved using `find_stores()`.
+/// Instantiate a store and read its saved configuration from the database, if
+/// available. The `name` has the format `store/<type>/<name>`, where `<name>`
+/// may contain additional slashes. The store names can be retrieved using
+/// `find_stores()`. If the named store does not have a saved configuration, it
+/// will have the default values for its type.
 ///
 pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
     let name_parts: Vec<&str> = name.split('/').collect();
@@ -141,16 +143,12 @@ pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
         return Err(err_msg(format!("name {} must start with 'store'", name)));
     }
     let store_type = StoreType::from_str(name_parts[1])?;
-    let encoded = dbase.get_document(name.as_bytes())?;
-    match encoded {
-        Some(dbv) => {
-            let value_str = str::from_utf8(&dbv)?;
-            let mut store_impl = build_store(store_type, Some(name_parts[2]));
-            store_impl.get_config_mut().from_json(value_str)?;
-            Ok(store_impl)
-        }
-        None => Err(err_msg(format!("no such store: {}", name))),
+    let mut store_impl = build_store(store_type, Some(name_parts[2]));
+    if let Some(dbv) = dbase.get_document(name.as_bytes())? {
+        let value_str = str::from_utf8(&dbv)?;
+        store_impl.get_config_mut().from_json(value_str)?;
     }
+    Ok(store_impl)
 }
 
 ///

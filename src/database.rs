@@ -28,6 +28,9 @@ pub struct Database {
     db: Arc<DB>,
 }
 
+// Mark the Database as a valid context type for Juniper.
+impl juniper::Context for Database {}
+
 impl Database {
     ///
     /// Create an instance of Database using the given path for storage. Will
