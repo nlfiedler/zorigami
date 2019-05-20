@@ -1,5 +1,5 @@
 * Zorigami
-** Phase 4
+** GraphQL and WebUI
 *** DONE Develop the GraphQL schema to represent everything
 **** DONE snapshots
 **** DONE need a custom type for the =SystemTime= in =Snapshot=; just use =BigInt=
@@ -54,15 +54,7 @@ let () =
   Js.log (text |> btoa);
   Js.log (text |> btoa |> atob)
 #+END_SRC
-*** TODO Recover from unfinished backup procedure
-**** When performing backup, check if latest snapshot exists and lacks an end time
-**** If so, try to continue the backup with that snapshot
-**** If not, make a new snapshot
-**** If there are no changes at all (tree or file), delete the snapshot
-*** TODO Manage stores, datasets, and configuration
-*** TODO Exclude the database files from the data set(s)
-*** TODO Add something that will run scheduled jobs
-**** that is, an easy way to trigger backups according to the configuration
+**** TODO Manage stores, datasets, and configuration
 *** TODO Loose ends from Rust translation
 **** TODO Learn how to manage application state
 ***** Actix offers state management for web code
@@ -94,27 +86,44 @@ let () =
 ***** DONE write functions for insert/get pack
 ***** DONE work out how to support the counts of each type of document
 ***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
+** Scheduling and Recovery
 *** TODO If the new snapshot has no changes from previous, delete it
-** Phase 5
+*** TODO Recover from unfinished backup procedure
+**** When performing backup, check if latest snapshot exists and lacks an end time
+**** If so, try to continue the backup with that snapshot
+**** If not, make a new snapshot
+**** If there are no changes at all (tree or file), delete the snapshot
+*** TODO Exclude the database files from the data set(s)
+*** TODO Add something that will run scheduled jobs
+**** that is, an easy way to trigger backups according to the configuration
+*** TODO Detect file deletion during backup, mark file record as skipped
+*** TODO Detect files changing between snapshot and pack building time
+**** use the =changed= record property to track this
+*** TODO Store database in a bucket named after the "computer UUID"
+** Local Backup
 *** TODO Get encryption password from an environment variable
 *** TODO Use this to replace =replicaz= by persisting to USB drive
+** SFTP Backup
+*** TODO Support SFTP with private key authentication
+**** TODO allow private key locked with passprhase
 *** TODO Use this to replace =replicaz= by persisting over SFTP
+** More Functionality
 *** TODO Enable configuring various overrides in a dataset
 **** schedule/frequency overrides
 **** file/dirctory ignore overrides
 **** storage overrides (e.g. `local` vs `aws`)
 *** TODO Support multiple roots per dataset
 *** TODO Verify checksum of downloaded packs during restore
-*** TODO Store database in a bucket named after the "computer UUID"
+** Google Backup
 *** TODO Store pack files in Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO Use this to replace =akashita= for online backups
-** Phase 6
-*** TODO Try building on Windows
+** macOS support
+*** TODO Handle computer shutdown during a backup
+*** TODO Use =launchd= to manage the process, have it start automatically
 *** TODO Use this to replace Time Machine (store on server using SFTP)
-**** Need to handle computer shutdown during a backup
-**** Use =launchd= to manage the process, have it start automatically
+** Full Restore
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
@@ -125,15 +134,24 @@ let () =
 **** TODO Directory extended attributes
 **** TODO Restore multiple files efficiently
 **** TODO Restore a directory tree efficiently
-*** TODO Detect files changing between snapshot and pack building time
-**** use the =changed= record property to track this
-*** TODO Detect file deletion during backup, mark file record as skipped
 *** TODO Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 *** TODO Restore the backup database
 **** TODO Restore to a different directory, then copy over records
+** Windows support
+*** TODO Try building on Windows
+*** TODO Support Windows file types
+**** ReadOnly
+**** Hidden
+**** System
+** More Better
+*** TODO Automatically prune backups more then N days old
+**** For Google and Amazon, anything older than 90 days is free to remove
+**** This would be a configuration setting, with defaults and path-specific
+*** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
+*** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 ***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
@@ -148,22 +166,11 @@ let () =
 ***** Use that to form the URL with which to =sync=
 **** Share the chunks and packs documents with a ~peer~ installation
 **** At the start of backup, sync with the ~peer~ to get latest chunks/packs
-*** TODO Automatically prune backups more then N days old
-**** For Google and Amazon, anything older than 90 days is free to remove
-**** This would be a configuration setting, with defaults and path-specific
-*** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
-*** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
-** Phase 7
-*** TODO Consider how to deal with partial uploads (e.g. Minio/S3 has a means of handling these)
+*** TODO Consider how to deal with partial uploads
+**** e.g. Minio/S3 has a means of handling these
 *** TODO Design garbage collection solution (see NOTES)
 *** TODO Pack store should recommend pack sizes
 **** e.g. Glacier recommends archives greater than 100mb
-*** TODO Support Windows file types
-**** ReadOnly
-**** Hidden
-**** System
-*** TODO Support SFTP with private key authentication
-**** TODO allow private key locked with passprhase
 *** TODO Permit removing a store from a dataset
 **** would encourage user to clean up the remote files
 **** for local store, could remove the files immediately
@@ -174,6 +181,7 @@ let () =
 **** Need to limit number of remote buckets to 100
 **** Bucket limit: catch the error and handle by re-using another bucket
 *** TODO Support Amazon Glacier
+**** Need to limit number of remote buckets to 1000
 **** Use S3 to store the database-to-archive mapping of each snapshot
 **** Offer user option to use "expedited" retrievals so they go faster
 *** TODO Support Microsoft Azure blob storage
