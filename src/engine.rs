@@ -50,7 +50,7 @@ pub fn perform_backup(
     // upload the remaining chunks in the pack builder
     bmaster.finish_pack()?;
     // commit everything to the database
-    bmaster.update_parent(&snap_sha1)?;
+    bmaster.update_snapshot(&snap_sha1)?;
     dataset.latest_snapshot = Some(snap_sha1.clone());
     dbase.put_dataset(&dataset)?;
     Ok(snap_sha1)
@@ -145,11 +145,9 @@ impl<'a> BackupMaster<'a> {
         Ok(())
     }
 
-    /// Update the current snapshot with a reference to the previous snapshot,
-    /// as well as set the end time value to the current time.
-    fn update_parent(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
+    /// Update the current snapshot with the end time set to the current time.
+    fn update_snapshot(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
         let mut snapshot = self.dbase.get_snapshot(snap_sha1)?.unwrap();
-        snapshot.parent = self.dataset.latest_snapshot.clone();
         snapshot.end_time = Some(SystemTime::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
         Ok(())

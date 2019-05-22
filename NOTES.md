@@ -83,7 +83,7 @@ They change the SSH config to run the backup command with "append only" flag.
 ### Overview
 
 * Snapshots record what was saved and when
-* Content is stored in what is essentially a hash tree
+* Files are indexed in what is essentially a hash tree
 * Trees describe what files/folders are in the snapshot
     - Trees are nested, a la git
 * File content is stored in pack files
@@ -229,12 +229,12 @@ that has the most recent `upload_time`.
 
 #### Backup
 
+1. Sync with any configured peers to get recent chunk updates.
 1. Check for a existing snapshot:
     1. If present but lacking `end_time` value, continue backup procedure
     1. Otherwise, generate the tree objects to represent the state of the dataset
 1. Find the differences from the previous snapshot.
 1. If there are no changes, delete snapshot record, exit the procedure.
-1. Sync with any configured peers to get recent chunk updates.
 1. For each new/changed file, check if record exists; if not:
     1. For small files, treat as a single chunk
     1. For large files, use CDC to find chunks
@@ -354,7 +354,7 @@ Remove the snapshot record to be deleted, then garbage collect.
 
 * http://duplicity.nongnu.org
 * Uses GnuPG, a tar-like format, and rsync
-* Supports numerous backends
+* Supports backends with a filesystem-like interface
 
 ### JungleDisk
 

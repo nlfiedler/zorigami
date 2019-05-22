@@ -105,6 +105,20 @@ impl Database {
     }
 
     ///
+    /// Retrieve all of the datasets in the database.
+    ///
+    pub fn get_all_datasets(&self) -> Result<Vec<Dataset>, Error> {
+        let datasets = self.fetch_prefix("dataset/")?;
+        let mut results: Vec<Dataset> = Vec::new();
+        for (key, value) in datasets {
+            let mut serde_result: Dataset = serde_cbor::from_slice(&value)?;
+            serde_result.key = key.to_owned();
+            results.push(serde_result);
+        }
+        Ok(results)
+    }
+
+    ///
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     ///
@@ -298,6 +312,26 @@ impl Database {
             }
             let key_str = str::from_utf8(&key)?;
             results.push(key_str.to_owned());
+        }
+        Ok(results)
+    }
+
+    ///
+    /// Fetch the key/value pairs for those keys that start with the given
+    /// prefix.
+    ///
+    pub fn fetch_prefix(&self, prefix: &str) -> Result<HashMap<String, Box<[u8]>>, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut results: HashMap<String, Box<[u8]>> = HashMap::new();
+        for (key, value) in iter {
+            let pre = &key[..pre_bytes.len()];
+            if pre != pre_bytes {
+                break;
+            }
+            let key_str = str::from_utf8(&key)?;
+            results.insert(key_str.to_owned(), value);
         }
         Ok(results)
     }

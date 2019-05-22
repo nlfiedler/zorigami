@@ -26,14 +26,14 @@
 **** TODO querying snapshots
 **** TODO querying trees
 **** TODO querying files
-**** TODO querying datasets
-**** TODO mutating datasets
-***** resolver will enforce write-once store assignment to a dataset
+**** DONE querying datasets
+**** DONE mutating datasets
 **** DONE querying stores
 **** DONE mutating stores
-**** TODO cannot change stores assigned to dataset once there are snapshots
+*** TODO schema code needs a way to get an existing =computer_id=
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
+*** TODO =Snapshot= should set =start_time= in =new()=
 *** DONE Read the db path from an environment variable
 *** DONE Read the HTTP port from an environment variable
 *** TODO Write a ReasonML frontend
@@ -87,40 +87,68 @@ let () =
 ***** DONE work out how to support the counts of each type of document
 ***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 ** Scheduling and Recovery
+*** TODO Change =perform_backup()= as follows:
+**** take snapshot
+**** clone =latest_snapshot= for finding changed files
+**** update dataset =latest_snapshot= and save to database
+**** perform the backup as usual
+**** update snapshot =end_time= and save to database
 *** TODO If the new snapshot has no changes from previous, delete it
 *** TODO Recover from unfinished backup procedure
 **** When performing backup, check if latest snapshot exists and lacks an end time
 **** If so, try to continue the backup with that snapshot
-**** If not, make a new snapshot
-**** If there are no changes at all (tree or file), delete the snapshot
-*** TODO Exclude the database files from the data set(s)
+**** If not, proceed as usual with backup
 *** TODO Add something that will run scheduled jobs
-**** that is, an easy way to trigger backups according to the configuration
+**** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
+**** https://github.com/lholden/job_scheduler (uses =cron= crate)
+**** https://github.com/mehcode/schedule-rs (also uses =cron=)
+**** https://github.com/mdsherry/clokwerk (weird DSL like API)
+**** Proposed design based on =cron= crate
+***** =main= spawns a thread to start jobs as needed
+***** supervisor thread sleeps, wakes every N minutes
+***** fetch all datasets from database
+***** parse cron-like schedule for each dataset
+****** webui will generate the cron-like schedule based on user input
+***** check if any of the datasets need to run now
+****** that is, a job _should_ have run since the last completed snapshot
+****** use =cron= crate, =Schedule.after()=, compare the =next()= value to current time
+***** spawn a thread to run the backup for that dataset
+***** need to know if a dataset is already running a backup
+***** keep a map of running threads and datasets
+****** need to know if a thread dies and fails to complete the backup
+****** using the database for this is tricky since a ~pending~ flag would never get cleared on crash
 *** TODO Detect file deletion during backup, mark file record as skipped
 *** TODO Detect files changing between snapshot and pack building time
 **** use the =changed= record property to track this
 *** TODO Store database in a bucket named after the "computer UUID"
+**** pack file should be a ULID so that the most recent entry is sorted last
+*** TODO Verify checksum of downloaded packs during restore
+*** TODO Handle termination signals to exit even if backup is running
+**** leave the cleanup process for next time
 ** Local Backup
 *** TODO Get encryption password from an environment variable
 *** TODO Use this to replace =replicaz= by persisting to USB drive
 ** SFTP Backup
 *** TODO Support SFTP with private key authentication
-**** TODO allow private key locked with passprhase
+**** TODO allow private key locked with passphrase
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 ** More Functionality
+*** TODO Support excluding certain file patterns from backup
+*** TODO Exclude the database files from the dataset(s)
+*** TODO Consider how datasets can be modified after creation
+**** should their stores be allowed to change?
+**** should their basepath be allowed to change?
+**** cannot change stores assigned to dataset once there are snapshots
 *** TODO Enable configuring various overrides in a dataset
-**** schedule/frequency overrides
-**** file/dirctory ignore overrides
-**** storage overrides (e.g. `local` vs `aws`)
-*** TODO Support multiple roots per dataset
-*** TODO Verify checksum of downloaded packs during restore
+**** upload schedule
+**** file exclusions
 ** Google Backup
 *** TODO Store pack files in Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO Use this to replace =akashita= for online backups
 ** macOS support
-*** TODO Handle computer shutdown during a backup
+*** TODO Ensure termination signals are handled even during a backup
 *** TODO Use =launchd= to manage the process, have it start automatically
 *** TODO Use this to replace Time Machine (store on server using SFTP)
 ** Full Restore
@@ -198,25 +226,24 @@ let () =
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
 * Desktop App
-** TODO Read https://youngdynasty.net/posts/writing-mac-apps-in-go/
-** Phase N: Revery?
+** TODO Consider using Revery
 *** https://github.com/revery-ui/revery
 *** ReasonML
 *** React-like UI
 *** Redux-like state management
 *** Compiles to native
 *** Would not be using CSS, presumably
-*** Does it have support for systray?
-*** Does it have support for dock icons?
-** Phase N: Electron
-*** TODO Write it in TypeScript
-**** However, TypeScript and redux might get ugly fast
+*** See roadmap for other features (e.g. systray integration)
+** TODO Research more about Electron
+*** TODO Consider using TypeScript
+**** c.f. https://redux.js.org/recipes/usage-with-typescript
+**** c.f. https://dev.to/michaeljota/electron-with-typescript-using-ts-node-8oi
 *** TODO Consider using [[https://github.com/neon-bindings/neon][Neon bindings]] to write some parts in Rust
-*** TODO Create a system tray icon/widget
-**** Popup menu like Time Machine
-**** Show current status, last backup
-**** Action to open the app and examine snapshots
-**** Action to open the app and check settings
+** TODO Create a system tray icon/widget
+*** Popup menu like Time Machine
+*** Show current status, last backup
+*** Action to open the app and examine snapshots
+*** Action to open the app and check settings
 * Product
 ** Name
 *** Joseph suggests "Attic"
