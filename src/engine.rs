@@ -164,10 +164,8 @@ pub fn take_snapshot(
     parent: Option<core::Checksum>,
     dbase: &Database,
 ) -> Result<core::Checksum, Error> {
-    let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase)?;
     let mut snap = core::Snapshot::new(parent, tree.checksum());
-    snap = snap.start_time(start_time);
     snap = snap.file_count(tree.file_count);
     let sha1 = snap.checksum();
     dbase.insert_snapshot(&sha1, &snap)?;

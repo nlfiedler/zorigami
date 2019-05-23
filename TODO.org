@@ -34,7 +34,6 @@
 **** DONE mutating stores
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
-*** TODO =Snapshot= should set =start_time= in =new()=
 *** DONE Read the db path from an environment variable
 *** DONE Read the HTTP port from an environment variable
 *** TODO Write a ReasonML frontend

@@ -674,19 +674,14 @@ impl Snapshot {
     /// Use the builder-style functions to set the other fields.
     ///
     pub fn new(parent: Option<Checksum>, tree: Checksum) -> Self {
+        let start_time = SystemTime::now();
         Self {
             parent,
-            start_time: SystemTime::UNIX_EPOCH,
+            start_time,
             end_time: None,
             file_count: 0,
             tree,
         }
-    }
-
-    /// Add the start_time property.
-    pub fn start_time(mut self, start_time: SystemTime) -> Self {
-        self.start_time = start_time;
-        self
     }
 
     /// Add the end_time property.
