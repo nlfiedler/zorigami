@@ -24,12 +24,18 @@ pub fn perform_backup(
     dbase: &Database,
     passphrase: &str,
 ) -> Result<core::Checksum, Error> {
+    // Take a snapshot and record it as the new most recent snapshot for this
+    // dataset, to allow detecting a running backup, and allow for recovery from
+    // a crash or forced shutdown.
     fs::create_dir_all(&dataset.workspace)?;
     let snap_sha1 = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
+    let latest_sha1 = dataset.latest_snapshot.take();
+    dataset.latest_snapshot = Some(snap_sha1.clone());
+    dbase.put_dataset(&dataset)?;
     let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
-    if dataset.latest_snapshot.is_none() {
+    if latest_sha1.is_none() {
         let snapshot = dbase.get_snapshot(&snap_sha1)?.unwrap();
         let tree = snapshot.tree.clone();
         let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
@@ -40,7 +46,7 @@ pub fn perform_backup(
         let iter = find_changed_files(
             dbase,
             dataset.basepath.clone(),
-            dataset.latest_snapshot.clone().unwrap(),
+            latest_sha1.clone().unwrap(),
             snap_sha1.clone(),
         )?;
         for result in iter {
@@ -51,8 +57,6 @@ pub fn perform_backup(
     bmaster.finish_pack()?;
     // commit everything to the database
     bmaster.update_snapshot(&snap_sha1)?;
-    dataset.latest_snapshot = Some(snap_sha1.clone());
-    dbase.put_dataset(&dataset)?;
     Ok(snap_sha1)
 }
 

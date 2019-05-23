@@ -58,18 +58,13 @@ let () =
 *** TODO Loose ends from Rust translation
 **** TODO Learn how to manage application state
 ***** Actix offers state management for web code
+***** https://crates.io/crates/redux-rs (MIT)
+***** https://crates.io/crates/reducer (MIT)
 ***** https://github.com/SergioBenitez/state (MIT/Apache)
-***** https://github.com/rust-redux/rust-redux (MIT)
 ***** https://github.com/jaredonline/redux-rs (???)
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
 ** Scheduling and Recovery
-*** TODO Change =perform_backup()= as follows:
-**** take snapshot
-**** clone =latest_snapshot= for finding changed files
-**** update dataset =latest_snapshot= and save to database
-**** perform the backup as usual
-**** update snapshot =end_time= and save to database
 *** TODO If the new snapshot has no changes from previous, delete it
 *** TODO Recover from unfinished backup procedure
 **** When performing backup, check if latest snapshot exists and lacks an end time
@@ -110,6 +105,15 @@ let () =
 **** TODO allow private key locked with passphrase
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 ** More Functionality
+*** TODO Event dispatching
+**** use the rust redux crate to manage "events" and state
+**** set up a singleton store instance using =lazy_static=
+**** engine emits actions/events to the store
+***** for backup and restore functions
+***** e.g. "downloaded a pack", "uploaded a pack"
+**** backup threads register as subscribers to the store
+**** clients will use GraphQL subscriptions to receive updates
+**** backup threads emit GraphQL subscription events
 *** TODO Support excluding certain file patterns from backup
 *** TODO Exclude the database files from the dataset(s)
 *** TODO Consider how datasets can be modified after creation
