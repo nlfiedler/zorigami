@@ -894,6 +894,33 @@ impl Dataset {
     }
 }
 
+/// Contains the configuration of the application, pertaining to all datasets.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Configuration {
+    /// name of the computer on which this application is running
+    #[serde(rename = "hn")]
+    pub hostname: String,
+    /// name of the user running this application
+    #[serde(rename = "un")]
+    pub username: String,
+    /// computer UUID for generating bucket names
+    #[serde(rename = "id")]
+    pub computer_id: String,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        let username = whoami::username();
+        let hostname = whoami::hostname();
+        let computer_id = generate_unique_id(&username, &hostname);
+        Self {
+            hostname,
+            username,
+            computer_id,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

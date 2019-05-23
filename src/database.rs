@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-use super::core::{Checksum, Chunk, Dataset, SavedFile, SavedPack, Snapshot, Tree};
+use super::core::{Checksum, Chunk, Configuration, Dataset, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use lazy_static::lazy_static;
 use rocksdb::{DBVector, DB};
@@ -116,6 +116,30 @@ impl Database {
             results.push(serde_result);
         }
         Ok(results)
+    }
+
+    ///
+    /// Put the configuration record into the database.
+    ///
+    pub fn put_config(&self, conf: Configuration) -> Result<(), Error> {
+        let key = "configuration";
+        let encoded: Vec<u8> = serde_cbor::to_vec(&conf)?;
+        self.put_document(key.as_bytes(), &encoded)
+    }
+
+    ///
+    /// Retrieve the configuration record, returning None if not found.
+    ///
+    pub fn get_config(&self) -> Result<Option<Configuration>, Error> {
+        let key = "configuration";
+        let encoded = self.get_document(key.as_bytes())?;
+        match encoded {
+            Some(dbv) => {
+                let serde_result: Configuration = serde_cbor::from_slice(&dbv)?;
+                Ok(Some(serde_result))
+            }
+            None => Ok(None),
+        }
     }
 
     ///

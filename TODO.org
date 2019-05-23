@@ -26,11 +26,12 @@
 **** TODO querying snapshots
 **** TODO querying trees
 **** TODO querying files
+**** TODO fetching configuration record
+**** TODO updating configuration record
 **** DONE querying datasets
 **** DONE mutating datasets
 **** DONE querying stores
 **** DONE mutating stores
-*** TODO schema code needs a way to get an existing =computer_id=
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO =Snapshot= should set =start_time= in =new()=
@@ -63,29 +64,6 @@ let () =
 ***** https://github.com/jaredonline/redux-rs (???)
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
-**** TODO Get basic database working
-***** DONE read https://github.com/facebook/rocksdb/wiki/RocksDB-Basics
-***** DONE write an "insert if missing" function
-****** does not write if the key is already present
-***** DONE decide how to store "documents" in the database
-****** use [[https://github.com/serde-rs/serde][serde]] to efficiently de/serialize to many formats
-****** can =skip= fields that do not need serde
-****** can write custom serde functionality as needed
-****** DONE how to manage versioning of the data structures?
-******* can use =#[serde(default)]= and =Default= to fill in blanks
-****** =serde_json= is maintained by serde community
-****** [[https://github.com/pyfisch/cbor][pyfisch/cbor]]; CBOR is an internet standard (RFC 7049)
-****** [[https://github.com/3Hren/msgpack-rust][3Hren/msgpack-rust]] is not actively developed
-***** DONE Use serde ~rename~ feature to make short field names
-***** DONE write functions for insert/get tree
-***** DONE write functions for insert/get snapshot
-***** TODO write functions for insert/get configuration
-***** DONE write functions for insert/get xattr
-***** DONE write functions for insert/get file
-***** DONE write functions for insert/get chunk
-***** DONE write functions for insert/get pack
-***** DONE work out how to support the counts of each type of document
-***** DONE decide how the chunk and pack records will be stored to facilitate multi-host dedupe
 ** Scheduling and Recovery
 *** TODO Change =perform_backup()= as follows:
 **** take snapshot

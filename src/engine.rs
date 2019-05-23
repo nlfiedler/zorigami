@@ -894,6 +894,17 @@ impl Default for Pack {
     }
 }
 
+///
+/// Retrieve the configuration record from the database, or build a new one
+/// using default values.
+///
+pub fn get_configuration(dbase: &Database) -> Result<core::Configuration, Error> {
+    if let Some(conf) = dbase.get_config()? {
+        return Ok(conf);
+    }
+    Ok(Default::default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::core::*;

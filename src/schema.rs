@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use zorigami::core;
 use zorigami::database::Database;
+use zorigami::engine;
 use zorigami::store;
 
 // Our GraphQL version of the core::Checksum type. It is tedious to implement
@@ -324,8 +325,8 @@ graphql_object!(MutationRoot: Database | &self | {
     field defineDataset(&executor, dataset: InputDataset) -> FieldResult<Dataset> {
         let database = executor.context();
         dataset.validate(&database)?;
-        // TODO: need to get computer id from database
-        let computer_id = core::generate_unique_id("username", "hostname");
+        let config = engine::get_configuration(&database)?;
+        let computer_id = config.computer_id;
         let set = core::Dataset::new(&computer_id, Path::new(&dataset.basepath), &dataset.stores[0]);
         let mut ds = Dataset::from_dataset(set);
         ds = ds.copy_input(dataset);
