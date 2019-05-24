@@ -40,12 +40,12 @@ graphql_scalar!(Digest where Scalar = <S> {
 
 impl Digest {
     /// Convert from a core Checksum.
-    pub fn from_checksum(value: &core::Checksum) -> Self {
+    fn from_checksum(value: &core::Checksum) -> Self {
         Digest(format!("{}", value))
     }
 
     /// Convert to a core Checksum value.
-    pub fn to_checksum(&self) -> core::Checksum {
+    fn to_checksum(&self) -> core::Checksum {
         // relying on input validation to make unwrap safe
         core::Checksum::from_str(&self.0).unwrap()
     }
@@ -128,10 +128,32 @@ struct File {
 }
 
 #[derive(GraphQLObject)]
+/// Application configuration record.
+struct Configuration {
+    /// Name of the computer on which this application is running.
+    hostname: String,
+    /// Name of the user running this application.
+    username: String,
+    /// Computer UUID for generating bucket names.
+    computer_id: String,
+}
+
+impl Configuration {
+    /// Convert from a core Configuration struct to the GraphQL object.
+    fn from_config(conf: core::Configuration) -> Self {
+        Self {
+            hostname: conf.hostname,
+            username: conf.username,
+            computer_id: conf.computer_id,
+        }
+    }
+}
+
+#[derive(GraphQLObject)]
 #[graphql(description = "The directory structure which will be saved.")]
 struct Dataset {
     #[graphql(description = "Opaque identifier for this dataset.")]
-    pub key: String,
+    key: String,
     #[graphql(description = "Unique computer identifier.")]
     computer_id: String,
     #[graphql(description = "Path that is being backed up.")]
@@ -204,7 +226,7 @@ struct InputDataset {
 
 impl InputDataset {
     /// Perform basic validation on the input dataset.
-    pub fn validate(&self, database: &Database) -> FieldResult<()> {
+    fn validate(&self, database: &Database) -> FieldResult<()> {
         if self.stores.is_empty() {
             return Err(FieldError::new(
                 "Require at least one store in dataset",
@@ -246,6 +268,13 @@ struct Store {
 pub struct QueryRoot;
 
 graphql_object!(QueryRoot: Database |&self| {
+    #[doc = "Retrieve the configuration record."]
+    field configuration(&executor) -> FieldResult<Option<Configuration>> {
+        let database = executor.context();
+        let conf = engine::get_configuration(&database)?;
+        Ok(Some(Configuration::from_config(conf)))
+    }
+
     #[doc = "Find all dataset configurations."]
     field datasets(&executor) -> FieldResult<Vec<Dataset>> {
         let database = executor.context();
@@ -736,6 +765,35 @@ mod tests {
         // packSize is a bigint that comes over the wire as a string
         let pack_size = res.as_scalar_value::<String>().unwrap();
         assert_eq!(pack_size, "33554432");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_config_access() -> Result<(), Error> {
+        let db_path = "tmp/test/schema/config/rocksdb";
+        let _ = fs::remove_dir_all(db_path);
+        let ctx = Database::new(Path::new(db_path))?;
+        let schema = create_schema();
+
+        // assert configuration has sensible default values
+        let (res, _errors) = juniper::execute(
+            r#"query { configuration { computerId } }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("configuration").unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("computerId").unwrap();
+        let actual = res.as_scalar_value::<String>().unwrap();
+        let username = whoami::username();
+        let hostname = whoami::hostname();
+        let expected = core::generate_unique_id(&username, &hostname);
+        assert_eq!(actual, &expected);
 
         Ok(())
     }
