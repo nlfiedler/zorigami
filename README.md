@@ -76,3 +76,10 @@ $ cargo lichking check
 
 However, need to look for "gpl" manually in the `list` output, as most licenses
 that are compatible with MIT/Apache are also compatible with GPL.
+
+## Origin of the name
+
+A zorigami is a clock possessed by a spirit, as described on the
+[Wikipedia](https://en.wikipedia.org/wiki/Tsukumogami) page about
+Tsukumogami, which includes zorigami. This has nothing at all do with
+this application, accept maybe for the association with time.
