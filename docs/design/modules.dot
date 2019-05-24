@@ -1,0 +1,14 @@
+digraph G {
+  "main" -> "schema"
+  "main" -> "database"
+  "schema" -> "engine"
+  "schema" -> "database"
+  "schema" -> "store"
+  "schema" -> "core"
+  "engine" -> "database"
+  "engine" -> "store"
+  "engine" -> "core"
+  "store" -> "database"
+  "store" -> "core"
+  "database" -> "core"
+}
