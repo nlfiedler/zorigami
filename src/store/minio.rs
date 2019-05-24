@@ -122,7 +122,12 @@ impl super::Store for MinioStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
         let client = self.connect();
         // Ensure the bucket exists
         create_bucket(&client, bucket)?;

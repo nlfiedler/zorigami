@@ -125,7 +125,12 @@ impl super::Store for SftpStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
         let conn = self.connect()?;
         let sftp = conn.session.sftp()?;
         let mut path: PathBuf = match &self.config.basepath {

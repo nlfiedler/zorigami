@@ -76,7 +76,12 @@ impl super::Store for LocalStore {
         &mut self.config
     }
 
-    fn store_pack(&self, packfile: &Path, bucket: &str, object: &str) -> Result<PackLocation, Error> {
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
         let mut path: PathBuf = [&self.config.basepath, bucket].iter().collect();
         fs::create_dir_all(&path)?;
         path.push(object);
@@ -86,7 +91,9 @@ impl super::Store for LocalStore {
     }
 
     fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
-        let path: PathBuf = [&self.config.basepath, &location.bucket, &location.object].iter().collect();
+        let path: PathBuf = [&self.config.basepath, &location.bucket, &location.object]
+            .iter()
+            .collect();
         fs::copy(&path, outfile)?;
         Ok(())
     }
