@@ -137,7 +137,7 @@ impl super::Store for MinioStore {
             bucket: bucket.to_owned(),
             key: object.to_owned(),
             content_length: Some(meta.len() as i64),
-            body: Some(StreamingBody::new(read_stream.map(|bytes| bytes.to_vec()))),
+            body: Some(StreamingBody::new(read_stream)),
             ..Default::default()
         };
         let result = client.put_object(req).sync()?;
