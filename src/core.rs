@@ -540,7 +540,6 @@ impl TreeEntry {
     pub fn owners(mut self, path: &Path) -> Self {
         #[cfg(target_family = "unix")]
         {
-            use libc;
             use std::ffi::CStr;
             use std::os::unix::fs::MetadataExt;
             let result = fs::symlink_metadata(path);
