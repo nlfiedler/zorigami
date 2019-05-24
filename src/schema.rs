@@ -38,14 +38,14 @@ graphql_scalar!(Digest where Scalar = <S> {
     }
 });
 
-impl Digest {
-    /// Convert from a core Checksum.
-    fn from_checksum(value: &core::Checksum) -> Self {
-        Digest(format!("{}", value))
+impl From<core::Checksum> for Digest {
+    fn from(value: core::Checksum) -> Self {
+        Digest(format!("{}", &value))
     }
+}
 
-    /// Convert to a core Checksum value.
-    fn to_checksum(&self) -> core::Checksum {
+impl Into<core::Checksum> for Digest {
+    fn into(self) -> core::Checksum {
         // relying on input validation to make unwrap safe
         core::Checksum::from_str(&self.0).unwrap()
     }
@@ -138,9 +138,8 @@ struct Configuration {
     computer_id: String,
 }
 
-impl Configuration {
-    /// Convert from a core Configuration struct to the GraphQL object.
-    fn from_config(conf: core::Configuration) -> Self {
+impl From<core::Configuration> for Configuration {
+    fn from(conf: core::Configuration) -> Self {
         Self {
             hostname: conf.hostname,
             username: conf.username,
@@ -169,10 +168,33 @@ struct Dataset {
 }
 
 impl Dataset {
-    /// Convert from core::Dataset to the GraphQL representation, consuming the
-    /// original dataset.
-    fn from_dataset(set: core::Dataset) -> Self {
-        let snapshot = set.latest_snapshot.map(|e| Digest::from_checksum(&e));
+    /// Update the fields of this dataset with the values from the input.
+    fn copy_input(mut self, set: InputDataset) -> Self {
+        self.basepath = set.basepath;
+        self.workspace = set.workspace;
+        self.pack_size = set.pack_size;
+        self.stores = set.stores;
+        self
+    }
+}
+
+impl Into<core::Dataset> for Dataset {
+    fn into(self) -> core::Dataset {
+        let store = self.stores[0].clone();
+        let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
+        set.latest_snapshot = self.latest_snapshot.map(Digest::into);
+        set.workspace = PathBuf::from(&self.workspace);
+        set.pack_size = self.pack_size.0 as u64;
+        for stor in self.stores.iter().skip(1) {
+            set = set.add_store(&stor);
+        }
+        set
+    }
+}
+
+impl From<core::Dataset> for Dataset {
+    fn from(set: core::Dataset) -> Self {
+        let snapshot = set.latest_snapshot.map(Digest::from);
         Self {
             key: set.key,
             computer_id: set.computer_id,
@@ -182,31 +204,6 @@ impl Dataset {
             pack_size: BigInt(set.pack_size as i64),
             stores: set.stores,
         }
-    }
-
-    /// Update the fields of this dataset with the values from the input.
-    fn copy_input(mut self, set: InputDataset) -> Self {
-        self.basepath = set.basepath;
-        self.workspace = set.workspace;
-        self.pack_size = set.pack_size;
-        self.stores = set.stores;
-        self
-    }
-
-    /// Convert to a core::Dataset value.
-    fn to_dataset(&self) -> core::Dataset {
-        let store = self.stores[0].clone();
-        let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
-        set.latest_snapshot = self
-            .latest_snapshot
-            .as_ref()
-            .map(|e| Digest::to_checksum(&e));
-        set.workspace = PathBuf::from(&self.workspace);
-        set.pack_size = self.pack_size.0 as u64;
-        for stor in self.stores.iter().skip(1) {
-            set = set.add_store(&stor);
-        }
-        set
     }
 }
 
@@ -272,7 +269,7 @@ graphql_object!(QueryRoot: Database |&self| {
     field configuration(&executor) -> FieldResult<Option<Configuration>> {
         let database = executor.context();
         let conf = engine::get_configuration(&database)?;
-        Ok(Some(Configuration::from_config(conf)))
+        Ok(Some(Configuration::from(conf)))
     }
 
     #[doc = "Find all dataset configurations."]
@@ -281,7 +278,7 @@ graphql_object!(QueryRoot: Database |&self| {
         let datasets = database.get_all_datasets()?;
         let mut results: Vec<Dataset> = Vec::new();
         for set in datasets {
-            results.push(Dataset::from_dataset(set));
+            results.push(Dataset::from(set));
         }
         Ok(results)
     }
@@ -291,7 +288,7 @@ graphql_object!(QueryRoot: Database |&self| {
         let database = executor.context();
         let opt = database.get_dataset(&key)?;
         if let Some(set) = opt {
-            Ok(Some(Dataset::from_dataset(set)))
+            Ok(Some(Dataset::from(set)))
         } else {
             Ok(None)
         }
@@ -357,11 +354,11 @@ graphql_object!(MutationRoot: Database | &self | {
         let config = engine::get_configuration(&database)?;
         let computer_id = config.computer_id;
         let set = core::Dataset::new(&computer_id, Path::new(&dataset.basepath), &dataset.stores[0]);
-        let mut ds = Dataset::from_dataset(set);
+        let mut ds = Dataset::from(set);
         ds = ds.copy_input(dataset);
-        let set = ds.to_dataset();
+        let set: core::Dataset = ds.into();
         database.put_dataset(&set)?;
-        Ok(Dataset::from_dataset(set))
+        Ok(Dataset::from(set))
     }
 
     #[doc = "Update an existing dataset with the given configuration."]
@@ -382,12 +379,12 @@ graphql_object!(MutationRoot: Database | &self | {
             ));
         }
         let key = opt.as_ref().unwrap().key.clone();
-        let mut ds = Dataset::from_dataset(opt.unwrap());
+        let mut ds = Dataset::from(opt.unwrap());
         ds = ds.copy_input(dataset);
-        let mut set = ds.to_dataset();
+        let mut set: core::Dataset = ds.into();
         set.key = key;
         database.put_dataset(&set)?;
-        Ok(Dataset::from_dataset(set))
+        Ok(Dataset::from(set))
     }
 });
 
