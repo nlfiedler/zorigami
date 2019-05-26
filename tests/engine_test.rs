@@ -48,7 +48,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
     assert_eq!(snapshot1.file_count, 1);
@@ -59,7 +59,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
         xattr::set(&dest, "me.fiedlers.test", b"foobar")?;
     }
     // take another snapshot
-    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
     assert!(snapshot2.parent.is_some());
     assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
@@ -67,7 +67,12 @@ fn test_basic_snapshots() -> Result<(), Error> {
     assert_ne!(snap1_sha, snap2_sha);
     assert_ne!(snapshot1.tree, snapshot2.tree);
     // compute the differences
-    let iter = find_changed_files(&dbase, PathBuf::from(basepath), snap1_sha, snap2_sha)?;
+    let iter = find_changed_files(
+        &dbase,
+        PathBuf::from(basepath),
+        snap1_sha,
+        snap2_sha.clone(),
+    )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
     assert!(changed[0].is_ok());
@@ -93,6 +98,10 @@ fn test_basic_snapshots() -> Result<(), Error> {
             .unwrap();
         assert_eq!(x_value, b"foobar");
     }
+
+    // take another snapshot, should indicate no changes
+    let snap3_opt = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase)?;
+    assert!(snap3_opt.is_none());
     Ok(())
 }
 
@@ -120,7 +129,7 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
         fs::symlink_file(&target, &dest)?;
     }
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
     assert_eq!(snapshot1.file_count, 0);
@@ -157,7 +166,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     fs::write(&mmm, b"morose monkey munching muffins")?;
     fs::write(&yyy, b"yellow yak yodeling")?;
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert_eq!(snapshot1.file_count, 3);
     // add new files, change one file
@@ -171,7 +180,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     fs::write(&mmm, b"many mumbling mice moonlight")?;
     fs::write(&nnn, b"neat newts gnawing noodles")?;
     fs::write(&zzz, b"zebras riding on a zephyr")?;
-    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     // compute the differences
     let iter = find_changed_files(
         &dbase,
@@ -192,7 +201,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     fs::remove_file(&bbb)?;
     fs::remove_file(&yyy)?;
     fs::write(&zzz, b"zippy zip ties zooming")?;
-    let snap3_sha = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase)?;
+    let snap3_sha = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase)?.unwrap();
     // compute the differences
     let iter = find_changed_files(&dbase, PathBuf::from(basepath), snap2_sha, snap3_sha)?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
@@ -216,7 +225,7 @@ fn test_snapshot_types() -> Result<(), Error> {
     fs::write(&ccc, b"crazy cat clawing chairs")?;
     fs::write(&mmm, b"morose monkey munching muffins")?;
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert_eq!(snapshot1.file_count, 2);
     // change files to dirs and vice versa
@@ -227,7 +236,7 @@ fn test_snapshot_types() -> Result<(), Error> {
     fs::remove_dir_all(&mmm)?;
     fs::write(&ccc, b"catastrophic catastrophes")?;
     fs::write(&mmm, b"many mumbling mice moonlight")?;
-    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     // compute the differences
     let iter = find_changed_files(
         &dbase,
@@ -257,7 +266,7 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     fs::write(&bbb, b"bored baby baboons bathing")?;
     fs::write(&ccc, b"crazy cat clawing chairs")?;
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert_eq!(snapshot1.file_count, 2);
     // replace the files and directories with links
@@ -282,7 +291,7 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
         #[cfg(target_family = "windows")]
         fs::symlink_file("mmm.txt", &ccc)?;
     }
-    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     // compute the differences
     let iter = find_changed_files(
         &dbase,
@@ -326,7 +335,7 @@ fn test_snapshot_was_links() -> Result<(), Error> {
         fs::symlink_file("mmm.txt", &ccc)?;
     }
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?;
+    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert_eq!(snapshot1.file_count, 1);
     // replace the links with files and directories
@@ -336,7 +345,7 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     let ccc: PathBuf = [basepath, "ccc", "ccc.txt"].iter().collect();
     fs::create_dir(ccc.parent().unwrap())?;
     fs::write(&ccc, b"crazy cat clawing chairs")?;
-    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?;
+    let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     // compute the differences
     let iter = find_changed_files(
         &dbase,
@@ -502,7 +511,8 @@ fn test_perform_backup() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // check for object(s) being present in the pack store
     let result = store.list_buckets();
@@ -518,7 +528,8 @@ fn test_perform_backup() -> Result<(), Error> {
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // check for more buckets and objects
     let result = store.list_buckets();
@@ -535,6 +546,10 @@ fn test_perform_backup() -> Result<(), Error> {
     assert!(result.is_ok());
     let listing = result.unwrap();
     assert!(!listing.is_empty());
+
+    // run the backup again with no changes, assert no new snapshot
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_none());
 
     Ok(())
 }
@@ -569,17 +584,20 @@ fn test_restore_file() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // perform the third backup
     let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/washington-journal.txt", &dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // should be 8 chunks in database (pack size of 64kb means chunks around
     // 16kb; testing with two small files and one larger file)
@@ -590,7 +608,8 @@ fn test_restore_file() -> Result<(), Error> {
     let infile = Path::new("tests/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = [basepath, "SekienShifted.jpg"].iter().collect();
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // should be one more chunk in database
     let count = dbase.count_prefix("chunk")?;
@@ -727,7 +746,8 @@ fn test_multiple_stores() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
-    perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    assert!(backup_opt.is_some());
 
     // ensure the pack record has multiple locations
     let pack_keys = dbase.find_prefix("pack/")?;

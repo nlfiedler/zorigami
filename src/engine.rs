@@ -17,18 +17,22 @@ use xattr;
 /// Take a snapshot, collect the new/changed files, assemble them into pack
 /// files, upload them to the pack store, and record the results in the
 /// database. The snapshot and dataset are updated in the database. Returns the
-/// snapshot checksum.
+/// snapshot checksum, or None if there were no changes.
 ///
 pub fn perform_backup(
     dataset: &mut core::Dataset,
     dbase: &Database,
     passphrase: &str,
-) -> Result<core::Checksum, Error> {
+) -> Result<Option<core::Checksum>, Error> {
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and allow for recovery from
     // a crash or forced shutdown.
     fs::create_dir_all(&dataset.workspace)?;
-    let snap_sha1 = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
+    let snap_opt = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
+    if snap_opt.is_none() {
+        return Ok(None)
+    }
+    let snap_sha1 = snap_opt.unwrap();
     let latest_sha1 = dataset.latest_snapshot.take();
     dataset.latest_snapshot = Some(snap_sha1.clone());
     dbase.put_dataset(&dataset)?;
@@ -57,7 +61,7 @@ pub fn perform_backup(
     bmaster.finish_pack()?;
     // commit everything to the database
     bmaster.update_snapshot(&snap_sha1)?;
-    Ok(snap_sha1)
+    Ok(Some(snap_sha1))
 }
 
 ///
@@ -161,19 +165,30 @@ impl<'a> BackupMaster<'a> {
 ///
 /// Take a snapshot of the directory structure at the given path. The parent, if
 /// `Some`, specifies the snapshot that will be recorded as the parent of this
-/// new snapshot.
+/// new snapshot. If there have been no changes, then None is returned.
 ///
 pub fn take_snapshot(
     basepath: &Path,
     parent: Option<core::Checksum>,
     dbase: &Database,
-) -> Result<core::Checksum, Error> {
+) -> Result<Option<core::Checksum>, Error> {
     let tree = scan_tree(basepath, dbase)?;
-    let mut snap = core::Snapshot::new(parent, tree.checksum());
+    let tree_sha1 = tree.checksum();
+    if parent.is_some() {
+        let parent_sha1 = parent.as_ref().unwrap();
+        let parent_doc = dbase
+            .get_snapshot(parent_sha1)?
+            .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", parent_sha1)))?;
+        if parent_doc.tree == tree_sha1 {
+            // nothing new at all with this snapshot
+            return Ok(None)
+        }
+    }
+    let mut snap = core::Snapshot::new(parent, tree_sha1);
     snap = snap.file_count(tree.file_count);
     let sha1 = snap.checksum();
     dbase.insert_snapshot(&sha1, &snap)?;
-    Ok(sha1)
+    Ok(Some(sha1))
 }
 
 ///
