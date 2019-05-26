@@ -65,10 +65,6 @@ let () =
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
 ** Scheduling and Recovery
-*** TODO Recover from unfinished backup procedure
-**** When performing backup, check if latest snapshot exists and lacks an end time
-**** If so, try to continue the backup with that snapshot
-**** If not, proceed as usual with backup
 *** TODO Add something that will run scheduled jobs
 **** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
 **** https://github.com/lholden/job_scheduler (uses =cron= crate)
@@ -104,6 +100,10 @@ let () =
 **** TODO allow private key locked with passphrase
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 ** More Functionality
+*** TODO The stores should be the ones to create bucket names
+**** Allows Glacier and S3 stores to re-use buckets as necessary
+**** Other stores would just use =generate_bucket_name()= as usual
+**** Try testing the bucket limit with Minio, should max out at 100
 *** TODO Event dispatching
 **** use the rust redux crate to manage "events" and state
 **** set up a singleton store instance using =lazy_static=

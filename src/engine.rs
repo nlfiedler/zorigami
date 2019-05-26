@@ -24,23 +24,49 @@ pub fn perform_backup(
     dbase: &Database,
     passphrase: &str,
 ) -> Result<Option<core::Checksum>, Error> {
-    // Take a snapshot and record it as the new most recent snapshot for this
-    // dataset, to allow detecting a running backup, and allow for recovery from
-    // a crash or forced shutdown.
     fs::create_dir_all(&dataset.workspace)?;
+    // Check if latest snapshot exists and lacks an end time, which indicates
+    // that the previous backup did not complete successfully.
+    let latest_snap_ref = dataset.latest_snapshot.as_ref();
+    if latest_snap_ref.is_some() {
+        let snapshot = dbase.get_snapshot(latest_snap_ref.unwrap())?.unwrap();
+        if snapshot.end_time.is_none() {
+            // continue from the previous incomplete backup
+            let parent_sha1 = snapshot.parent;
+            let current_sha1 = latest_snap_ref.unwrap().to_owned();
+            return continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1);
+        }
+    }
+    // Take a snapshot and record it as the new most recent snapshot for this
+    // dataset, to allow detecting a running backup, and thus recover from a
+    // crash or forced shutdown.
     let snap_opt = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
     if snap_opt.is_none() {
-        return Ok(None)
+        return Ok(None);
     }
-    let snap_sha1 = snap_opt.unwrap();
-    let latest_sha1 = dataset.latest_snapshot.take();
-    dataset.latest_snapshot = Some(snap_sha1.clone());
+    let current_sha1 = snap_opt.unwrap();
+    let parent_sha1 = dataset.latest_snapshot.take();
+    dataset.latest_snapshot = Some(current_sha1.clone());
     dbase.put_dataset(&dataset)?;
+    continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1)
+}
+
+///
+/// Continue the backup for the most recent snapshot, comparing against the
+/// parent snapshot, if any.
+///
+fn continue_backup(
+    dataset: &mut core::Dataset,
+    dbase: &Database,
+    passphrase: &str,
+    parent_sha1: Option<core::Checksum>,
+    current_sha1: core::Checksum,
+) -> Result<Option<core::Checksum>, Error> {
     let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
-    if latest_sha1.is_none() {
-        let snapshot = dbase.get_snapshot(&snap_sha1)?.unwrap();
+    if parent_sha1.is_none() {
+        let snapshot = dbase.get_snapshot(&current_sha1)?.unwrap();
         let tree = snapshot.tree.clone();
         let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
         for result in iter {
@@ -50,8 +76,8 @@ pub fn perform_backup(
         let iter = find_changed_files(
             dbase,
             dataset.basepath.clone(),
-            latest_sha1.clone().unwrap(),
-            snap_sha1.clone(),
+            parent_sha1.clone().unwrap(),
+            current_sha1.clone(),
         )?;
         for result in iter {
             bmaster.handle_file(result)?;
@@ -60,8 +86,8 @@ pub fn perform_backup(
     // upload the remaining chunks in the pack builder
     bmaster.finish_pack()?;
     // commit everything to the database
-    bmaster.update_snapshot(&snap_sha1)?;
-    Ok(Some(snap_sha1))
+    bmaster.update_snapshot(&current_sha1)?;
+    Ok(Some(current_sha1))
 }
 
 ///
@@ -181,7 +207,7 @@ pub fn take_snapshot(
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", parent_sha1)))?;
         if parent_doc.tree == tree_sha1 {
             // nothing new at all with this snapshot
-            return Ok(None)
+            return Ok(None);
         }
     }
     let mut snap = core::Snapshot::new(parent, tree_sha1);
