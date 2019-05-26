@@ -249,6 +249,8 @@ pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
     let mut results = Vec::new();
     let file = File::open(infile)?;
     let mut ar = Archive::new(file);
+    // seems clippy is confused by this one
+    #[allow(clippy::identity_conversion)]
     for entry in ar.entries()? {
         let mut file = entry?;
         let fp = file.path()?;
