@@ -322,61 +322,46 @@ Remove the snapshot record to be deleted, then garbage collect.
 
 ## Alternatives
 
-### Arq
+### Commercial
+
+#### Arq
 
 * https://www.arqbackup.com
-* Mac and Windows apps
+* Windows, Mac
 * Uses a single master password
 * Supports numerous backends
 
-### Attic
+#### CloudBerry
 
-* https://attic-backup.org
-* Open source, development stopped in 2015
-* Seems to use an old chunking algorithm
-* Only supports SSH remote host
+* https://www.cloudberrylab.com/backup
+* Consumer and business
+* Windows, Mac, Linux
+* Supports Glacier and other services
+* Freeware version lacks compression, encryption, limited to 200GB
 
-### CloudBerry
-
-* Has enterprise versions
-* https://www.cloudberrylab.com/backup/desktop/windows.aspx
-* Windows-only
-
-### Duplicacy
+#### Duplicacy
 
 * https://github.com/gilbertchen/duplicacy
 * Lists other open source tools and compares them
 * Deduplicates chunks across systems
-* Does not support Glacier
-    - Their design depends on accessing chunks by their checksum
+* Does not use a database supposedly
+* Does not and can not support Glacier
 
-### duplicity
-
-* http://duplicity.nongnu.org
-* Uses GnuPG, a tar-like format, and rsync
-* Supports backends with a filesystem-like interface
-
-### JungleDisk
+#### JungleDisk
 
 * https://www.jungledisk.com/encrypted-backups/
 * Primarily business oriented
 * Seems to rely on their servers
 * Probably stores data elsewhere
 
-### qBackup
+#### qBackup
 
 * https://www.qualeed.com/en/qbackup/
-* Mac, Linux, Windows
+* Windows, Mac, Linux
 * Supports numerous backends
 * Has copious documentation with screen shots
 
-### restic
-
-* https://restic.net
-* Open source command line tool
-* Supports numerous backends
-
-### tarsnap
+#### tarsnap
 
 * https://www.tarsnap.com
 * Free client
@@ -384,3 +369,47 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Stores data in Amazon S3
 * Relies on tarsnap servers
 * 10x the price of Google Cloud or Amazon Glacier
+* Command-line interface
+
+### Open Source
+
+#### Attic
+
+* https://attic-backup.org
+* Development stopped in 2015
+* Only supports SSH remote host
+* Command-line interface
+
+#### Borg
+
+* https://borgbackup.readthedocs.io/en/stable/
+* Fork of Attic
+* Only supports SSH remote host
+* Command-line interface
+
+#### bup
+
+* https://bup.github.io
+* Git-like (uses Python and Git) pack file storage
+* Requires a bup server for remote storage
+* Command-line interface
+
+#### Duplicati
+
+* https://www.duplicati.com/
+* Requires .NET or Mono
+* Web-based interface
+
+#### duplicity
+
+* http://duplicity.nongnu.org
+* Uses GnuPG, a tar-like format, and rsync
+* Supports backends with a filesystem-like interface
+* Command-line interface
+
+#### restic
+
+* https://restic.net
+* Git-like data model
+* Supports numerous backends
+* Command-line interface

@@ -65,7 +65,6 @@ let () =
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
 ** Scheduling and Recovery
-*** TODO If the new snapshot has no changes from previous, delete it
 *** TODO Recover from unfinished backup procedure
 **** When performing backup, check if latest snapshot exists and lacks an end time
 **** If so, try to continue the backup with that snapshot
@@ -161,6 +160,7 @@ let () =
 **** This would be a configuration setting, with defaults and path-specific
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
+*** TODO Ability to pause or cancel a backup
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 ***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
@@ -193,11 +193,13 @@ let () =
 **** Need to limit number of remote buckets to 1000
 **** Use S3 to store the database-to-archive mapping of each snapshot
 **** Offer user option to use "expedited" retrievals so they go faster
+*** TODO Support Amazon Cloud Drive
 *** TODO Support Microsoft Azure blob storage
 *** TODO Support Backblaze B2
 *** TODO Support [[https://wiki.openstack.org/wiki/Swift][OpenStack Swift]]
 *** TODO Support Wasabi
 *** TODO Support Google Drive
+*** TODO Support Google Cloud Coldline
 *** TODO Support Dropbox
 *** TODO Support Oracle Cloud Storage
 *** TODO Support IBM Cloud Storage
@@ -218,6 +220,14 @@ let () =
 *** Action to open the app and examine snapshots
 *** Action to open the app and check settings
 * Product
+** Define the target audience
+*** Average home user, no technical expertise required
+** Need distinquishing features
+*** TODO What sets this application apart from the other polished products?
+**** Linux server ready
+** Windows Certified
+*** CloudBerry(?) has bunches of certifications
+*** is that really so meaningful? *I* never cared
 ** Name
 *** Joseph suggests "Attic"
 **** =atticapp.com= is taken
