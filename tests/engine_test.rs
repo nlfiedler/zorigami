@@ -13,6 +13,7 @@ use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
 use zorigami::engine::*;
+use zorigami::state;
 use zorigami::store::*;
 
 #[test]
@@ -507,6 +508,7 @@ fn test_perform_backup() -> Result<(), Error> {
     let store_name = store_name(&store);
     let mut dataset = Dataset::new(&unique_id, Path::new(basepath), &store_name);
     dataset.pack_size = 65536 as u64;
+    dataset.key = "foobar".to_owned();
 
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
@@ -555,6 +557,12 @@ fn test_perform_backup() -> Result<(), Error> {
     // let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     // assert!(backup_opt.is_none());
 
+    let stated = state::get_state();
+    let backups = stated.backups(&dataset.key).unwrap();
+    assert!(backups.end_time().is_some());
+    assert!(backups.end_time().unwrap() > backups.start_time());
+    assert_eq!(backups.packs_uploaded(), 2);
+    assert_eq!(backups.files_uploaded(), 1);
     Ok(())
 }
 

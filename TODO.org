@@ -56,15 +56,26 @@ let () =
 #+END_SRC
 **** TODO Manage stores, datasets, and configuration
 *** TODO Loose ends from Rust translation
-**** TODO Learn how to manage application state
-***** Actix offers state management for web code
-***** https://crates.io/crates/redux-rs (MIT)
-***** https://crates.io/crates/reducer (MIT)
-***** https://github.com/SergioBenitez/state (MIT/Apache)
-***** https://github.com/jaredonline/redux-rs (???)
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
 ** Scheduling and Recovery
+*** DONE Get the redux state management working
+**** DONE choose a state management crate
+***** https://crates.io/crates/reducer (MIT)
+***** https://crates.io/crates/redux-rs (MIT)
+***** https://github.com/SergioBenitez/state (MIT/Apache)
+**** DONE set up a singleton store instance using =lazy_static=
+**** DONE implement getter methods for =State=
+**** DONE register listeners with the Display thing
+**** DONE the =Reactor= impl for =Display= calls listeners with state
+**** DONE add a fn that takes a callback to receive current state
+**** DONE store tracks progress of backup process
+**** DONE engine emits actions to update progress
+**** DONE state holds overall data for tracking progress
+**** DONE write tests for engine related behavior
+*** TODO Logging of backup process
+**** main process spawns thread to listen for state events
+**** Write to log using the =log= crate (how =main= does it now)
 *** TODO Add something that will run scheduled jobs
 **** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
 **** https://github.com/lholden/job_scheduler (uses =cron= crate)
@@ -79,12 +90,19 @@ let () =
 ***** check if any of the datasets need to run now
 ****** that is, a job _should_ have run since the last completed snapshot
 ****** use =cron= crate, =Schedule.after()=, compare the =next()= value to current time
+***** check if dataset is already running (it will be in redux store)
 ***** spawn a thread to run the backup for that dataset
-***** need to know if a dataset is already running a backup
-***** keep a map of running threads and datasets
-****** need to know if a thread dies and fails to complete the backup
-****** using the database for this is tricky since a ~pending~ flag would never get cleared on crash
+***** backup thread inserts dataset into redux store at start
+***** backup thread removes dataset from redux store upon completion
+*** TODO Recover from a backup thread that panicked
+**** For each spawned backup thread, spawn a supervisor thread
+**** Supervisor thread joins the backup thread
+**** If the =Result= from =JoinHandle.join()= is =Err=, then restart
+**** see also example on docs for =std::thread::panicking()=
+*** TODO How to recover from the main supervisor thread panicking?
+**** Perhaps rely on cron, launchd, etc to keep things running
 *** TODO Detect file deletion during backup, mark file record as skipped
+**** Basically handle the error and mark the record as "failed"
 *** TODO Detect files changing between snapshot and pack building time
 **** use the =changed= record property to track this
 *** TODO Store database in a bucket named after the "computer UUID"
@@ -92,27 +110,22 @@ let () =
 *** TODO Verify checksum of downloaded packs during restore
 *** TODO Handle termination signals to exit even if backup is running
 **** leave the cleanup process for next time
-** Local Backup
+** kohaku Server Backup
 *** TODO Get encryption password from an environment variable
-*** TODO Use this to replace =replicaz= by persisting to USB drive
-** SFTP Backup
 *** TODO Support SFTP with private key authentication
 **** TODO allow private key locked with passphrase
+*** TODO Use this to replace =replicaz= by persisting to USB drive
 *** TODO Use this to replace =replicaz= by persisting over SFTP
 ** More Functionality
-*** TODO The stores should be the ones to create bucket names
-**** Allows Glacier and S3 stores to re-use buckets as necessary
-**** Other stores would just use =generate_bucket_name()= as usual
-**** Try testing the bucket limit with Minio, should max out at 100
-*** TODO Event dispatching
+*** TODO Event dispatching for the web and desktop
 **** use the rust redux crate to manage "events" and state
-**** set up a singleton store instance using =lazy_static=
 **** engine emits actions/events to the store
 ***** for backup and restore functions
 ***** e.g. "downloaded a pack", "uploaded a pack"
-**** backup threads register as subscribers to the store
+**** store holds the cumulative data so late attachers can gather everything
+**** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
-**** backup threads emit GraphQL subscription events
+**** supervisor threads emit GraphQL subscription events
 *** TODO Support excluding certain file patterns from backup
 *** TODO Exclude the database files from the dataset(s)
 *** TODO Consider how datasets can be modified after creation
@@ -180,6 +193,7 @@ let () =
 *** TODO Design garbage collection solution (see NOTES)
 *** TODO Pack store should recommend pack sizes
 **** e.g. Glacier recommends archives greater than 100mb
+**** can only really make a recommendation, the user has to choose the right size
 *** TODO Permit removing a store from a dataset
 **** would encourage user to clean up the remote files
 **** for local store, could remove the files immediately

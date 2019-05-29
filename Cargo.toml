@@ -27,6 +27,7 @@ log = "0.4.6"
 md-5 = "0.8.0"
 memmap = "0.7.0"
 openssl = { version = "0.10", features = ["vendored"] }
+reducer = "1.1.1"
 rocksdb = "0.12.2"
 rusoto_core = "0.39.0"
 rusoto_credential = "0.39.0"

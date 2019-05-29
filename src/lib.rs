@@ -4,4 +4,5 @@
 pub mod core;
 pub mod engine;
 pub mod database;
+pub mod state;
 pub mod store;

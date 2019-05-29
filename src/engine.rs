@@ -3,6 +3,7 @@
 //
 use super::core;
 use super::database::Database;
+use super::state::{self, Action};
 use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
@@ -109,6 +110,7 @@ impl<'a> BackupMaster<'a> {
         dbase: &'a Database,
         passphrase: &str,
     ) -> Result<Self, Error> {
+        state::dispatch(Action::StartBackup(dataset.key.clone()));
         let bucket_name = core::generate_bucket_name(&dataset.computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
         let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
@@ -165,8 +167,10 @@ impl<'a> BackupMaster<'a> {
                 &self.stores,
             )?;
             pack.record_completed_pack(self.dbase, locations)?;
+            state::dispatch(Action::UploadPack(self.dataset.key.clone()));
         }
-        pack.record_completed_files(self.dbase)?;
+        let count = pack.record_completed_files(self.dbase)? as u64;
+        state::dispatch(Action::UploadFiles(self.dataset.key.clone(), count));
         Ok(())
     }
 
@@ -184,6 +188,7 @@ impl<'a> BackupMaster<'a> {
         let mut snapshot = self.dbase.get_snapshot(snap_sha1)?.unwrap();
         snapshot.end_time = Some(SystemTime::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
+        state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
         Ok(())
     }
 }
@@ -909,8 +914,9 @@ impl Pack {
         Ok(())
     }
 
-    // Record the set of files completed by uploading this pack file.
-    pub fn record_completed_files(&mut self, dbase: &Database) -> Result<(), Error> {
+    /// Record the set of files completed by uploading this pack file.
+    /// Returns the number of completed files.
+    pub fn record_completed_files(&mut self, dbase: &Database) -> Result<usize, Error> {
         // massage the file/chunk data into database records for those files
         // that have been completely uploaded
         for (filesum, parts) in &self.files {
@@ -923,7 +929,7 @@ impl Pack {
             let file = core::SavedFile::new(filesum.clone(), length, chunks);
             dbase.insert_file(&file)?;
         }
-        Ok(())
+        Ok(self.files.len())
     }
 }
 
