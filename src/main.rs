@@ -14,6 +14,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zorigami::database::Database;
+use zorigami::state;
 
 mod schema;
 
@@ -50,8 +51,38 @@ fn graphql(
     })
 }
 
+fn log_state_changes(state: &state::State) {
+    let keys = state.active_datasets();
+    for key in keys {
+        let backup = state.backups(&key).unwrap();
+        if let Some(end_time) = backup.end_time() {
+            // the backup finished recently, log one last entry
+            let sys_time = std::time::SystemTime::now();
+            if let Ok(interval) = sys_time.duration_since(end_time) {
+                if interval.as_secs() < 60 {
+                    info!(
+                        "complete for {}: packs: {}, files: {}",
+                        &key,
+                        backup.packs_uploaded(),
+                        backup.files_uploaded()
+                    );
+                }
+            }
+        } else {
+            // this backup is not yet finished
+            info!(
+                "progress for {}: packs: {}, files: {}",
+                &key,
+                backup.packs_uploaded(),
+                backup.files_uploaded()
+            );
+        }
+    }
+}
+
 pub fn main() -> io::Result<()> {
     env_logger::init();
+    state::subscribe("main-logger", log_state_changes);
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
     let addr = format!("127.0.0.1:{}", port);
     let schema = std::sync::Arc::new(schema::create_schema());

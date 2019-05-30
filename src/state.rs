@@ -159,6 +159,14 @@ impl Reducer<Action> for State {
 
 impl State {
     ///
+    /// Return all of the datasets currently in the backups collection. Use
+    /// the `backups()` accessor to access individual entries.
+    ///
+    pub fn active_datasets(&self) -> Vec<String> {
+       self.backups.keys().cloned().collect()
+    }
+
+    ///
     /// Retrieve the backup state for the named dataset.
     ///
     pub fn backups(&self, dataset: &str) -> Option<&BackupState> {

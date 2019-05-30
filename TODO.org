@@ -73,9 +73,7 @@ let () =
 **** DONE engine emits actions to update progress
 **** DONE state holds overall data for tracking progress
 **** DONE write tests for engine related behavior
-*** TODO Logging of backup process
-**** main process spawns thread to listen for state events
-**** Write to log using the =log= crate (how =main= does it now)
+*** DONE Log the progress of backups
 *** TODO Add something that will run scheduled jobs
 **** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
 **** https://github.com/lholden/job_scheduler (uses =cron= crate)
