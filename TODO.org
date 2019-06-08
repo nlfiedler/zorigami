@@ -1,24 +1,38 @@
 * Zorigami
+** Scheduling and Recovery
+*** TODO Add something that will run scheduled jobs
+**** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
+**** https://github.com/lholden/job_scheduler (uses =cron= crate)
+**** https://github.com/mehcode/schedule-rs (also uses =cron=)
+**** https://github.com/mdsherry/clokwerk (weird DSL like API)
+**** Proposed design based on =cron= crate
+***** =main= spawns a thread to start jobs as needed
+***** supervisor thread sleeps, wakes every N minutes
+***** fetch all datasets from database
+***** parse cron-like schedule for each dataset
+****** webui will generate the cron-like schedule based on user input
+***** check if any of the datasets need to run now
+****** that is, a job _should_ have run since the last completed snapshot
+****** use =cron= crate, =Schedule.after()=, compare the =next()= value to current time
+***** check if dataset is already running (it will be in redux store)
+***** spawn a thread to run the backup for that dataset
+*** TODO Recover from a backup thread that panicked
+**** For each spawned backup thread, spawn a supervisor thread
+**** Supervisor thread joins the backup thread
+**** If the =Result= from =JoinHandle.join()= is =Err=, then restart
+**** see also example on docs for =std::thread::panicking()=
+*** TODO How to recover from the main supervisor thread panicking?
+**** Perhaps rely on cron, launchd, etc to keep things running
+*** TODO Detect file deletion during backup, mark file record as skipped
+**** Basically handle the error and mark the record as "failed"
+*** TODO Detect files changing between snapshot and pack building time
+**** use the =changed= record property to track this
+*** TODO Store database in a bucket named after the "computer UUID"
+**** pack file should be a ULID so that the most recent entry is sorted last
+*** TODO Verify checksum of downloaded packs during restore
+*** TODO Handle termination signals to exit even if backup is running
+**** leave the cleanup process for next time
 ** GraphQL and WebUI
-*** DONE Develop the GraphQL schema to represent everything
-**** DONE snapshots
-**** DONE need a custom type for the =SystemTime= in =Snapshot=; just use =BigInt=
-**** DONE define a custom type for =Checksum= values called =Digest=
-**** DONE =Digest= should check that input value is well-formed
-**** DONE =BigInt= should handle parse errors properly
-**** DONE define a custom type for file size
-***** at best it will be 53-bit integers, because JavaScript on front-end
-***** see the =BigInt= code in tanuki
-***** 2^31 is kinda small: 2,147,483,647
-***** 2^53 is a pretty big number: 9,007,199,254,740,992
-***** 2^63 has a maximum value of: 9,223,372,036,854,775,807
-**** DONE use =graphql_scalar!= macro to define serde functions for new types
-**** DONE trees
-**** DONE files
-**** DONE datasets
-**** DONE store configuration: base64 encoded json
-**** DONE just call =Database::new= every time, to ensure db is flushed
-***** connection pooling sounds neat, but will it ever close the database?
 *** TODO Test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
 **** TODO digests that lack the proper algorithm prefix
@@ -34,8 +48,6 @@
 **** DONE mutating stores
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
-*** DONE Read the db path from an environment variable
-*** DONE Read the HTTP port from an environment variable
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
 **** TODO Put front-end code in a directory named =web-src=
@@ -58,56 +70,6 @@ let () =
 *** TODO Loose ends from Rust translation
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
-** Scheduling and Recovery
-*** DONE Get the redux state management working
-**** DONE choose a state management crate
-***** https://crates.io/crates/reducer (MIT)
-***** https://crates.io/crates/redux-rs (MIT)
-***** https://github.com/SergioBenitez/state (MIT/Apache)
-**** DONE set up a singleton store instance using =lazy_static=
-**** DONE implement getter methods for =State=
-**** DONE register listeners with the Display thing
-**** DONE the =Reactor= impl for =Display= calls listeners with state
-**** DONE add a fn that takes a callback to receive current state
-**** DONE store tracks progress of backup process
-**** DONE engine emits actions to update progress
-**** DONE state holds overall data for tracking progress
-**** DONE write tests for engine related behavior
-*** DONE Log the progress of backups
-*** TODO Add something that will run scheduled jobs
-**** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
-**** https://github.com/lholden/job_scheduler (uses =cron= crate)
-**** https://github.com/mehcode/schedule-rs (also uses =cron=)
-**** https://github.com/mdsherry/clokwerk (weird DSL like API)
-**** Proposed design based on =cron= crate
-***** =main= spawns a thread to start jobs as needed
-***** supervisor thread sleeps, wakes every N minutes
-***** fetch all datasets from database
-***** parse cron-like schedule for each dataset
-****** webui will generate the cron-like schedule based on user input
-***** check if any of the datasets need to run now
-****** that is, a job _should_ have run since the last completed snapshot
-****** use =cron= crate, =Schedule.after()=, compare the =next()= value to current time
-***** check if dataset is already running (it will be in redux store)
-***** spawn a thread to run the backup for that dataset
-***** backup thread inserts dataset into redux store at start
-***** backup thread removes dataset from redux store upon completion
-*** TODO Recover from a backup thread that panicked
-**** For each spawned backup thread, spawn a supervisor thread
-**** Supervisor thread joins the backup thread
-**** If the =Result= from =JoinHandle.join()= is =Err=, then restart
-**** see also example on docs for =std::thread::panicking()=
-*** TODO How to recover from the main supervisor thread panicking?
-**** Perhaps rely on cron, launchd, etc to keep things running
-*** TODO Detect file deletion during backup, mark file record as skipped
-**** Basically handle the error and mark the record as "failed"
-*** TODO Detect files changing between snapshot and pack building time
-**** use the =changed= record property to track this
-*** TODO Store database in a bucket named after the "computer UUID"
-**** pack file should be a ULID so that the most recent entry is sorted last
-*** TODO Verify checksum of downloaded packs during restore
-*** TODO Handle termination signals to exit even if backup is running
-**** leave the cleanup process for next time
 ** kohaku Server Backup
 *** TODO Get encryption password from an environment variable
 *** TODO Support SFTP with private key authentication
@@ -220,6 +182,8 @@ let () =
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
+** Loose Ends
+*** TODO Update brunocodutra/reducer to get fix for issue #34
 * Desktop App
 ** Project name: ungaikyou "mirror beyond the clouds"
 *** c.f. https://en.wikipedia.org/wiki/Ungaikyō
