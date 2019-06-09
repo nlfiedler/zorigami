@@ -4,27 +4,18 @@
 use lazy_static::lazy_static;
 use reducer::{Dispatcher, Reactor, Reducer, Store};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 lazy_static! {
     /// Set of registered state change listeners.
     static ref REACTORS: Mutex<HashMap<String, Subscription<State>>> = {
-        let mut listeners: HashMap<String, Subscription<State>> = HashMap::new();
-        listeners.insert("copy_state".to_owned(), copy_state);
+        let listeners: HashMap<String, Subscription<State>> = HashMap::new();
         Mutex::new(listeners)
     };
     /// Mutable shared reference to the redux store.
     static ref STORE: Mutex<Store<State, Display>> =
         Mutex::new(Store::new(State::default(), Display));
-    /// Copy of the most recently updated state.
-    static ref STATE: Mutex<Arc<State>> = Mutex::new(Arc::new(State::default()));
-}
-
-// Copy the state so we can retrieve it at any time.
-fn copy_state(state: &State) {
-    let mut st = STATE.lock().unwrap();
-    *st = Arc::new(state.clone());
 }
 
 ///
@@ -36,11 +27,11 @@ pub fn dispatch(action: Action) {
 }
 
 ///
-/// Get a reference to the current state.
+/// Get a copy of the current state.
 ///
-pub fn get_state() -> Arc<State> {
-    let arc = STATE.lock().unwrap();
-    arc.clone()
+pub fn get_state() -> State {
+    let store = STORE.lock().unwrap();
+    store.clone()
 }
 
 ///

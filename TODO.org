@@ -6,7 +6,7 @@
 **** https://github.com/mehcode/schedule-rs (also uses =cron=)
 **** https://github.com/mdsherry/clokwerk (weird DSL like API)
 **** Proposed design based on =cron= crate
-***** =main= spawns a thread to start jobs as needed
+***** =main= spawns a "supervisor" thread to start jobs as needed
 ***** supervisor thread sleeps, wakes every N minutes
 ***** fetch all datasets from database
 ***** parse cron-like schedule for each dataset
@@ -50,7 +50,7 @@
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
 **** TODO Add =bs-platform= dependency and =bsconfig.json= file
-**** TODO Put front-end code in a directory named =web-src=
+**** TODO Put the bucklescript output into =lib/js=
 **** TODO Set up =gulp= and =webpack= to build the front-end code
 **** TODO Set up apollo client dependency and schema tooling
 **** TODO Set up the routing
@@ -182,19 +182,6 @@ let () =
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
-** Loose Ends
-*** TODO Update brunocodutra/reducer to get fix for issue #34
-* Desktop App
-** Project name: ungaikyou "mirror beyond the clouds"
-*** c.f. https://en.wikipedia.org/wiki/Ungaikyō
-*** a possessed mirror that makes humans look monstrous
-** TODO Develop the Electron application using ReasonML
-** TODO Consider using [[https://github.com/neon-bindings/neon][Neon bindings]] to write some parts in Rust
-** TODO Create a system tray icon/widget
-*** Popup menu like Time Machine
-*** Show current status, last backup
-*** Action to open the app and examine snapshots
-*** Action to open the app and check settings
 * Product
 ** Define the target audience
 *** Average home user, no technical expertise required
