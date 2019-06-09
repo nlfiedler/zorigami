@@ -83,3 +83,45 @@ A zorigami is a clock possessed by a spirit, as described on the
 [Wikipedia](https://en.wikipedia.org/wiki/Tsukumogami) page about
 Tsukumogami, which includes zorigami. This has nothing at all do with
 this application, accept maybe for the association with time.
+
+## Project History
+
+### July 2014
+
+Started as a project named "akashita", with a basic
+[Python](https://www.python.org) implementation that uploaded tarballs to
+Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and
+`split` to produce "pack" files of reasonable size.
+
+### February 2016
+
+Started the [Erlang](http://www.erlang.org) implementation with all of the
+Python code converted to [Go](https://golang.org) and the Erlang application
+invoking the Go piece to upload the individual files.
+
+### August 2016
+
+Switched from Amazon Glacier to Google Cloud Storage.
+
+### November 2016
+
+Replaced the Go code with an Erlang
+[client](https://github.com/nlfiedler/enenra) for Google Cloud Storage.
+
+### September 2017
+
+Attempted to rewrite the application in [Elixir](https://elixir-lang.org). Spent
+a lot of time designing the data model and developing the basic algorithms,
+using the Arq data model as a starting point.
+
+### December 2018
+
+Started new project named zorigami that was written using
+[Node.js](https://nodejs.org/), again spending a lot of time designing a new
+data model based on a key/value store. Settled on using tar format for the pack
+files, and [OpenPGP](https://tools.ietf.org/html/rfc4880) for encryption.
+
+### February 2019
+
+Started rewriting the (now [TypeScript](https://www.typescriptlang.org)) code
+using [Rust](https://www.rust-lang.org).
