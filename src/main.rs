@@ -1,6 +1,10 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The main application binary that starts the web server and spawns the
+//! supervisor threads to manage the backups.
+
 use actix_files as afs;
 use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
 use env_logger;

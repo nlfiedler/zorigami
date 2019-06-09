@@ -1,6 +1,9 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `schema` modules defines the GraphQL schema and resolvers.
+
 use juniper::{
     graphql_object, graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
     GraphQLObject, ParseScalarResult, ParseScalarValue, RootNode, Value,

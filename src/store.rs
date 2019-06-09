@@ -1,6 +1,10 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `store` module defines functions for uploading and retrieving pack files
+//! stored in local or remote sites.
+
 use super::core::PackLocation;
 use super::database::Database;
 use failure::{err_msg, Error};

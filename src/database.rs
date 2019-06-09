@@ -1,6 +1,12 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `database` module provides high-level functions for storing and
+//! retrieving the various core data structures to a database. This module
+//! performs the serde functions to convert the structures to a format suitable
+//! for on-disk storage.
+
 use super::core::{Checksum, Chunk, Configuration, Dataset, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use lazy_static::lazy_static;

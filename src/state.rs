@@ -1,6 +1,9 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `state` module manages the application state.
+
 use lazy_static::lazy_static;
 use reducer::{Dispatcher, Reactor, Reducer, Store};
 use std::collections::HashMap;
@@ -154,7 +157,7 @@ impl State {
     /// the `backups()` accessor to access individual entries.
     ///
     pub fn active_datasets(&self) -> Vec<String> {
-       self.backups.keys().cloned().collect()
+        self.backups.keys().cloned().collect()
     }
 
     ///

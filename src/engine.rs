@@ -1,6 +1,11 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `engine` module performs backups by taking a snapshot of a dataset,
+//! storing new entries in the database, finding the differences from the
+//! previous snapshot, building pack files, and sending them to the store.
+
 use super::core;
 use super::database::Database;
 use super::state::{self, Action};

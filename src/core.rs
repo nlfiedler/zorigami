@@ -1,6 +1,10 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+
+//! The `core` module defines the most basic of functions and the core data
+//! types used throughout the application.
+
 use failure::{err_msg, Error};
 use fastcdc;
 use gpgme;
