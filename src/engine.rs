@@ -191,7 +191,7 @@ impl<'a> BackupMaster<'a> {
     /// Update the current snapshot with the end time set to the current time.
     fn update_snapshot(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
         let mut snapshot = self.dbase.get_snapshot(snap_sha1)?.unwrap();
-        snapshot.end_time = Some(SystemTime::now());
+        snapshot = snapshot.end_time(SystemTime::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
         state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
         Ok(())
