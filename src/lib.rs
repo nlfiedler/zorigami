@@ -6,3 +6,4 @@ pub mod engine;
 pub mod database;
 pub mod state;
 pub mod store;
+pub mod supervisor;

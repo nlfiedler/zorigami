@@ -2,20 +2,22 @@
 ** Scheduling and Recovery
 *** TODO Add something that will run scheduled jobs
 **** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
-**** https://github.com/lholden/job_scheduler (uses =cron= crate)
-**** https://github.com/mehcode/schedule-rs (also uses =cron=)
-**** https://github.com/mdsherry/clokwerk (weird DSL like API)
 **** Proposed design based on =cron= crate
 ***** =main= spawns a "supervisor" thread to start jobs as needed
 ***** supervisor thread sleeps, wakes every N minutes
 ***** fetch all datasets from database
 ***** parse cron-like schedule for each dataset
-****** webui will generate the cron-like schedule based on user input
 ***** check if any of the datasets need to run now
-****** that is, a job _should_ have run since the last completed snapshot
-****** use =cron= crate, =Schedule.after()=, compare the =next()= value to current time
 ***** check if dataset is already running (it will be in redux store)
 ***** spawn a thread to run the backup for that dataset
+**** DONE Put the new logic in a module called =supervisor=
+**** DONE use =@hourly= and =@daily= for simple backup schedules
+**** DONE add the cron expression to the =Dataset= type
+**** DONE modify the GraphQL resolvers to validate the cron expression
+**** DONE spawn a thread in =main= to run the supervisor
+**** DONE fetch datasets and find those that should run
+**** DONE spawn a thread to backup each available dataset
+**** TODO add logging to allow for debugging the supervisor
 *** TODO Recover from a backup thread that panicked
 **** For each spawned backup thread, spawn a supervisor thread
 **** Supervisor thread joins the backup thread
@@ -67,6 +69,8 @@ let () =
   Js.log (text |> btoa |> atob)
 #+END_SRC
 **** TODO Manage stores, datasets, and configuration
+***** generate cron-like schedules based on checkboxes for datasets
+****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
 *** TODO Loose ends from Rust translation
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
@@ -96,6 +100,9 @@ let () =
 **** upload schedule
 **** file exclusions
 ** Google Backup
+*** TODO Support scheduling upload times, like akashita does
+**** Define a set of hours each day when uploads should occur
+**** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
 *** TODO Store pack files in Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
@@ -132,6 +139,8 @@ let () =
 **** For Google and Amazon, anything older than 90 days is free to remove
 **** This would be a configuration setting, with defaults and path-specific
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
+*** TODO Permit scheduling upload hours for each day of the week
+**** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
 *** TODO Ability to pause or cancel a backup
 *** TODO Support deduplication across multiple computers

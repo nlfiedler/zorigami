@@ -4,6 +4,7 @@
 
 //! The `schema` modules defines the GraphQL schema and resolvers.
 
+use cron::Schedule;
 use juniper::{
     graphql_object, graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
     GraphQLObject, ParseScalarResult, ParseScalarValue, RootNode, Value,
@@ -160,6 +161,8 @@ struct Dataset {
     computer_id: String,
     /// Path that is being backed up.
     basepath: String,
+    /// Cron-like expression for the backup schedule.
+    schedule: Option<String>,
     /// Reference to most recent snapshot.
     latest_snapshot: Option<Digest>,
     /// Path to temporary workspace for backup process.
@@ -174,6 +177,7 @@ impl Dataset {
     /// Update the fields of this dataset with the values from the input.
     fn copy_input(mut self, set: InputDataset) -> Self {
         self.basepath = set.basepath;
+        self.schedule = set.schedule;
         self.workspace = set.workspace;
         self.pack_size = set.pack_size;
         self.stores = set.stores;
@@ -185,6 +189,7 @@ impl Into<core::Dataset> for Dataset {
     fn into(self) -> core::Dataset {
         let store = self.stores[0].clone();
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
+        set.schedule = self.schedule;
         set.latest_snapshot = self.latest_snapshot.map(Digest::into);
         set.workspace = PathBuf::from(&self.workspace);
         set.pack_size = self.pack_size.0 as u64;
@@ -202,6 +207,7 @@ impl From<core::Dataset> for Dataset {
             key: set.key,
             computer_id: set.computer_id,
             basepath: set.basepath.to_str().unwrap().to_owned(),
+            schedule: set.schedule,
             latest_snapshot: snapshot,
             workspace: set.workspace.to_str().unwrap().to_owned(),
             pack_size: BigInt(set.pack_size as i64),
@@ -216,6 +222,8 @@ struct InputDataset {
     key: Option<String>,
     /// Path that is being backed up.
     basepath: String,
+    /// Cron-like expression for the backup schedule.
+    schedule: Option<String>,
     /// Path to temporary workspace for backup process.
     workspace: String,
     /// Desired byte length of pack files.
@@ -251,6 +259,16 @@ impl InputDataset {
                 format!("Base path does not exist: {}", &self.basepath),
                 Value::null(),
             ));
+        }
+        // ensure the schedule, if any, can be parsed successfully
+        if let Some(schedule) = self.schedule.as_ref() {
+            let result = Schedule::from_str(schedule);
+            if result.is_err() {
+                return Err(FieldError::new(
+                    format!("schedule expression could not be parsed: {}", schedule),
+                    Value::null(),
+                ));
+            }
         }
         Ok(())
     }
@@ -576,6 +594,7 @@ mod tests {
         let input_set = InputDataset {
             key: None,
             basepath: "/path".to_owned(),
+            schedule: None,
             workspace: "/path/.tmp".to_owned(),
             pack_size: BigInt(42),
             stores: vec![],
@@ -602,6 +621,7 @@ mod tests {
         let input_set = InputDataset {
             key: None,
             basepath: "/path".to_owned(),
+            schedule: None,
             workspace: "/path/.tmp".to_owned(),
             pack_size: BigInt(42),
             stores: vec!["store/local/i_am_noman".to_owned()],
@@ -630,6 +650,7 @@ mod tests {
         let input_set = InputDataset {
             key: None,
             basepath: "/does_not_exist".to_owned(),
+            schedule: None,
             workspace: "/does_not_exist/.tmp".to_owned(),
             pack_size: BigInt(42),
             stores: vec!["store/local/exists".to_owned()],
@@ -651,12 +672,40 @@ mod tests {
         assert_eq!(errors.len(), 1);
         assert!(errors[0].error().message().contains("path does not exist"));
 
-        // finally define a valid dataset!
+        // dataset with an invalid schedule expression
         let cwd = std::env::current_dir()?;
         let mut vars = Variables::new();
         let input_set = InputDataset {
             key: None,
             basepath: cwd.to_str().unwrap().to_owned(),
+            schedule: Some(String::from("1 2 3 2019")),
+            workspace: "/does_not_exist/.tmp".to_owned(),
+            pack_size: BigInt(42),
+            stores: vec!["store/local/exists".to_owned()],
+        };
+        vars.insert("dataset".to_owned(), input_set.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation DefineDataset($dataset: InputDataset!) {
+                defineDataset(dataset: $dataset) {
+                    key
+                }
+            }"#,
+            Some("DefineDataset"),
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("schedule expression could not be parsed"));
+
+        // finally define a valid dataset!
+        let mut vars = Variables::new();
+        let input_set = InputDataset {
+            key: None,
+            basepath: cwd.to_str().unwrap().to_owned(),
+            schedule: Some(String::from("@daily")),
             workspace: "/does_not_exist/.tmp".to_owned(),
             pack_size: BigInt(42),
             stores: vec!["store/local/exists".to_owned()],
@@ -686,6 +735,7 @@ mod tests {
         let input_set = InputDataset {
             key: None,
             basepath: cwd.to_str().unwrap().to_owned(),
+            schedule: Some(String::from("@hourly")),
             workspace: "/does_not_exist/.tmp".to_owned(),
             pack_size: BigInt(42),
             stores: vec!["store/local/exists".to_owned()],
@@ -729,6 +779,7 @@ mod tests {
         let input_set = InputDataset {
             key: Some(key.to_owned()),
             basepath: cwd.to_str().unwrap().to_owned(),
+            schedule: Some(String::from("0 2,17,51 1-3,6,9-11 4,29 2,3,7 Wed")),
             workspace: "/does_not_exist/.tmp".to_owned(),
             pack_size: BigInt(33_554_432),
             stores: vec!["store/local/exists".to_owned()],

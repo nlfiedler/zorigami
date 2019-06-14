@@ -848,6 +848,9 @@ pub struct Dataset {
     /// local base path of dataset to be saved
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
+    /// cron-like expression for the backup schedule
+    #[serde(rename = "sc" )]
+    pub schedule: Option<String>,
     /// latest snapshot reference, if any
     #[serde(rename = "ls")]
     pub latest_snapshot: Option<Checksum>,
@@ -880,6 +883,7 @@ impl Dataset {
             key,
             computer_id: computer_id.to_owned(),
             basepath: basepath.to_owned(),
+            schedule: None,
             latest_snapshot: None,
             workspace,
             pack_size: DEFAULT_PACK_SIZE,
