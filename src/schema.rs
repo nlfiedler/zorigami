@@ -82,7 +82,7 @@ graphql_scalar!(BigInt where Scalar = <S> {
 });
 
 #[derive(GraphQLEnum)]
-#[graphql(description = "Type of the entry in the tree.")]
+/// Type of the entry in the tree.
 enum EntryType {
     File,
     Directory,
@@ -90,43 +90,43 @@ enum EntryType {
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "A file, directory, or link within a tree.")]
+/// A file, directory, or link within a tree.
 struct TreeEntry {
-    #[graphql(description = "File system name of this entry.")]
+    /// File system name of this entry.
     name: String,
-    #[graphql(description = "File system type of this entry.")]
+    /// File system type of this entry.
     fstype: EntryType,
-    #[graphql(description = "Coordinates for this entry in the database.")]
+    /// Coordinates for this entry in the database.
     reference: String,
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "A collection of files, directories, and links.")]
+/// A collection of files, directories, and links.
 struct Tree {
     entries: Vec<TreeEntry>,
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "A single backup.")]
+/// A single backup.
 struct Snapshot {
-    #[graphql(description = "The snapshot before this one, if any.")]
+    /// The snapshot before this one, if any.
     parent: Option<Digest>,
-    #[graphql(description = "Time when the snapshot was first created.")]
+    /// Time when the snapshot was first created.
     start_time: BigInt,
-    #[graphql(description = "Time when the snapshot completely finished.")]
+    /// Time when the snapshot completely finished.
     end_time: Option<BigInt>,
-    #[graphql(description = "Total number of files contained in this snapshot.")]
+    /// Total number of files contained in this snapshot.
     file_count: BigInt,
-    #[graphql(description = "Reference to the tree containing all of the files.")]
+    /// Reference to the tree containing all of the files.
     tree: Digest,
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "A single version of a saved file.")]
+/// A single version of a saved file.
 struct File {
-    #[graphql(description = "Reference to the file in the database.")]
+    /// Reference to the file in the database.
     digest: Digest,
-    #[graphql(description = "Byte length of this version of the file.")]
+    /// Byte length of this version of the file.
     length: BigInt,
 }
 
@@ -152,21 +152,21 @@ impl From<core::Configuration> for Configuration {
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "The directory structure which will be saved.")]
+/// The directory structure which will be saved.
 struct Dataset {
-    #[graphql(description = "Opaque identifier for this dataset.")]
+    /// Opaque identifier for this dataset.
     key: String,
-    #[graphql(description = "Unique computer identifier.")]
+    /// Unique computer identifier.
     computer_id: String,
-    #[graphql(description = "Path that is being backed up.")]
+    /// Path that is being backed up.
     basepath: String,
-    #[graphql(description = "Reference to most recent snapshot.")]
+    /// Reference to most recent snapshot.
     latest_snapshot: Option<Digest>,
-    #[graphql(description = "Path to temporary workspace for backup process.")]
+    /// Path to temporary workspace for backup process.
     workspace: String,
-    #[graphql(description = "Specified byte length of pack files.")]
+    /// Specified byte length of pack files.
     pack_size: BigInt,
-    #[graphql(description = "Identifiers of stores used for saving packs.")]
+    /// Identifiers of stores used for saving packs.
     stores: Vec<String>,
 }
 
@@ -212,15 +212,15 @@ impl From<core::Dataset> for Dataset {
 
 #[derive(GraphQLInputObject)]
 struct InputDataset {
-    #[graphql(description = "Identifier of dataset to update, None if creating.")]
+    /// Identifier of dataset to update, None if creating.
     key: Option<String>,
-    #[graphql(description = "Path that is being backed up.")]
+    /// Path that is being backed up.
     basepath: String,
-    #[graphql(description = "Path to temporary workspace for backup process.")]
+    /// Path to temporary workspace for backup process.
     workspace: String,
-    #[graphql(description = "Desired byte length of pack files.")]
+    /// Desired byte length of pack files.
     pack_size: BigInt,
-    #[graphql(description = "Identifiers of stores used for saving packs.")]
+    /// Identifiers of stores used for saving packs.
     stores: Vec<String>,
 }
 
@@ -257,11 +257,11 @@ impl InputDataset {
 }
 
 #[derive(GraphQLObject)]
-#[graphql(description = "Local or remote store for pack files.")]
+/// Local or remote store for pack files.
 struct Store {
-    #[graphql(description = "Opaque identifier of this store.")]
+    /// Opaque identifier of this store.
     key: String,
-    #[graphql(description = "Base64 encoded JSON of store options.")]
+    /// Base64 encoded JSON of store options.
     options: String,
 }
 
