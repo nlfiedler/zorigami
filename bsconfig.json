@@ -1,0 +1,28 @@
+{
+  "name": "zorigami",
+  "namespace": true,
+  "refmt": 3,
+  "reason": {
+    "react-jsx": 3
+  },
+  "bsc-flags": [
+    "-bs-super-errors"
+  ],
+  "bs-dependencies": [
+    "reason-react"
+  ],
+  "package-specs": [
+    {
+      "module": "commonjs",
+      "in-source": false
+    }
+  ],
+  "ppx-flags": [],
+  "sources": [
+    {
+      "dir": "src",
+      "subdirs": true
+    }
+  ],
+  "suffix": ".bs.js"
+}

@@ -11,3 +11,11 @@ target
 tmp
 
 .DS_Store
+.vscode
+
+# ReasonML/BuckleScript
+.merlin
+.graphql_ppx_cache
+lib/bs
+lib/js
+public/javascripts/main.js

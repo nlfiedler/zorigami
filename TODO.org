@@ -1,23 +1,4 @@
 * Zorigami
-** Scheduling and Recovery
-*** DONE Add something that will run scheduled jobs
-**** https://github.com/zslayton/cron (cron-like syntax for defining a schedule)
-**** Proposed design based on =cron= crate
-***** =main= spawns a "supervisor" thread to start jobs as needed
-***** supervisor thread sleeps, wakes every N minutes
-***** fetch all datasets from database
-***** parse cron-like schedule for each dataset
-***** check if any of the datasets need to run now
-***** check if dataset is already running (it will be in redux store)
-***** spawn a thread to run the backup for that dataset
-**** DONE Put the new logic in a module called =supervisor=
-**** DONE use =@hourly= and =@daily= for simple backup schedules
-**** DONE add the cron expression to the =Dataset= type
-**** DONE modify the GraphQL resolvers to validate the cron expression
-**** DONE spawn a thread in =main= to run the supervisor
-**** DONE fetch datasets and find those that should run
-**** DONE spawn a thread to backup each available dataset
-**** DONE add logging to allow for debugging the supervisor
 ** GraphQL and WebUI
 *** TODO Test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
@@ -35,12 +16,14 @@
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
-**** TODO Add =bs-platform= dependency and =bsconfig.json= file
-**** TODO Put the bucklescript output into =lib/js=
-**** TODO Set up =gulp= and =webpack= to build the front-end code
+**** DONE Add =bs-platform= dependency and =bsconfig.json= file
+**** DONE Put the bucklescript output into =lib/js=
+**** DONE Set up =gulp= and =webpack= to build the front-end code
+**** DONE Ensure Rust web server serves compiled JavaScript
+**** DONE Add bulma and fontawesome for styling
 **** TODO Set up apollo client dependency and schema tooling
-**** TODO Set up the routing
 **** TODO Write a simple home page that shows something
+**** TODO Set up the reason-react routing
 **** TODO Store configuration is base64 encoded JSON values
 ***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
 #+BEGIN_SRC

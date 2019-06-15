@@ -9,10 +9,26 @@
   "keywords": [
     "backup"
   ],
-  "author": "Nathan Fiedler",
+  "author": {
+    "name": "Nathan Fiedler",
+    "email": "nathanfiedler@gmail.com"
+  },
   "private": true,
   "license": "UNLICENSED",
   "homepage": "https://github.com/nlfiedler/zorigami/",
-  "dependencies": {},
-  "devDependencies": {}
+  "scripts": {
+    "lick": "license-checker --production --exclude MIT,ISC,LGPL,WTFPL,Apache-2.0,BSD-3-Clause,BSD-2-Clause,MPL-2.0,Unlicense"
+  },
+  "dependencies": {
+    "reason-react": "^0.7.0"
+  },
+  "devDependencies": {
+    "bs-platform": "^5.0.4",
+    "del": "^4.1.1",
+    "gulp": "^4.0.2",
+    "gulp-if": "^2.0.2",
+    "gulp-uglify": "^3.0.2",
+    "license-checker": "^25.0.1",
+    "webpack-stream": "^5.2.1"
+  }
 }
