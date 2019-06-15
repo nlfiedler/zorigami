@@ -15,6 +15,7 @@ use super::state;
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
+use log::info;
 use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
@@ -46,12 +47,14 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
                     } else {
                         true
                     };
+                    info!("candidate dataset {}", &set.key);
                     if maybe_run {
                         // check if backup is already running
                         let redux = state::get_state();
                         if let Some(backup) = redux.backups(&set.key) {
                             if backup.end_time().is_none() {
                                 maybe_run = false;
+                                info!("dataset {} backup in progress", &set.key);
                             }
                         }
                     }
@@ -98,9 +101,11 @@ fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
     let passphrase = env::var("PASSPHRASE").unwrap_or_else(|_| "keyboard cat".to_owned());
     thread::spawn(move || {
+        info!("dataset {} to be backed up", &set_key);
         let mut dataset = dbase.get_dataset(&set_key).unwrap().unwrap();
         let _ = engine::perform_backup(&mut dataset, &dbase, &passphrase).unwrap();
         // the perform_backup() has done everything, we can quietly die now
+        info!("dataset {} backup complete", &set_key);
     });
     Ok(())
 }
