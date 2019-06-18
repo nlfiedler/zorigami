@@ -9,6 +9,7 @@
     "-bs-super-errors"
   ],
   "bs-dependencies": [
+    "reason-apollo",
     "reason-react"
   ],
   "package-specs": [
@@ -17,7 +18,9 @@
       "in-source": false
     }
   ],
-  "ppx-flags": [],
+  "ppx-flags": [
+    "graphql_ppx/ppx"
+  ],
   "sources": [
     {
       "dir": "src",

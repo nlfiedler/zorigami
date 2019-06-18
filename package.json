@@ -20,11 +20,14 @@
     "lick": "license-checker --production --exclude MIT,ISC,LGPL,WTFPL,Apache-2.0,BSD-3-Clause,BSD-2-Clause,MPL-2.0,Unlicense"
   },
   "dependencies": {
+    "apollo-client": "^2.6.2",
+    "reason-apollo": "^0.16.4",
     "reason-react": "^0.7.0"
   },
   "devDependencies": {
     "bs-platform": "^5.0.4",
     "del": "^4.1.1",
+    "graphql_ppx": "^0.2.8",
     "gulp": "^4.0.2",
     "gulp-if": "^2.0.2",
     "gulp-uglify": "^3.0.2",

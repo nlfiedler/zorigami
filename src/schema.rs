@@ -287,10 +287,10 @@ pub struct QueryRoot;
 
 graphql_object!(QueryRoot: Database |&self| {
     #[doc = "Retrieve the configuration record."]
-    field configuration(&executor) -> FieldResult<Option<Configuration>> {
+    field configuration(&executor) -> FieldResult<Configuration> {
         let database = executor.context();
         let conf = engine::get_configuration(&database)?;
-        Ok(Some(Configuration::from(conf)))
+        Ok(Configuration::from(conf))
     }
 
     #[doc = "Find all dataset configurations."]

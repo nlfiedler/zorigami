@@ -21,9 +21,10 @@
 **** DONE Set up =gulp= and =webpack= to build the front-end code
 **** DONE Ensure Rust web server serves compiled JavaScript
 **** DONE Add bulma and fontawesome for styling
-**** TODO Set up apollo client dependency and schema tooling
-**** TODO Write a simple home page that shows something
+**** DONE Set up apollo client dependency and schema tooling
+**** DONE Write a simple home page that shows configuration
 **** TODO Set up the reason-react routing
+**** TODO Figure out how to use reductive with JSX 3
 **** TODO Store configuration is base64 encoded JSON values
 ***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
 #+BEGIN_SRC
@@ -67,7 +68,7 @@ let () =
 **** futures would help with reporting errors back to the main thread
 ** More Functionality
 *** TODO Event dispatching for the web and desktop
-**** use the rust redux crate to manage "events" and state
+**** use the state management to manage "events" and state
 **** engine emits actions/events to the store
 ***** for backup and restore functions
 ***** e.g. "downloaded a pack", "uploaded a pack"

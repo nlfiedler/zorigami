@@ -38,6 +38,16 @@ $ cargo test
 $ RUST_LOG=debug ./target/debug/zorigami
 ```
 
+### Updating the GraphQL PPX schema
+
+The ReasonML support for GraphQL uses a JSON formatted representation of the
+schema, which is generated using the following command (after starting a local
+server in another window):
+
+```shell
+$ npx send-introspection-query http://localhost:8080/graphql
+```
+
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the
@@ -51,6 +61,13 @@ the tests. For instance, the tests related to SFTP are enabled by the presence
 of certain environment variables, which is easily accomplished using dotenv.
 
 ## Tools
+
+### Visual Studio Code and Reason Language Server
+
+When adding new ReasonML dependencies to the project, it may be necessary to
+restart the Reason Language Server. Use the VS Code command palatte to find
+**Restart Reason Language Server** and select it -- now the references to the
+new code should be resolved correctly.
 
 ### Finding Outdated Crates
 
