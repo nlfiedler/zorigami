@@ -279,8 +279,24 @@ impl InputDataset {
 struct Store {
     /// Opaque identifier of this store.
     key: String,
+    /// The type, or kind, of the store (e.g. "local", "minio", "glacier").
+    kind: String,
     /// Base64 encoded JSON of store options.
     options: String,
+}
+
+impl From<Box<store::Store>> for Store {
+    fn from(store: Box<store::Store>) -> Self {
+        let type_name = store.get_type().to_string();
+        let json: String = store.get_config().to_json().unwrap();
+        let encoded = base64::encode(&json);
+        let key = store::store_name(store.as_ref());
+        Self {
+            key,
+            kind: type_name,
+            options: encoded,
+        }
+    }
 }
 
 pub struct QueryRoot;
@@ -316,22 +332,22 @@ graphql_object!(QueryRoot: Database |&self| {
     }
 
     #[doc = "Find all named store configurations."]
-    field stores(&executor) -> FieldResult<Vec<String>> {
+    field stores(&executor) -> FieldResult<Vec<Store>> {
         let database = executor.context();
-        let stores = store::find_stores(database)?;
-        Ok(stores)
+        let store_names = store::find_stores(database)?;
+        let stores = store::load_stores(database, store_names.as_slice())?;
+        let mut results: Vec<Store> = Vec::new();
+        for stor in stores {
+            results.push(Store::from(stor))
+        }
+        Ok(results)
     }
 
     #[doc = "Retrieve the named store configuration."]
     field store(&executor, key: String) -> FieldResult<Store> {
         let database = executor.context();
         let stor = store::load_store(database, &key)?;
-        let json: String = stor.get_config().to_json()?;
-        let encoded = base64::encode(&json);
-        Ok(Store{
-            key,
-            options: encoded,
-        })
+        Ok(Store::from(stor))
     }
 });
 
@@ -348,10 +364,7 @@ graphql_object!(MutationRoot: Database | &self | {
         stor.get_config_mut().from_json(&json)?;
         store::save_store(&database, stor.as_ref())?;
         let key = store::store_name(stor.as_ref());
-        Ok(Store{
-            key,
-            options,
-        })
+        Ok(Store::from(stor))
     }
 
     #[doc = "Update the saved store configuration."]
@@ -362,10 +375,7 @@ graphql_object!(MutationRoot: Database | &self | {
         let mut stor = store::load_store(database, &key)?;
         stor.get_config_mut().from_json(&json)?;
         store::save_store(&database, stor.as_ref())?;
-        Ok(Store{
-            key,
-            options,
-        })
+        Ok(Store::from(stor))
     }
 
     #[doc = "Define a new dataset with the given configuration."]
@@ -433,7 +443,7 @@ mod tests {
 
         // make sure there are no stores in the database
         let (res, _errors) = juniper::execute(
-            r#"query { stores }"#,
+            r#"query { stores { key } }"#,
             None,
             &schema,
             &Variables::new(),
@@ -448,7 +458,7 @@ mod tests {
         // query for a store that does not exist, should return one
         // with default settings
         let (res, _errors) = juniper::execute(
-            r#"query { store(key: "store/local/foobar") { options } }"#,
+            r#"query { store(key: "store/local/foobar") { kind options } }"#,
             None,
             &schema,
             &Variables::new(),
@@ -457,8 +467,11 @@ mod tests {
         .unwrap();
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("store").unwrap();
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("options").unwrap();
+        let obj = res.as_object_value().unwrap();
+        let res = obj.get_field_value("kind").unwrap();
+        let res = res.as_scalar_value::<String>().unwrap();
+        assert_eq!(res, "local");
+        let res = obj.get_field_value("options").unwrap();
         let res = res.as_scalar_value::<String>().unwrap();
         let decoded = base64::decode(&res)?;
         let json = std::str::from_utf8(&decoded)?;
@@ -489,7 +502,7 @@ mod tests {
 
         // call stores query to ensure the new local store is returned
         let (res, _errors) = juniper::execute(
-            r#"query { stores }"#,
+            r#"query { stores { key } }"#,
             None,
             &schema,
             &Variables::new(),
@@ -500,8 +513,11 @@ mod tests {
         let res = res.get_field_value("stores").unwrap();
         let res = res.as_list_value().unwrap();
         assert_eq!(res.len(), 1);
-        let value = Value::scalar::<String>(key.to_owned());
-        assert!(res.contains(&value));
+        let res = res[0].as_object_value().unwrap();
+        let res = res.get_field_value("key").unwrap();
+        let actual = res.as_scalar_value::<String>().unwrap();
+        assert!(key.starts_with("store/local/"));
+        assert!(key.ends_with(actual));
 
         // fetch the local store to make sure the options were saved
         let query = format!(r#"query {{ store(key: "{}") {{ options }} }}"#, key);
