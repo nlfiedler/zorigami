@@ -21,6 +21,7 @@ use std::path::Path;
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct MinioConfig {
+    label: String,
     /// The AWS/Minio region to connect to (e.g. "us-east-1").
     region: String,
     /// The endpoint should be something like http://192.168.99.100:9000 such
@@ -30,8 +31,13 @@ struct MinioConfig {
 }
 
 impl super::Config for MinioConfig {
+    fn get_label(&self) -> String {
+        self.label.clone()
+    }
+
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: MinioConfig = serde_json::from_str(data)?;
+        self.label = conf.label;
         self.region = conf.region;
         self.endpoint = conf.endpoint;
         Ok(())
@@ -46,6 +52,7 @@ impl super::Config for MinioConfig {
 impl Default for MinioConfig {
     fn default() -> Self {
         Self {
+            label: String::from("default minio"),
             region: String::from("us-west-1"),
             endpoint: String::from("http://localhost:9000"),
         }

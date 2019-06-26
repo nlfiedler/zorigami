@@ -241,6 +241,12 @@ pub fn retrieve_pack(
 ///
 pub trait Config {
     ///
+    /// Return the user-defined label for this configuration, used to present
+    /// the store in a friendly manner in the user interface.
+    ///
+    fn get_label(&self) -> String;
+
+    ///
     /// Read the store configuration from the given JSON and update the
     /// properties of this configuration instance.
     ///

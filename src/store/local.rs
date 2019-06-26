@@ -12,13 +12,19 @@ use std::path::{Path, PathBuf};
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct LocalConfig {
+    label: String,
     basepath: String,
 }
 
 impl super::Config for LocalConfig {
+    fn get_label(&self) -> String {
+        self.label.clone()
+    }
+
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: LocalConfig = serde_json::from_str(data)?;
         self.basepath = conf.basepath;
+        self.label = conf.label;
         Ok(())
     }
 
@@ -31,6 +37,7 @@ impl super::Config for LocalConfig {
 impl Default for LocalConfig {
     fn default() -> Self {
         Self {
+            label: String::from("default local"),
             basepath: String::from("."),
         }
     }

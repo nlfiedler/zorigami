@@ -493,6 +493,7 @@ fn test_perform_backup() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
+        "label": "foobar",
         "basepath": pack_path,
     });
     let value = config_json.to_string();
@@ -577,6 +578,7 @@ fn test_restore_file() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
+        "label": "foobar",
         "basepath": pack_path,
     });
     let value = config_json.to_string();
@@ -725,6 +727,7 @@ fn test_multiple_stores() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
+        "label": "foobar",
         "basepath": pack_path,
     });
     let value = config_json.to_string();
@@ -736,6 +739,7 @@ fn test_multiple_stores() -> Result<(), Error> {
     let endpoint = endp_var.unwrap();
     let region = env::var("MINIO_REGION").unwrap();
     let config_json = json!({
+        "label": "foobar",
         "region": region,
         "endpoint": endpoint,
     });
@@ -802,6 +806,7 @@ fn test_continue_backup() -> Result<(), Error> {
 
     // create a local store
     let config_json = json!({
+        "label": "foobar",
         "basepath": pack_path,
     });
     let value = config_json.to_string();

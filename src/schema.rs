@@ -279,6 +279,8 @@ impl InputDataset {
 struct Store {
     /// Opaque identifier of this store.
     key: String,
+    /// User-defined label for this store configuration.
+    label: String,
     /// The type, or kind, of the store (e.g. "local", "minio", "glacier").
     kind: String,
     /// Base64 encoded JSON of store options.
@@ -289,10 +291,12 @@ impl From<Box<store::Store>> for Store {
     fn from(store: Box<store::Store>) -> Self {
         let type_name = store.get_type().to_string();
         let json: String = store.get_config().to_json().unwrap();
+        let label: String = store.get_config().get_label();
         let encoded = base64::encode(&json);
         let key = store::store_name(store.as_ref());
         Self {
             key,
+            label,
             kind: type_name,
             options: encoded,
         }
@@ -479,12 +483,13 @@ mod tests {
 
         // define a new local store with some options
         let mut vars = Variables::new();
-        let options = base64::encode(r#"{"basepath": "/some/local/path"}"#);
+        let options = base64::encode(r#"{"label": "foobar", "basepath": "/some/local/path"}"#);
         vars.insert("options".to_owned(), InputValue::scalar(options));
         let (res, _errors) = juniper::execute(
             r#"mutation DefineStore($options: String!) {
                 defineStore(typeName: "local", options: $options) {
                     key
+                    label
                 }
             }"#,
             Some("DefineStore"),
@@ -495,10 +500,13 @@ mod tests {
         .unwrap();
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("defineStore").unwrap();
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("key").unwrap();
-        let key = res.as_scalar_value::<String>().unwrap();
+        let obj = res.as_object_value().unwrap();
+        let field = obj.get_field_value("key").unwrap();
+        let key = field.as_scalar_value::<String>().unwrap();
         assert!(key.starts_with("store/local/"));
+        let field = obj.get_field_value("label").unwrap();
+        let label = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(label, "foobar");
 
         // call stores query to ensure the new local store is returned
         let (res, _errors) = juniper::execute(
@@ -535,7 +543,7 @@ mod tests {
         // update the store configuration to something different
         let mut vars = Variables::new();
         vars.insert("key".to_owned(), InputValue::scalar(key.to_owned()));
-        let options = base64::encode(r#"{"basepath": "/totally/different"}"#);
+        let options = base64::encode(r#"{"label": "foobar", "basepath": "/totally/different"}"#);
         vars.insert("options".to_owned(), InputValue::scalar(options));
         let (res, _errors) = juniper::execute(
             r#"mutation UpdateStore($key: String!, $options: String!) {

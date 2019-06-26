@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 ///
 #[derive(Serialize, Deserialize, Debug)]
 struct SftpConfig {
+    label: String,
     /// Host and port of the SFTP server (e.g. "127.0.0.1:22")
     remote_addr: String,
     /// Name of the user account on the SFTP server.
@@ -28,8 +29,13 @@ struct SftpConfig {
 }
 
 impl super::Config for SftpConfig {
+    fn get_label(&self) -> String {
+        self.label.clone()
+    }
+
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: SftpConfig = serde_json::from_str(data)?;
+        self.label = conf.label;
         self.remote_addr = conf.remote_addr;
         self.username = conf.username;
         self.password = conf.password;
@@ -46,6 +52,7 @@ impl super::Config for SftpConfig {
 impl Default for SftpConfig {
     fn default() -> Self {
         Self {
+            label: String::from("default sftp"),
             remote_addr: String::from("127.0.0.1:22"),
             username: String::from("charlie"),
             password: None,

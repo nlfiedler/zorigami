@@ -23,9 +23,6 @@
 **** DONE Add bulma and fontawesome for styling
 **** DONE Set up apollo client dependency and schema tooling
 **** DONE Write a simple home page that shows configuration
-**** DONE need "type" field for =Store= in GraphQL schema
-**** DONE =stores= query should return full =Store= for streamlined queries
-**** TODO need a label field for =Store= in GraphQL schema
 **** TODO Set up the reason-react routing
 ***** TODO decide on routes
 ****** home: shows configuration, stores, datasets, backup status

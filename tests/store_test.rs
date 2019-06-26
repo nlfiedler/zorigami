@@ -20,6 +20,7 @@ fn test_store_config() -> Result<(), Error> {
     let dbase = Database::new(Path::new(db_path)).unwrap();
 
     let config_json = json!({
+        "label": "foobar",
         "basepath": "some/path/for_local",
     });
     let value = config_json.to_string();
@@ -29,6 +30,7 @@ fn test_store_config() -> Result<(), Error> {
 
     // test updating the store config (only need this one time)
     let config_json = json!({
+        "label": "foobar",
         "basepath": "some/other/path",
     });
     store.get_config_mut().from_json(&config_json.to_string())?;
@@ -38,6 +40,7 @@ fn test_store_config() -> Result<(), Error> {
     assert!(json.contains("some/other/path"));
 
     let config_json = json!({
+        "label": "foobar",
         "remote_addr": "localhost:22",
         "username": "joe",
         "password": "secret123",
@@ -48,6 +51,7 @@ fn test_store_config() -> Result<(), Error> {
     run_config_tests(&value, &mut store, &dbase)?;
 
     let config_json = json!({
+        "label": "foobar",
         "region": "us-west-1",
         "endpoint": "http://localhost:9000",
     });
@@ -76,6 +80,7 @@ fn run_config_tests(config: &str, store: &mut Store, dbase: &Database) -> Result
 #[test]
 fn test_local_roundtrip() -> Result<(), Error> {
     let config_json = json!({
+        "label": "foobar",
         "basepath": "tmp/test/local_store",
     });
     let mut store = local::LocalStore::new("testing");
@@ -98,6 +103,7 @@ fn test_sftp_roundtrip() -> Result<(), Error> {
     let password = env::var("SFTP_PASSWORD").unwrap();
     let basepath = env::var("SFTP_BASEPATH").unwrap();
     let config_json = json!({
+        "label": "foobar",
         "remote_addr": address,
         "username": username,
         "password": password,
@@ -121,6 +127,7 @@ fn test_minio_roundtrip() -> Result<(), Error> {
     let endpoint = endp_var.unwrap();
     let region = env::var("MINIO_REGION").unwrap();
     let config_json = json!({
+        "label": "foobar",
         "region": region,
         "endpoint": endpoint,
     });
