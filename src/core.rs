@@ -76,8 +76,8 @@ impl Checksum {
 impl Clone for Checksum {
     fn clone(&self) -> Self {
         match self {
-            Checksum::SHA1(sum) => Checksum::SHA1(String::from(sum.as_ref())),
-            Checksum::SHA256(sum) => Checksum::SHA256(String::from(sum.as_ref())),
+            Checksum::SHA1(sum) => Checksum::SHA1(sum.to_owned()),
+            Checksum::SHA256(sum) => Checksum::SHA256(sum.to_owned()),
         }
     }
 }
