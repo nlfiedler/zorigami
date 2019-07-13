@@ -26,15 +26,20 @@ $ brew install gpgme
 
 ### Building and Testing
 
+These commands will build the backend and run the tests.
+
 ```shell
 $ cargo clean
 $ cargo build
 $ cargo test
 ```
 
-### Running
+### Building and Running
+
+These commands will build backend and front-end, and then start the server.
 
 ```shell
+$ gulp
 $ RUST_LOG=debug ./target/debug/zorigami
 ```
 
@@ -108,7 +113,7 @@ this application, accept maybe for the association with time.
 Started as a project named "akashita", with a basic
 [Python](https://www.python.org) implementation that uploaded tarballs to
 Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and
-`split` to produce "pack" files of reasonable size.
+`split` to produce "pack" files of a reasonable size.
 
 ### February 2016
 
