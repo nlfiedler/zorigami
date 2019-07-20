@@ -5,7 +5,7 @@ const gulpif = require('gulp-if')
 const uglify = require('gulp-uglify')
 const webpack = require('webpack-stream')
 
-let production = process.env.NODE_ENV === 'production'
+const production = process.env.NODE_ENV === 'production'
 
 gulp.task('make:rust', (cb) => {
   exec('cargo build', (err, stdout, stderr) => {
