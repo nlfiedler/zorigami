@@ -39,7 +39,7 @@
 ***** DONE copy tanuki =main.re= contents to =Index.re=
 ***** DONE copy tanuki =Home.re= to show the =Config= component
 ***** DONE =main= needs to default all other routes to the front-end code
-***** TODO add a navbar and start using font awesome icons
+***** DONE add a navbar and start using font awesome icons
 ***** TODO create page for defining a store and saving to backend
 **** TODO Decide what will be stored in reductive
 ***** dataset being viewed

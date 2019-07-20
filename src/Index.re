@@ -42,7 +42,10 @@ module App = {
       | HomeRoute => <Home.Component />
       | NotFoundRoute => <NotFound.Component />
       };
-    <div className="container"> <main role="main"> content </main> </div>;
+    <div className="container">
+      <Navbar />
+      <main role="main"> content </main>
+    </div>;
   };
 };
 
