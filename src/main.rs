@@ -6,7 +6,7 @@
 //! supervisor threads to manage the backups.
 
 use actix_files as afs;
-use actix_web::{middleware, web, App, Error, HttpResponse, HttpServer};
+use actix_web::{middleware, web, App, Error, HttpResponse, HttpRequest, HttpServer};
 use env_logger;
 use futures::future::Future;
 use juniper::http::graphiql::graphiql_source;
@@ -85,6 +85,14 @@ fn log_state_changes(state: &state::State) {
     }
 }
 
+// All requests that fail to match anything else will be directed to the index
+// page, where the client-side code will handle the routing and "page not found"
+// error condition.
+fn default_index(_req: HttpRequest) -> Result<afs::NamedFile, Error> {
+    let file = afs::NamedFile::open("./public/index.html")?;
+    Ok(file.use_last_modified(true))
+}
+
 pub fn main() -> io::Result<()> {
     env_logger::init();
     state::subscribe("main-logger", log_state_changes);
@@ -100,6 +108,7 @@ pub fn main() -> io::Result<()> {
             .service(web::resource("/graphql").route(web::post().to_async(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
             .service(afs::Files::new("/", "./public/").index_file("index.html"))
+            .default_service(web::get().to(default_index))
     })
     .bind(addr)?
     .run()

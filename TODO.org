@@ -23,20 +23,31 @@
 **** DONE Add bulma and fontawesome for styling
 **** DONE Set up apollo client dependency and schema tooling
 **** DONE Write a simple home page that shows configuration
-**** TODO Set up the reason-react routing
-***** TODO decide on routes
-****** home: shows configuration, stores, datasets, backup status
-****** dataset: shows recent snapshots for a dataset
-****** define dataset
-****** define store
-****** tree: shows tree entries for a dataset/snapshot/path tuple
-****** file: shows details about a particular file
+**** DONE Decide on routing paths
+***** home: shows configuration, stores, datasets, backup status
+***** dataset: shows recent snapshots for a dataset
+***** define dataset
+***** define store
+***** tree: shows tree entries for a dataset/snapshot/path tuple
+***** file: shows details about a particular file
+
+**** TODO Set up some basic pages (config, stores)
+***** DONE move contents of =Index.re= to =Config.re=
+***** DONE read https://reactjs.org/docs/hooks-intro.html
+***** DONE read https://reasonml.github.io/reason-react/blog/2019/04/10/react-hooks
+***** DONE read http://bypaulshen.com/articles/reason-react-hook-recipes
+***** DONE copy tanuki =main.re= contents to =Index.re=
+***** DONE copy tanuki =Home.re= to show the =Config= component
+***** DONE =main= needs to default all other routes to the front-end code
+***** TODO add a navbar and start using font awesome icons
+***** TODO create page for defining a store and saving to backend
 **** TODO Decide what will be stored in reductive
 ***** dataset being viewed
 ***** snapshot being viewed
 ***** full path within snapshot being viewed
-**** TODO Figure out how to use reductive with JSX 3
+**** DONE Figure out how to use reductive with JSX 3
 ***** put reductive components in separate files with =[@bs.config {jsx: 2}];= at the top
+***** use Margaret Krutikova's reductive "hooks" branch
 **** TODO Store configuration is base64 encoded JSON values
 ***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
 #+BEGIN_SRC
@@ -107,6 +118,16 @@ let () =
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO Use this to replace =akashita= for online backups
+** Architecture Review
+*** Embedded Database
+**** Is the default RocksDB performance sufficient?
+**** Consider https://github.com/spacejam/sled/
+***** written in Rust, open source
+***** will need prefix key scanning
+****** looks like you just use a prefix of the key (sorts before the matching keys)
+*** Client/Server
+**** Look at ways to secure the server, to allay fears of exploits
+**** A web conferencing tool was exploited via its hidden HTTP server
 ** macOS support
 *** TODO Ensure termination signals are handled even during a backup
 *** TODO Use =launchd= to manage the process, have it start automatically

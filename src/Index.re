@@ -1,59 +1,54 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
-module GetConfiguration = [%graphql
-  {|
-    query {
-      configuration {
-        hostname
-        username
-        computerId
-      }
-    }
-  |}
-];
-
-module GetConfigurationQuery = ReasonApollo.CreateQuery(GetConfiguration);
-
-module Configuration = {
+module App = {
+  type route =
+    | HomeRoute
+    | NotFoundRoute;
+  type state = {nowShowing: route};
+  type action =
+    | Navigate(route);
+  let reducer = (_state, action) =>
+    switch (action) {
+    | Navigate(page) => {nowShowing: page}
+    };
+  let urlToShownPage = (url: ReasonReact.Router.url) =>
+    switch (url.path) {
+    | [] => HomeRoute
+    | _ => NotFoundRoute
+    };
   [@react.component]
   let make = () => {
-    <GetConfigurationQuery>
-      ...{({result}) =>
-        switch (result) {
-        | Loading => <div> {ReasonReact.string("Loading...")} </div>
-        | Error(error) =>
-          Js.log(error);
-          <div> {ReasonReact.string(error##message)} </div>;
-        | Data(data) =>
-          <div>
-            <ul>
-              <li>
-                {ReasonReact.string(
-                   "Username: " ++ data##configuration##username,
-                 )}
-              </li>
-              <li>
-                {ReasonReact.string(
-                   "Hostname: " ++ data##configuration##hostname,
-                 )}
-              </li>
-              <li>
-                {ReasonReact.string(
-                   "Computer ID: " ++ data##configuration##computerId,
-                 )}
-              </li>
-            </ul>
-          </div>
-        }
-      }
-    </GetConfigurationQuery>;
+    let (state, dispatch) =
+      React.useReducer(
+        reducer,
+        {
+          nowShowing:
+            // Need to take the given URL in order to return to where we were
+            // before as the backend may redirect to a specific page. When that
+            // happens our application is effectively reloading from scratch.
+            urlToShownPage(ReasonReact.Router.dangerouslyGetInitialUrl()),
+        },
+      );
+    React.useEffect0(() => {
+      let token =
+        ReasonReact.Router.watchUrl(url =>
+          dispatch(Navigate(urlToShownPage(url)))
+        );
+      Some(() => ReasonReact.Router.unwatchUrl(token));
+    });
+    let content =
+      switch (state.nowShowing) {
+      | HomeRoute => <Home.Component />
+      | NotFoundRoute => <NotFound.Component />
+      };
+    <div className="container"> <main role="main"> content </main> </div>;
   };
 };
 
 ReactDOMRe.renderToElementWithId(
   <ReasonApollo.Provider client=Client.instance>
-    <Configuration />
+    <App />
   </ReasonApollo.Provider>,
   "main",
 );
