@@ -95,8 +95,8 @@
                     "kind": "NON_NULL",
                     "name": null,
                     "ofType": {
-                      "kind": "SCALAR",
-                      "name": "String",
+                      "kind": "OBJECT",
+                      "name": "Store",
                       "ofType": null
                     }
                   }
@@ -160,6 +160,38 @@
             {
               "name": "key",
               "description": "Opaque identifier of this store.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "label",
+              "description": "User-defined label for this store configuration.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "kind",
+              "description": "The type, or kind, of the store (e.g. \"local\", \"minio\", \"glacier\").",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1450,7 +1482,7 @@
       ],
       "directives": [
         {
-          "name": "skip",
+          "name": "include",
           "description": null,
           "locations": [
             "FIELD",
@@ -1475,7 +1507,7 @@
           ]
         },
         {
-          "name": "include",
+          "name": "skip",
           "description": null,
           "locations": [
             "FIELD",
