@@ -40,8 +40,10 @@ These commands will build backend and front-end, and then start the server.
 
 ```shell
 $ gulp
-$ RUST_LOG=debug ./target/debug/zorigami
+$ RUST_LOG=info ./target/debug/zorigami
 ```
+
+For more verbose debugging output, use `RUST_LOG=debug` in the command above.
 
 ### Updating the GraphQL PPX schema
 
