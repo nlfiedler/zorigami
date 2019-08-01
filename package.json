@@ -20,7 +20,9 @@
     "lick": "license-checker --production --exclude MIT,ISC,LGPL,WTFPL,Apache-2.0,BSD-3-Clause,BSD-2-Clause,MPL-2.0,Unlicense"
   },
   "dependencies": {
+    "@glennsl/bs-json": "^4.0.0",
     "apollo-client": "^2.6.3",
+    "bs-reform": "^8.3.2",
     "reason-apollo": "^0.16.4",
     "reason-react": "^0.7.0"
   },
@@ -31,6 +33,7 @@
     "gulp": "^4.0.2",
     "gulp-if": "^3.0.0",
     "gulp-uglify": "^3.0.2",
+    "lenses-ppx": "^2.0.0",
     "license-checker": "^25.0.1",
     "webpack-stream": "^5.2.1"
   }

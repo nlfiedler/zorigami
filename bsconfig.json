@@ -9,6 +9,8 @@
     "-bs-super-errors"
   ],
   "bs-dependencies": [
+    "bs-reform",
+    "@glennsl/bs-json",
     "reason-apollo",
     "reason-react"
   ],
@@ -19,7 +21,8 @@
     }
   ],
   "ppx-flags": [
-    "graphql_ppx/ppx"
+    "graphql_ppx/ppx",
+    "lenses-ppx/ppx"
   ],
   "sources": [
     {

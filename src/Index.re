@@ -4,6 +4,7 @@
 module App = {
   type route =
     | HomeRoute
+    | StoresRoute
     | NotFoundRoute;
   type state = {nowShowing: route};
   type action =
@@ -14,6 +15,7 @@ module App = {
     };
   let urlToShownPage = (url: ReasonReact.Router.url) =>
     switch (url.path) {
+    | ["stores"] => StoresRoute
     | [] => HomeRoute
     | _ => NotFoundRoute
     };
@@ -40,6 +42,7 @@ module App = {
     let content =
       switch (state.nowShowing) {
       | HomeRoute => <Home.Component />
+      | StoresRoute => <Stores.Component />
       | NotFoundRoute => <NotFound.Component />
       };
     <div className="container">

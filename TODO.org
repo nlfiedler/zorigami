@@ -31,7 +31,7 @@
 ***** tree: shows tree entries for a dataset/snapshot/path tuple
 ***** file: shows details about a particular file
 
-**** TODO Set up some basic pages (config, stores)
+**** DONE Set up some basic pages (config, stores)
 ***** DONE move contents of =Index.re= to =Config.re=
 ***** DONE read https://reactjs.org/docs/hooks-intro.html
 ***** DONE read https://reasonml.github.io/reason-react/blog/2019/04/10/react-hooks
@@ -40,7 +40,38 @@
 ***** DONE copy tanuki =Home.re= to show the =Config= component
 ***** DONE =main= needs to default all other routes to the front-end code
 ***** DONE add a navbar and start using font awesome icons
-***** TODO create page for defining a store and saving to backend
+***** DONE create page for defining a store and saving to backend
+****** DONE add a form for adding a new store
+****** DONE fix the bulma styling on the form elements
+****** DONE resolve all of the browser errors/warnings
+****** DONE find a form input validation library (e.g. "reform")
+****** DONE form submit adds new store via GraphQL
+****** DONE display results of the store define/update operation
+****** DONE default to a "local" store for now, with hard-coded fields
+****** DONE add exclusive selection status to the store list items
+****** DONE remove the store list, too confusing in terms of UX
+****** DONE for each defined store, create a form, initially disabled
+****** DONE each form has an ~Edit~ button that becomes ~Save~
+****** DONE when editing, also have a ~Cancel~ "button" link
+****** DONE cancel button needs to reset the form
+****** DONE one additional empty form at the bottom for adding a new store
+****** DONE new store form needs to be editable, no "cancel" button maybe
+****** DONE upon add/update, display a flash message
+**** TODO Look at [[https://github.com/minima-app/re-formality][re-formality]] as an alternative to bs-reform
+***** it is a lot more powerful
+**** TODO Support defining different kinds of stores
+***** TODO new store button needs to have a "kind" selector
+***** TODO based on the kind, get the default options via GraphQL
+***** TODO options maybe contain uneditable =help= and =placeholder= fields
+***** TODO form fields are built up according to the set of options
+***** TODO need to encode the options into a single "options" field
+**** TODO Need GraphQL mutations to delete stores and datasets
+**** TODO Add a delete button to the store edit form
+***** probably use a hidden form embedded in the store form
+***** hidden form submits to a GraphQL mutation to remove the given store
+***** have the ~is-danger~ delete button submit on that hidden form
+**** TODO Seems like there is a new way to use ReasonReact Router
+***** c.f. bs-reform's demo code has an example
 **** TODO Decide what will be stored in reductive
 ***** dataset being viewed
 ***** snapshot being viewed
@@ -48,7 +79,7 @@
 **** DONE Figure out how to use reductive with JSX 3
 ***** put reductive components in separate files with =[@bs.config {jsx: 2}];= at the top
 ***** use Margaret Krutikova's reductive "hooks" branch
-**** TODO Store configuration is base64 encoded JSON values
+**** DONE Store configuration is base64 encoded JSON values
 ***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
 #+BEGIN_SRC
 external btoa : string -> string = "" [@@bs.val]
@@ -60,8 +91,11 @@ let () =
   Js.log (text |> btoa |> atob)
 #+END_SRC
 **** TODO Manage stores, datasets, and configuration
-***** generate cron-like schedules based on checkboxes for datasets
+***** TODO add forms for adding/editing datasets to the home page
+****** use the same basic logic as the stores page
+***** TODO generate cron-like schedules based on checkboxes for datasets
 ****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
+**** TODO Display help text on stores page when there are no stores defined
 *** TODO Loose ends from Rust translation
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test
@@ -77,6 +111,8 @@ let () =
 *** TODO Detect file deletion during backup, mark file record as skipped
 **** Basically handle the error and mark the record as "failed"
 *** TODO Verify checksum of downloaded packs during restore
+*** TODO Consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
+**** it appears to support Erlang-style supervisor behavior
 *** TODO Recover from a backup thread that panicked
 **** For each spawned backup thread, spawn a supervisor thread
 **** Supervisor thread joins the backup thread
