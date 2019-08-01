@@ -16,47 +16,6 @@
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
-**** DONE Add =bs-platform= dependency and =bsconfig.json= file
-**** DONE Put the bucklescript output into =lib/js=
-**** DONE Set up =gulp= and =webpack= to build the front-end code
-**** DONE Ensure Rust web server serves compiled JavaScript
-**** DONE Add bulma and fontawesome for styling
-**** DONE Set up apollo client dependency and schema tooling
-**** DONE Write a simple home page that shows configuration
-**** DONE Decide on routing paths
-***** home: shows configuration, stores, datasets, backup status
-***** dataset: shows recent snapshots for a dataset
-***** define dataset
-***** define store
-***** tree: shows tree entries for a dataset/snapshot/path tuple
-***** file: shows details about a particular file
-
-**** DONE Set up some basic pages (config, stores)
-***** DONE move contents of =Index.re= to =Config.re=
-***** DONE read https://reactjs.org/docs/hooks-intro.html
-***** DONE read https://reasonml.github.io/reason-react/blog/2019/04/10/react-hooks
-***** DONE read http://bypaulshen.com/articles/reason-react-hook-recipes
-***** DONE copy tanuki =main.re= contents to =Index.re=
-***** DONE copy tanuki =Home.re= to show the =Config= component
-***** DONE =main= needs to default all other routes to the front-end code
-***** DONE add a navbar and start using font awesome icons
-***** DONE create page for defining a store and saving to backend
-****** DONE add a form for adding a new store
-****** DONE fix the bulma styling on the form elements
-****** DONE resolve all of the browser errors/warnings
-****** DONE find a form input validation library (e.g. "reform")
-****** DONE form submit adds new store via GraphQL
-****** DONE display results of the store define/update operation
-****** DONE default to a "local" store for now, with hard-coded fields
-****** DONE add exclusive selection status to the store list items
-****** DONE remove the store list, too confusing in terms of UX
-****** DONE for each defined store, create a form, initially disabled
-****** DONE each form has an ~Edit~ button that becomes ~Save~
-****** DONE when editing, also have a ~Cancel~ "button" link
-****** DONE cancel button needs to reset the form
-****** DONE one additional empty form at the bottom for adding a new store
-****** DONE new store form needs to be editable, no "cancel" button maybe
-****** DONE upon add/update, display a flash message
 **** TODO Look at [[https://github.com/minima-app/re-formality][re-formality]] as an alternative to bs-reform
 ***** it is a lot more powerful
 **** TODO Support defining different kinds of stores
@@ -70,26 +29,10 @@
 ***** probably use a hidden form embedded in the store form
 ***** hidden form submits to a GraphQL mutation to remove the given store
 ***** have the ~is-danger~ delete button submit on that hidden form
-**** TODO Seems like there is a new way to use ReasonReact Router
-***** c.f. bs-reform's demo code has an example
 **** TODO Decide what will be stored in reductive
 ***** dataset being viewed
 ***** snapshot being viewed
 ***** full path within snapshot being viewed
-**** DONE Figure out how to use reductive with JSX 3
-***** put reductive components in separate files with =[@bs.config {jsx: 2}];= at the top
-***** use Margaret Krutikova's reductive "hooks" branch
-**** DONE Store configuration is base64 encoded JSON values
-***** c.f. https://github.com/glennsl/bucklescript-cookbook#encode-and-decode-base64
-#+BEGIN_SRC
-external btoa : string -> string = "" [@@bs.val]
-external atob : string -> string = "" [@@bs.val]
-
-let () =
-  let text = "Hello World!" in
-  Js.log (text |> btoa);
-  Js.log (text |> btoa |> atob)
-#+END_SRC
 **** TODO Manage stores, datasets, and configuration
 ***** TODO add forms for adding/editing datasets to the home page
 ****** use the same basic logic as the stores page

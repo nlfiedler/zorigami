@@ -34,7 +34,7 @@ let make = () => {
              ReactDOMRe.objToDOMProps({
                "className": "navbar-item tooltip is-tooltip-bottom",
                "data-tooltip": "Home",
-               "onClick": _ => ReasonReact.Router.push("/"),
+               "onClick": _ => ReasonReactRouter.push("/"),
              }),
            [|
              <span className="icon">
@@ -48,7 +48,7 @@ let make = () => {
              ReactDOMRe.objToDOMProps({
                "className": "navbar-item tooltip is-tooltip-bottom",
                "data-tooltip": "Manage stores",
-               "onClick": _ => ReasonReact.Router.push("/stores"),
+               "onClick": _ => ReasonReactRouter.push("/stores"),
              }),
            [|
              <span className="icon">
