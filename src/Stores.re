@@ -90,20 +90,59 @@ module Encode = {
     );
 };
 
-module StoreLenses = [%lenses
+module StoreForm = {
+  open Formality;
+
+  type field =
+    | Label
+    | Options;
+
   type state = {
     label: string,
     options: string,
-  }
-];
+  };
 
-module StoreForm = ReFormNext.Make(StoreLenses);
+  type message = string;
+  type submissionError = unit;
+  // define this updater type for convenience
+  type updater = (state, string) => state;
+
+  module LabelField = {
+    let update = (state, value) => {...state, label: value};
+
+    let validator = {
+      field: Label,
+      strategy: Strategy.OnFirstSuccessOrFirstBlur,
+      dependents: None,
+      validate: state =>
+        switch (state.label) {
+        | "" => Error("Please enter a label")
+        | _ => Ok(Valid)
+        },
+    };
+  };
+
+  module OptionsField = {
+    let update = (state, value) => {...state, options: value};
+
+    let validator = {
+      field: Label,
+      strategy: Strategy.OnFirstSuccessOrFirstBlur,
+      dependents: None,
+      validate: _state => Ok(Valid),
+    };
+  };
+
+  let validators = [LabelField.validator, OptionsField.validator];
+};
+
+module StoreFormHook = Formality.Make(StoreForm);
 
 let formInput =
     (
-      handleChange,
-      fieldState: ReFormNext.fieldState,
-      fieldTitle: StoreLenses.field('a),
+      form: StoreFormHook.interface,
+      field: StoreForm.field,
+      updater: StoreForm.updater,
       labelText: string,
       inputId: string,
       inputType: string,
@@ -111,15 +150,12 @@ let formInput =
       placeholderText: string,
       readOnly: bool,
     ) => {
-  // would invoke getFieldState(Field(<label>)) here but Field() is not in scope
   let validateMsg =
-    fieldState
-    |> (
-      fun
-      | Error(error) => Some(error)
-      | _ => None
-    )
-    |> Belt.Option.getWithDefault(_, "");
+    switch (form.result(field)) {
+    | Some(Error(message)) => message
+    | Some(Ok(Valid | NoValue))
+    | None => ""
+    };
   let formIsValid = validateMsg == "";
   let inputClass = formIsValid ? "input" : "input is-danger";
   let validationTextDiv =
@@ -134,9 +170,13 @@ let formInput =
         type_=inputType
         name=inputId
         value=inputValue
-        onChange={ReForm.Helpers.handleDomFormChange(
-          handleChange(fieldTitle),
-        )}
+        onBlur={_ => form.blur(field)}
+        onChange={event =>
+          form.change(
+            Label,
+            updater(form.state, event->ReactEvent.Form.target##value),
+          )
+        }
         readOnly
         placeholder=placeholderText
       />
@@ -162,22 +202,11 @@ let formInput =
 module StoreFormRe = {
   [@react.component]
   // set newform=true to have form in edit mode w/o cancel button
-  let make = (~initial: StoreLenses.state, ~onSubmit, ~newform=false) => {
+  let make = (~initial: StoreForm.state, ~onSubmit, ~newform=false) => {
     let (editing, setEditing) = React.useState(() => newform);
-    let {state, submit, getFieldState, handleChange, resetForm}: StoreForm.api =
-      StoreForm.use(
-        ~schema={
-          StoreForm.Validation.Schema([|
-            Custom(
-              Label,
-              values =>
-                values.label == "" ? Error("Please enter a label") : Valid,
-            ),
-          |]);
-        },
-        ~onSubmit=({state}) => onSubmit(state.values),
-        ~initialState=initial,
-        (),
+    let form: StoreFormHook.interface =
+      StoreFormHook.useForm(~initialState=initial, ~onSubmit=(state, _form) =>
+        onSubmit(state)
       );
     let cancelLink =
       newform
@@ -187,15 +216,15 @@ module StoreFormRe = {
             className="button is-text"
             onClick={_ => {
               setEditing(_ => false);
-              resetForm();
+              form.reset();
             }}
             title="Cancel">
             {React.string("Cancel")}
           </a>;
-    let assetSaveButton = (state: StoreForm.state) =>
-      switch (state.formState) {
-      | Submitting => <p> {React.string("Saving...")} </p>
-      | Errored =>
+    let assetSaveButton = () =>
+      switch (form.status) {
+      | Submitting(_) => <p> {React.string("Saving...")} </p>
+      | SubmissionFailed(_) =>
         <div className="field is-grouped">
           <input
             type_="submit"
@@ -219,40 +248,36 @@ module StoreFormRe = {
         className="button is-primary">
         {React.string("Edit")}
       </a>;
-    <form
-      onSubmit={event => {
-        ReactEvent.Synthetic.preventDefault(event);
-        submit();
-      }}>
+    <form onSubmit={form.submit->Formality.Dom.preventDefault}>
       <div
         className="container"
         style={ReactDOMRe.Style.make(~width="auto", ~paddingRight="6em", ())}>
         {formInput(
-           handleChange,
-           getFieldState(Field(Label)),
+           form,
            Label,
+           StoreForm.LabelField.update,
            "Label",
            "label",
            "text",
-           state.values.label,
+           form.state.label,
            "My Stuff",
            !editing,
          )}
         {formInput(
-           handleChange,
-           getFieldState(Field(Options)),
+           form,
            Options,
+           StoreForm.OptionsField.update,
            "Path",
            "basepath",
            "text",
-           state.values.options,
+           form.state.options,
            "c:\\mystuff",
            !editing,
          )}
         <div className="field is-horizontal">
           <div className="field-label" />
           <div className="field-body">
-            {editing ? assetSaveButton(state) : assetEditButton}
+            {editing ? assetSaveButton() : assetEditButton}
           </div>
         </div>
       </div>
@@ -262,7 +287,7 @@ module StoreFormRe = {
 
 module NewStorePanel = {
   let submitNewStore =
-      (mutate: DefineStoreMutation.apolloMutation, values: StoreLenses.state) => {
+      (mutate: DefineStoreMutation.apolloMutation, values: StoreForm.state) => {
     let options: local = {label: values.label, basepath: values.options};
     let text = Json.stringify(Encode.local(options));
     let update =
@@ -274,8 +299,6 @@ module NewStorePanel = {
       (),
     )
     |> ignore;
-    // bs-reform expects an option return value for onSubmit
-    None;
   };
   [@react.component]
   let make = () => {
@@ -305,7 +328,7 @@ module EditStorePanel = {
       (
         mutate: UpdateStoreMutation.apolloMutation,
         key: string,
-        values: StoreLenses.state,
+        values: StoreForm.state,
       ) => {
     let options: local = {label: values.label, basepath: values.options};
     let text = Json.stringify(Encode.local(options));
@@ -317,12 +340,10 @@ module EditStorePanel = {
       (),
     )
     |> ignore;
-    // bs-reform expects an option return value for onSubmit
-    None;
   };
   let computeInitial = (store: t) => {
     let options = store##options |> atob |> Json.parseOrRaise |> Decode.local;
-    let initial: StoreLenses.state = {
+    let initial: StoreForm.state = {
       label: options.label,
       options: options.basepath,
     };
@@ -361,7 +382,7 @@ module Component = {
     let buildEditPanels = (stores: array(t)) =>
       Array.map(
         (store: t) =>
-          <div> <EditStorePanel key={store##key} store /> <hr /> </div>,
+          <div key={store##key}> <EditStorePanel store /> <hr /> </div>,
         stores,
       );
     <GetStoresQuery>

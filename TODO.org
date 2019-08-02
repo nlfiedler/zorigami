@@ -16,8 +16,20 @@
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
-**** TODO Look at [[https://github.com/minima-app/re-formality][re-formality]] as an alternative to bs-reform
+**** DONE Look at [[https://github.com/minima-app/re-formality][re-formality]] as an alternative to bs-reform
 ***** it is a lot more powerful
+***** DONE add =re-formality= to =package.json=
+***** DONE remove =lenses-ppx= from =package.json=
+***** DONE remove =bs-reform= from =package.json=
+***** DONE remove =lenses-ppx/ppx= from =bs-config.json=
+***** DONE remove =bs-reform= from =bs-config.json=
+***** DONE add =re-formality= to =bs-config.json=
+***** DONE rewrite the form related code in =Stores.re=
+***** DONE test the form validation
+**** DONE Fix missing =key= attribute warning reported on stores page
+**** TODO Form being edited should take focus and scroll to be visible
+***** with a bunch of stores on the screen, click ~Edit~ for last one
+***** page refreshes and scrolls to the top, no input field has the focus
 **** TODO Support defining different kinds of stores
 ***** TODO new store button needs to have a "kind" selector
 ***** TODO based on the kind, get the default options via GraphQL
