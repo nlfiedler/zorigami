@@ -173,7 +173,7 @@ let formInput =
         onBlur={_ => form.blur(field)}
         onChange={event =>
           form.change(
-            Label,
+            field,
             updater(form.state, event->ReactEvent.Form.target##value),
           )
         }

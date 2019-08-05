@@ -16,22 +16,8 @@
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
-**** DONE Look at [[https://github.com/minima-app/re-formality][re-formality]] as an alternative to bs-reform
-***** it is a lot more powerful
-***** DONE add =re-formality= to =package.json=
-***** DONE remove =lenses-ppx= from =package.json=
-***** DONE remove =bs-reform= from =package.json=
-***** DONE remove =lenses-ppx/ppx= from =bs-config.json=
-***** DONE remove =bs-reform= from =bs-config.json=
-***** DONE add =re-formality= to =bs-config.json=
-***** DONE rewrite the form related code in =Stores.re=
-***** DONE test the form validation
-**** DONE Fix missing =key= attribute warning reported on stores page
-**** TODO Form being edited should take focus and scroll to be visible
-***** with a bunch of stores on the screen, click ~Edit~ for last one
-***** page refreshes and scrolls to the top, no input field has the focus
 **** TODO Support defining different kinds of stores
-***** TODO new store button needs to have a "kind" selector
+***** TODO new store form needs to have a "kind" selector
 ***** TODO based on the kind, get the default options via GraphQL
 ***** TODO options maybe contain uneditable =help= and =placeholder= fields
 ***** TODO form fields are built up according to the set of options
@@ -123,6 +109,16 @@
 *** TODO Ensure termination signals are handled even during a backup
 *** TODO Use =launchd= to manage the process, have it start automatically
 *** TODO Use this to replace Time Machine (store on server using SFTP)
+** Front-end improvements
+*** Stores page
+**** TODO Scroll to form when edit button is clicked
+***** with a bunch of stores on the screen, click ~Edit~ for last one
+***** page refreshes and scrolls to the top
+**** TODO Autofocus input field on edit
+***** this is tricky with React, =autofocus= is not really honored
+***** can do it if we turn the input element into a full-fledged component
+***** and use the =useRef()= hook to set the focus on the HTML element
+***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Full Restore
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
