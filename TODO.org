@@ -16,13 +16,7 @@
 *** TODO How to document arguments to mutations in GraphQL?
 *** TODO Need a way to handle error in getting Database ref in graphql handler
 *** TODO Write a ReasonML frontend
-**** TODO Support defining different kinds of stores
-***** TODO new store form needs to have a "kind" selector
-***** TODO based on the kind, get the default options via GraphQL
-***** TODO options maybe contain uneditable =help= and =placeholder= fields
-***** TODO form fields are built up according to the set of options
-***** TODO need to encode the options into a single "options" field
-**** TODO Need GraphQL mutations to delete stores and datasets
+**** DONE Need GraphQL mutations to delete stores and datasets
 **** TODO Add a delete button to the store edit form
 ***** probably use a hidden form embedded in the store form
 ***** hidden form submits to a GraphQL mutation to remove the given store
@@ -31,12 +25,20 @@
 ***** dataset being viewed
 ***** snapshot being viewed
 ***** full path within snapshot being viewed
+**** TODO Support defining different kinds of stores
+***** TODO need a GraphQL query for the available kinds of stores
+****** just return every kind of the store with default config values
+***** TODO new store form needs to have a "kind" selector
+***** TODO options maybe contain uneditable =help= and =placeholder= fields
+***** TODO form fields are built up according to the set of options
+***** TODO need to encode the options into a single "options" field
 **** TODO Manage stores, datasets, and configuration
 ***** TODO add forms for adding/editing datasets to the home page
 ****** use the same basic logic as the stores page
 ***** TODO generate cron-like schedules based on checkboxes for datasets
 ****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
 **** TODO Display help text on stores page when there are no stores defined
+**** TODO Display help text on home page when there are no datasets defined
 *** TODO Loose ends from Rust translation
 **** TODO Set up configuration for dev and testing
 ***** TODO replace hard-coded db_path in integration test

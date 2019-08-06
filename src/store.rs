@@ -168,6 +168,28 @@ pub fn load_stores(dbase: &Database, names: &[String]) -> Result<Vec<Box<Store>>
 }
 
 ///
+/// Delete the given store's configuration from the database.
+///
+pub fn delete_store(dbase: &Database, name: &str) -> Result<(), Error> {
+    // perform some validation of the input, ensuring we do not delete arbitrary
+    // records from the database
+    let name_parts: Vec<&str> = name.split('/').collect();
+    if name_parts.len() < 3 {
+        return Err(err_msg(format!(
+            "name {} requires three / separated parts",
+            name
+        )));
+    }
+    if name_parts[0] != "store" {
+        return Err(err_msg(format!("name {} must start with 'store'", name)));
+    }
+    let _ = StoreType::from_str(name_parts[1])?;
+    // okay, the name appears to be a valid store identifier
+    dbase.delete_document(name.as_bytes())?;
+    Ok(())
+}
+
+///
 /// Store the given pack to all of the provided store implementations. Returns
 /// the list of all pack locations, which can be used to retrieve the pack
 /// at a later time.

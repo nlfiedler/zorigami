@@ -86,6 +86,14 @@ impl Database {
     }
 
     ///
+    /// Delete the database record associated with the given key.
+    ///
+    pub fn delete_document(&self, key: &[u8]) -> Result<(), Error> {
+        self.db.delete(key)?;
+        Ok(())
+    }
+
+    ///
     /// Put the given dataset into the database.
     ///
     pub fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
@@ -122,6 +130,14 @@ impl Database {
             results.push(serde_result);
         }
         Ok(results)
+    }
+
+    ///
+    /// Delete the given dataset from the database.
+    ///
+    pub fn delete_dataset(&self, key: &str) -> Result<(), Error> {
+        let key = format!("dataset/{}", key);
+        self.delete_document(key.as_bytes())
     }
 
     ///

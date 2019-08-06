@@ -382,6 +382,14 @@ graphql_object!(MutationRoot: Database | &self | {
         Ok(Store::from(stor))
     }
 
+    #[doc = "Delete the named store, returning its current configuration."]
+    field deleteStore(&executor, key: String) -> FieldResult<Store> {
+        let database = executor.context();
+        let stor = store::load_store(database, &key)?;
+        store::delete_store(&database, &key)?;
+        Ok(Store::from(stor))
+    }
+
     #[doc = "Define a new dataset with the given configuration."]
     field defineDataset(&executor, dataset: InputDataset) -> FieldResult<Dataset> {
         let database = executor.context();
@@ -420,6 +428,21 @@ graphql_object!(MutationRoot: Database | &self | {
         set.key = key;
         database.put_dataset(&set)?;
         Ok(Dataset::from(set))
+    }
+
+    #[doc = "Delete the named dataset, returning its current configuration."]
+    field deleteDataset(&executor, key: String) -> FieldResult<Dataset> {
+        let database = executor.context();
+        let opt = database.get_dataset(&key)?;
+        if let Some(set) = opt {
+            database.delete_dataset(&key)?;
+            Ok(Dataset::from(set))
+        } else {
+            return Err(FieldError::new(
+                format!("Dataset does not exist: {}", &key),
+                Value::null()
+            ));
+        }
     }
 });
 
@@ -576,6 +599,32 @@ mod tests {
         let decoded = base64::decode(&res)?;
         let json = std::str::from_utf8(&decoded)?;
         assert!(json.contains("/totally/different"));
+
+        // delete the store configuration
+        let mut vars = Variables::new();
+        vars.insert("key".to_owned(), InputValue::scalar(key.to_owned()));
+        let (res, _errors) = juniper::execute(
+            r#"mutation DeleteStore($key: String!) {
+                deleteStore(key: $key) {
+                    key
+                }
+            }"#,
+            Some("DeleteStore"),
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("deleteStore").unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("key").unwrap();
+        let key = res.as_scalar_value::<String>().unwrap();
+        assert!(key.starts_with("store/local/"));
+
+        // delete the store configuration again, should error
+        // ... the store is generated on demand, so this will never error
+
         Ok(())
     }
 
@@ -840,6 +889,48 @@ mod tests {
         // packSize is a bigint that comes over the wire as a string
         let pack_size = res.as_scalar_value::<String>().unwrap();
         assert_eq!(pack_size, "33554432");
+
+        // delete the dataset configuration
+        let mut vars = Variables::new();
+        vars.insert("key".to_owned(), InputValue::scalar(key.to_owned()));
+        let (res, _errors) = juniper::execute(
+            r#"mutation DeleteDataset($key: String!) {
+                deleteDataset(key: $key) {
+                    packSize
+                }
+            }"#,
+            Some("DeleteDataset"),
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("deleteDataset").unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("packSize").unwrap();
+        // packSize is a bigint that comes over the wire as a string
+        let pack_size = res.as_scalar_value::<String>().unwrap();
+        assert_eq!(pack_size, "33554432");
+
+        // delete the dataset configuration again, should error
+        let mut vars = Variables::new();
+        vars.insert("key".to_owned(), InputValue::scalar(key.to_owned()));
+        let (res, errors) = juniper::execute(
+            r#"mutation DeleteDataset($key: String!) {
+                deleteDataset(key: $key) {
+                    key
+                }
+            }"#,
+            Some("DeleteDataset"),
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("Dataset does not exist"));
 
         Ok(())
     }
