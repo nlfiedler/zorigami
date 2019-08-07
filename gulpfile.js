@@ -7,14 +7,6 @@ const webpack = require('webpack-stream')
 
 const production = process.env.NODE_ENV === 'production'
 
-gulp.task('make:rust', (cb) => {
-  exec('cargo build', (err, stdout, stderr) => {
-    console.info(stdout)
-    console.error(stderr)
-    cb(err)
-  })
-})
-
 gulp.task('make:bsb', (cb) => {
   exec('npx bsb -make-world', (err, stdout, stderr) => {
     console.info(stdout)
@@ -48,4 +40,4 @@ gulp.task('clean:js', () => {
 })
 
 gulp.task('clean', gulp.series('clean:bsb', 'clean:js'))
-gulp.task('default', gulp.series('make:rust', 'make:bsb', 'webpack'))
+gulp.task('default', gulp.series('make:bsb', 'webpack'))

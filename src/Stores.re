@@ -66,6 +66,18 @@ module UpdateStore = [%graphql
 
 module UpdateStoreMutation = ReasonApollo.CreateMutation(UpdateStore);
 
+module DeleteStore = [%graphql
+  {|
+    mutation DeleteStore($key: String!) {
+      deleteStore(key: $key) {
+        key
+      }
+    }
+  |}
+];
+
+module DeleteStoreMutation = ReasonApollo.CreateMutation(DeleteStore);
+
 // type of the local store options
 type local = {
   label: string,
@@ -199,10 +211,15 @@ let formInput =
   </div>;
 };
 
+let deleteFormName = (key: string) => {
+  "deleteForm_" ++ key;
+};
+
 module StoreFormRe = {
   [@react.component]
-  // set newform=true to have form in edit mode w/o cancel button
-  let make = (~initial: StoreForm.state, ~onSubmit, ~newform=false) => {
+  // if storeKey is None, form will be in edit mode w/o cancel button
+  let make = (~initial: StoreForm.state, ~onSubmit, ~storeKey=None) => {
+    let newform = Belt.Option.isNone(storeKey);
     let (editing, setEditing) = React.useState(() => newform);
     let form: StoreFormHook.interface =
       StoreFormHook.useForm(~initialState=initial, ~onSubmit=(state, _form) =>
@@ -210,48 +227,84 @@ module StoreFormRe = {
       );
     let cancelLink =
       newform
-        ? <div />
-        : <a
-            href="#"
-            className="button is-text"
-            onClick={_ => {
-              setEditing(_ => false);
-              form.reset();
-            }}
-            title="Cancel">
-            {React.string("Cancel")}
-          </a>;
+        ? React.null
+        : <p className="control">
+            <a
+              href="#"
+              className="button is-text"
+              onClick={_ => {
+                setEditing(_ => false);
+                form.reset();
+              }}
+              title="Cancel">
+              {React.string("Cancel")}
+            </a>
+          </p>;
     let assetSaveButton = () =>
       switch (form.status) {
       | Submitting(_) => <p> {React.string("Saving...")} </p>
       | SubmissionFailed(_) =>
         <div className="field is-grouped">
-          <input
-            type_="submit"
-            value="Save"
-            className="button"
-            disabled=true
-          />
+          <p className="control">
+            <input
+              type_="submit"
+              value="Save"
+              className="button"
+              disabled=true
+            />
+          </p>
           cancelLink
         </div>
       | _ =>
         <div className="field is-grouped">
-          <input type_="submit" value="Save" className="button is-primary" />
+          <p className="control">
+            <input type_="submit" value="Save" className="button is-primary" />
+          </p>
           cancelLink
         </div>
       };
+    let assetDeleteButton =
+      switch (storeKey) {
+      | Some(key) =>
+        <p className="control">
+          <input
+            type_="submit"
+            value="Delete"
+            className="button is-danger is-outlined"
+            form={deleteFormName(key)}
+          />
+        </p>
+      | None => React.null
+      };
     let assetEditButton =
-      <a
-        onClick={_ => setEditing(_ => true)}
-        href="#"
-        title="Edit"
-        className="button is-primary">
-        {React.string("Edit")}
-      </a>;
+      <div className="field is-grouped">
+        <p className="control">
+          <a
+            onClick={_ => setEditing(_ => true)}
+            href="#"
+            title="Edit"
+            className="button is-primary">
+            {React.string("Edit")}
+          </a>
+        </p>
+        assetDeleteButton
+      </div>;
     <form onSubmit={form.submit->Formality.Dom.preventDefault}>
       <div
         className="container"
         style={ReactDOMRe.Style.make(~width="auto", ~paddingRight="6em", ())}>
+        {newform
+           ? <div className="field is-horizontal" key="help_text">
+               <div className="field-label is-normal" />
+               <div className="field-body">
+                 <div className="field">
+                   {React.string(
+                      "Use the form below to add a new pack store.",
+                    )}
+                 </div>
+               </div>
+             </div>
+           : React.null}
         {formInput(
            form,
            Label,
@@ -308,10 +361,9 @@ module NewStorePanel = {
           <StoreFormRe
             initial={label: "", options: ""}
             onSubmit={submitNewStore(mutate)}
-            newform=true
           />;
         switch (result) {
-        | Loading => <p> {ReasonReact.string("Loading...")} </p>
+        | Loading => <p> {ReasonReact.string("Preparing...")} </p>
         | Error(error) =>
           Js.log(error);
           <div> {ReasonReact.string(error##message)} </div>;
@@ -354,7 +406,7 @@ module EditStorePanel = {
     <UpdateStoreMutation>
       ...{(mutate, {result}) =>
         switch (result) {
-        | Loading => <p> {ReasonReact.string("Loading...")} </p>
+        | Loading => <p> {ReasonReact.string("Saving the store...")} </p>
         | Error(error) =>
           Js.log(error);
           <div> {ReasonReact.string(error##message)} </div>;
@@ -363,16 +415,53 @@ module EditStorePanel = {
           <StoreFormRe
             initial
             onSubmit={submitEditStore(mutate, store##key)}
+            storeKey={Some(store##key)}
           />;
         | NotCalled =>
           let initial = computeInitial(store);
           <StoreFormRe
             initial
             onSubmit={submitEditStore(mutate, store##key)}
+            storeKey={Some(store##key)}
           />;
         }
       }
     </UpdateStoreMutation>;
+  };
+};
+
+module DeleteStorePanel = {
+  let submitDeleteStore =
+      (mutate: DeleteStoreMutation.apolloMutation, key: string) => {
+    let update = DeleteStore.make(~key, ());
+    // ignore the returned promise, the result will be delivered later
+    mutate(
+      ~variables=update##variables,
+      ~refetchQueries=[|"getAllStores"|],
+      (),
+    )
+    |> ignore;
+  };
+  [@react.component]
+  let make = (~store: t) => {
+    <DeleteStoreMutation>
+      ...{(mutate, {result}) =>
+        switch (result) {
+        | Loading => <p> {ReasonReact.string("Deleting the store...")} </p>
+        | Error(error) =>
+          Js.log(error);
+          <div> {ReasonReact.string(error##message)} </div>;
+        | Data(result) =>
+          Js.log2("deleted store:", result##deleteStore##key);
+          React.null;
+        | NotCalled =>
+          <form
+            onSubmit={_ => submitDeleteStore(mutate, store##key)}
+            id={deleteFormName(store##key)}
+          />
+        }
+      }
+    </DeleteStoreMutation>;
   };
 };
 
@@ -382,22 +471,27 @@ module Component = {
     let buildEditPanels = (stores: array(t)) =>
       Array.map(
         (store: t) =>
-          <div key={store##key}> <EditStorePanel store /> <hr /> </div>,
+          <div
+            key={
+              store##key;
+            }>
+            <DeleteStorePanel store />
+            <EditStorePanel store />
+            <hr />
+          </div>,
         stores,
       );
     <GetStoresQuery>
       ...{({result}) =>
         switch (result) {
-        | Loading => <div> {ReasonReact.string("Loading...")} </div>
+        | Loading =>
+          <div> {ReasonReact.string("Loading the stores...")} </div>
         | Error(error) =>
           Js.log(error);
           <div> {ReasonReact.string(error##message)} </div>;
         | Data(data) =>
           <div>
             {ReasonReact.array(buildEditPanels(data##stores))}
-            <p>
-              {React.string("Use the form below to add a new pack store.")}
-            </p>
             <NewStorePanel />
           </div>
         }
