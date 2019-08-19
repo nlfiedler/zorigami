@@ -331,6 +331,18 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Uses a single master password
 * Supports numerous backends
 
+#### Carbonite
+
+* https://www.carbonite.com
+* Consumer and business
+* Billed monthly
+    + $6 for one computer
+    + $24 for multiple computers
+    + $50 for computes + servers
+* 128-bit encryption for all but most expensive plan
+* Windows, Mac, and "servers"
+* Seems to backup to their servers
+
 #### CloudBerry
 
 * https://www.cloudberrylab.com/backup
