@@ -7,15 +7,15 @@ const webpack = require('webpack-stream')
 
 const production = process.env.NODE_ENV === 'production'
 
-gulp.task('make:bsb', (cb) => {
+function makebsb (cb) {
   exec('npx bsb -make-world', (err, stdout, stderr) => {
     console.info(stdout)
     console.error(stderr)
     cb(err)
   })
-})
+}
 
-gulp.task('webpack', () => {
+function packweb (cb) {
   return gulp.src('lib/js/src/Index.bs.js')
     .pipe(webpack({
       mode: production ? 'production' : 'development',
@@ -25,19 +25,19 @@ gulp.task('webpack', () => {
     }))
     .pipe(gulpif(production, uglify()))
     .pipe(gulp.dest('public/javascripts'))
-})
+}
 
-gulp.task('clean:bsb', (cb) => {
+function cleanbsb (cb) {
   exec('npx bsb -clean-world', (err, stdout, stderr) => {
     console.info(stdout)
     console.error(stderr)
     cb(err)
   })
-})
+}
 
-gulp.task('clean:js', () => {
+function cleanjs (cb) {
   return del(['public/javascripts/main.js'])
-})
+}
 
-gulp.task('clean', gulp.series('clean:bsb', 'clean:js'))
-gulp.task('default', gulp.series('make:bsb', 'webpack'))
+exports.clean = gulp.parallel(cleanbsb, cleanjs)
+exports.build = gulp.series(makebsb, packweb)
