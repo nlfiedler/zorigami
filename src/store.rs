@@ -68,7 +68,7 @@ pub enum StoreSpeed {
 /// in order to function properly (e.g. setting the host for the SFTP store, or
 /// the base directory for the local store).
 ///
-pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<Store> {
+pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<dyn Store> {
     let uuid = if id.is_some() {
         id.unwrap().to_owned()
     } else {
@@ -112,7 +112,7 @@ pub fn find_store_by_id(dbase: &Database, id: &str) -> Result<Option<String>, Er
 /// saving the store configuration in the database, as well as referring to the
 /// store in the `core::Dataset`.
 ///
-pub fn store_name(store: &Store) -> String {
+pub fn store_name(store: &dyn Store) -> String {
     let type_name = store.get_type().to_string();
     let unique_id = store.get_id();
     format!("store/{}/{}", type_name, unique_id)
@@ -121,7 +121,7 @@ pub fn store_name(store: &Store) -> String {
 ///
 /// Save the given store's configuration to the database.
 ///
-pub fn save_store(dbase: &Database, store: &Store) -> Result<(), Error> {
+pub fn save_store(dbase: &Database, store: &dyn Store) -> Result<(), Error> {
     let key = store_name(store);
     let value = store.get_config().to_json()?;
     dbase.put_document(key.as_bytes(), value.as_bytes())?;
@@ -135,7 +135,7 @@ pub fn save_store(dbase: &Database, store: &Store) -> Result<(), Error> {
 /// `find_stores()`. If the named store does not have a saved configuration, it
 /// will have the default values for its type.
 ///
-pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
+pub fn load_store(dbase: &Database, name: &str) -> Result<Box<dyn Store>, Error> {
     let name_parts: Vec<&str> = name.split('/').collect();
     if name_parts.len() < 3 {
         return Err(err_msg(format!(
@@ -158,8 +158,8 @@ pub fn load_store(dbase: &Database, name: &str) -> Result<Box<Store>, Error> {
 ///
 /// Load all of the stores named in the list.
 ///
-pub fn load_stores(dbase: &Database, names: &[String]) -> Result<Vec<Box<Store>>, Error> {
-    let mut stores_boxed: Vec<Box<Store>> = Vec::new();
+pub fn load_stores(dbase: &Database, names: &[String]) -> Result<Vec<Box<dyn Store>>, Error> {
+    let mut stores_boxed: Vec<Box<dyn Store>> = Vec::new();
     for name in names {
         let boxed = load_store(dbase, name)?;
         stores_boxed.push(boxed);
@@ -198,7 +198,7 @@ pub fn store_pack(
     packfile: &Path,
     bucket: &str,
     object: &str,
-    stores: &[Box<Store>],
+    stores: &[Box<dyn Store>],
 ) -> Result<Vec<PackLocation>, Error> {
     let mut results: Vec<PackLocation> = Vec::new();
     for store in stores {
@@ -214,7 +214,7 @@ pub fn store_pack(
 /// over a slow one.
 ///
 pub fn retrieve_pack(
-    stores: &[Box<Store>],
+    stores: &[Box<dyn Store>],
     locations: &[PackLocation],
     outfile: &Path,
 ) -> Result<(), Error> {
@@ -303,12 +303,12 @@ pub trait Store {
     ///
     /// Return a reference to the configuration for this store.
     ///
-    fn get_config(&self) -> &Config;
+    fn get_config(&self) -> &dyn Config;
 
     ///
     /// Return a mutable reference to the configuration for this store.
     ///
-    fn get_config_mut(&mut self) -> &mut Config;
+    fn get_config_mut(&mut self) -> &mut dyn Config;
 
     ///
     /// Store the pack file under the named bucket and referenced by the object

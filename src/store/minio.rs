@@ -121,11 +121,11 @@ impl super::Store for MinioStore {
         super::StoreSpeed::FAST
     }
 
-    fn get_config(&self) -> &super::Config {
+    fn get_config(&self) -> &dyn super::Config {
         &self.config
     }
 
-    fn get_config_mut(&mut self) -> &mut super::Config {
+    fn get_config_mut(&mut self) -> &mut dyn super::Config {
         &mut self.config
     }
 

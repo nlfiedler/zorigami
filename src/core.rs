@@ -294,7 +294,7 @@ pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
     // need a passphrase provider otherwise nothing is output;
     // n.b. this and/or the passphrase is cached in memory somehow
     ctx.with_passphrase_provider(
-        |_: gpgme::PassphraseRequest, out: &mut Write| {
+        |_: gpgme::PassphraseRequest, out: &mut dyn Write| {
             out.write_all(passphrase.as_bytes())?;
             Ok(())
         },
@@ -319,7 +319,7 @@ pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
     // need a passphrase provider otherwise nothing is output;
     // n.b. this and/or the passphrase is cached in memory somehow
     ctx.with_passphrase_provider(
-        |_: gpgme::PassphraseRequest, out: &mut Write| {
+        |_: gpgme::PassphraseRequest, out: &mut dyn Write| {
             out.write_all(passphrase.as_bytes())?;
             Ok(())
         },

@@ -287,8 +287,8 @@ struct Store {
     options: String,
 }
 
-impl From<Box<store::Store>> for Store {
-    fn from(store: Box<store::Store>) -> Self {
+impl From<Box<dyn store::Store>> for Store {
+    fn from(store: Box<dyn store::Store>) -> Self {
         let type_name = store.get_type().to_string();
         let json: String = store.get_config().to_json().unwrap();
         let label: String = store.get_config().get_label();
@@ -438,10 +438,10 @@ graphql_object!(MutationRoot: Database | &self | {
             database.delete_dataset(&key)?;
             Ok(Dataset::from(set))
         } else {
-            return Err(FieldError::new(
+            Err(FieldError::new(
                 format!("Dataset does not exist: {}", &key),
                 Value::null()
-            ));
+            ))
         }
     }
 });

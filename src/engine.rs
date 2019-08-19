@@ -105,7 +105,7 @@ struct BackupMaster<'a> {
     builder: PackBuilder<'a>,
     passphrase: String,
     bucket_name: String,
-    stores: Vec<Box<store::Store>>,
+    stores: Vec<Box<dyn store::Store>>,
 }
 
 impl<'a> BackupMaster<'a> {

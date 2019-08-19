@@ -35,7 +35,7 @@ fn test_store_config() -> Result<(), Error> {
     });
     store.get_config_mut().from_json(&config_json.to_string())?;
     save_store(&dbase, &store)?;
-    let boxster: Box<Store> = load_store(&dbase, "store/local/development")?;
+    let boxster: Box<dyn Store> = load_store(&dbase, "store/local/development")?;
     let json: String = boxster.get_config().to_json()?;
     assert!(json.contains("some/other/path"));
 
@@ -62,7 +62,7 @@ fn test_store_config() -> Result<(), Error> {
     Ok(())
 }
 
-fn run_config_tests(config: &str, store: &mut Store, dbase: &Database) -> Result<(), Error> {
+fn run_config_tests(config: &str, store: &mut dyn Store, dbase: &Database) -> Result<(), Error> {
     store.get_config_mut().from_json(config)?;
     save_store(dbase, store)?;
     let stores: Vec<String> = find_stores(dbase)?;
@@ -71,7 +71,7 @@ fn run_config_tests(config: &str, store: &mut Store, dbase: &Database) -> Result
     let unique_id = store.get_id();
     let store_key = format!("store/{}/{}", type_name, unique_id);
     assert!(stores.contains(&store_key));
-    let boxster: Box<Store> = load_store(dbase, &store_key)?;
+    let boxster: Box<dyn Store> = load_store(dbase, &store_key)?;
     assert_eq!(boxster.get_type().to_string(), type_name);
     assert_eq!(boxster.get_id(), unique_id);
     Ok(())
@@ -138,7 +138,7 @@ fn test_minio_roundtrip() -> Result<(), Error> {
     Ok(())
 }
 
-fn run_store_tests(store: &Store) {
+fn run_store_tests(store: &dyn Store) {
     let unique_id = generate_unique_id("charlie", "localhost");
     let bucket = generate_bucket_name(&unique_id);
 
