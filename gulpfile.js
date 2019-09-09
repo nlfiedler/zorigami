@@ -15,7 +15,7 @@ function makebsb (cb) {
   })
 }
 
-function packweb (cb) {
+function makeweb (cb) {
   return gulp.src('lib/js/src/Index.bs.js')
     .pipe(webpack({
       mode: production ? 'production' : 'development',
@@ -35,9 +35,9 @@ function cleanbsb (cb) {
   })
 }
 
-function cleanjs (cb) {
+function cleanweb (cb) {
   return del(['public/javascripts/main.js'])
 }
 
-exports.clean = gulp.parallel(cleanbsb, cleanjs)
-exports.build = gulp.series(makebsb, packweb)
+exports.clean = gulp.parallel(cleanbsb, cleanweb)
+exports.build = gulp.series(makebsb, makeweb)
