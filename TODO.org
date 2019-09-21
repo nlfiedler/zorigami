@@ -22,13 +22,18 @@
 ***** hidden form submits to a GraphQL mutation to remove the given store
 ***** have the ~is-danger~ delete button submit on that hidden form
 **** TODO Support defining different kinds of stores
-***** TODO change the existing code to treat basepath as one of many options
-***** TODO need a GraphQL query for the available kinds of stores
-****** just return every kind of the store with default config values
+***** DONE will need validators for each kind of store
+****** not all fields with the same name will validate the same way for different kinds of stores
+****** some fields will be required and some will not, even if they have the same name
+***** DONE lack of exposed types in Formality makes a generic form difficult
+***** TODO remove the edit/cancel button, form is always in edit mode with save button
 ***** TODO new store form needs to have a "kind" selector
-***** TODO options maybe contain uneditable =help= and =placeholder= fields
-***** TODO form fields are built up according to the set of options
-***** TODO need to encode the options into a single "options" field
+***** TODO selecting different kind will rebuild new store form accordingly
+***** TODO need to parameterize new store form somehow to avoid code duplication
+***** TODO make a different form and validation module for each type of store
+***** TODO need to encode the options into a single "options" field for GraphQL
+***** TODO delete button should be far away from the other button(s)
+***** TODO delete button should require two clicks, with "are you sure?"
 **** TODO Manage stores, datasets, and configuration
 ***** TODO add forms for adding/editing datasets to the home page
 ****** use the same basic logic as the stores page

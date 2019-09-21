@@ -18,10 +18,9 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zorigami::database::Database;
+use zorigami::schema;
 use zorigami::state;
 use zorigami::supervisor;
-
-mod schema;
 
 lazy_static! {
     // Path to the database files.
@@ -44,7 +43,7 @@ fn graphql(
     data: web::Json<GraphQLRequest>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
-        let ctx = Database::new(&DB_PATH).unwrap();
+        let ctx = Database::new(DB_PATH.as_path()).unwrap();
         let res = data.execute(&st, &ctx);
         Ok::<_, serde_json::error::Error>(serde_json::to_string(&res)?)
     })

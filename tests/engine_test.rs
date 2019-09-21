@@ -1,6 +1,8 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+mod util;
+
 use dotenv::dotenv;
 use failure::Error;
 use serde_json::json;
@@ -9,6 +11,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
+use util::DBPath;
 use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
@@ -19,9 +22,8 @@ use zorigami::store::*;
 #[test]
 fn test_datasets() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/datasets/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_datasets");
+    let dbase = Database::new(&db_path).unwrap();
     let unique_id = generate_unique_id("charlie", "localhost");
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
@@ -40,9 +42,8 @@ fn test_datasets() -> Result<(), Error> {
 #[test]
 fn test_basic_snapshots() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/snapshots/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_basic_snapshots");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/snapshots/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -109,9 +110,8 @@ fn test_basic_snapshots() -> Result<(), Error> {
 #[test]
 fn test_snapshot_symlinks() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/symlinks/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_snapshot_symlinks");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/symlinks/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -151,9 +151,8 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
 #[test]
 fn test_snapshot_ordering() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/ordering/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_snapshot_ordering");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/ordering/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -214,9 +213,8 @@ fn test_snapshot_ordering() -> Result<(), Error> {
 #[test]
 fn test_snapshot_types() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/types/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_snapshot_types");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/types/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -255,9 +253,8 @@ fn test_snapshot_types() -> Result<(), Error> {
 #[test]
 fn test_snapshot_ignore_links() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/ignore_links/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_snapshot_ignore_links");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/ignore_links/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -309,9 +306,8 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
 #[test]
 fn test_snapshot_was_links() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/was_links/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_snapshot_was_links");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/was_links/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -364,9 +360,8 @@ fn test_snapshot_was_links() -> Result<(), Error> {
 #[test]
 fn test_pack_builder() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/builder/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_pack_builder");
+    let dbase = Database::new(&db_path).unwrap();
     let basepath = "tmp/test/engine/builder/fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
@@ -440,9 +435,8 @@ fn test_pack_builder() -> Result<(), Error> {
 #[test]
 fn test_pack_builder_empty() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/ebuilder/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_pack_builder_empty");
+    let dbase = Database::new(&db_path).unwrap();
     let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.has_chunks(), false);
     assert_eq!(builder.is_full(), false);
@@ -457,9 +451,8 @@ fn test_pack_builder_empty() -> Result<(), Error> {
 #[test]
 fn test_pack_builder_dupes() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/dbuilder/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_pack_builder_dupes");
+    let dbase = Database::new(&db_path).unwrap();
     let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.file_count(), 0);
     assert_eq!(builder.chunk_count(), 0);
@@ -485,9 +478,8 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
 #[test]
 fn test_perform_backup() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/backup/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_perform_backup");
+    let dbase = Database::new(&db_path).unwrap();
     let pack_path = "tmp/test/engine/backup/packs";
     let _ = fs::remove_dir_all(pack_path);
 
@@ -570,9 +562,8 @@ fn test_perform_backup() -> Result<(), Error> {
 #[test]
 fn test_restore_file() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/restore_file/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_restore_file");
+    let dbase = Database::new(&db_path).unwrap();
     let pack_path = "tmp/test/engine/restore_file/packs";
     let _ = fs::remove_dir_all(pack_path);
 
@@ -719,9 +710,8 @@ fn test_multiple_stores() -> Result<(), Error> {
     }
 
     // create a clean database for each test
-    let db_path = "tmp/test/engine/multi_store/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_multiple_stores");
+    let dbase = Database::new(&db_path).unwrap();
     let pack_path = "tmp/test/engine/multi_store/packs";
     let _ = fs::remove_dir_all(pack_path);
 
@@ -798,9 +788,8 @@ fn test_multiple_stores() -> Result<(), Error> {
 #[test]
 fn test_continue_backup() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/engine/continue/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_continue_backup");
+    let dbase = Database::new(&db_path).unwrap();
     let pack_path = "tmp/test/engine/continue/packs";
     let _ = fs::remove_dir_all(pack_path);
 

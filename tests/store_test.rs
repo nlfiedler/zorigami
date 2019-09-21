@@ -1,13 +1,15 @@
 //
 // Copyright (c) 2019 Nathan Fiedler
 //
+mod util;
+
 use dotenv::dotenv;
 use failure::Error;
 use serde_json::json;
 use std::env;
-use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
+use util::DBPath;
 use zorigami::core::*;
 use zorigami::database::*;
 use zorigami::store::*;
@@ -15,9 +17,8 @@ use zorigami::store::*;
 #[test]
 fn test_store_config() -> Result<(), Error> {
     // create a clean database for each test
-    let db_path = "tmp/test/store/config/rocksdb";
-    let _ = fs::remove_dir_all(db_path);
-    let dbase = Database::new(Path::new(db_path)).unwrap();
+    let db_path = DBPath::new("_test_store_config");
+    let dbase = Database::new(&db_path).unwrap();
 
     let config_json = json!({
         "label": "foobar",

@@ -43,15 +43,15 @@ impl Database {
     /// reuse an existing `DB` instance for the given path, if one has already
     /// been opened.
     ///
-    pub fn new(db_path: &Path) -> Result<Self, Error> {
+    pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
         // should be able to recover from a poisoned mutex without any problem
         let mut db_refs = DBASE_REFS.lock().unwrap();
-        if let Some(weak) = db_refs.get(db_path) {
+        if let Some(weak) = db_refs.get(db_path.as_ref()) {
             if let Some(arc) = weak.upgrade() {
                 return Ok(Self { db: arc });
             }
         }
-        let buf = db_path.to_path_buf();
+        let buf = db_path.as_ref().to_path_buf();
         let db = DB::open_default(db_path)?;
         let arc = Arc::new(db);
         db_refs.insert(buf, Arc::downgrade(&arc));
