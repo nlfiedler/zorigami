@@ -305,16 +305,6 @@
           "possibleTypes": null
         },
         {
-          "kind": "SCALAR",
-          "name": "Digest",
-          "description": "A SHA1 or SHA256 checksum, with algorithm prefix.",
-          "fields": null,
-          "inputFields": null,
-          "interfaces": null,
-          "enumValues": null,
-          "possibleTypes": null
-        },
-        {
           "kind": "OBJECT",
           "name": "__Field",
           "description": null,
@@ -1129,7 +1119,7 @@
               "args": [],
               "type": {
                 "kind": "SCALAR",
-                "name": "Digest",
+                "name": "Checksum",
                 "ofType": null
               },
               "isDeprecated": false,
@@ -1261,6 +1251,16 @@
           ],
           "inputFields": null,
           "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "SCALAR",
+          "name": "Checksum",
+          "description": "A SHA1 or SHA256 checksum, with algorithm prefix.",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
           "enumValues": null,
           "possibleTypes": null
         },

@@ -19,22 +19,22 @@ use std::str::FromStr;
 // Our GraphQL version of the core::Checksum type. It is tedious to implement
 // all of the juniper interfaces, and the macro requires having a `from_str`
 // where our type already has that method. This just seemed easier...
-pub struct Digest(String);
+pub struct Checksum(String);
 
 // need `where Scalar = <S>` parameterization to use this with objects
 // c.f. https://github.com/graphql-rust/juniper/issues/358 for details
-graphql_scalar!(Digest where Scalar = <S> {
+graphql_scalar!(Checksum where Scalar = <S> {
     description: "A SHA1 or SHA256 checksum, with algorithm prefix."
 
     resolve(&self) -> Value {
         Value::scalar(self.0.clone())
     }
 
-    from_input_value(v: &InputValue) -> Option<Digest> {
+    from_input_value(v: &InputValue) -> Option<Checksum> {
         v.as_scalar_value::<String>().filter(|s| {
             // make sure the input value actually looks like a digest
             s.starts_with("sha1-") || s.starts_with("sha256-")
-        }).map(|s| Digest(s.to_owned()))
+        }).map(|s| Checksum(s.to_owned()))
     }
 
     from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
@@ -42,13 +42,13 @@ graphql_scalar!(Digest where Scalar = <S> {
     }
 });
 
-impl From<core::Checksum> for Digest {
+impl From<core::Checksum> for Checksum {
     fn from(value: core::Checksum) -> Self {
-        Digest(format!("{}", &value))
+        Checksum(format!("{}", &value))
     }
 }
 
-impl Into<core::Checksum> for Digest {
+impl Into<core::Checksum> for Checksum {
     fn into(self) -> core::Checksum {
         // relying on input validation to make unwrap safe
         core::Checksum::from_str(&self.0).unwrap()
@@ -118,7 +118,7 @@ struct Tree {
 /// A single backup.
 struct Snapshot {
     /// The snapshot before this one, if any.
-    parent: Option<Digest>,
+    parent: Option<Checksum>,
     /// Time when the snapshot was first created.
     start_time: BigInt,
     /// Time when the snapshot completely finished.
@@ -126,14 +126,14 @@ struct Snapshot {
     /// Total number of files contained in this snapshot.
     file_count: BigInt,
     /// Reference to the tree containing all of the files.
-    tree: Digest,
+    tree: Checksum,
 }
 
 #[derive(GraphQLObject)]
 /// A single version of a saved file.
 struct File {
     /// Reference to the file in the database.
-    digest: Digest,
+    digest: Checksum,
     /// Byte length of this version of the file.
     length: BigInt,
 }
@@ -171,7 +171,7 @@ struct Dataset {
     /// Cron-like expression for the backup schedule.
     schedule: Option<String>,
     /// Reference to most recent snapshot.
-    latest_snapshot: Option<Digest>,
+    latest_snapshot: Option<Checksum>,
     /// Path to temporary workspace for backup process.
     workspace: String,
     /// Specified byte length of pack files.
@@ -197,7 +197,7 @@ impl Into<core::Dataset> for Dataset {
         let store = self.stores[0].clone();
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
         set.schedule = self.schedule;
-        set.latest_snapshot = self.latest_snapshot.map(Digest::into);
+        set.latest_snapshot = self.latest_snapshot.map(Checksum::into);
         set.workspace = PathBuf::from(&self.workspace);
         set.pack_size = self.pack_size.0 as u64;
         for stor in self.stores.iter().skip(1) {
@@ -209,7 +209,7 @@ impl Into<core::Dataset> for Dataset {
 
 impl From<core::Dataset> for Dataset {
     fn from(set: core::Dataset) -> Self {
-        let snapshot = set.latest_snapshot.map(Digest::from);
+        let snapshot = set.latest_snapshot.map(Checksum::from);
         Self {
             key: set.key,
             computer_id: set.computer_id,
