@@ -78,31 +78,92 @@ module DeleteStore = [%graphql
 
 module DeleteStoreMutation = ReasonApollo.CreateMutation(DeleteStore);
 
-// type of the local store options
 type local = {
   label: string,
   basepath: string,
 };
 
+type minio = {
+  label: string,
+  region: string,
+  endpoint: string,
+};
+
+type sftp = {
+  label: string,
+  remote_addr: string,
+  username: string,
+  password: option(string),
+  basepath: option(string),
+};
+
 module Decode = {
-  let local = json =>
+  let local = (json: Js.Json.t): local =>
     Json.Decode.{
       label: json |> field("label", string),
       basepath: json |> field("basepath", string),
     };
+
+  let minio = (json: Js.Json.t): minio =>
+    Json.Decode.{
+      label: json |> field("label", string),
+      region: json |> field("region", string),
+      endpoint: json |> field("endpoint", string),
+    };
+
+  let sftp = (json: Js.Json.t): sftp =>
+    Json.Decode.{
+      label: json |> field("label", string),
+      remote_addr: json |> field("remote_addr", string),
+      username: json |> field("username", string),
+      password: json |> optional(field("password", string)),
+      basepath: json |> optional(field("basepath", string)),
+    };
 };
 
 module Encode = {
-  let local = opts =>
+  let local = (opts: local) =>
     Json.Encode.(
       object_([
         ("label", string(opts.label)),
         ("basepath", string(opts.basepath)),
       ])
     );
+
+  let minio = (opts: minio) =>
+    Json.Encode.(
+      object_([
+        ("label", string(opts.label)),
+        ("region", string(opts.region)),
+        ("endpoint", string(opts.endpoint)),
+      ])
+    );
+
+  let sftp = (opts: sftp) =>
+    Json.Encode.(
+      object_([
+        ("label", string(opts.label)),
+        ("remote_addr", string(opts.remote_addr)),
+        ("username", string(opts.username)),
+        (
+          "password",
+          switch (opts.password) {
+          | Some(value) => string(value)
+          | None => null
+          },
+        ),
+        (
+          "basepath",
+          switch (opts.basepath) {
+          | Some(value) => string(value)
+          | None => null
+          },
+        ),
+      ])
+    );
 };
 
-module StoreForm = {
+module LocalForm = {
   open Formality;
 
   type field =
@@ -148,26 +209,19 @@ module StoreForm = {
   let validators = [LabelField.validator, OptionsField.validator];
 };
 
-module StoreFormHook = Formality.Make(StoreForm);
+module LocalFormHook = Formality.Make(LocalForm);
 
 let formInput =
     (
-      form: StoreFormHook.interface,
-      field: StoreForm.field,
-      updater: StoreForm.updater,
       labelText: string,
       inputId: string,
       inputType: string,
       inputValue: string,
       placeholderText: string,
-      readOnly: bool,
+      validateMsg: string,
+      onBlur,
+      onChange,
     ) => {
-  let validateMsg =
-    switch (form.result(field)) {
-    | Some(Error(message)) => message
-    | Some(Ok(Valid | NoValue))
-    | None => ""
-    };
   let formIsValid = validateMsg == "";
   let inputClass = formIsValid ? "input" : "input is-danger";
   let validationTextDiv =
@@ -182,14 +236,8 @@ let formInput =
         type_=inputType
         name=inputId
         value=inputValue
-        onBlur={_ => form.blur(field)}
-        onChange={event =>
-          form.change(
-            field,
-            updater(form.state, event->ReactEvent.Form.target##value),
-          )
-        }
-        readOnly
+        onBlur
+        onChange
         placeholder=placeholderText
       />
     </div>;
@@ -215,122 +263,105 @@ let deleteFormName = (key: string) => {
   "deleteForm_" ++ key;
 };
 
-module StoreFormRe = {
+let assetDeleteButton = (storeKey: option(string)) =>
+  switch (storeKey) {
+  | Some(key) =>
+    <p className="control">
+      <input
+        type_="submit"
+        value="Delete"
+        className="button is-danger is-outlined"
+        form={deleteFormName(key)}
+      />
+    </p>
+  | None => React.null
+  };
+
+// alias for the private form status type in Formality.Form
+type formStatus =
+  | Submitting
+  | SubmissionFailed
+  | SomethingElse;
+
+let assetSaveButton = (status: formStatus, storeKey: option(string)) =>
+  switch (status) {
+  | Submitting => <p> {React.string("Saving...")} </p>
+  | SubmissionFailed =>
+    <div className="field is-grouped">
+      <p className="control">
+        <input type_="submit" value="Save" className="button" disabled=true />
+      </p>
+      {assetDeleteButton(storeKey)}
+    </div>
+  | _ =>
+    <div className="field is-grouped">
+      <p className="control">
+        <input type_="submit" value="Save" className="button is-primary" />
+      </p>
+      {assetDeleteButton(storeKey)}
+    </div>
+  };
+
+module LocalFormRe = {
   [@react.component]
-  // if storeKey is None, form will be in edit mode w/o cancel button
-  let make = (~initial: StoreForm.state, ~onSubmit, ~storeKey=None) => {
-    let newform = Belt.Option.isNone(storeKey);
-    let (editing, setEditing) = React.useState(() => newform);
-    let form: StoreFormHook.interface =
-      StoreFormHook.useForm(~initialState=initial, ~onSubmit=(state, _form) =>
+  let make = (~initial: LocalForm.state, ~onSubmit, ~storeKey=None) => {
+    let form: LocalFormHook.interface =
+      LocalFormHook.useForm(~initialState=initial, ~onSubmit=(state, _form) =>
         onSubmit(state)
       );
-    let cancelLink =
-      newform
-        ? React.null
-        : <p className="control">
-            <a
-              href="#"
-              className="button is-text"
-              onClick={_ => {
-                setEditing(_ => false);
-                form.reset();
-              }}
-              title="Cancel">
-              {React.string("Cancel")}
-            </a>
-          </p>;
-    let assetSaveButton = () =>
-      switch (form.status) {
-      | Submitting(_) => <p> {React.string("Saving...")} </p>
-      | SubmissionFailed(_) =>
-        <div className="field is-grouped">
-          <p className="control">
-            <input
-              type_="submit"
-              value="Save"
-              className="button"
-              disabled=true
-            />
-          </p>
-          cancelLink
-        </div>
-      | _ =>
-        <div className="field is-grouped">
-          <p className="control">
-            <input type_="submit" value="Save" className="button is-primary" />
-          </p>
-          cancelLink
-        </div>
+    let validateMsg = (field: LocalForm.field) =>
+      switch (form.result(field)) {
+      | Some(Error(message)) => message
+      | Some(Ok(Valid | NoValue))
+      | None => ""
       };
-    let assetDeleteButton =
-      switch (storeKey) {
-      | Some(key) =>
-        <p className="control">
-          <input
-            type_="submit"
-            value="Delete"
-            className="button is-danger is-outlined"
-            form={deleteFormName(key)}
-          />
-        </p>
-      | None => React.null
-      };
-    let assetEditButton =
-      <div className="field is-grouped">
-        <p className="control">
-          <a
-            onClick={_ => setEditing(_ => true)}
-            href="#"
-            title="Edit"
-            className="button is-primary">
-            {React.string("Edit")}
-          </a>
-        </p>
-        assetDeleteButton
-      </div>;
     <form onSubmit={form.submit->Formality.Dom.preventDefault}>
       <div
         className="container"
         style={ReactDOMRe.Style.make(~width="auto", ~paddingRight="6em", ())}>
-        {newform
-           ? <div className="field is-horizontal" key="help_text">
-               <div className="field-label is-normal" />
-               <div className="field-body">
-                 <div className="field">
-                   {React.string(
-                      "Use the form below to add a new pack store.",
-                    )}
-                 </div>
-               </div>
-             </div>
-           : React.null}
         {formInput(
-           form,
-           Label,
-           StoreForm.LabelField.update,
-           "Label",
+           "Local Label",
            "label",
            "text",
            form.state.label,
            "My Stuff",
-           !editing,
+           validateMsg(Label),
+           _ => form.blur(Label),
+           event =>
+             form.change(
+               Label,
+               LocalForm.LabelField.update(
+                 form.state,
+                 event->ReactEvent.Form.target##value,
+               ),
+             ),
          )}
         {formInput(
-           form,
-           Options,
-           StoreForm.OptionsField.update,
-           "Path",
+           "Local Path",
            "basepath",
            "text",
            form.state.options,
            "c:\\mystuff",
-           !editing,
+           validateMsg(Options),
+           _ => form.blur(Options),
+           event =>
+             form.change(
+               Options,
+               LocalForm.OptionsField.update(
+                 form.state,
+                 event->ReactEvent.Form.target##value,
+               ),
+             ),
          )}
         <div className="field is-horizontal">
           <div className="field-label" />
           <div className="field-body">
-            {editing ? assetSaveButton() : assetEditButton}
+            {switch (form.status) {
+             | Submitting(_) => assetSaveButton(Submitting, storeKey)
+             | SubmissionFailed(_) =>
+               assetSaveButton(SubmissionFailed, storeKey)
+             | _ => assetSaveButton(SomethingElse, storeKey)
+             }}
           </div>
         </div>
       </div>
@@ -340,7 +371,7 @@ module StoreFormRe = {
 
 module NewStorePanel = {
   let submitNewStore =
-      (mutate: DefineStoreMutation.apolloMutation, values: StoreForm.state) => {
+      (mutate: DefineStoreMutation.apolloMutation, values: LocalForm.state) => {
     let options: local = {label: values.label, basepath: values.options};
     let text = Json.stringify(Encode.local(options));
     let update =
@@ -358,7 +389,7 @@ module NewStorePanel = {
     <DefineStoreMutation>
       ...{(mutate, {result}) => {
         let storeForm =
-          <StoreFormRe
+          <LocalFormRe
             initial={label: "", options: ""}
             onSubmit={submitNewStore(mutate)}
           />;
@@ -380,7 +411,7 @@ module EditStorePanel = {
       (
         mutate: UpdateStoreMutation.apolloMutation,
         key: string,
-        values: StoreForm.state,
+        values: LocalForm.state,
       ) => {
     let options: local = {label: values.label, basepath: values.options};
     let text = Json.stringify(Encode.local(options));
@@ -395,7 +426,7 @@ module EditStorePanel = {
   };
   let computeInitial = (store: t) => {
     let options = store##options |> atob |> Json.parseOrRaise |> Decode.local;
-    let initial: StoreForm.state = {
+    let initial: LocalForm.state = {
       label: options.label,
       options: options.basepath,
     };
@@ -412,14 +443,14 @@ module EditStorePanel = {
           <div> {ReasonReact.string(error##message)} </div>;
         | Data(result) =>
           let initial = computeInitial(result##updateStore);
-          <StoreFormRe
+          <LocalFormRe
             initial
             onSubmit={submitEditStore(mutate, store##key)}
             storeKey={Some(store##key)}
           />;
         | NotCalled =>
           let initial = computeInitial(store);
-          <StoreFormRe
+          <LocalFormRe
             initial
             onSubmit={submitEditStore(mutate, store##key)}
             storeKey={Some(store##key)}
@@ -492,6 +523,9 @@ module Component = {
         | Data(data) =>
           <div>
             {ReasonReact.array(buildEditPanels(data##stores))}
+            <p>
+              {React.string("Use the form below to add a new pack store.")}
+            </p>
             <NewStorePanel />
           </div>
         }
