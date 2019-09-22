@@ -1,3 +1,6 @@
+//
+// Copyright (c) 2019 Nathan Fiedler
+//
 type state = {menuActive: bool};
 type action =
   | ToggleMenu;
