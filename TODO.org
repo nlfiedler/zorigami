@@ -1,6 +1,26 @@
 * Zorigami
-** GraphQL and WebUI
-*** TODO Test the GraphQL schema and resolvers
+** kohaku local backup
+*** DONE form for defining a local store
+*** TODO form for configuring dataset
+**** TODO on home page, indicate if there are no stores defined, link to stores page
+***** i.e. only show the datasets forms when there are stores defined
+**** TODO add forms for adding/editing datasets to the home page
+***** use the same basic logic as the stores page
+**** TODO select a store for the dataset (one for now)
+**** TODO set the backup schedule with simple rules (e.g. "daily")
+***** generate cron-like schedules based on checkboxes for datasets
+****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
+*** TODO use this to replace =replicaz= for local backup
+** kohaku remote (SFTP) backup
+*** TODO form for defining an SFTP store
+**** TODO new store form needs to have a "kind" selector
+**** TODO selecting different kind will rebuild new store form accordingly
+**** TODO make a different form and validation module for each type of store
+*** TODO support SFTP with private key authentication
+*** TODO allow private key that is locked with a passphrase
+*** TODO use this to replace =replicaz= for remote backup
+** Loose GraphQL tasks
+*** TODO test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
 **** TODO digests that lack the proper algorithm prefix
 **** TODO querying for things when there is nothing in the database
@@ -13,69 +33,57 @@
 **** DONE mutating datasets
 **** DONE querying stores
 **** DONE mutating stores
-*** TODO How to document arguments to mutations in GraphQL?
-*** TODO Need a way to handle error in getting Database ref in graphql handler
-*** TODO Write a ReasonML frontend
-**** DONE Need GraphQL mutations to delete stores and datasets
-**** DONE Add a delete button to the store edit form
-***** probably use a hidden form embedded in the store form
-***** hidden form submits to a GraphQL mutation to remove the given store
-***** have the ~is-danger~ delete button submit on that hidden form
-**** TODO Support defining different kinds of stores
-***** DONE will need validators for each kind of store
-****** not all fields with the same name will validate the same way for different kinds of stores
-****** some fields will be required and some will not, even if they have the same name
-***** DONE lack of exposed types in Formality makes a generic form difficult
-***** TODO remove the edit/cancel button, form is always in edit mode with save button
-***** TODO new store form needs to have a "kind" selector
-***** TODO selecting different kind will rebuild new store form accordingly
-***** TODO need to parameterize new store form somehow to avoid code duplication
-***** TODO make a different form and validation module for each type of store
-***** TODO need to encode the options into a single "options" field for GraphQL
-***** TODO delete button should be far away from the other button(s)
-***** TODO delete button should require two clicks, with "are you sure?"
-**** TODO Manage stores, datasets, and configuration
-***** TODO add forms for adding/editing datasets to the home page
-****** use the same basic logic as the stores page
-***** TODO generate cron-like schedules based on checkboxes for datasets
-****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
+*** TODO find out how to document arguments to mutations
+*** TODO handle errors in getting Database ref in graphql handler
+** Loose WebUI tasks
+*** TODO improve the page for defining stores
+**** TODO remove the edit/cancel button, form is always in edit mode with save button
+**** TODO delete button should be far away from the other button(s)
+**** TODO delete button should require two clicks, with "are you sure?"
 **** TODO Display help text on stores page when there are no stores defined
 **** TODO Display help text on home page when there are no datasets defined
-**** TODO Decide what will be stored in reductive
-***** dataset being viewed
-***** snapshot being viewed
-***** full path within snapshot being viewed
-*** TODO Loose ends from Rust translation
-**** TODO Set up configuration for dev and testing
-***** TODO replace hard-coded db_path in integration test
-** kohaku Server Backup
-*** DONE Get encryption password from an environment variable
-*** TODO Support SFTP with private key authentication
-**** TODO allow private key locked with passphrase
-*** TODO Use this to replace =replicaz= by persisting to USB drive
-*** TODO Use this to replace =replicaz= by persisting over SFTP
+**** TODO Scroll to form when edit button is clicked
+***** with a bunch of stores on the screen, click ~Edit~ for last one
+***** page refreshes and scrolls to the top
+**** TODO Autofocus input field on edit
+***** this is tricky with React, =autofocus= is not really honored
+***** can do it if we turn the input element into a full-fledged component
+***** and use the =useRef()= hook to set the focus on the HTML element
+***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Robustness and Recovery
-*** TODO Detect files changing between snapshot and pack building time
+*** TODO detect files changing between snapshot and pack building time
 **** use the =changed= record property to track this
-*** TODO Detect file deletion during backup, mark file record as skipped
+*** TODO detect file deletion during backup, mark file record as skipped
 **** Basically handle the error and mark the record as "failed"
-*** TODO Verify checksum of downloaded packs during restore
-*** TODO Consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
+*** TODO verify checksum of downloaded packs during restore
+*** TODO consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
 **** it appears to support Erlang-style supervisor behavior
-*** TODO Recover from a backup thread that panicked
+*** TODO recover from a backup thread that panicked
 **** For each spawned backup thread, spawn a supervisor thread
 **** Supervisor thread joins the backup thread
 **** If the =Result= from =JoinHandle.join()= is =Err=, then restart
 **** see also example on docs for =std::thread::panicking()=
 
-*** TODO How to recover from the main supervisor thread panicking?
+*** TODO how to recover from the main supervisor thread panicking?
 **** Perhaps rely on cron, launchd, etc to keep things running
-*** TODO Handle termination signals to exit even if backup is running
+*** TODO handle termination signals to exit even if backup is running
 **** leave the cleanup process for next time
-*** TODO Maybe use thread pools and futures in supervisor
+*** TODO maybe use thread pools and futures in supervisor
 **** futures would help with reporting errors back to the main thread
+** Google Backup
+*** TODO support excluding certain file patterns from backup
+*** TODO add store that supports Google Cloud Storage
+**** Check for bucket name collisions and retry in pack store
+**** https://cloud.google.com/storage/docs/best-practices
+*** TODO form for defining a Google Cloud Storage store
+*** TODO store database in a bucket named after the "computer UUID"
+**** pack file should be a ULID so that the most recent entry is sorted last
+*** TODO support scheduling upload times, like akashita does
+**** Define a set of hours each day when uploads should occur
+**** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
+*** TODO use this to replace =akashita= for online backups
 ** More Functionality
-*** TODO Event dispatching for the web and desktop
+*** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store
 ***** for backup and restore functions
@@ -84,25 +92,12 @@
 **** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
-*** TODO Support excluding certain file patterns from backup
-*** TODO Exclude the database files from the dataset(s)
-*** TODO Consider how datasets can be modified after creation
+*** TODO exclude the database files from the dataset(s)
+*** TODO allow assigning multiple stores to a given dataset
+*** TODO consider how datasets can be modified after creation
 **** should their stores be allowed to change?
 **** should their basepath be allowed to change?
 **** cannot change stores assigned to dataset once there are snapshots
-*** TODO Enable configuring various overrides in a dataset
-**** upload schedule
-**** file exclusions
-** Google Backup
-*** TODO Store database in a bucket named after the "computer UUID"
-**** pack file should be a ULID so that the most recent entry is sorted last
-*** TODO Support scheduling upload times, like akashita does
-**** Define a set of hours each day when uploads should occur
-**** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
-*** TODO Store pack files in Google Cloud Storage
-**** Check for bucket name collisions and retry in pack store
-**** https://cloud.google.com/storage/docs/best-practices
-*** TODO Use this to replace =akashita= for online backups
 ** Architecture Review
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
@@ -117,16 +112,6 @@
 *** TODO Ensure termination signals are handled even during a backup
 *** TODO Use =launchd= to manage the process, have it start automatically
 *** TODO Use this to replace Time Machine (store on server using SFTP)
-** Front-end improvements
-*** Stores page
-**** TODO Scroll to form when edit button is clicked
-***** with a bunch of stores on the screen, click ~Edit~ for last one
-***** page refreshes and scrolls to the top
-**** TODO Autofocus input field on edit
-***** this is tricky with React, =autofocus= is not really honored
-***** can do it if we turn the input element into a full-fledged component
-***** and use the =useRef()= hook to set the focus on the HTML element
-***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Full Restore
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
