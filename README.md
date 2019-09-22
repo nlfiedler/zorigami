@@ -58,8 +58,8 @@ $ npx send-introspection-query http://localhost:8080/graphql
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the
-application (e.g. SFTP). Change to the `test/docker` directory and start the
-SFTP server via `docker-compose up -d` (requires Docker Compose).
+application (e.g. SFTP). From the base directory, start the containers using
+`docker-compose up -d` (requires Docker Compose).
 
 ### dotenv
 
@@ -72,7 +72,7 @@ of certain environment variables, which is easily accomplished using dotenv.
 ### Visual Studio Code and Reason Language Server
 
 When adding new ReasonML dependencies to the project, it may be necessary to
-restart the Reason Language Server. Use the VS Code command palatte to find
+restart the Reason Language Server. Use the VS Code command palette to find
 **Restart Reason Language Server** and select it -- now the references to the
 new code should be resolved correctly.
 
