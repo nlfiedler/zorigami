@@ -2,14 +2,14 @@
 ** kohaku local backup
 *** DONE form for defining a local store
 *** TODO form for configuring dataset
-**** TODO on home page, indicate if there are no stores defined, link to stores page
-***** i.e. only show the datasets forms when there are stores defined
+**** DONE on home page, indicate if there are no stores defined, link to stores page
 **** TODO add forms for adding/editing datasets to the home page
 ***** use the same basic logic as the stores page
-**** TODO select a store for the dataset (one for now)
+**** TODO select a single store for the dataset (just one for now)
 **** TODO set the backup schedule with simple rules (e.g. "daily")
 ***** generate cron-like schedules based on checkboxes for datasets
 ****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
+**** TODO add a link to navbar to datasets page
 *** TODO use this to replace =replicaz= for local backup
 ** kohaku remote (SFTP) backup
 *** TODO form for defining an SFTP store
