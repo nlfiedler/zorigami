@@ -13,7 +13,7 @@ use juniper::{
     graphql_object, graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
     GraphQLObject, ParseScalarResult, ParseScalarValue, RootNode, Value,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 
 // Our GraphQL version of the core::Checksum type. It is tedious to implement
@@ -162,7 +162,7 @@ impl From<core::Configuration> for Configuration {
 #[derive(GraphQLObject)]
 /// The directory structure which will be saved.
 struct Dataset {
-    /// Opaque identifier for this dataset.
+    /// Opaque identifier for this dataset (w/o db prefix).
     key: String,
     /// Unique computer identifier.
     computer_id: String,
@@ -173,7 +173,7 @@ struct Dataset {
     /// Reference to most recent snapshot.
     latest_snapshot: Option<Checksum>,
     /// Path to temporary workspace for backup process.
-    workspace: String,
+    // workspace: String,
     /// Specified byte length of pack files.
     pack_size: BigInt,
     /// Identifiers of stores used for saving packs.
@@ -185,7 +185,7 @@ impl Dataset {
     fn copy_input(mut self, set: InputDataset) -> Self {
         self.basepath = set.basepath;
         self.schedule = set.schedule;
-        self.workspace = set.workspace;
+        // self.workspace = set.workspace;
         self.pack_size = set.pack_size;
         self.stores = set.stores;
         self
@@ -198,8 +198,11 @@ impl Into<core::Dataset> for Dataset {
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
         set.schedule = self.schedule;
         set.latest_snapshot = self.latest_snapshot.map(Checksum::into);
-        set.workspace = PathBuf::from(&self.workspace);
-        set.pack_size = self.pack_size.0 as u64;
+        // set.workspace = PathBuf::from(&self.workspace);
+        let new_pack_size = self.pack_size.0 as u64;
+        if new_pack_size > 0 {
+            set.pack_size = new_pack_size;
+        }
         for stor in self.stores.iter().skip(1) {
             set = set.add_store(&stor);
         }
@@ -216,7 +219,7 @@ impl From<core::Dataset> for Dataset {
             basepath: set.basepath.to_str().unwrap().to_owned(),
             schedule: set.schedule,
             latest_snapshot: snapshot,
-            workspace: set.workspace.to_str().unwrap().to_owned(),
+            // workspace: set.workspace.to_str().unwrap().to_owned(),
             pack_size: BigInt(set.pack_size as i64),
             stores: set.stores,
         }
@@ -232,7 +235,7 @@ pub struct InputDataset {
     /// Cron-like expression for the backup schedule.
     pub schedule: Option<String>,
     /// Path to temporary workspace for backup process.
-    pub workspace: String,
+    // pub workspace: String,
     /// Desired byte length of pack files.
     pub pack_size: BigInt,
     /// Identifiers of stores used for saving packs.

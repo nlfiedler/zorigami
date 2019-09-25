@@ -211,6 +211,37 @@ module LocalForm = {
 
 module LocalFormHook = Formality.Make(LocalForm);
 
+// Read-only form input for displaying a value.
+let formDisplay =
+    (
+      labelText: string,
+      inputId: string,
+      inputType: string,
+      inputValue: string,
+    ) => {
+  let inputField =
+    <div className="control" key="the_control">
+      <input
+        id=inputId
+        className="input"
+        type_=inputType
+        name=inputId
+        value=inputValue
+        readOnly=true
+      />
+    </div>;
+  <div className="field is-horizontal" key=inputId>
+    <div className="field-label is-normal">
+      <label htmlFor=inputId className="label">
+        {ReasonReact.string(labelText)}
+      </label>
+    </div>
+    <div className="field-body">
+      <div className="field"> inputField </div>
+    </div>
+  </div>;
+};
+
 let formInput =
     (
       labelText: string,
@@ -353,6 +384,10 @@ module LocalFormRe = {
                ),
              ),
          )}
+        {switch (storeKey) {
+         | Some(key) => formDisplay("Store Key", "storekey", "text", key)
+         | None => React.null
+         }}
         <div className="field is-horizontal">
           <div className="field-label" />
           <div className="field-body">
@@ -482,9 +517,7 @@ module DeleteStorePanel = {
         | Error(error) =>
           Js.log(error);
           <div> {ReasonReact.string(error##message)} </div>;
-        | Data(result) =>
-          Js.log2("deleted store:", result##deleteStore##key);
-          React.null;
+        | Data(_result) => React.null
         | NotCalled =>
           <form
             onSubmit={_ => submitDeleteStore(mutate, store##key)}

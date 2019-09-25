@@ -1,16 +1,31 @@
 * Zorigami
 ** kohaku local backup
 *** DONE form for defining a local store
-*** TODO form for configuring dataset
+*** DONE form for configuring dataset
 **** DONE on home page, indicate if there are no stores defined, link to stores page
-**** TODO add forms for adding/editing datasets to the home page
+**** DONE add forms for adding/editing datasets to the home page
 ***** use the same basic logic as the stores page
-**** TODO select a single store for the dataset (just one for now)
-**** TODO set the backup schedule with simple rules (e.g. "daily")
+***** DONE validate the schedule form inputs
+***** DONE allow schedule to be blank with default
+***** DONE allow packsize to be blank with default
+***** DONE validate the pack size form inputs
+***** DONE convert the pack_size value from MB to bytes on new/update
+***** DONE pack size input is not populated in edit form
+**** DONE select a single store for the dataset (just one for now)
+**** DONE set the backup schedule with simple rules (e.g. "daily")
 ***** generate cron-like schedules based on checkboxes for datasets
 ****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
-**** TODO add a link to navbar to datasets page
+**** DONE dataset delete is failing
+*** TODO currently when running locally the backup thread panics
+**** add more logging in the error cases
+*** TODO ensure backup progress is logged to the console
+*** TODO consider again if schema should strip store key prefix
 *** TODO use this to replace =replicaz= for local backup
+**** deploy in the same manner as tanuki (one instance, store db on host)
+** restore file via webui
+*** TODO browse snapshots via webui
+*** TODO browse directory tree via webui
+*** TODO restore a file to local disk via webui
 ** kohaku remote (SFTP) backup
 *** TODO form for defining an SFTP store
 **** TODO new store form needs to have a "kind" selector
@@ -36,7 +51,16 @@
 *** TODO find out how to document arguments to mutations
 *** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
+*** TODO improve the page for defining datasets
+**** TODO store selection should be easier for the user
+***** it expects a store key, but user cannot see that value
+**** TODO schedule input should be easier to use
+***** user should not have to type ~@daily~ literally
+**** TODO disable Save button until form is valid
+**** TODO store input validator should check stores actually exist
+**** TODO pack size should have minimum and maximum values
 *** TODO improve the page for defining stores
+**** TODO disable Save button until form is valid
 **** TODO remove the edit/cancel button, form is always in edit mode with save button
 **** TODO delete button should be far away from the other button(s)
 **** TODO delete button should require two clicks, with "are you sure?"
@@ -51,6 +75,8 @@
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Robustness and Recovery
+*** TODO store database in a bucket named after the "computer UUID"
+**** pack file should be a ULID so that the most recent entry is sorted last
 *** TODO detect files changing between snapshot and pack building time
 **** use the =changed= record property to track this
 *** TODO detect file deletion during backup, mark file record as skipped
@@ -76,8 +102,6 @@
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO form for defining a Google Cloud Storage store
-*** TODO store database in a bucket named after the "computer UUID"
-**** pack file should be a ULID so that the most recent entry is sorted last
 *** TODO support scheduling upload times, like akashita does
 **** Define a set of hours each day when uploads should occur
 **** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations

@@ -126,7 +126,7 @@ impl Database {
         let mut results: Vec<Dataset> = Vec::new();
         for (key, value) in datasets {
             let mut serde_result: Dataset = serde_cbor::from_slice(&value)?;
-            serde_result.key = key.to_owned();
+            serde_result.key = key[8..].to_string();
             results.push(serde_result);
         }
         Ok(results)

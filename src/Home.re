@@ -16,9 +16,7 @@ module Component = {
             <div> {ReasonReact.string(error##message)} </div>;
           | Data(data) =>
             if (Belt.Array.length(data##stores) > 0) {
-              <div className="container">
-                <p> {ReasonReact.string("TODO: show dataset forms here")} </p>
-              </div>;
+              <div className="container"> <Datasets.Component /> </div>;
             } else {
               <div className="notification is-warning">
                 <p>

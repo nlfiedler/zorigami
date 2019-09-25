@@ -1126,24 +1126,8 @@
               "deprecationReason": null
             },
             {
-              "name": "workspace",
-              "description": "Path to temporary workspace for backup process.",
-              "args": [],
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
-              },
-              "isDeprecated": false,
-              "deprecationReason": null
-            },
-            {
               "name": "packSize",
-              "description": "Specified byte length of pack files.",
+              "description": "Path to temporary workspace for backup process.\nSpecified byte length of pack files.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1352,22 +1336,8 @@
               "defaultValue": null
             },
             {
-              "name": "workspace",
-              "description": "Path to temporary workspace for backup process.",
-              "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
-              },
-              "defaultValue": null
-            },
-            {
               "name": "packSize",
-              "description": "Desired byte length of pack files.",
+              "description": "Path to temporary workspace for backup process.\nDesired byte length of pack files.",
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
