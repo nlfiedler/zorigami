@@ -16,12 +16,13 @@
 ***** generate cron-like schedules based on checkboxes for datasets
 ****** e.g. "daily" produces =@daily=, "hourly" produces =@hourly=
 **** DONE dataset delete is failing
-*** TODO currently when running locally the backup thread panics
-**** add more logging in the error cases
-*** TODO ensure backup progress is logged to the console
-*** TODO consider again if schema should strip store key prefix
+*** DONE currently when running locally the backup thread panics
+**** DONE remove all of the =unwrap()= calls, replace with proper error handling
+**** DONE add more logging in the error cases
+*** DONE ensure backup progress is logged to the console
 *** TODO use this to replace =replicaz= for local backup
 **** deploy in the same manner as tanuki (one instance, store db on host)
+**** use docker registry and build the image locally
 ** restore file via webui
 *** TODO browse snapshots via webui
 *** TODO browse directory tree via webui

@@ -898,6 +898,12 @@ impl Dataset {
     }
 }
 
+impl fmt::Display for Dataset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "dataset-{}", self.key)
+    }
+}
+
 /// Contains the configuration of the application, pertaining to all datasets.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Configuration {

@@ -8,14 +8,14 @@
 //! This module assumes that `std::time::SystemTime` is UTC, which seems to be
 //! the case, but is not mentioned in the documentation.
 
-use super::core::Snapshot;
+use super::core::{Dataset, Snapshot};
 use super::database::Database;
 use super::engine;
 use super::state;
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
-use log::info;
+use log::{error, info};
 use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
@@ -31,44 +31,57 @@ use std::time::Duration;
 pub fn start(db_path: PathBuf) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
     thread::spawn(move || {
-        // unexpected errors (e.g. database) here will panic the thread;
-        // i.e. database needs to be working, snapshots need to exist, etc
-        // let it crash and the user will debug whatever is going on
         loop {
-            // look for datasets that should be running
-            let datasets = dbase.get_all_datasets().unwrap();
-            for set in datasets {
-                // only consider those datasets that have a schedule, otherwise
-                // the user is expected to manually start the backup process
-                if let Some(schedule) = set.schedule.as_ref() {
-                    let mut maybe_run = if let Some(checksum) = set.latest_snapshot.as_ref() {
-                        let snapshot = dbase.get_snapshot(checksum).unwrap().unwrap();
-                        should_run(schedule, &snapshot).unwrap()
-                    } else {
-                        true
-                    };
-                    info!("candidate dataset {}", &set.key);
-                    if maybe_run {
-                        // check if backup is already running
-                        let redux = state::get_state();
-                        if let Some(backup) = redux.backups(&set.key) {
-                            if backup.end_time().is_none() {
-                                maybe_run = false;
-                                info!("dataset {} backup in progress", &set.key);
-                            }
+            // look for datasets that should be running, spawning a thread to
+            // run the backup for any waiting datasets
+            match dbase.get_all_datasets() {
+                Ok(datasets) => {
+                    for set in datasets {
+                        if let Err(err) = consider_dataset(&db_path, &dbase, &set) {
+                            error!("failed to process dataset {}: {}", &set, err)
                         }
                     }
-                    if maybe_run {
-                        // passed all the checks, we can start this dataset
-                        run_dataset(db_path.clone(), set.key).unwrap();
-                    }
                 }
+                Err(err) => error!("failed to retrieve datasets: {}", err),
             }
-            // * spawn a thread to run the backup for that dataset
             // sleep for 5 minutes before trying again
             thread::sleep(Duration::from_millis(300_000));
         }
     });
+    Ok(())
+}
+
+///
+/// Check if the given dataset should be processed now.
+///
+fn consider_dataset(db_path: &PathBuf, dbase: &Database, set: &Dataset) -> Result<(), Error> {
+    // only consider those datasets that have a schedule, otherwise
+    // the user is expected to manually start the backup process
+    if let Some(schedule) = set.schedule.as_ref() {
+        let mut maybe_run = if let Some(checksum) = set.latest_snapshot.as_ref() {
+            let snapshot = dbase
+                .get_snapshot(checksum)?
+                .ok_or_else(|| err_msg(format!("snapshot {} missing from database", &checksum)))?;
+            should_run(schedule, &snapshot)?
+        } else {
+            true
+        };
+        info!("candidate dataset {}", &set.key);
+        if maybe_run {
+            // check if backup is already running
+            let redux = state::get_state();
+            if let Some(backup) = redux.backups(&set.key) {
+                if backup.end_time().is_none() {
+                    maybe_run = false;
+                    info!("dataset {} backup in progress", &set.key);
+                }
+            }
+        }
+        if maybe_run {
+            // passed all the checks, we can start this dataset
+            run_dataset(db_path.clone(), set.key.clone())?;
+        }
+    }
     Ok(())
 }
 
@@ -78,43 +91,55 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
 ///
 #[allow(dead_code)]
 fn should_run(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
-    if snapshot.end_time.is_some() {
-        let end_time = DateTime::<Utc>::from(snapshot.end_time.unwrap());
-        let result = Schedule::from_str(schedule);
-        if result.is_err() {
+    if let Some(et) = snapshot.end_time {
+        let end_time = DateTime::<Utc>::from(et);
+        // cannot use ? because the error type is not thread-safe
+        if let Ok(sched) = Schedule::from_str(schedule) {
+            let mut events = sched.after(&end_time);
+            let utc_now = Utc::now();
+            let next = events
+                .next()
+                .ok_or_else(|| err_msg("scheduled event had no 'next'?"))?;
+            return Ok(next.cmp(&utc_now) == Ordering::Less);
+        } else {
             return Err(err_msg("schedule expression could not be parsed"));
         }
-        let sched = result.unwrap();
-        let mut events = sched.after(&end_time);
-        let utc_now = Utc::now();
-        return Ok(events.next().unwrap().cmp(&utc_now) == Ordering::Less);
     }
     Ok(false)
 }
 
 ///
 /// Run the backup procedure for the named dataset. Takes the passphrase from
-/// the environment. Any errors occurring within the spawned thread will result
-/// in a panic.
+/// the environment.
 ///
 fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
     let passphrase = env::var("PASSPHRASE").unwrap_or_else(|_| "keyboard cat".to_owned());
     thread::spawn(move || {
         info!("dataset {} to be backed up", &set_key);
-        let mut dataset = dbase.get_dataset(&set_key).unwrap().unwrap();
-        let _ = engine::perform_backup(&mut dataset, &dbase, &passphrase).unwrap();
-        // the perform_backup() has done everything, we can quietly die now
-        info!("dataset {} backup complete", &set_key);
+        match dbase.get_dataset(&set_key) {
+            Ok(Some(mut dataset)) => {
+                match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
+                    Ok(Some(checksum)) => {
+                        info!("created new snapshot {}", &checksum);
+                        info!("dataset {} backup complete", &set_key);
+                    }
+                    Ok(None) => info!("no new snapshot required"),
+                    Err(err) => error!("could not perform backup: {}", err),
+                }
+            }
+            Ok(None) => error!("dataset {} missing from database", &set_key),
+            Err(err) => error!("could not retrieve dataset {}: {}", &set_key, err),
+        }
     });
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
     use super::*;
     use crate::core::*;
+    use std::time::SystemTime;
 
     #[test]
     fn test_should_run_hourly() {
