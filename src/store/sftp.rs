@@ -86,29 +86,17 @@ impl SftpStore {
     /// Connect to the SFTP server using an SSH connection. The caller must
     /// instantiate the Sftp instance using the Session in connection.
     ///
-    fn connect(&self) -> Result<Connection, Error> {
+    fn connect(&self) -> Result<Session, Error> {
         let tcp = TcpStream::connect(&self.config.remote_addr)?;
         let mut sess = Session::new().unwrap();
-        sess.handshake(&tcp)?;
+        sess.set_tcp_stream(tcp);
+        sess.handshake()?;
         sess.userauth_password(
             &self.config.username,
             self.config.password.as_ref().unwrap(),
         )?;
-        Ok(Connection {
-            _stream: tcp,
-            session: sess,
-        })
+        Ok(sess)
     }
-}
-
-///
-/// Holds the TCP stream and SFTP session in one place because the stream is
-/// merely referenced and may be dropped prematurely (see the ssh2 docs). When
-/// the connection is dropped, so will the session and stream.
-///
-struct Connection {
-    _stream: TcpStream,
-    session: Session,
 }
 
 impl super::Store for SftpStore {
@@ -138,8 +126,8 @@ impl super::Store for SftpStore {
         bucket: &str,
         object: &str,
     ) -> Result<PackLocation, Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         let mut path: PathBuf = match &self.config.basepath {
             Some(bp) => [bp, bucket].iter().collect(),
             None => PathBuf::from(bucket),
@@ -156,8 +144,8 @@ impl super::Store for SftpStore {
     }
 
     fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         let object_path: PathBuf = match &self.config.basepath {
             Some(bp) => [bp, &location.bucket, &location.object].iter().collect(),
             None => [&location.bucket, &location.object].iter().collect(),
@@ -169,8 +157,8 @@ impl super::Store for SftpStore {
     }
 
     fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         // Default the directory to something, it cannot be blank or ~ as that
         // results in a "no such file" error. Regardless, it is discarded when
         // we produce the results so it matters not.
@@ -192,8 +180,8 @@ impl super::Store for SftpStore {
     }
 
     fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         let bucket_path: PathBuf = match &self.config.basepath {
             Some(bp) => [bp, bucket].iter().collect(),
             None => PathBuf::from(bucket),
@@ -212,8 +200,8 @@ impl super::Store for SftpStore {
     }
 
     fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         let object_path: PathBuf = match &self.config.basepath {
             Some(bp) => [bp, bucket, object].iter().collect(),
             None => [bucket, object].iter().collect(),
@@ -223,8 +211,8 @@ impl super::Store for SftpStore {
     }
 
     fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let conn = self.connect()?;
-        let sftp = conn.session.sftp()?;
+        let sess = self.connect()?;
+        let sftp = sess.sftp()?;
         let bucket_path: PathBuf = match &self.config.basepath {
             Some(bp) => [bp, bucket].iter().collect(),
             None => PathBuf::from(bucket),
