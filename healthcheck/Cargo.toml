@@ -1,0 +1,11 @@
+[package]
+name = "healthcheck"
+version = "0.1.0"
+authors = ["Tobi Fuhrimann <tobias.fuhrimann@gmail.com>"]
+edition = "2018"
+description = "Make an HTTP request and exit non-zero if an error occurs."
+homepage = "https://github.com/mastertinner/healthcheck"
+license = "Apache-2.0"
+
+[dependencies]
+hyper = "0.12"

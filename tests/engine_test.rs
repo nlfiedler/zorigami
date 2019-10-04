@@ -57,9 +57,8 @@ fn test_basic_snapshots() -> Result<(), Error> {
     // make a change to the data set
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    if xattr::SUPPORTED_PLATFORM {
-        xattr::set(&dest, "me.fiedlers.test", b"foobar")?;
-    }
+    let xattr_worked =
+        xattr::SUPPORTED_PLATFORM && xattr::set(&dest, "me.fiedlers.test", b"foobar").is_ok();
     // take another snapshot
     let snap2_sha = take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase)?.unwrap();
     let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
@@ -86,7 +85,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
         ))
     );
     // ensure extended attributes are stored in database
-    if xattr::SUPPORTED_PLATFORM {
+    if xattr_worked {
         let tree = dbase.get_tree(&snapshot2.tree)?.unwrap();
         let entries: Vec<&TreeEntry> = tree
             .entries

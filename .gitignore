@@ -1,4 +1,6 @@
+.vagrant
 node_modules
+ssh_config
 
 # Build artifacts
 Cargo.lock

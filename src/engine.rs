@@ -12,6 +12,7 @@ use super::state::{self, Action};
 use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
+use log::{debug, trace};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,31 +31,37 @@ pub fn perform_backup(
     dbase: &Database,
     passphrase: &str,
 ) -> Result<Option<core::Checksum>, Error> {
+    debug!("performing backup for {}", dataset);
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
     // that the previous backup did not complete successfully.
     let latest_snap_ref = dataset.latest_snapshot.as_ref();
-    if latest_snap_ref.is_some() {
-        let snapshot = dbase.get_snapshot(latest_snap_ref.unwrap())?.unwrap();
-        if snapshot.end_time.is_none() {
-            // continue from the previous incomplete backup
-            let parent_sha1 = snapshot.parent;
-            let current_sha1 = latest_snap_ref.unwrap().to_owned();
-            return continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1);
+    if let Some(latest) = latest_snap_ref {
+        if let Some(snapshot) = dbase.get_snapshot(latest)? {
+            if snapshot.end_time.is_none() {
+                // continue from the previous incomplete backup
+                let parent_sha1 = snapshot.parent;
+                let current_sha1 = latest.to_owned();
+                debug!("continuing previous backup {}", &current_sha1);
+                return continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1);
+            }
         }
     }
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
+    debug!("taking snapshot of {:?}", &dataset.basepath);
     let snap_opt = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
-    if snap_opt.is_none() {
-        return Ok(None);
+    match snap_opt {
+        None => Ok(None),
+        Some(current_sha1) => {
+            let parent_sha1 = dataset.latest_snapshot.take();
+            dataset.latest_snapshot = Some(current_sha1.clone());
+            dbase.put_dataset(&dataset)?;
+            debug!("starting new backup {}", &current_sha1);
+            continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1)
+        }
     }
-    let current_sha1 = snap_opt.unwrap();
-    let parent_sha1 = dataset.latest_snapshot.take();
-    dataset.latest_snapshot = Some(current_sha1.clone());
-    dbase.put_dataset(&dataset)?;
-    continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1)
 }
 
 ///
@@ -132,21 +139,20 @@ impl<'a> BackupMaster<'a> {
     /// Handle a single changed file, adding it to the pack, and possibly
     /// uploading one or more pack files as needed.
     fn handle_file(&mut self, changed: Result<ChangedFile, Error>) -> Result<(), Error> {
-        if changed.is_ok() {
-            let entry = changed.unwrap();
-            // ignore files which already have records
-            let filerec = self.dbase.get_file(&entry.digest)?;
-            if filerec.is_none() {
-                self.builder.add_file(&entry.path, entry.digest.clone())?;
-                // loop until pack builder is below desired size
-                // (adding a very large file may require multiple packs)
-                while self.builder.is_full() {
-                    self.send_one_pack()?;
+        match changed {
+            Ok(entry) => {
+                // ignore files which already have records
+                if self.dbase.get_file(&entry.digest)?.is_none() {
+                    self.builder.add_file(&entry.path, entry.digest.clone())?;
+                    // loop until pack builder is below desired size
+                    // (adding a very large file may require multiple packs)
+                    while self.builder.is_full() {
+                        self.send_one_pack()?;
+                    }
                 }
+                Ok(())
             }
-            Ok(())
-        } else {
-            Err(changed.unwrap_err())
+            Err(err) => Err(err),
         }
     }
 
@@ -233,7 +239,7 @@ pub fn take_snapshot(
 pub fn restore_file(
     dbase: &Database,
     dataset: &core::Dataset,
-    passphrase: &str,
+    _passphrase: &str,
     checksum: core::Checksum,
     outfile: &Path,
 ) -> Result<(), Error> {
@@ -267,10 +273,10 @@ pub fn restore_file(
                 .tempfile_in(&dataset.workspace)?;
             store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
             // extract chunks from pack (temporarily use the output file path)
-            core::decrypt_file(passphrase, packfile.path(), outfile)?;
+            // core::decrypt_file(passphrase, packfile.path(), outfile)?;
+            let chunk_names = core::unpack_chunks(packfile.path(), &dataset.workspace)?;
             fs::remove_file(packfile.path())?;
-            let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
-            fs::remove_file(outfile)?;
+            // fs::remove_file(outfile)?;
             // remove unrelated chunks to conserve space
             for cname in chunk_names {
                 if !desired_chunks.contains(&cname) {
@@ -644,8 +650,10 @@ fn read_link(path: &Path) -> Result<String, Error> {
 fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
     let mut entries: Vec<core::TreeEntry> = Vec::new();
     let mut file_count = 0;
+    trace!("scanning directory {:?}", basepath);
     for entry in fs::read_dir(basepath)? {
         let entry = entry?;
+        trace!("scanning entry {:?}", &entry);
         // DirEntry.metadata() does not follow symlinks
         let file_type = entry.metadata()?.file_type();
         let path = entry.path();
@@ -687,18 +695,23 @@ fn process_path(
     let mut entry = core::TreeEntry::new(fullpath, reference)?;
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
+    trace!("processed path entry {:?}", &entry);
     if xattr::SUPPORTED_PLATFORM {
-        let xattrs = xattr::list(fullpath)?;
-        for name in xattrs {
-            let nm = name
-                .to_str()
-                .ok_or_else(|| err_msg(format!("invalid UTF-8 in filename: {:?}", fullpath)))?;
-            let value = xattr::get(fullpath, &name)?;
-            if value.is_some() {
-                let digest = core::checksum_data_sha1(value.as_ref().unwrap());
-                dbase.insert_xattr(&digest, value.as_ref().unwrap())?;
-                entry.xattrs.insert(nm.to_owned(), digest);
+        // The "supported" flag is not all that helpful, as it will be true even
+        // for platforms where xattr operations will result in an error.
+        if let Ok(xattrs) = xattr::list(fullpath) {
+            for name in xattrs {
+                let nm = name
+                    .to_str()
+                    .ok_or_else(|| err_msg(format!("invalid UTF-8 in filename: {:?}", fullpath)))?;
+                let value = xattr::get(fullpath, &name)?;
+                if value.is_some() {
+                    let digest = core::checksum_data_sha1(value.as_ref().unwrap());
+                    dbase.insert_xattr(&digest, value.as_ref().unwrap())?;
+                    entry.xattrs.insert(nm.to_owned(), digest);
+                }
             }
+            trace!("processed path with xattrs {:?}", &entry);
         }
     }
     Ok(entry)
@@ -885,17 +898,25 @@ impl Pack {
 
     /// Write the chunks in this pack to the specified path, encrypting using
     /// OpenPGP with the given passphrase.
-    pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
+    pub fn build_pack(&mut self, outfile: &Path, _passphrase: &str) -> Result<(), Error> {
         // sort the chunks by digest to produce identical results
         self.chunks
             .sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
         let digest = core::pack_chunks(&self.chunks, outfile)?;
-        let mut owtfile = outfile.to_path_buf();
-        owtfile.set_extension(".pgp");
-        core::encrypt_file(passphrase, outfile, &owtfile)?;
-        fs::rename(owtfile, outfile)?;
         self.digest = Some(digest);
         Ok(())
+        // XXX: encryption is not working when running in docker
+        // let mut cipher = outfile.to_path_buf();
+        // cipher.set_extension(".pgp");
+        // core::encrypt_file(passphrase, outfile, &cipher)?;
+        // let attr = fs::symlink_metadata(&cipher)?;
+        // if attr.len() == 0 {
+        //     Err(err_msg("gpgme produced a zero-length file"))
+        // } else {
+        //     fs::rename(cipher, outfile)?;
+        //     self.digest = Some(digest);
+        //     Ok(())
+        // }
     }
 
     /// Record the results of building this pack to the database. This includes

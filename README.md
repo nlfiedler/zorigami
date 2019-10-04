@@ -24,7 +24,7 @@ $ brew install node
 $ brew install gpgme
 ```
 
-### Building and Testing
+### Running Automated Tests
 
 These commands will build the backend and run the tests.
 
@@ -34,7 +34,7 @@ $ cargo build
 $ cargo test
 ```
 
-### Building and Running
+### Running the Server
 
 These commands will build backend and front-end, and then start the server.
 
@@ -58,14 +58,30 @@ $ npx send-introspection-query http://localhost:8080/graphql
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the
-application (e.g. SFTP). From the base directory, start the containers using
-`docker-compose up -d` (requires Docker Compose).
+application (e.g. SFTP). A Docker Compose file is located in the `test/docker`
+directory, which describes the services used for testing. With the services
+running, and a `.env` file in the base directory, the tests will leverage the
+services.
 
 ### dotenv
 
 This application uses [dotenv](https://github.com/dotenv-rs/dotenv) to configure
 the tests. For instance, the tests related to SFTP are enabled by the presence
 of certain environment variables, which is easily accomplished using dotenv.
+
+## Deploying
+
+### Using Docker
+
+The base directory contains a `docker-compose.yml` file which is used to build
+the application in stages and produce a relatively small final image.
+
+```shell
+$ docker-compose build
+$ docker image rm 192.168.1.3:5000/zorigami_app
+$ docker image tag zorigami_app 192.168.1.3:5000/zorigami_app
+$ docker push 192.168.1.3:5000/zorigami_app
+```
 
 ## Tools
 
@@ -100,6 +116,15 @@ $ cargo lichking check
 
 However, need to look for "gpl" manually in the `list` output, as most licenses
 that are compatible with MIT/Apache are also compatible with GPL.
+
+## Metrics
+
+### Linux ext4
+
+The directory `node_modules` containing `13,941` files, totaling `335M`. Backup
+produced `7` pack files, `32M` in size, totaling `67M`, containing the `10,412`
+unique files (verified with `fdupes -rm`). Database files totaling `7.5M` in
+size.
 
 ## Origin of the name
 

@@ -15,7 +15,7 @@ use super::state;
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
-use log::{error, info};
+use log::{debug, error, info};
 use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
@@ -119,6 +119,7 @@ fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
         info!("dataset {} to be backed up", &set_key);
         match dbase.get_dataset(&set_key) {
             Ok(Some(mut dataset)) => {
+                debug!("got dataset from database {}", &dataset);
                 match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
                     Ok(Some(checksum)) => {
                         info!("created new snapshot {}", &checksum);

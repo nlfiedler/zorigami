@@ -69,8 +69,8 @@ pub enum StoreSpeed {
 /// the base directory for the local store).
 ///
 pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<dyn Store> {
-    let uuid = if id.is_some() {
-        id.unwrap().to_owned()
+    let uuid = if let Some(idd) = id {
+        idd.to_owned()
     } else {
         Ulid::new().to_string().to_lowercase()
     };

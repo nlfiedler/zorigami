@@ -96,8 +96,9 @@ pub fn main() -> io::Result<()> {
     env_logger::init();
     state::subscribe("main-logger", log_state_changes);
     supervisor::start(DB_PATH.clone()).unwrap();
+    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("{}:{}", host, port);
     let schema = std::sync::Arc::new(schema::create_schema());
     info!("listening on http://{}/...", addr);
     HttpServer::new(move || {

@@ -8,6 +8,7 @@
 use failure::{err_msg, Error};
 use fastcdc;
 use gpgme;
+use log::{debug, error};
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -283,7 +284,7 @@ pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
 /// Encrypt the given file using the OpenPGP (RFC 4880) format, with the
 /// provided passphrase as the seed for the encryption key.
 ///
-pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), gpgme::Error> {
+pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), Error> {
     let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
     // need to set pinentry mode to avoid user interaction
     // n.b. this setting is cached in memory somehow
@@ -296,11 +297,17 @@ pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
     ctx.with_passphrase_provider(
         |_: gpgme::PassphraseRequest, out: &mut dyn Write| {
             out.write_all(passphrase.as_bytes())?;
+            // XXX: seems this is not invoked when running in docker
+            debug!("gpgme passphrase provided...");
             Ok(())
         },
+        // XXX: seems this outputs an empty file when running on docker
         |ctx| match ctx.encrypt(&recipients, &mut input, &mut cipher) {
             Ok(v) => v,
-            Err(err) => panic!("operation failed {}", err),
+            Err(err) => {
+                error!("gpgme operation failed: {}", err);
+                panic!("operation failed {}", err);
+            },
         },
     );
     Ok(())
@@ -309,7 +316,7 @@ pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(
 ///
 /// Decrypt the OpenPGP-encrypted file using the given passphrase.
 ///
-pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), gpgme::Error> {
+pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), Error> {
     let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
     // need to set pinentry mode to avoid user interaction
     // n.b. this setting is cached in memory somehow
@@ -497,6 +504,9 @@ impl TreeEntry {
         let name = path
             .file_name()
             .ok_or_else(|| err_msg("invalid file path"))?;
+        // creation time is not available on all platforms, and we are only
+        // using it to record a value in the database
+        let ctime: SystemTime = attr.created().unwrap_or_else(|_| SystemTime::UNIX_EPOCH);
         Ok(Self {
             name: name.to_str().unwrap().to_owned(),
             fstype: EntryType::from(attr.file_type()),
@@ -505,7 +515,7 @@ impl TreeEntry {
             gid: None,
             user: None,
             group: None,
-            ctime: attr.created()?,
+            ctime,
             mtime: attr.modified()?,
             reference,
             xattrs: HashMap::new(),
@@ -548,26 +558,39 @@ impl TreeEntry {
         {
             use std::ffi::CStr;
             use std::os::unix::fs::MetadataExt;
-            let result = fs::symlink_metadata(path);
-            if let Ok(meta) = result {
+            if let Ok(meta) = fs::symlink_metadata(path) {
                 self.uid = Some(meta.uid());
                 self.gid = Some(meta.gid());
                 // get the user name
-                let c_str = unsafe {
+                let username: String = unsafe {
                     let passwd = libc::getpwuid(meta.uid());
-                    let c_buf = (*passwd).pw_name;
-                    CStr::from_ptr(c_buf)
+                    if passwd.is_null() {
+                        String::new()
+                    } else {
+                        let c_buf = (*passwd).pw_name;
+                        if c_buf.is_null() {
+                            String::new()
+                        } else {
+                            CStr::from_ptr(c_buf).to_string_lossy().into_owned()
+                        }
+                    }
                 };
-                let str_slice: &str = c_str.to_str().unwrap();
-                self.user = Some(str_slice.to_owned());
+                self.user = Some(username);
                 // get the group name
-                let c_str = unsafe {
+                let groupname = unsafe {
                     let group = libc::getgrgid(meta.gid());
-                    let c_buf = (*group).gr_name;
-                    CStr::from_ptr(c_buf)
+                    if group.is_null() {
+                        String::new()
+                    } else {
+                        let c_buf = (*group).gr_name;
+                        if c_buf.is_null() {
+                            String::new()
+                        } else {
+                            CStr::from_ptr(c_buf).to_string_lossy().into_owned()
+                        }
+                    }
                 };
-                let str_slice: &str = c_str.to_str().unwrap();
-                self.group = Some(str_slice.to_owned());
+                self.group = Some(groupname);
             }
         }
         self
@@ -849,7 +872,7 @@ pub struct Dataset {
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
     /// cron-like expression for the backup schedule
-    #[serde(rename = "sc" )]
+    #[serde(rename = "sc")]
     pub schedule: Option<String>,
     /// latest snapshot reference, if any
     #[serde(rename = "ls")]
@@ -1233,7 +1256,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encryption() -> Result<(), gpgme::Error> {
+    fn test_encryption() -> Result<(), Error> {
         let passphrase = "some passphrase";
         let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let outdir = tempdir()?;
