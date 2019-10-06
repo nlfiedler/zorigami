@@ -170,9 +170,8 @@ impl super::Store for SftpStore {
         let mut results = Vec::new();
         for (path, stat) in listing {
             if stat.is_dir() {
-                let fno = get_file_name(&path);
-                if fno.is_some() {
-                    results.push(fno.unwrap());
+                if let Some(name) = get_file_name(&path) {
+                    results.push(name);
                 }
             }
         }
@@ -190,9 +189,8 @@ impl super::Store for SftpStore {
         let mut results = Vec::new();
         for (path, stat) in listing {
             if stat.is_file() {
-                let fno = get_file_name(&path);
-                if fno.is_some() {
-                    results.push(fno.unwrap());
+                if let Some(name) = get_file_name(&path) {
+                    results.push(name);
                 }
             }
         }
@@ -226,13 +224,11 @@ impl super::Store for SftpStore {
 /// Return the last part of the path, converting to a String.
 ///
 fn get_file_name(path: &Path) -> Option<String> {
-    let p = path.file_name();
     // ignore any paths that end in '..'
-    if p.is_some() {
-        let pp = p.unwrap().to_str();
+    if let Some(p) = path.file_name() {
         // ignore any paths that failed UTF-8 translation
-        if pp.is_some() {
-            return Some(pp.unwrap().to_owned());
+        if let Some(pp) = p.to_str() {
+            return Some(pp.to_owned());
         }
     }
     None
