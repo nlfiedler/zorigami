@@ -51,7 +51,6 @@ pub fn perform_backup(
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
-    debug!("taking snapshot of {:?}", &dataset.basepath);
     let snap_opt = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
     match snap_opt {
         None => Ok(None),
@@ -656,10 +655,8 @@ fn read_link(path: &Path) -> Result<String, Error> {
 fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
     let mut entries: Vec<core::TreeEntry> = Vec::new();
     let mut file_count = 0;
-    trace!("scanning directory {:?}", basepath);
     for entry in fs::read_dir(basepath)? {
         let entry = entry?;
-        trace!("scanning entry {:?}", &entry);
         // DirEntry.metadata() does not follow symlinks
         let file_type = entry.metadata()?.file_type();
         let path = entry.path();
@@ -701,7 +698,7 @@ fn process_path(
     let mut entry = core::TreeEntry::new(fullpath, reference)?;
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
-    trace!("processed path entry {:?}", &entry);
+    trace!("processed path entry {:?}", fullpath);
     if xattr::SUPPORTED_PLATFORM {
         // The "supported" flag is not all that helpful, as it will be true even
         // for platforms where xattr operations will result in an error.
@@ -717,7 +714,6 @@ fn process_path(
                     entry.xattrs.insert(nm.to_owned(), digest);
                 }
             }
-            trace!("processed path with xattrs {:?}", &entry);
         }
     }
     Ok(entry)
