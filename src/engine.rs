@@ -13,6 +13,7 @@ use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
 use log::{debug, trace};
+use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -239,7 +240,7 @@ pub fn take_snapshot(
 pub fn restore_file(
     dbase: &Database,
     dataset: &core::Dataset,
-    _passphrase: &str,
+    passphrase: &str,
     checksum: core::Checksum,
     outfile: &Path,
 ) -> Result<(), Error> {
@@ -265,7 +266,12 @@ pub fn restore_file(
         if !finished_packs.contains(pack_digest) {
             let saved_pack = dbase
                 .get_pack(pack_digest)?
-                .ok_or_else(|| err_msg(format!("missing pack: {:?}", pack_digest)))?;
+                .ok_or_else(|| err_msg(format!("missing pack record: {:?}", pack_digest)))?;
+            // check the salt before downloading the pack, otherwise we waste
+            // time fetching it when we would not be able to decrypt it
+            let salt = saved_pack
+                .crypto_salt
+                .ok_or_else(|| err_msg(format!("missing pack salt: {:?}", pack_digest)))?;
             // retrieve the pack file
             let packfile = tempfile::Builder::new()
                 .prefix("pack")
@@ -273,10 +279,10 @@ pub fn restore_file(
                 .tempfile_in(&dataset.workspace)?;
             store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
             // extract chunks from pack (temporarily use the output file path)
-            // core::decrypt_file(passphrase, packfile.path(), outfile)?;
-            let chunk_names = core::unpack_chunks(packfile.path(), &dataset.workspace)?;
+            core::decrypt_file(passphrase, &salt, packfile.path(), outfile)?;
             fs::remove_file(packfile.path())?;
-            // fs::remove_file(outfile)?;
+            let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
+            fs::remove_file(outfile)?;
             // remove unrelated chunks to conserve space
             for cname in chunk_names {
                 if !desired_chunks.contains(&cname) {
@@ -829,7 +835,7 @@ impl<'a> PackBuilder<'a> {
         total_size > self.pack_size
     }
 
-    /// Write a pack file to the given path, encrypting using OpenPGP with the
+    /// Write a pack file to the given path, encrypting using libsodium with the
     /// given passphrase. If nothing has been added to the builder, then nothing
     /// is written and an empty pack is returned.
     pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<Pack, Error> {
@@ -878,6 +884,8 @@ pub struct Pack {
     files: HashMap<core::Checksum, Vec<core::Chunk>>,
     /// Those chunks that are contained in this pack.
     chunks: Vec<core::Chunk>,
+    /// Salt used to hash the password for this pack.
+    salt: Option<Salt>,
 }
 
 impl Pack {
@@ -897,26 +905,17 @@ impl Pack {
     }
 
     /// Write the chunks in this pack to the specified path, encrypting using
-    /// OpenPGP with the given passphrase.
-    pub fn build_pack(&mut self, outfile: &Path, _passphrase: &str) -> Result<(), Error> {
+    /// libsodium with the given passphrase.
+    pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
         // sort the chunks by digest to produce identical results
         self.chunks
             .sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
-        let digest = core::pack_chunks(&self.chunks, outfile)?;
-        self.digest = Some(digest);
+        self.digest = Some(core::pack_chunks(&self.chunks, outfile)?);
+        let mut cipher = outfile.to_path_buf();
+        cipher.set_extension(".pgp");
+        self.salt = Some(core::encrypt_file(passphrase, outfile, &cipher)?);
+        fs::rename(cipher, outfile)?;
         Ok(())
-        // XXX: encryption is not working when running in docker
-        // let mut cipher = outfile.to_path_buf();
-        // cipher.set_extension(".pgp");
-        // core::encrypt_file(passphrase, outfile, &cipher)?;
-        // let attr = fs::symlink_metadata(&cipher)?;
-        // if attr.len() == 0 {
-        //     Err(err_msg("gpgme produced a zero-length file"))
-        // } else {
-        //     fs::rename(cipher, outfile)?;
-        //     self.digest = Some(digest);
-        //     Ok(())
-        // }
     }
 
     /// Record the results of building this pack to the database. This includes
@@ -935,7 +934,8 @@ impl Pack {
         }
         self.chunks.clear();
         // record the pack in the database
-        let pack = core::SavedPack::new(digest.clone(), coords);
+        let mut pack = core::SavedPack::new(digest.clone(), coords);
+        pack.crypto_salt = self.salt;
         dbase.insert_pack(&pack)?;
         Ok(())
     }
@@ -965,6 +965,7 @@ impl Default for Pack {
             digest: None,
             files: HashMap::new(),
             chunks: Vec::new(),
+            salt: None,
         }
     }
 }

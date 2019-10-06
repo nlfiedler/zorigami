@@ -4,7 +4,7 @@
 FROM rust:latest AS builder
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get -q update && \
-    apt-get -q -y install clang libgpgme-dev
+    apt-get -q -y install clang
 WORKDIR /build
 COPY Cargo.toml .
 COPY src src/
@@ -44,13 +44,9 @@ RUN gulp build
 # build the final image
 #
 FROM debian:latest
-ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get -q update && \
-    apt-get -q -y install libgpgme11
 RUN adduser --disabled-password --gecos '' zorigami
 USER zorigami
 WORKDIR /zorigami
-COPY --from=builder /build/target/release/libzorigami.rlib .
 COPY --from=builder /build/target/release/zorigami .
 COPY --from=healthy /health/target/release/healthcheck .
 COPY public public/

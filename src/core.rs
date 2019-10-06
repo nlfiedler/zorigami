@@ -7,10 +7,10 @@
 
 use failure::{err_msg, Error};
 use fastcdc;
-use gpgme;
-use log::{debug, error};
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
+use sodiumoxide::crypto::pwhash::{self, Salt};
+use sodiumoxide::crypto::secretstream::{self, Stream, Tag};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{self, File, FileType};
@@ -18,6 +18,7 @@ use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Once;
 use std::time::SystemTime;
 use tar::{Archive, Builder, Header};
 use ulid::Ulid;
@@ -280,61 +281,122 @@ pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
     Ok(())
 }
 
+// Used to avoid initializing the crypto library more than once. Not a
+// requirement, but seems sensible and it is easy.
+static CRYPTO_INIT: Once = Once::new();
+
+// Initialize the crypto library to improve performance and ensure all of its
+// operations are thread-safe.
+fn init_crypto() {
+    CRYPTO_INIT.call_once(|| {
+        let _ = sodiumoxide::init();
+    });
+}
+
+// Hash the given user password using a computationally expensive algorithm.
+fn hash_password(passphrase: &str, salt: &Salt) -> Result<secretstream::Key, Error> {
+    init_crypto();
+    let mut k = secretstream::Key([0; secretstream::KEYBYTES]);
+    let secretstream::Key(ref mut kb) = k;
+    match pwhash::derive_key(
+        kb,
+        passphrase.as_bytes(),
+        salt,
+        pwhash::OPSLIMIT_INTERACTIVE,
+        pwhash::MEMLIMIT_INTERACTIVE,
+    ) {
+        Ok(_) => Ok(k),
+        Err(()) => Err(err_msg("pwhash::derive_key() failed mysteriously")),
+    }
+}
+
+// Size of the "messages" encrypted with libsodium. We need to read the stream
+// back in chunks this size to successfully decrypt.
+static CRYPTO_BUFLEN: usize = 8192;
+
 ///
-/// Encrypt the given file using the OpenPGP (RFC 4880) format, with the
-/// provided passphrase as the seed for the encryption key.
+/// Encrypt the given file using libsodium stream encryption.
 ///
-pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), Error> {
-    let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
-    // need to set pinentry mode to avoid user interaction
-    // n.b. this setting is cached in memory somehow
-    ctx.set_pinentry_mode(gpgme::PinentryMode::Loopback)?;
-    let recipients = Vec::new();
+/// The passphrase is used with a newly generated salt to produce a secret key,
+/// which is then used to encrypt the file. The salt is returned to the caller.
+///
+pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<Salt, Error> {
+    init_crypto();
+    let salt = pwhash::gen_salt();
+    let key = hash_password(passphrase, &salt)?;
+    let attr = fs::symlink_metadata(infile)?;
+    let infile_len = attr.len();
+    let mut total_bytes_read: u64 = 0;
+    let mut buffer = vec![0; CRYPTO_BUFLEN];
+    let (mut enc_stream, header) =
+        Stream::init_push(&key).map_err(|_| err_msg("stream init failed"))?;
     let mut input = File::open(infile)?;
     let mut cipher = File::create(outfile)?;
-    // need a passphrase provider otherwise nothing is output;
-    // n.b. this and/or the passphrase is cached in memory somehow
-    ctx.with_passphrase_provider(
-        |_: gpgme::PassphraseRequest, out: &mut dyn Write| {
-            out.write_all(passphrase.as_bytes())?;
-            // XXX: seems this is not invoked when running in docker
-            debug!("gpgme passphrase provided...");
-            Ok(())
-        },
-        // XXX: seems this outputs an empty file when running on docker
-        |ctx| match ctx.encrypt(&recipients, &mut input, &mut cipher) {
-            Ok(v) => v,
-            Err(err) => {
-                error!("gpgme operation failed: {}", err);
-                panic!("operation failed {}", err);
-            },
-        },
-    );
-    Ok(())
+    // Write out a magic/version number for backward compatibility. The magic
+    // number is meant to be unique for this file type. The version accounts for
+    // any change in the size of the secret stream header, which may change,
+    // even if that may be unlikely.
+    let version = [b'Z', b'R', b'G', b'M', 0, 0, 0, 1];
+    cipher.write_all(&version)?;
+    cipher.write_all(header.as_ref())?;
+    while total_bytes_read < infile_len {
+        let bytes_read = input.read(&mut buffer)?;
+        total_bytes_read += bytes_read as u64;
+        let tag = if total_bytes_read < infile_len {
+            Tag::Message
+        } else {
+            Tag::Final
+        };
+        let cipher_text = enc_stream
+            .push(&buffer[0..bytes_read], None, tag)
+            .map_err(|_| err_msg("stream push failed"))?;
+        cipher.write_all(cipher_text.as_ref())?;
+    }
+    Ok(salt)
 }
 
 ///
-/// Decrypt the OpenPGP-encrypted file using the given passphrase.
+/// Decrypt the encrypted file using the given passphrase and salt.
 ///
-pub fn decrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<(), Error> {
-    let mut ctx = gpgme::Context::from_protocol(gpgme::Protocol::OpenPgp)?;
-    // need to set pinentry mode to avoid user interaction
-    // n.b. this setting is cached in memory somehow
-    ctx.set_pinentry_mode(gpgme::PinentryMode::Loopback)?;
+pub fn decrypt_file(
+    passphrase: &str,
+    salt: &Salt,
+    infile: &Path,
+    outfile: &Path,
+) -> Result<(), Error> {
+    init_crypto();
+    let key = hash_password(passphrase, salt)?;
     let mut input = File::open(infile)?;
+    // read the magic/version and ensure they match expectations
+    let mut version_bytes = [0; 8];
+    input.read_exact(&mut version_bytes)?;
+    if version_bytes[0..4] != [b'Z', b'R', b'G', b'M'] {
+        return Err(err_msg("pack file missing magic number"));
+    }
+    if version_bytes[4..8] != [0, 0, 0, 1] {
+        return Err(err_msg("pack file unsupported version"));
+    }
+    // create a vector with sufficient space to read the header
+    let mut header_vec = vec![0; secretstream::HEADERBYTES];
+    input.read_exact(&mut header_vec)?;
+    let header = secretstream::Header::from_slice(&header_vec)
+        .ok_or_else(|| err_msg("invalid secretstream header"))?;
+    // initialize the pull stream
+    let mut dec_stream =
+        Stream::init_pull(&header, &key).map_err(|_| err_msg("stream init failed"))?;
     let mut plain = File::create(outfile)?;
-    // need a passphrase provider otherwise nothing is output;
-    // n.b. this and/or the passphrase is cached in memory somehow
-    ctx.with_passphrase_provider(
-        |_: gpgme::PassphraseRequest, out: &mut dyn Write| {
-            out.write_all(passphrase.as_bytes())?;
-            Ok(())
-        },
-        |ctx| match ctx.decrypt(&mut input, &mut plain) {
-            Ok(v) => v,
-            Err(err) => panic!("operation failed {}", err),
-        },
-    );
+    // buffer must be large enough for reading an entire message
+    let mut buffer = vec![0; CRYPTO_BUFLEN + secretstream::ABYTES];
+    // read the encrypted text until the stream is finalized
+    while !dec_stream.is_finalized() {
+        let bytes_read = input.read(&mut buffer)?;
+        // n.b. this will fail if the read does not get the entire message, but
+        // that is unlikely when reading local files
+        let (decrypted, _tag) = dec_stream
+            .pull(&buffer[0..bytes_read], None)
+            .map_err(|_| err_msg("stream pull failed"))?;
+        plain.write_all(decrypted.as_ref())?;
+    }
     Ok(())
 }
 
@@ -844,6 +906,9 @@ pub struct SavedPack {
     /// Date/time of successful upload, for conflict resolution.
     #[serde(rename = "tm")]
     pub upload_time: SystemTime,
+    /// Salt used to encrypt this pack.
+    #[serde(rename = "sa")]
+    pub crypto_salt: Option<Salt>,
 }
 
 impl SavedPack {
@@ -854,6 +919,7 @@ impl SavedPack {
             digest,
             locations: coords,
             upload_time: SystemTime::now(),
+            crypto_salt: None,
         }
     }
 }
@@ -1261,16 +1327,25 @@ mod tests {
         let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let outdir = tempdir()?;
         let ciphertext = outdir.path().join("SekienAkashita.jpg.enc");
-        encrypt_file(passphrase, infile, &ciphertext)?;
+        let salt = encrypt_file(passphrase, infile, &ciphertext)?;
         // cannot do much validation of the encrypted file, it is always
         // going to be different because of random keys and init vectors
         let plaintext = outdir.path().join("SekienAkashita.jpg");
-        decrypt_file(passphrase, &ciphertext, &plaintext)?;
+        decrypt_file(passphrase, &salt, &ciphertext, &plaintext)?;
         let plainsum = checksum_file(&plaintext)?;
         assert_eq!(
             plainsum.to_string(),
             "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hash_password() -> Result<(), Error> {
+        let passwd = "Correct Horse Battery Staple";
+        let salt = pwhash::gen_salt();
+        let result = hash_password(passwd, &salt)?;
+        assert_eq!(result.as_ref().len(), secretstream::KEYBYTES);
         Ok(())
     }
 
@@ -1314,9 +1389,10 @@ mod tests {
         let bucket = generate_bucket_name(&uuid);
         let object = "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1";
         let pacloc = PackLocation::new("01arz3ndektsv4rrffq69g5fav", &bucket, &object);
-        let pack = SavedPack::new(digest, vec![pacloc]);
+        let mut pack = SavedPack::new(digest, vec![pacloc]);
+        pack.crypto_salt = Some(pwhash::gen_salt());
         let encoded: Vec<u8> = serde_cbor::to_vec(&pack).unwrap();
-        assert_eq!(encoded.len(), 225);
+        assert_eq!(encoded.len(), 262);
     }
 
     #[test]

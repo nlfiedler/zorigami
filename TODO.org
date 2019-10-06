@@ -20,20 +20,30 @@
 **** DONE remove all of the =unwrap()= calls, replace with proper error handling
 **** DONE add more logging in the error cases
 *** DONE ensure backup progress is logged to the console
-*** TODO find all =panic!= calls and ensure there is error logging as well
-*** TODO replace =gpgme= with =libsodium= which seems better
+*** DONE find all =panic!= calls and ensure there is error logging as well
+*** DONE replace =gpgme= with =libsodium= which seems better
 **** unclear if gpgme is available on windows
 **** would need to distribute gpgme with our application
 **** c.f. https://download.libsodium.org/doc/
 **** rust crate: https://crates.io/crates/sodiumoxide
 ***** appears to pull down the library and compile/link statically
-**** TODO comment out the encrypt/decrypt functions
-**** TODO remove the gpgme dependencies from =Cargo.toml=
-**** TODO remove the gpgme installs in =Dockerfile=
-**** TODO add =sodiumoxide= dependency to =Cargo.toml=
-**** TODO write new encrypt/decrypt functions using sodium
-***** TODO produce a key from the given passphrase
-***** TODO encrypt/decrypt the file using the stream function
+**** DONE comment out the encrypt/decrypt functions
+**** DONE remove the gpgme dependencies from =Cargo.toml=
+**** DONE remove the gpgme installs in =Dockerfile=
+**** DONE add =sodiumoxide= dependency to =Cargo.toml=
+**** DONE read documentation: https://docs.rs/sodiumoxide/0.2.4/sodiumoxide/
+***** DONE how to create an encryption key from a passphrase
+****** look for =crypto_pwhash()=
+***** DONE how to encrypt/decrypt a stream/file
+**** DONE write new encrypt/decrypt functions using sodium
+***** DONE use the =ONCE= thing to invoke =sodiumoxide.init()= once
+***** DONE produce a key from the given passphrase and a random salt for each pack file
+***** DONE encrypt the pack file using the derived key
+***** DONE store the salt for each pack in the pack record in the database
+***** DONE decrypt the pack file using the derived key
+***** DONE read the salt from the corresponding pack record
+**** DONE update all references to ~openpgp~ everywhere
+*** DONE fix the clippy issues found in =sftp.rs=
 *** TODO use this to replace =replicaz= for local backup
 **** build the image locally, push to docker registry
 **** deploy as a single instance, using volumes for data
@@ -122,14 +132,13 @@ XDG_SESSION_ID=760
 ***** maybe need to set =USER= so that gpg can write files: did not work
 ***** maybe something about the passphrase provider is not working: it is not invoked
 **** DONE create a host user to own the files on the host system
-**** TODO is the =.rlib= file actually needed? =ldd= and =otool= do not show as such
-***** TODO try building without copying the =libzorigami.rlib= file
+**** DONE try building without copying the =libzorigami.rlib= file
 **** TODO define volumes and environment variables for production
 ***** =DB_PATH=
 ***** =PASSPHRASE=
 ***** =PORT=
 **** TODO start with a small dataset to avoid filling the safe disk
-**** TODO document the build and deploy procedure in =README.md=
+**** DONE document the build and deploy procedure in =README.md=
 ** restore file via webui
 *** TODO move datasets to their own page
 *** TODO add a navbar link for the datasets route

@@ -12,8 +12,7 @@ Vagrant.configure('2') do |config|
   end
   #
   # $ sudo apt-get update
-  # $ sudo apt-get -q -y install build-essential curl libgpgme-dev libgpg-error-dev
-  # $ sudo apt-get -q -y install clang emacs-nox git
+  # $ sudo apt-get -q -y install build-essential clang curl emacs-nox git
   # $ curl https://sh.rustup.rs -sSf | sh
   # $ source $HOME/.cargo/env
   #

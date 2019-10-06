@@ -21,7 +21,6 @@ get out of date, and some of the dependencies will fail to build without them.
 ```shell
 $ xcode-select --install
 $ brew install node
-$ brew install gpgme
 ```
 
 ### Running Automated Tests
@@ -76,11 +75,21 @@ of certain environment variables, which is easily accomplished using dotenv.
 The base directory contains a `docker-compose.yml` file which is used to build
 the application in stages and produce a relatively small final image.
 
+On the build host:
+
 ```shell
 $ docker-compose build
 $ docker image rm 192.168.1.3:5000/zorigami_app
 $ docker image tag zorigami_app 192.168.1.3:5000/zorigami_app
 $ docker push 192.168.1.3:5000/zorigami_app
+```
+
+On the server, with a production version of the `docker-compose.yml` file:
+
+```shell
+$ docker-compose pull
+$ docker-compose rm -f -s
+$ docker-compose up -d
 ```
 
 ## Tools
@@ -174,3 +183,7 @@ files, and [OpenPGP](https://tools.ietf.org/html/rfc4880) for encryption.
 
 Started rewriting the (now [TypeScript](https://www.typescriptlang.org)) code
 using [Rust](https://www.rust-lang.org).
+
+### October 2019
+
+Deployed to server using Docker. Replaced gpgme encryption with libsodium.

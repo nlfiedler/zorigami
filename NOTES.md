@@ -5,7 +5,7 @@
 * Unlimited backup: all files of any size
 * Maintains multiple versions, not just the most recent
 * Efficiency (compression, de-duplication, block-level incremental backup)
-* Encryption (all remotely stored data is encrypted with OpenPGP)
+* Encryption (all remotely stored data is encrypted with libsodium)
 * Service agnostic (SFTP, Amazon, Google, etc)
 * Full restore or file-level restore
 * Restore to dissimilar hardware
@@ -125,7 +125,7 @@ They change the SSH config to run the backup command with "append only" flag.
     - tar file format
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
-    - encrypted with OpenPGP (RFC 4880) using passphrase
+    - encrypted with libsodium using passphrase
 
 ### Database Schema
 
