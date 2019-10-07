@@ -87,6 +87,8 @@
 *** DONE log snapshot metrics after =take_snapshot()= call
 **** number of files
 **** time duration
+*** DONE =core::scan_tree()= should not return a Result, deal with all of the errors
+**** need to be robust against all sorts of weird file access issues
 *** TODO use this to replace =replicaz= for local backup
 **** build the image locally, push to docker registry
 **** deploy as a single instance, using volumes for data
@@ -189,6 +191,8 @@ XDG_SESSION_ID=760
 *** TODO browse snapshots via webui
 *** TODO browse directory tree via webui
 *** TODO tree entries of =ERROR= type should be displayed as such
+**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
+***** e.g. =TreeReference.ERROR(String)= where the string is the error message
 *** TODO restore a file to local disk via webui
 ** kohaku remote (SFTP) backup
 *** TODO should maybe have an initial backup delay on startup
@@ -247,8 +251,6 @@ XDG_SESSION_ID=760
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Robustness and Recovery
-*** TODO =core::scan_tree()= should not return a Result, deal with all of the errors
-**** need to be robust against all sorts of weird file access issues
 *** TODO store database in a bucket named after the "computer UUID"
 **** pack file should be a ULID so that the most recent entry is sorted last
 **** glacier will use s3 to track the "compuuter UUID" to vault name mapping

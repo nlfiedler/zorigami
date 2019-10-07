@@ -12,7 +12,7 @@ use super::state::{self, Action};
 use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
-use log::{debug, info, trace};
+use log::{debug, error, info, trace};
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
@@ -667,12 +667,14 @@ impl<'a> Iterator for TreeWalker<'a> {
 }
 
 ///
-/// Read the symbolic link value. This results in an error if the referenced
-/// path is not a symbolic link.
+/// Read the symbolic link value.
 ///
-fn read_link(path: &Path) -> Result<String, Error> {
-    let value = fs::read_link(path)?;
-    Ok(encode(value.to_str().unwrap()))
+fn read_link(path: &Path) -> String {
+    if let Ok(value) = fs::read_link(path) {
+        encode(value.to_str().unwrap())
+    } else {
+        path.to_string_lossy().into_owned()
+    }
 }
 
 ///
@@ -686,30 +688,50 @@ fn read_link(path: &Path) -> Result<String, Error> {
 fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
     let mut entries: Vec<core::TreeEntry> = Vec::new();
     let mut file_count = 0;
-    for entry in fs::read_dir(basepath)? {
-        let entry = entry?;
-        // DirEntry.metadata() does not follow symlinks
-        let file_type = entry.metadata()?.file_type();
-        let path = entry.path();
-        if file_type.is_dir() {
-            let scan = scan_tree(&path, dbase)?;
-            file_count += scan.file_count;
-            let digest = scan.checksum();
-            let tref = core::TreeReference::TREE(digest);
-            let ent = process_path(&path, tref, dbase);
-            entries.push(ent);
-        } else if file_type.is_symlink() {
-            let link = read_link(&path)?;
-            let tref = core::TreeReference::LINK(link);
-            let ent = process_path(&path, tref, dbase);
-            entries.push(ent);
-        } else if file_type.is_file() {
-            let digest = core::checksum_file(&path)?;
-            let tref = core::TreeReference::FILE(digest);
-            let ent = process_path(&path, tref, dbase);
-            entries.push(ent);
-            file_count += 1;
+    match fs::read_dir(basepath) {
+        Ok(readdir) => {
+            for entry_result in readdir {
+                match entry_result {
+                    Ok(entry) => {
+                        let path = entry.path();
+                        // DirEntry.metadata() does not follow symlinks
+                        match entry.metadata() {
+                            Ok(metadata) => {
+                                let file_type = metadata.file_type();
+                                if file_type.is_dir() {
+                                    let scan = scan_tree(&path, dbase)?;
+                                    file_count += scan.file_count;
+                                    let digest = scan.checksum();
+                                    let tref = core::TreeReference::TREE(digest);
+                                    let ent = process_path(&path, tref, dbase);
+                                    entries.push(ent);
+                                } else if file_type.is_symlink() {
+                                    let link = read_link(&path);
+                                    let tref = core::TreeReference::LINK(link);
+                                    let ent = process_path(&path, tref, dbase);
+                                    entries.push(ent);
+                                } else if file_type.is_file() {
+                                    match core::checksum_file(&path) {
+                                        Ok(digest) => {
+                                            let tref = core::TreeReference::FILE(digest);
+                                            let ent = process_path(&path, tref, dbase);
+                                            entries.push(ent);
+                                            file_count += 1;
+                                        }
+                                        Err(err) => {
+                                            error!("could not read file: {:?}: {}", path, err)
+                                        }
+                                    }
+                                }
+                            }
+                            Err(err) => error!("metadata error for {:?}: {}", path, err),
+                        }
+                    }
+                    Err(err) => error!("read_dir error for an entry in {:?}: {}", basepath, err),
+                }
+            }
         }
+        Err(err) => error!("read_dir error for {:?}: {}", basepath, err),
     }
     let tree = core::Tree::new(entries, file_count);
     let digest = tree.checksum();
@@ -1032,7 +1054,7 @@ mod tests {
         fs::symlink(&target, &link)?;
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &link)?;
-        let actual = read_link(&link)?;
+        let actual = read_link(&link);
         assert_eq!(actual, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
         Ok(())
     }
