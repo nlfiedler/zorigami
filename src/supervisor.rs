@@ -37,8 +37,15 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
             match dbase.get_all_datasets() {
                 Ok(datasets) => {
                     for set in datasets {
-                        if let Err(err) = consider_dataset(&db_path, &dbase, &set) {
-                            error!("failed to process dataset {}: {}", &set, err)
+                        match should_run(&dbase, &set) {
+                            Ok(true) => {
+                                // passed all the checks, we can start this dataset
+                                if let Err(err) = run_dataset(db_path.clone(), set.key.clone()) {
+                                    error!("error running backup for {}: {}", &set, err);
+                                }
+                            }
+                            Ok(false) => (),
+                            Err(err) => error!("error while checking schedule: {}", err),
                         }
                     }
                 }
@@ -54,7 +61,9 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
 ///
 /// Check if the given dataset should be processed now.
 ///
-fn consider_dataset(db_path: &PathBuf, dbase: &Database, set: &Dataset) -> Result<(), Error> {
+pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
+    // public function so it can be tested from an external crate
+
     // only consider those datasets that have a schedule, otherwise
     // the user is expected to manually start the backup process
     if let Some(schedule) = set.schedule.as_ref() {
@@ -62,26 +71,24 @@ fn consider_dataset(db_path: &PathBuf, dbase: &Database, set: &Dataset) -> Resul
             let snapshot = dbase
                 .get_snapshot(checksum)?
                 .ok_or_else(|| err_msg(format!("snapshot {} missing from database", &checksum)))?;
-            should_run(schedule, &snapshot)?
+            is_overdue(schedule, &snapshot)?
         } else {
             true
         };
         if maybe_run {
-            // check if backup is already running
+            // check if a backup is already running
             let redux = state::get_state();
             if let Some(backup) = redux.backups(&set.key) {
                 if backup.end_time().is_none() {
                     maybe_run = false;
-                    info!("dataset {} backup in progress", &set.key);
+                    info!("dataset {} backup already in progress", &set.key);
                 }
             }
         }
-        if maybe_run {
-            // passed all the checks, we can start this dataset
-            run_dataset(db_path.clone(), set.key.clone())?;
-        }
+        Ok(maybe_run)
+    } else {
+        Ok(false)
     }
-    Ok(())
 }
 
 ///
@@ -89,7 +96,7 @@ fn consider_dataset(db_path: &PathBuf, dbase: &Database, set: &Dataset) -> Resul
 /// running a backup now.
 ///
 #[allow(dead_code)]
-fn should_run(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
+fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
     if let Some(et) = snapshot.end_time {
         let end_time = DateTime::<Utc>::from(et);
         // cannot use ? because the error type is not thread-safe
@@ -141,14 +148,14 @@ mod tests {
     use std::time::SystemTime;
 
     #[test]
-    fn test_should_run_hourly() {
+    fn test_is_overdue_hourly() {
         let expression = "@hourly";
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha);
         //
         // test with no end time for latest snapshot, should not run
         //
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
         //
@@ -157,7 +164,7 @@ mod tests {
         let hour_ago = Duration::new(3600, 0);
         let end_time = SystemTime::now() - hour_ago;
         snapshot = snapshot.end_time(end_time);
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
@@ -165,20 +172,20 @@ mod tests {
         //
         let end_time = SystemTime::now();
         snapshot = snapshot.end_time(end_time);
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
     }
 
     #[test]
-    fn test_should_run_daily() {
+    fn test_is_overdue_daily() {
         let expression = "@daily";
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha);
         //
         // test with no end time for latest snapshot, should not run
         //
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
         //
@@ -187,7 +194,7 @@ mod tests {
         let day_ago = Duration::new(90_000, 0);
         let end_time = SystemTime::now() - day_ago;
         snapshot = snapshot.end_time(end_time);
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
@@ -195,7 +202,7 @@ mod tests {
         //
         let end_time = SystemTime::now();
         snapshot = snapshot.end_time(end_time);
-        let result = should_run(expression, &snapshot);
+        let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
     }

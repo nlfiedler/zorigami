@@ -48,6 +48,11 @@ pub fn perform_backup(
             }
         }
     }
+    // The start of a _new_ backup is at the moment that a snapshot is to be
+    // taken. The snapshot can take a very long time to build, and another
+    // thread may spawn in the mean time and start taking another snapshot, and
+    // again, and again until the system runs out of resources.
+    state::dispatch(Action::StartBackup(dataset.key.clone()));
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
@@ -122,7 +127,6 @@ impl<'a> BackupMaster<'a> {
         dbase: &'a Database,
         passphrase: &str,
     ) -> Result<Self, Error> {
-        state::dispatch(Action::StartBackup(dataset.key.clone()));
         let bucket_name = core::generate_bucket_name(&dataset.computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
         let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;

@@ -44,6 +44,50 @@
 ***** DONE read the salt from the corresponding pack record
 **** DONE update all references to ~openpgp~ everywhere
 *** DONE fix the clippy issues found in =sftp.rs=
+*** TODO catch and report file errors in =process_path()= and gracefully skip that entry
+**** need to indicate there was an error for that entry in the file browser
+*** TODO seems like multiple jobs are spawning at the same time
+**** kernel errors in the =dmesg= output
+#+BEGIN_SRC
+[230312.758919] INFO: task zorigami:9494 blocked for more than 120 seconds.
+[230312.758970]       Tainted: P           O     4.15.0-65-generic #74-Ubuntu
+[230312.758986] "echo 0 > /proc/sys/kernel/hung_task_timeout_secs" disables this message.
+[230312.759004] zorigami        D    0  9494   7537 0x00000120
+[230312.759006] Call Trace:
+[230312.759010]  __schedule+0x24e/0x880
+[230312.759011]  ? mutex_lock+0x12/0x40
+[230312.759012]  schedule+0x2c/0x80
+[230312.759017]  cv_wait_common+0x11e/0x140 [spl]
+[230312.759019]  ? wait_woken+0x80/0x80
+[230312.759022]  __cv_wait+0x15/0x20 [spl]
+[230312.759051]  dmu_buf_hold_array_by_dnode+0x1c6/0x450 [zfs]
+[230312.759066]  dmu_read_uio_dnode+0x49/0x100 [zfs]
+[230312.759079]  dmu_read_uio_dbuf+0x49/0x70 [zfs]
+[230312.759101]  zfs_read+0x136/0x3f0 [zfs]
+[230312.759124]  zpl_read_common_iovec+0x80/0xd0 [zfs]
+[230312.759145]  zpl_iter_read+0x9c/0xe0 [zfs]
+[230312.759147]  new_sync_read+0xe4/0x130
+[230312.759148]  __vfs_read+0x29/0x40
+[230312.759149]  vfs_read+0x8e/0x130
+[230312.759150]  SyS_read+0x5c/0xe0
+[230312.759152]  do_syscall_64+0x73/0x130
+[230312.759154]  entry_SYSCALL_64_after_hwframe+0x3d/0xa2
+[230312.759155] RIP: 0033:0x7f78a35b8544
+[230312.759156] RSP: 002b:00007f78913bcb40 EFLAGS: 00000246 ORIG_RAX: 0000000000000000
+[230312.759157] RAX: ffffffffffffffda RBX: 00000000000000b0 RCX: 00007f78a35b8544
+[230312.759157] RDX: 0000000000002000 RSI: 00007f78913bcbe8 RDI: 00000000000000b0
+[230312.759158] RBP: 00007f78913bcbe8 R08: 0000000000000000 R09: 000000004e7dd2ac
+[230312.759158] R10: 00000000f3f61b17 R11: 0000000000000246 R12: 0000000000002000
+[230312.759159] R13: 00007f78913bcb90 R14: 0000000000080000 R15: 00007f78913becf0
+#+END_SRC
+**** many zorigami processes are spawned
+**** lot of CPU activity
+**** no pack files were made
+**** really long log file
+**** seems like the supervisor is starting the backup repeatedly
+*** TODO log snapshot metrics after =take_snapshot()= call
+**** number of files
+**** time duration
 *** TODO use this to replace =replicaz= for local backup
 **** build the image locally, push to docker registry
 **** deploy as a single instance, using volumes for data
@@ -133,43 +177,20 @@ XDG_SESSION_ID=760
 ***** maybe something about the passphrase provider is not working: it is not invoked
 **** DONE create a host user to own the files on the host system
 **** DONE try building without copying the =libzorigami.rlib= file
-**** TODO define volumes and environment variables for production
+**** DONE document the build and deploy procedure in =README.md=
+**** DONE define volumes and environment variables for production
 ***** =DB_PATH=
 ***** =PASSPHRASE=
-***** =PORT=
-**** TODO start with a small dataset to avoid filling the safe disk
-**** DONE document the build and deploy procedure in =README.md=
+**** DONE stop the =replicaz_safe_1= container
+**** DONE destroy the =safe/shared= zfs dataset
+**** DONE create the =safe/packs= zfs dataset
 ** restore file via webui
 *** TODO move datasets to their own page
 *** TODO add a navbar link for the datasets route
 *** TODO browse snapshots via webui
 *** TODO browse directory tree via webui
 *** TODO restore a file to local disk via webui
-** Loose issues
-*** TODO sometimes creating a new store results in a network error
-*** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
-**** seemingly only on Ubuntu (maybe Debian, need to test)
 ** kohaku remote (SFTP) backup
-*** TODO backup progress reporting seems weird
-**** number of files repeats which seems wrong
-#+BEGIN_SRC
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 0, files: 0
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 1, files: 0
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 1, files: 3040
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 2, files: 3040
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 2, files: 3333
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 3, files: 3333
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 3, files: 3343
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 4, files: 3343
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 4, files: 5019
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 5, files: 5019
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 5, files: 7118
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 6, files: 7118
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 6, files: 7490
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 7, files: 7490
-progress for 01dnwy2adgwbadf7satd0thmqn: packs: 7, files: 10412
-complete for 01dnwy2adgwbadf7satd0thmqn: packs: 7, files: 10412
-#+END_SRC
 *** TODO should maybe have an initial backup delay on startup
 **** it starts up and immediately starts processing backups
 *** TODO form for defining an SFTP store
@@ -179,6 +200,10 @@ complete for 01dnwy2adgwbadf7satd0thmqn: packs: 7, files: 10412
 *** TODO support SFTP with private key authentication
 *** TODO allow private key that is locked with a passphrase
 *** TODO use this to replace =replicaz= for remote backup
+** Loose issues
+*** TODO sometimes creating a new store results in a network error
+*** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
+**** seemingly only on Ubuntu (maybe Debian, need to test)
 ** Loose GraphQL tasks
 *** TODO test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
