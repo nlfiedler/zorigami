@@ -7,6 +7,7 @@
 
 use failure::{err_msg, Error};
 use fastcdc;
+use log::error;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::pwhash::{self, Salt};
@@ -408,6 +409,8 @@ pub enum EntryType {
     DIR,
     /// Definitely a symbolic link.
     SYMLINK,
+    /// Error occurred while processing the entry.
+    ERROR,
 }
 
 impl EntryType {
@@ -516,6 +519,21 @@ impl fmt::Display for TreeReference {
 }
 
 ///
+/// Return the last part of the path, converting to a String.
+///
+fn get_file_name(path: &Path) -> String {
+    // ignore any paths that end in '..'
+    if let Some(p) = path.file_name() {
+        // ignore any paths that failed UTF-8 translation
+        if let Some(pp) = p.to_str() {
+            return pp.to_owned();
+        }
+    }
+    // normal conversion failed, return whatever garbage is there
+    path.to_string_lossy().into_owned()
+}
+
+///
 /// A `TreeEntry` represents a file, directory, or symbolic link within a tree.
 ///
 #[derive(Serialize, Deserialize, Debug)]
@@ -561,27 +579,41 @@ impl TreeEntry {
     ///
     /// Create an instance of `TreeEntry` based on the given path.
     ///
-    pub fn new(path: &Path, reference: TreeReference) -> Result<Self, Error> {
-        let attr = fs::symlink_metadata(path)?;
-        let name = path
-            .file_name()
-            .ok_or_else(|| err_msg("invalid file path"))?;
+    pub fn new(path: &Path, reference: TreeReference) -> Self {
+        let name = get_file_name(path);
+        // Lot of error handling built-in so we can safely process any path
+        // entry and not blow up the backup process.
+        let metadata = fs::symlink_metadata(path);
+        let fstype = match metadata.as_ref() {
+            Ok(attr) => EntryType::from(attr.file_type()),
+            Err(err) => {
+                error!("error getting metadata for {:?}: {}", path, err);
+                EntryType::ERROR
+            },
+        };
+        let mtime = match metadata.as_ref() {
+            Ok(attr) => attr.modified().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),
+            Err(_) => SystemTime::UNIX_EPOCH,
+        };
         // creation time is not available on all platforms, and we are only
         // using it to record a value in the database
-        let ctime: SystemTime = attr.created().unwrap_or_else(|_| SystemTime::UNIX_EPOCH);
-        Ok(Self {
-            name: name.to_str().unwrap().to_owned(),
-            fstype: EntryType::from(attr.file_type()),
+        let ctime = match metadata.as_ref() {
+            Ok(attr) => attr.created().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),
+            Err(_) => SystemTime::UNIX_EPOCH,
+        };
+        Self {
+            name,
+            fstype,
             mode: None,
             uid: None,
             gid: None,
             user: None,
             group: None,
             ctime,
-            mtime: attr.modified()?,
+            mtime,
             reference,
             xattrs: HashMap::new(),
-        })
+        }
     }
 
     ///
@@ -595,16 +627,14 @@ impl TreeEntry {
         #[cfg(target_family = "unix")]
         {
             use std::os::unix::fs::MetadataExt;
-            let result = fs::symlink_metadata(path);
-            if let Ok(meta) = result {
+            if let Ok(meta) = fs::symlink_metadata(path) {
                 self.mode = Some(meta.mode());
             }
         }
         #[cfg(target_family = "windows")]
         {
             use std::os::windows::prelude::*;
-            let result = fs::symlink_metadata(path);
-            if let Ok(meta) = result {
+            if let Ok(meta) = fs::symlink_metadata(path) {
                 self.mode = Some(metadata.file_attributes());
             }
         }
@@ -1399,9 +1429,7 @@ mod tests {
     fn test_tree_entry() {
         let path = Path::new("./tests/fixtures/lorem-ipsum.txt");
         let tref = TreeReference::TREE(Checksum::SHA1("cafebabe".to_owned()));
-        let result = TreeEntry::new(&path, tref);
-        assert!(result.is_ok());
-        let mut entry = result.unwrap();
+        let mut entry = TreeEntry::new(&path, tref);
         entry = entry.mode(&path);
         entry = entry.owners(&path);
         assert_eq!(entry.reference.to_string(), "tree-sha1-cafebabe");
@@ -1427,13 +1455,11 @@ mod tests {
         let path = Path::new("./tests/fixtures/lorem-ipsum.txt");
         let sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let tref = TreeReference::FILE(sha1);
-        let result = TreeEntry::new(&path, tref);
-        let entry1 = result.unwrap();
+        let entry1 = TreeEntry::new(&path, tref);
         let path = Path::new("./tests/fixtures/SekienAkashita.jpg");
         let sha1 = Checksum::SHA1("4c009e44fe5794df0b1f828f2a8c868e66644964".to_owned());
         let tref = TreeReference::FILE(sha1);
-        let result = TreeEntry::new(&path, tref);
-        let entry2 = result.unwrap();
+        let entry2 = TreeEntry::new(&path, tref);
         let tree = Tree::new(vec![entry1, entry2], 2);
         let sha1 = tree.checksum();
         // with file timestamps, the digest always changes

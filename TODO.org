@@ -44,9 +44,8 @@
 ***** DONE read the salt from the corresponding pack record
 **** DONE update all references to ~openpgp~ everywhere
 *** DONE fix the clippy issues found in =sftp.rs=
-*** TODO catch and report file errors in =process_path()= and gracefully skip that entry
-**** need to indicate there was an error for that entry in the file browser
-*** TODO seems like multiple jobs are spawning at the same time
+*** DONE catch and report file errors in =process_path()= and gracefully skip that entry
+*** DONE seems like multiple jobs are spawning at the same time
 **** kernel errors in the =dmesg= output
 #+BEGIN_SRC
 [230312.758919] INFO: task zorigami:9494 blocked for more than 120 seconds.
@@ -85,7 +84,7 @@
 **** no pack files were made
 **** really long log file
 **** seems like the supervisor is starting the backup repeatedly
-*** TODO log snapshot metrics after =take_snapshot()= call
+*** DONE log snapshot metrics after =take_snapshot()= call
 **** number of files
 **** time duration
 *** TODO use this to replace =replicaz= for local backup
@@ -189,6 +188,7 @@ XDG_SESSION_ID=760
 *** TODO add a navbar link for the datasets route
 *** TODO browse snapshots via webui
 *** TODO browse directory tree via webui
+*** TODO tree entries of =ERROR= type should be displayed as such
 *** TODO restore a file to local disk via webui
 ** kohaku remote (SFTP) backup
 *** TODO should maybe have an initial backup delay on startup
@@ -247,6 +247,8 @@ XDG_SESSION_ID=760
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 ** Robustness and Recovery
+*** TODO =core::scan_tree()= should not return a Result, deal with all of the errors
+**** need to be robust against all sorts of weird file access issues
 *** TODO store database in a bucket named after the "computer UUID"
 **** pack file should be a ULID so that the most recent entry is sorted last
 **** glacier will use s3 to track the "compuuter UUID" to vault name mapping

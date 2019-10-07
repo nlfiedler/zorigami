@@ -231,5 +231,7 @@ fn get_file_name(path: &Path) -> Option<String> {
             return Some(pp.to_owned());
         }
     }
+    // This is like core::get_file_name(), but we would likely have errors later
+    // on if we tried to use lossy values for CRUD operations.
     None
 }

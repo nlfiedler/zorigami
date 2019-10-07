@@ -12,12 +12,12 @@ use super::state::{self, Action};
 use super::store;
 use base64::encode;
 use failure::{err_msg, Error};
-use log::{debug, trace};
+use log::{debug, info, trace};
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, SystemTimeError};
 use tempfile;
 use xattr;
 
@@ -218,6 +218,7 @@ pub fn take_snapshot(
     parent: Option<core::Checksum>,
     dbase: &Database,
 ) -> Result<Option<core::Checksum>, Error> {
+    let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase)?;
     let tree_sha1 = tree.checksum();
     if parent.is_some() {
@@ -230,11 +231,37 @@ pub fn take_snapshot(
             return Ok(None);
         }
     }
+    let end_time = SystemTime::now();
+    let time_diff = end_time.duration_since(start_time);
+    let pretty_time = pretty_print_duration(time_diff);
     let mut snap = core::Snapshot::new(parent, tree_sha1);
     snap = snap.file_count(tree.file_count);
     let sha1 = snap.checksum();
+    info!(
+        "took snapshot {} with {} files after {}",
+        sha1, tree.file_count, pretty_time
+    );
     dbase.insert_snapshot(&sha1, &snap)?;
     Ok(Some(sha1))
+}
+
+// Return a short string description of the duration.
+fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
+    match duration {
+        Ok(value) => {
+            let seconds = value.as_secs();
+            if seconds > 3600 {
+                let hours = seconds / 3600;
+                format!("{} hours", hours)
+            } else if seconds > 60 {
+                let minutes = seconds / 60;
+                format!("{} minutes", minutes)
+            } else {
+                format!("{} seconds", seconds)
+            }
+        }
+        Err(_) => "-1".to_owned(),
+    }
 }
 
 ///
@@ -669,17 +696,17 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
             file_count += scan.file_count;
             let digest = scan.checksum();
             let tref = core::TreeReference::TREE(digest);
-            let ent = process_path(&path, tref, dbase)?;
+            let ent = process_path(&path, tref, dbase);
             entries.push(ent);
         } else if file_type.is_symlink() {
             let link = read_link(&path)?;
             let tref = core::TreeReference::LINK(link);
-            let ent = process_path(&path, tref, dbase)?;
+            let ent = process_path(&path, tref, dbase);
             entries.push(ent);
         } else if file_type.is_file() {
             let digest = core::checksum_file(&path)?;
             let tref = core::TreeReference::FILE(digest);
-            let ent = process_path(&path, tref, dbase)?;
+            let ent = process_path(&path, tref, dbase);
             entries.push(ent);
             file_count += 1;
         }
@@ -698,8 +725,8 @@ fn process_path(
     fullpath: &Path,
     reference: core::TreeReference,
     dbase: &Database,
-) -> Result<core::TreeEntry, Error> {
-    let mut entry = core::TreeEntry::new(fullpath, reference)?;
+) -> core::TreeEntry {
+    let mut entry = core::TreeEntry::new(fullpath, reference);
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
     trace!("processed path entry {:?}", fullpath);
@@ -710,17 +737,18 @@ fn process_path(
             for name in xattrs {
                 let nm = name
                     .to_str()
-                    .ok_or_else(|| err_msg(format!("invalid UTF-8 in filename: {:?}", fullpath)))?;
-                let value = xattr::get(fullpath, &name)?;
-                if value.is_some() {
-                    let digest = core::checksum_data_sha1(value.as_ref().unwrap());
-                    dbase.insert_xattr(&digest, value.as_ref().unwrap())?;
-                    entry.xattrs.insert(nm.to_owned(), digest);
+                    .map(|v| v.to_owned())
+                    .unwrap_or_else(|| name.to_string_lossy().into_owned());
+                if let Ok(Some(value)) = xattr::get(fullpath, &name) {
+                    let digest = core::checksum_data_sha1(value.as_ref());
+                    if dbase.insert_xattr(&digest, value.as_ref()).is_ok() {
+                        entry.xattrs.insert(nm, digest);
+                    }
                 }
             }
         }
     }
-    Ok(entry)
+    entry
 }
 
 /// Builds pack files by splitting incoming files into chunks.
@@ -1068,5 +1096,20 @@ mod tests {
             sum.to_string(),
             "sha1-086f6c6ba3e51882c4fd55fc9733316c4ee1b15d"
         );
+    }
+
+    #[test]
+    fn test_pretty_print_duration() {
+        let input = Duration::from_secs(5);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "5 seconds");
+
+        let input = Duration::from_secs(65);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "1 minutes");
+
+        let input = Duration::from_secs(7300);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "2 hours");
     }
 }
