@@ -15,7 +15,7 @@ use super::state;
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
-use log::{error, info};
+use log::{debug, error, info};
 use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
             if let Some(backup) = redux.backups(&set.key) {
                 if backup.end_time().is_none() {
                     maybe_run = false;
-                    info!("dataset {} backup already in progress", &set.key);
+                    debug!("dataset {} backup already in progress", &set.key);
                 }
             }
         }
