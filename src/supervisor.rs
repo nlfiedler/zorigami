@@ -32,6 +32,10 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
     thread::spawn(move || {
         loop {
+            // sleep for 5 minutes before starting so it gives me a chance
+            // to change the configuration without having to wipe the
+            // database first
+            thread::sleep(Duration::from_millis(300_000));
             // look for datasets that should be running, spawning a thread to
             // run the backup for any waiting datasets
             match dbase.get_all_datasets() {
@@ -51,8 +55,6 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
                 }
                 Err(err) => error!("failed to retrieve datasets: {}", err),
             }
-            // sleep for 5 minutes before trying again
-            thread::sleep(Duration::from_millis(300_000));
         }
     });
     Ok(())
@@ -95,7 +97,6 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 /// Determine if the snapshot finished a sufficiently long time ago to warrant
 /// running a backup now.
 ///
-#[allow(dead_code)]
 fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
     if let Some(et) = snapshot.end_time {
         let end_time = DateTime::<Utc>::from(et);
