@@ -91,9 +91,9 @@
 **** need to be robust against all sorts of weird file access issues
 *** DONE should maybe have an initial backup delay on startup
 **** it starts up and immediately starts processing backups
-*** TODO change snapshot duration display to show hours, minutes, and seconds
+*** DONE change snapshot duration display to show hours, minutes, and seconds
 **** e.g. ~1 hours, 32 minutes, 16 seconds~
-*** TODO log how long the backup process took
+*** DONE log how long the backup process took
 *** TODO use this to replace =replicaz= for local backup
 **** build the image locally, push to docker registry
 **** deploy as a single instance, using volumes for data

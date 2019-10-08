@@ -245,23 +245,29 @@ pub fn take_snapshot(
     Ok(Some(sha1))
 }
 
-// Return a short string description of the duration.
-fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
+// Return a clear and accurate description of the duration.
+pub fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
+    let mut result = String::new();
     match duration {
         Ok(value) => {
-            let seconds = value.as_secs();
+            let mut seconds = value.as_secs();
             if seconds > 3600 {
                 let hours = seconds / 3600;
-                format!("{} hours", hours)
-            } else if seconds > 60 {
+                result.push_str(format!("{} hours ", hours).as_ref());
+                seconds -= hours * 3600;
+            }
+            if seconds > 60 {
                 let minutes = seconds / 60;
-                format!("{} minutes", minutes)
-            } else {
-                format!("{} seconds", seconds)
+                result.push_str(format!("{} minutes ", minutes).as_ref());
+                seconds -= minutes * 60;
+            }
+            if seconds > 0 {
+                result.push_str(format!("{} seconds", seconds).as_ref());
             }
         }
-        Err(_) => "-1".to_owned(),
+        Err(_) => result.push_str("(error)"),
     }
+    result
 }
 
 ///
@@ -1139,10 +1145,18 @@ mod tests {
 
         let input = Duration::from_secs(65);
         let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "1 minutes");
+        assert_eq!(result, "1 minutes 5 seconds");
+
+        let input = Duration::from_secs(4949);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "1 hours 22 minutes 29 seconds");
 
         let input = Duration::from_secs(7300);
         let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "2 hours");
+        assert_eq!(result, "2 hours 1 minutes 40 seconds");
+
+        let input = Duration::from_secs(10090);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "2 hours 48 minutes 10 seconds");
     }
 }

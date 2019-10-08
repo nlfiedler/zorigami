@@ -21,7 +21,7 @@ use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 ///
 /// Spawn a thread to monitor the datasets, ensuring that backups are started
@@ -126,10 +126,14 @@ fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
         info!("dataset {} to be backed up", &set_key);
         match dbase.get_dataset(&set_key) {
             Ok(Some(mut dataset)) => {
+                let start_time = SystemTime::now();
                 match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
                     Ok(Some(checksum)) => {
+                        let end_time = SystemTime::now();
+                        let time_diff = end_time.duration_since(start_time);
+                        let pretty_time = engine::pretty_print_duration(time_diff);
                         info!("created new snapshot {}", &checksum);
-                        info!("dataset {} backup complete", &set_key);
+                        info!("dataset {} backup complete after {}", &set_key, pretty_time);
                     }
                     Ok(None) => info!("no new snapshot required"),
                     Err(err) => error!("could not perform backup: {}", err),
