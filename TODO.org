@@ -89,6 +89,11 @@
 **** time duration
 *** DONE =core::scan_tree()= should not return a Result, deal with all of the errors
 **** need to be robust against all sorts of weird file access issues
+*** DONE should maybe have an initial backup delay on startup
+**** it starts up and immediately starts processing backups
+*** TODO change snapshot duration display to show hours, minutes, and seconds
+**** e.g. ~1 hours, 32 minutes, 16 seconds~
+*** TODO log how long the backup process took
 *** TODO use this to replace =replicaz= for local backup
 **** build the image locally, push to docker registry
 **** deploy as a single instance, using volumes for data
@@ -195,14 +200,14 @@ XDG_SESSION_ID=760
 ***** e.g. =TreeReference.ERROR(String)= where the string is the error message
 *** TODO restore a file to local disk via webui
 ** kohaku remote (SFTP) backup
-*** TODO should maybe have an initial backup delay on startup
-**** it starts up and immediately starts processing backups
 *** TODO form for defining an SFTP store
 **** TODO new store form needs to have a "kind" selector
 **** TODO selecting different kind will rebuild new store form accordingly
 **** TODO make a different form and validation module for each type of store
 *** TODO support SFTP with private key authentication
 *** TODO allow private key that is locked with a passphrase
+*** TODO allow multiple stores per dataset
+**** really should run one backup, store locally and to sftp at the same time
 *** TODO use this to replace =replicaz= for remote backup
 ** Loose issues
 *** TODO sometimes creating a new store results in a network error
@@ -289,6 +294,9 @@ XDG_SESSION_ID=760
 **** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
 *** TODO use this to replace =akashita= for online backups
 ** More Functionality
+*** TODO Query to see histogram of file sizes, number of chunks, etc
+**** for a given snapshot...
+**** count number of files with N chunks for all values of N
 *** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store

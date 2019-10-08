@@ -773,6 +773,11 @@ fn process_path(
     entry
 }
 
+// The default desired chunk size should be a little larger than the typical
+// image file, and small enough that packs do not end up with a wide range
+// of sizes due to large chunks.
+const DEFAULT_CHUNK_SIZE: u64 = 4_194_304;
+
 /// Builds pack files by splitting incoming files into chunks.
 pub struct PackBuilder<'a> {
     /// Reference to Database for fetching records.
@@ -793,8 +798,14 @@ pub struct PackBuilder<'a> {
 impl<'a> PackBuilder<'a> {
     /// Create a new builder with the desired size.
     pub fn new(dbase: &'a Database, pack_size: u64) -> Self {
-        // Use the pack size as a guide for determining the chunk sizes.
-        let chunk_size = pack_size / 4;
+        // Use our default chunk size unless the desired pack size is so
+        // small that the chunks would be a significant portion of the pack
+        // file (this is mostly for testing purposes).
+        let chunk_size = if pack_size < DEFAULT_CHUNK_SIZE * 4 {
+            pack_size / 4
+        } else {
+            DEFAULT_CHUNK_SIZE
+        };
         Self {
             dbase,
             pack_size,
