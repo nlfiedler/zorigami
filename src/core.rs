@@ -589,7 +589,7 @@ impl TreeEntry {
             Err(err) => {
                 error!("error getting metadata for {:?}: {}", path, err);
                 EntryType::ERROR
-            },
+            }
         };
         let mtime = match metadata.as_ref() {
             Ok(attr) => attr.modified().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),

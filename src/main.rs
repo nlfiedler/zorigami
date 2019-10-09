@@ -6,7 +6,7 @@
 //! supervisor threads to manage the backups.
 
 use actix_files as afs;
-use actix_web::{middleware, web, App, Error, HttpResponse, HttpRequest, HttpServer};
+use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use env_logger;
 use futures::future::Future;
 use juniper::http::graphiql::graphiql_source;

@@ -101,8 +101,7 @@ fn test_store_access() -> Result<(), Error> {
 
     // fetch the local store to make sure the options were saved
     let query = format!(r#"query {{ store(key: "{}") {{ options }} }}"#, key);
-    let (res, _errors) =
-        juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
+    let (res, _errors) = juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
     let res = res.as_object_value().unwrap();
     let res = res.get_field_value("store").unwrap();
     let res = res.as_object_value().unwrap();
@@ -138,8 +137,7 @@ fn test_store_access() -> Result<(), Error> {
 
     // fetch the local store to make sure the options were saved
     let query = format!(r#"query {{ store(key: "{}") {{ options }} }}"#, key);
-    let (res, _errors) =
-        juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
+    let (res, _errors) = juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
     let res = res.as_object_value().unwrap();
     let res = res.get_field_value("store").unwrap();
     let res = res.as_object_value().unwrap();
@@ -319,7 +317,10 @@ fn test_dataset_access() -> Result<(), Error> {
     .unwrap();
     assert!(res.is_null());
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].error().message().contains("schedule expression could not be parsed"));
+    assert!(errors[0]
+        .error()
+        .message()
+        .contains("schedule expression could not be parsed"));
 
     // finally define a valid dataset!
     let mut vars = Variables::new();
@@ -428,8 +429,7 @@ fn test_dataset_access() -> Result<(), Error> {
 
     // fetch dataset and make sure pack_size has been updated
     let query = format!(r#"query {{ dataset(key: "{}") {{ packSize }} }}"#, key);
-    let (res, _errors) =
-        juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
+    let (res, _errors) = juniper::execute(&query, None, &schema, &Variables::new(), &ctx).unwrap();
     let res = res.as_object_value().unwrap();
     let res = res.get_field_value("dataset").unwrap();
     let res = res.as_object_value().unwrap();
@@ -478,7 +478,10 @@ fn test_dataset_access() -> Result<(), Error> {
     .unwrap();
     assert!(res.is_null());
     assert_eq!(errors.len(), 1);
-    assert!(errors[0].error().message().contains("Dataset does not exist"));
+    assert!(errors[0]
+        .error()
+        .message()
+        .contains("Dataset does not exist"));
 
     Ok(())
 }
