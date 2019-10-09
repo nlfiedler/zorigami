@@ -1,7 +1,7 @@
 * Zorigami
 ** restore file via webui
-*** TODO move datasets to their own page
-*** TODO add a navbar link for the datasets route
+*** DONE move datasets to their own page
+*** DONE add a navbar link for the datasets route
 *** TODO browse snapshots via webui
 *** TODO browse directory tree via webui
 *** TODO tree entries of =ERROR= type should be displayed as such

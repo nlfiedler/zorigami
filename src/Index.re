@@ -7,6 +7,7 @@ module App = {
     let url = ReasonReactRouter.useUrl();
     let content =
       switch (url.path) {
+      | ["datasets"] => <Datasets.Component />
       | ["stores"] => <Stores.Component />
       | [] => <Home.Component />
       | _ => <NotFound.Component />
