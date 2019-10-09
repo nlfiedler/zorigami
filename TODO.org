@@ -106,6 +106,10 @@
 *** TODO Query to see histogram of file sizes, number of chunks, etc
 **** for a given snapshot...
 **** count number of files with N chunks for all values of N
+*** TODO show details about snapshots and files
+**** show differences between two snapshots
+**** show pack/chunk metrics for   all   files in a snapshot
+**** show pack/chunk metrics for changed files in a snapshot
 *** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store

@@ -40,6 +40,24 @@ fn test_datasets() -> Result<(), Error> {
 }
 
 #[test]
+fn test_pack_chunk_sizes() {
+    let db_path = DBPath::new("_test_pack_chunk_sizes");
+    let dbase = Database::new(&db_path).unwrap();
+    let builder = PackBuilder::new(&dbase, 65_536);
+    assert_eq!(builder.chunk_size(), 16_384);
+    let builder = PackBuilder::new(&dbase, 131_072);
+    assert_eq!(builder.chunk_size(), 32_768);
+    let builder = PackBuilder::new(&dbase, 262_144);
+    assert_eq!(builder.chunk_size(), 65_536);
+    let builder = PackBuilder::new(&dbase, 16_777_216);
+    assert_eq!(builder.chunk_size(), 4_194_304);
+    let builder = PackBuilder::new(&dbase, 33_554_432);
+    assert_eq!(builder.chunk_size(), 4_194_304);
+    let builder = PackBuilder::new(&dbase, 134_217_728);
+    assert_eq!(builder.chunk_size(), 4_194_304);
+}
+
+#[test]
 fn test_basic_snapshots() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_basic_snapshots");

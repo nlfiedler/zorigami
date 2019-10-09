@@ -822,6 +822,11 @@ impl<'a> PackBuilder<'a> {
         }
     }
 
+    /// For testing purposes.
+    pub fn chunk_size(&self) -> u64 {
+        self.chunk_size
+    }
+
     /// Return number of files in this pack, primarily for testing.
     pub fn file_count(&self) -> usize {
         self.file_chunks.len()
