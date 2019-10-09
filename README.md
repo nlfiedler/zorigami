@@ -135,6 +135,38 @@ produced `7` pack files, `32M` in size, totaling `67M`, containing the `10,412`
 unique files (verified with `fdupes -rm`). Database files totaling `7.5M` in
 size.
 
+### Linux ZFS
+
+* Intel Xeon E3-1220 v5 @ 3.00GHz
+* 32 GB RAM
+* ZFS 5 disk pool (raidz1)
+* 305,567 MB of disk usage
+* 123,586 files
+* 2.47 MB average file size
+* 12,947 duplicates, 69,165 MB (confirmed with `fdupes -rm`)
+* 10,015 lines of log output at DEBUG level
+* 0 errors
+
+#### Snap-shotting
+
+* 1 hours, 22 minutes, 29 seconds
+* 25 files per second
+* database: 54 MB
+* database overhead: 0.02%
+
+#### Pack-building
+
+* 2 hours, 48 minutes, 10 seconds
+* 11 files per second
+* USB attached slow disk
+* Mostly I/O bound
+* 8 MB chunk sizes
+* 3,373 pack files, 110,639 files
+* pack store: 239,803 MB
+* ZFS dataset: 307,992 MB
+* Pack file overhead: 0.4%
+* Size difference due largely to duplicate files
+
 ## Origin of the name
 
 A zorigami is a clock possessed by a spirit, as described on the
