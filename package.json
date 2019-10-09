@@ -21,14 +21,14 @@
   },
   "dependencies": {
     "@glennsl/bs-json": "^4.0.0",
-    "apollo-client": "^2.6.3",
-    "re-formality": "^3.0.0",
+    "apollo-client": "^2.6.4",
+    "re-formality": "^3.1.0",
     "reason-apollo": "^0.16.4",
     "reason-react": "^0.7.0"
   },
   "devDependencies": {
     "bs-platform": "^5.0.6",
-    "del": "^5.0.0",
+    "del": "^5.1.0",
     "graphql_ppx": "^0.2.8",
     "gulp": "^4.0.2",
     "gulp-if": "^3.0.0",
