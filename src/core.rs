@@ -256,8 +256,6 @@ pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
     let mut results = Vec::new();
     let file = File::open(infile)?;
     let mut ar = Archive::new(file);
-    // seems clippy is confused by this one
-    #[allow(clippy::identity_conversion)]
     for entry in ar.entries()? {
         let mut file = entry?;
         let fp = file.path()?;
@@ -694,13 +692,13 @@ impl fmt::Display for TreeEntry {
         let ctime = self
             .ctime
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .and_then(|v| Ok(v.as_secs()))
+            .unwrap_or(0);
         let mtime = self
             .mtime
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .and_then(|v| Ok(v.as_secs()))
+            .unwrap_or(0);
         // Format in a manner similar to git tree entries; this forms part of
         // the digest value for the overall tree, so it should remain relatively
         // stable over time.
@@ -833,21 +831,20 @@ impl fmt::Display for Snapshot {
         let stime = self
             .start_time
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .and_then(|v| Ok(v.as_secs()))
+            .unwrap_or(0);
         let etime = self
             .end_time
             .unwrap_or(std::time::UNIX_EPOCH)
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .and_then(|v| Ok(v.as_secs()))
+            .unwrap_or(0);
         // Format in a manner similar to git commit entries; this forms part of
         // the digest value for the snapshot, so it should remain relatively
         // stable over time.
-        let parent = if self.parent.is_none() {
-            NULL_SHA1.to_string()
-        } else {
-            self.parent.as_ref().unwrap().to_string()
+        let parent = match self.parent {
+            None => NULL_SHA1.to_string(),
+            Some(ref value) => value.to_string(),
         };
         write!(
             f,

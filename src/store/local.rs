@@ -111,7 +111,9 @@ impl super::Store for LocalStore {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                results.push(entry.file_name().to_str().unwrap().to_owned());
+                if let Some(name) = super::get_file_name(&path) {
+                    results.push(name);
+                }
             }
         }
         Ok(results)
@@ -124,7 +126,9 @@ impl super::Store for LocalStore {
             let entry = entry?;
             let path = entry.path();
             if path.is_file() {
-                results.push(entry.file_name().to_str().unwrap().to_owned());
+                if let Some(name) = super::get_file_name(&path) {
+                    results.push(name);
+                }
             }
         }
         Ok(results)

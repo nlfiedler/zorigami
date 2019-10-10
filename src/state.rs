@@ -136,16 +136,19 @@ impl Reducer<Action> for State {
                 self.backups.insert(key, BackupState::default());
             }
             Action::UploadPack(key) => {
-                let record = self.backups.get_mut(&key).unwrap();
-                record.packs_uploaded += 1;
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.packs_uploaded += 1;
+                }
             }
             Action::UploadFiles(key, inc) => {
-                let record = self.backups.get_mut(&key).unwrap();
-                record.files_uploaded += inc;
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.files_uploaded += inc;
+                }
             }
             Action::FinishBackup(key) => {
-                let record = self.backups.get_mut(&key).unwrap();
-                record.end_time = Some(SystemTime::now());
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.end_time = Some(SystemTime::now());
+                }
             }
         }
     }

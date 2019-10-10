@@ -83,22 +83,27 @@ fn continue_backup(
     let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
-    if parent_sha1.is_none() {
-        let snapshot = dbase.get_snapshot(&current_sha1)?.unwrap();
-        let tree = snapshot.tree.clone();
-        let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
-        for result in iter {
-            bmaster.handle_file(result)?;
+    match parent_sha1 {
+        None => {
+            let snapshot = dbase
+                .get_snapshot(&current_sha1)?
+                .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", current_sha1)))?;
+            let tree = snapshot.tree.clone();
+            let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
+            for result in iter {
+                bmaster.handle_file(result)?;
+            }
         }
-    } else {
-        let iter = find_changed_files(
-            dbase,
-            dataset.basepath.clone(),
-            parent_sha1.clone().unwrap(),
-            current_sha1.clone(),
-        )?;
-        for result in iter {
-            bmaster.handle_file(result)?;
+        Some(ref parent) => {
+            let iter = find_changed_files(
+                dbase,
+                dataset.basepath.clone(),
+                parent.clone(),
+                current_sha1.clone(),
+            )?;
+            for result in iter {
+                bmaster.handle_file(result)?;
+            }
         }
     }
     // upload the remaining chunks in the pack builder
@@ -200,7 +205,10 @@ impl<'a> BackupMaster<'a> {
 
     /// Update the current snapshot with the end time set to the current time.
     fn update_snapshot(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
-        let mut snapshot = self.dbase.get_snapshot(snap_sha1)?.unwrap();
+        let mut snapshot = self
+            .dbase
+            .get_snapshot(snap_sha1)?
+            .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
         snapshot = snapshot.end_time(SystemTime::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
         state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
@@ -221,8 +229,7 @@ pub fn take_snapshot(
     let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase)?;
     let tree_sha1 = tree.checksum();
-    if parent.is_some() {
-        let parent_sha1 = parent.as_ref().unwrap();
+    if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", parent_sha1)))?;
@@ -342,8 +349,6 @@ pub fn restore_file(
             cpath
         })
         .collect();
-    // c.f. https://github.com/rust-lang/rust-clippy/issues/3071
-    #[allow(clippy::redundant_closure)]
     let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
     core::assemble_chunks(&chunk_paths, outfile)?;
     Ok(())
@@ -677,7 +682,12 @@ impl<'a> Iterator for TreeWalker<'a> {
 ///
 fn read_link(path: &Path) -> String {
     if let Ok(value) = fs::read_link(path) {
-        encode(value.to_str().unwrap())
+        if let Some(vstr) = value.to_str() {
+            encode(vstr)
+        } else {
+            let s: String = value.to_string_lossy().into_owned();
+            encode(&s)
+        }
     } else {
         path.to_string_lossy().into_owned()
     }

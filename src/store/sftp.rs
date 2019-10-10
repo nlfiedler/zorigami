@@ -88,7 +88,7 @@ impl SftpStore {
     ///
     fn connect(&self) -> Result<Session, Error> {
         let tcp = TcpStream::connect(&self.config.remote_addr)?;
-        let mut sess = Session::new().unwrap();
+        let mut sess = Session::new()?;
         sess.set_tcp_stream(tcp);
         sess.handshake()?;
         sess.userauth_password(
@@ -170,7 +170,7 @@ impl super::Store for SftpStore {
         let mut results = Vec::new();
         for (path, stat) in listing {
             if stat.is_dir() {
-                if let Some(name) = get_file_name(&path) {
+                if let Some(name) = super::get_file_name(&path) {
                     results.push(name);
                 }
             }
@@ -189,7 +189,7 @@ impl super::Store for SftpStore {
         let mut results = Vec::new();
         for (path, stat) in listing {
             if stat.is_file() {
-                if let Some(name) = get_file_name(&path) {
+                if let Some(name) = super::get_file_name(&path) {
                     results.push(name);
                 }
             }
@@ -218,20 +218,4 @@ impl super::Store for SftpStore {
         sftp.rmdir(&bucket_path)?;
         Ok(())
     }
-}
-
-///
-/// Return the last part of the path, converting to a String.
-///
-fn get_file_name(path: &Path) -> Option<String> {
-    // ignore any paths that end in '..'
-    if let Some(p) = path.file_name() {
-        // ignore any paths that failed UTF-8 translation
-        if let Some(pp) = p.to_str() {
-            return Some(pp.to_owned());
-        }
-    }
-    // This is like core::get_file_name(), but we would likely have errors later
-    // on if we tried to use lossy values for CRUD operations.
-    None
 }

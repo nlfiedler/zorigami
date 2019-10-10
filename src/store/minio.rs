@@ -142,7 +142,7 @@ impl super::Store for MinioStore {
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
         //
-        let meta = fs::metadata(packfile).unwrap();
+        let meta = fs::metadata(packfile)?;
         let fs = FsPool::default();
         let read_stream = fs.read(packfile.to_owned(), Default::default());
         let req = PutObjectRequest {
@@ -153,12 +153,11 @@ impl super::Store for MinioStore {
             ..Default::default()
         };
         let result = client.put_object(req).sync()?;
-        if result.e_tag.is_some() {
+        if let Some(ref etag) = result.e_tag {
             // compute MD5 of file and compare to returned e_tag
             let md5 = checksum_file(packfile)?;
             // AWS S3 quotes the etag values for some reason
-            let quoted_etag = result.e_tag.as_ref().unwrap();
-            let stripped_etag = &quoted_etag.trim_matches('"');
+            let stripped_etag = etag.trim_matches('"');
             if !md5.eq(stripped_etag) {
                 return Err(err_msg("returned e_tag does not match MD5 of pack file"));
             }
@@ -175,7 +174,13 @@ impl super::Store for MinioStore {
             ..Default::default()
         };
         let result = client.get_object(request).sync()?;
-        let stream = result.body.unwrap();
+        let stream = result.body.ok_or_else(|| {
+            err_msg(format!(
+                "failed to retrieve object {} from bucket {}",
+                location.object.clone(),
+                location.bucket.clone()
+            ))
+        })?;
         let mut file = File::create(outfile)?;
         stream
             .for_each(move |chunk| file.write_all(&chunk).map_err(Into::into))
@@ -187,8 +192,12 @@ impl super::Store for MinioStore {
         let client = self.connect();
         let result = client.list_buckets().sync()?;
         let mut results = Vec::new();
-        for bucket in result.buckets.unwrap() {
-            results.push(bucket.name.unwrap());
+        if let Some(buckets) = result.buckets {
+            for bucket in buckets {
+                if let Some(name) = bucket.name {
+                    results.push(name);
+                }
+            }
         }
         Ok(results)
     }

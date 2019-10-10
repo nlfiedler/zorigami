@@ -212,11 +212,16 @@ impl Into<core::Dataset> for Dataset {
 
 impl From<core::Dataset> for Dataset {
     fn from(set: core::Dataset) -> Self {
+        let basepath = set
+            .basepath
+            .to_str()
+            .and_then(|v| Some(v.to_owned()))
+            .unwrap_or_else(|| set.basepath.to_string_lossy().into_owned());
         let snapshot = set.latest_snapshot.map(Checksum::from);
         Self {
             key: set.key,
             computer_id: set.computer_id,
-            basepath: set.basepath.to_str().unwrap().to_owned(),
+            basepath,
             schedule: set.schedule,
             latest_snapshot: snapshot,
             // workspace: set.workspace.to_str().unwrap().to_owned(),
@@ -416,28 +421,31 @@ graphql_object!(MutationRoot: Database | &self | {
 
     #[doc = "Update an existing dataset with the given configuration."]
     field updateDataset(&executor, dataset: InputDataset) -> FieldResult<Dataset> {
-        if dataset.key.is_none() {
-            return Err(FieldError::new(
+        match dataset.key {
+            None => Err(FieldError::new(
                 "Dataset must specify a key",
                 Value::null()
-            ));
+            )),
+            Some(ref set_key) => {
+                let database = executor.context();
+                dataset.validate(&database)?;
+                match database.get_dataset(set_key)? {
+                    None => Err(FieldError::new(
+                        format!("Dataset does not exist: {}", set_key),
+                        Value::null()
+                    )),
+                    Some(dset) => {
+                        let key = dset.key.clone();
+                        let mut ds = Dataset::from(dset);
+                        ds = ds.copy_input(dataset);
+                        let mut set: core::Dataset = ds.into();
+                        set.key = key;
+                        database.put_dataset(&set)?;
+                        Ok(Dataset::from(set))
+                    }
+                }
+            }
         }
-        let database = executor.context();
-        dataset.validate(&database)?;
-        let opt = database.get_dataset(dataset.key.as_ref().unwrap())?;
-        if opt.is_none() {
-            return Err(FieldError::new(
-                format!("Dataset does not exist: {}", dataset.key.as_ref().unwrap()),
-                Value::null()
-            ));
-        }
-        let key = opt.as_ref().unwrap().key.clone();
-        let mut ds = Dataset::from(opt.unwrap());
-        ds = ds.copy_input(dataset);
-        let mut set: core::Dataset = ds.into();
-        set.key = key;
-        database.put_dataset(&set)?;
-        Ok(Dataset::from(set))
     }
 
     #[doc = "Delete the named dataset, returning its current configuration."]

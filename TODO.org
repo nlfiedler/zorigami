@@ -3,6 +3,9 @@
 *** DONE move datasets to their own page
 *** DONE add a navbar link for the datasets route
 *** TODO browse snapshots via webui
+**** TODO show list of datasets by computer id and basepath
+**** TODO clicking on dataset then shows list of snapshots
+**** TODO clicking on snapshot then shows base directory
 *** TODO browse directory tree via webui
 *** TODO tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
