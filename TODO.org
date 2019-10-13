@@ -3,7 +3,7 @@
 *** DONE move datasets to their own page
 *** DONE add a navbar link for the datasets route
 *** TODO browse snapshots via webui
-**** TODO show list of datasets by computer id and basepath
+**** TODO show list of datasets by computer id, basepath, and schedule
 **** TODO clicking on dataset then shows list of snapshots
 **** TODO clicking on snapshot then shows base directory
 *** TODO browse directory tree via webui

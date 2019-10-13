@@ -15,6 +15,7 @@ use juniper::{
 };
 use std::path::Path;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // Our GraphQL version of the core::Checksum type. It is tedious to implement
 // all of the juniper interfaces, and the macro requires having a `from_str`
@@ -68,6 +69,45 @@ impl BigInt {
     }
 }
 
+impl Into<u32> for BigInt {
+    fn into(self) -> u32 {
+        self.0 as u32
+    }
+}
+
+impl From<u32> for BigInt {
+    fn from(t: u32) -> Self {
+        BigInt(i64::from(t))
+    }
+}
+
+// If the value is positive and successfully converts to a time then return
+// that, otherwise return Unix epoch (zero time).
+impl Into<SystemTime> for BigInt {
+    fn into(self) -> SystemTime {
+        if self.0 >= 0 {
+            let d = Duration::new(self.0 as u64, 0);
+            match UNIX_EPOCH.checked_add(d) {
+                Some(value) => value,
+                None => UNIX_EPOCH,
+            }
+        } else {
+            UNIX_EPOCH
+        }
+    }
+}
+
+// If the time can be converted to seconds since the Unix epoch, then return
+// that, otherwise return zero.
+impl From<SystemTime> for BigInt {
+    fn from(t: SystemTime) -> Self {
+        match t.duration_since(UNIX_EPOCH) {
+            Ok(value) => BigInt(value.as_secs() as i64),
+            Err(_err) => BigInt(0),
+        }
+    }
+}
+
 // need `where Scalar = <S>` parameterization to use this with objects
 // c.f. https://github.com/graphql-rust/juniper/issues/358 for details
 graphql_scalar!(BigInt where Scalar = <S> {
@@ -92,9 +132,25 @@ graphql_scalar!(BigInt where Scalar = <S> {
 #[derive(GraphQLEnum)]
 /// Type of the entry in the tree.
 enum EntryType {
+    /// Represents a file.
     File,
+    /// Represents a directory.
     Directory,
+    /// Represents a symbolic link.
     SymLink,
+    /// An error occurred when processing this entry.
+    Error,
+}
+
+impl From<core::EntryType> for EntryType {
+    fn from(entype: core::EntryType) -> Self {
+        match entype {
+            core::EntryType::FILE => EntryType::File,
+            core::EntryType::DIR => EntryType::Directory,
+            core::EntryType::SYMLINK => EntryType::SymLink,
+            core::EntryType::ERROR => EntryType::Error,
+        }
+    }
 }
 
 #[derive(GraphQLObject)]
@@ -108,15 +164,34 @@ struct TreeEntry {
     reference: String,
 }
 
+impl From<core::TreeEntry> for TreeEntry {
+    fn from(entry: core::TreeEntry) -> Self {
+        Self {
+            name: entry.name,
+            fstype: EntryType::from(entry.fstype),
+            reference: entry.reference.to_string(),
+        }
+    }
+}
+
 #[derive(GraphQLObject)]
 /// A collection of files, directories, and links.
 struct Tree {
     entries: Vec<TreeEntry>,
 }
 
+impl From<core::Tree> for Tree {
+    fn from(tree: core::Tree) -> Self {
+        let entries = tree.entries.into_iter().map(TreeEntry::from).collect();
+        Self { entries }
+    }
+}
+
 #[derive(GraphQLObject)]
 /// A single backup.
 struct Snapshot {
+    /// Computed checksum of the snapshot.
+    checksum: Checksum,
     /// The snapshot before this one, if any.
     parent: Option<Checksum>,
     /// Time when the snapshot was first created.
@@ -127,6 +202,31 @@ struct Snapshot {
     file_count: BigInt,
     /// Reference to the tree containing all of the files.
     tree: Checksum,
+}
+
+impl Into<core::Snapshot> for Snapshot {
+    fn into(self) -> core::Snapshot {
+        let parent = self.parent.map(Checksum::into);
+        let tree = Checksum::into(self.tree);
+        let mut snap = core::Snapshot::new(parent, tree);
+        snap.start_time = self.start_time.into();
+        snap.end_time = self.end_time.map(|v| v.into());
+        snap.file_count = self.file_count.into();
+        snap
+    }
+}
+
+impl From<core::Snapshot> for Snapshot {
+    fn from(set: core::Snapshot) -> Self {
+        Self {
+            checksum: Checksum::from(set.checksum()),
+            parent: set.parent.map(|v| v.into()),
+            start_time: BigInt::from(set.start_time),
+            end_time: set.end_time.map(|v| v.into()),
+            file_count: BigInt::from(set.file_count),
+            tree: Checksum::from(set.tree),
+        }
+    }
 }
 
 #[derive(GraphQLObject)]
@@ -170,8 +270,12 @@ struct Dataset {
     basepath: String,
     /// Cron-like expression for the backup schedule.
     schedule: Option<String>,
+    /// Checksum for the latest snapshot, if any. However, this is not exposed
+    /// to the client, only used to retrieve the full snapshot data as needed.
+    #[graphql(skip)]
+    latest_snapsum: Option<Checksum>,
     /// Reference to most recent snapshot.
-    latest_snapshot: Option<Checksum>,
+    latest_snapshot: Option<Snapshot>,
     /// Path to temporary workspace for backup process.
     // workspace: String,
     /// Specified byte length of pack files.
@@ -190,6 +294,19 @@ impl Dataset {
         self.stores = set.stores;
         self
     }
+
+    /// If the snapshot can be found in the database, convert to the GraphQL
+    /// representation, otherwise leave the value as `None`.
+    fn fill_snapshot(mut self, dbase: &Database) -> Self {
+        if let Some(value) = self.latest_snapsum.as_ref() {
+            if let Ok(digest) = core::Checksum::from_str(&value.0) {
+                if let Ok(Some(snapshot)) = dbase.get_snapshot(&digest) {
+                    self.latest_snapshot = Some(Snapshot::from(snapshot));
+                }
+            }
+        }
+        self
+    }
 }
 
 impl Into<core::Dataset> for Dataset {
@@ -197,7 +314,7 @@ impl Into<core::Dataset> for Dataset {
         let store = self.stores[0].clone();
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
         set.schedule = self.schedule;
-        set.latest_snapshot = self.latest_snapshot.map(Checksum::into);
+        set.latest_snapshot = self.latest_snapshot.map(|s| s.checksum.into());
         // set.workspace = PathBuf::from(&self.workspace);
         let new_pack_size = self.pack_size.0 as u64;
         if new_pack_size > 0 {
@@ -223,7 +340,8 @@ impl From<core::Dataset> for Dataset {
             computer_id: set.computer_id,
             basepath,
             schedule: set.schedule,
-            latest_snapshot: snapshot,
+            latest_snapsum: snapshot,
+            latest_snapshot: None,
             // workspace: set.workspace.to_str().unwrap().to_owned(),
             pack_size: BigInt(set.pack_size as i64),
             stores: set.stores,
@@ -334,7 +452,9 @@ graphql_object!(QueryRoot: Database |&self| {
         let datasets = database.get_all_datasets()?;
         let mut results: Vec<Dataset> = Vec::new();
         for set in datasets {
-            results.push(Dataset::from(set));
+            let mut ds = Dataset::from(set);
+            ds = ds.fill_snapshot(database);
+            results.push(ds);
         }
         Ok(results)
     }
@@ -344,7 +464,9 @@ graphql_object!(QueryRoot: Database |&self| {
         let database = executor.context();
         let opt = database.get_dataset(&key)?;
         if let Some(set) = opt {
-            Ok(Some(Dataset::from(set)))
+            let mut ds = Dataset::from(set);
+            ds = ds.fill_snapshot(database);
+            Ok(Some(ds))
         } else {
             Ok(None)
         }
@@ -367,6 +489,30 @@ graphql_object!(QueryRoot: Database |&self| {
         let database = executor.context();
         let stor = store::load_store(database, &key)?;
         Ok(Store::from(stor))
+    }
+
+    #[doc = "Retrieve a specific snapshot."]
+    field snapshot(&executor, digest: Checksum) -> FieldResult<Option<Snapshot>> {
+        let database = executor.context();
+        let snapsum = digest.into();
+        let opt = database.get_snapshot(&snapsum)?;
+        if let Some(snap) = opt {
+            Ok(Some(Snapshot::from(snap)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[doc = "Retrieve a specific tree."]
+    field tree(&executor, digest: Checksum) -> FieldResult<Option<Tree>> {
+        let database = executor.context();
+        let treesum = digest.into();
+        let opt = database.get_tree(&treesum)?;
+        if let Some(tree) = opt {
+            Ok(Some(Tree::from(tree)))
+        } else {
+            Ok(None)
+        }
     }
 });
 
