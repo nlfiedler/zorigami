@@ -28,24 +28,39 @@ use uuid::Uuid;
 ///
 /// Generate a type 5 UUID based on the given values.
 ///
+/// Returns a shortened version of the UUID to minimize storage and reduce the
+/// number of pixels used to display the value. It can be converted back to a
+/// UUID using `blob_uuid::to_uuid()` if necessary.
+///
 pub fn generate_unique_id(username: &str, hostname: &str) -> String {
     let mut name = String::from(username);
     name.push(':');
     name.push_str(hostname);
     let bytes = name.into_bytes();
-    Uuid::new_v5(&Uuid::NAMESPACE_URL, &bytes)
-        .to_hyphenated()
-        .to_string()
+    let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, &bytes);
+    blob_uuid::to_blob(&uuid)
 }
 
 ///
-/// Generate a suitable bucket name, using a ULID and the given UUID.
+/// Generate a suitable bucket name, using a ULID and the given unique ID.
+///
+/// The unique ID is assumed to be a shorted version of the UUID returned from
+/// `generate_unique_id()`, and will be converted back to a full UUID for the
+/// purposes of generating a bucket name consisting only of lowercase letters.
 ///
 pub fn generate_bucket_name(unique_id: &str) -> String {
-    let shorter = String::from(unique_id).replace("-", "");
-    let mut ulid = Ulid::new().to_string();
-    ulid.push_str(&shorter);
-    ulid.to_lowercase()
+    match blob_uuid::to_uuid(unique_id) {
+        Ok(uuid) => {
+            let shorter = uuid.to_simple().to_string();
+            let mut ulid = Ulid::new().to_string();
+            ulid.push_str(&shorter);
+            ulid.to_lowercase()
+        }
+        Err(err) => {
+            error!("failed to convert unique ID: {:?}", err);
+            Ulid::new().to_string().to_lowercase()
+        }
+    }
 }
 
 ///
@@ -1056,7 +1071,8 @@ mod tests {
     #[test]
     fn test_generate_unique_id() {
         let uuid = generate_unique_id("charlie", "localhost");
-        assert_eq!(uuid, "747267d5-6e70-5711-8a9a-a40c24c1730f");
+        // UUIDv5 = 747267d5-6e70-5711-8a9a-a40c24c1730f
+        assert_eq!(uuid, "dHJn1W5wVxGKmqQMJMFzDw");
     }
 
     #[test]
