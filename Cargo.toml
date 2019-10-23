@@ -43,6 +43,7 @@ sodiumoxide = "0.2.4"
 ssh2 = "0.5"
 tar = "0.4.26"
 tempfile = "3.1.0"
+# cannot update uuid until blob-uuid updates to uuid 0.8
 uuid = { version = "0.7", features = ["v5"] }
 ulid = "0.3.1"
 whoami = "0.5.3"
