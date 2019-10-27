@@ -28,7 +28,7 @@ $ brew install node
 These commands will build the backend and run the tests.
 
 ```shell
-$ cargo clean
+$ cargo update
 $ cargo build
 $ cargo test
 ```
@@ -43,6 +43,8 @@ $ RUST_LOG=info ./target/debug/zorigami
 ```
 
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
+For extremely verbose logging, use `RUST_LOG=trace` which will dump volumes of
+output.
 
 ### Updating the GraphQL PPX schema
 
@@ -128,11 +130,18 @@ that are compatible with MIT/Apache are also compatible with GPL.
 
 ## Metrics
 
+### macOS APFS
+
+The directory `node_modules` containing `13,161` files, totaling `331M`. Backup
+produced `7` pack files, `32M` in size, totaling `222M`, containing the `9,498`
+unique files (verified with `fdupes -rm`). Database files totaling `7.2M` in
+size.
+
 ### Linux ext4
 
-The directory `node_modules` containing `13,941` files, totaling `335M`. Backup
-produced `7` pack files, `32M` in size, totaling `67M`, containing the `10,412`
-unique files (verified with `fdupes -rm`). Database files totaling `7.5M` in
+The directory `node_modules` containing `13,164` files, totaling `333M`. Backup
+produced `7` pack files, `32M` in size, totaling `227M`, containing the `9,501`
+unique files (verified with `fdupes -rm`). Database files totaling `7.2M` in
 size.
 
 ### Linux ZFS
