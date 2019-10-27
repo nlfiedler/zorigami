@@ -9,7 +9,6 @@ type t = {
   "computerId": string,
   "basepath": string,
   "schedule": option(string),
-  "latestSnapshot": option(Js.Json.t),
   "packSize": Js.Json.t,
   "stores": Js.Array.t(string),
 };
@@ -22,7 +21,6 @@ module GetDatasets = [%graphql
         computerId
         basepath
         schedule
-        latestSnapshot
         packSize
         stores
       }
@@ -53,7 +51,6 @@ module DefineDataset = [%graphql
         computerId
         basepath
         schedule
-        latestSnapshot
         packSize
         stores
       }
@@ -75,7 +72,6 @@ module UpdateDataset = [%graphql
         computerId
         basepath
         schedule
-        latestSnapshot
         packSize
         stores
       }
