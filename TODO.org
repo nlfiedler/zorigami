@@ -2,11 +2,22 @@
 ** restore file via webui
 *** DONE move datasets to their own page
 *** DONE add a navbar link for the datasets route
-*** TODO browse snapshots via webui
-**** TODO show list of datasets by computer id, basepath, and schedule
-**** TODO clicking on dataset then shows list of snapshots
-**** TODO clicking on snapshot then shows base directory
-*** TODO browse directory tree via webui
+*** DONE browse snapshots via webui
+**** DONE show list of datasets by computer id, basepath, and schedule
+**** DONE if a dataset has a latest snapshot with an end time, that row can be clicked
+**** DONE clicking on dataset will display information about the snapshot
+*** DONE browse directory tree via webui
+**** DONE write GetTreeQuery to fetch the tree
+**** DONE build a Tree component that displays a given tree
+**** DONE embed tree component in Snapshot and display the initial tree
+**** DONE clicking on tree entry will open that tree
+**** DONE when opening a tree push current tree onto a stack
+**** DONE when stack is non-empty, first row has a button to pop the stack
+*** TODO clicking on file entry will display file details somewhere
+**** tree will likely be vertically unlimited, so maybe next to the tree?
+**** or appear over the tree in a modal?
+*** TODO should sort the datasets so they are always in the same order
+**** maybe sort them by date, with most recent first
 *** TODO tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
 ***** e.g. =TreeReference.ERROR(String)= where the string is the error message
@@ -22,6 +33,9 @@
 **** really should run one backup, store local and sftp at the same time
 *** TODO use this to replace =replicaz= for remote backup
 ** Loose issues
+*** TODO apparently the backup is including the =.tmp= entry from the dataset
+**** putting the =.tmp= in the dataset is probably a bad idea
+**** at the very least, need to exclude that from the tree scan
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
@@ -42,7 +56,11 @@
 *** TODO find out how to document arguments to mutations
 *** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
-*** TODO Update to the latest release of reductive
+*** TODO datasets selector on home page should highlight current selection
+**** need to keep selection state in =Datasets= component
+*** TODO snapshots page needs controls to select snapshot to examine
+*** TODO should have ui for listing all snapshots in a dataset
+**** probably need paging in the ui and graphql api
 *** TODO improve the page for defining datasets
 **** TODO for now, =basepath= and =stores= must be write-once
 ***** changing them would screw up everything
@@ -67,6 +85,7 @@
 ***** can do it if we turn the input element into a full-fledged component
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
+*** TODO the tooltips on the navbar are not showing
 ** Robustness and Recovery
 *** TODO store database in a bucket named after the "computer UUID"
 **** pack file should be a ULID so that the most recent entry is sorted last
@@ -96,6 +115,7 @@
 **** find and report dangling objects
 **** an automated scan could be run on occasion
 ** Google Backup
+*** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store

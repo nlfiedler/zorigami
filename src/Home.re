@@ -16,7 +16,7 @@ module Component = {
             <div> {ReasonReact.string(error##message)} </div>;
           | Data(data) =>
             if (Belt.Array.length(data##stores) > 0) {
-              ReasonReact.null;
+              <Snapshots.Component />;
             } else {
               <div className="notification is-warning">
                 <p>
