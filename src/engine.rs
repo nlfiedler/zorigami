@@ -326,7 +326,6 @@ pub fn restore_file(
             store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
             // extract chunks from pack (temporarily use the output file path)
             core::decrypt_file(passphrase, &salt, packfile.path(), outfile)?;
-            fs::remove_file(packfile.path())?;
             let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
             fs::remove_file(outfile)?;
             // remove unrelated chunks to conserve space
