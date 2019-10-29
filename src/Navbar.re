@@ -35,7 +35,7 @@ let make = () => {
            "a",
            ~props=
              ReactDOMRe.objToDOMProps({
-               "className": "navbar-item tooltip is-tooltip-bottom",
+               "className": "navbar-item tooltip has-tooltip-bottom",
                "data-tooltip": "Home",
                "onClick": _ => ReasonReactRouter.push("/"),
              }),
@@ -49,7 +49,7 @@ let make = () => {
            "a",
            ~props=
              ReactDOMRe.objToDOMProps({
-               "className": "navbar-item tooltip is-tooltip-bottom",
+               "className": "navbar-item tooltip has-tooltip-bottom",
                "data-tooltip": "Manage stores",
                "onClick": _ => ReasonReactRouter.push("/stores"),
              }),
@@ -63,7 +63,7 @@ let make = () => {
            "a",
            ~props=
              ReactDOMRe.objToDOMProps({
-               "className": "navbar-item tooltip is-tooltip-bottom",
+               "className": "navbar-item tooltip has-tooltip-bottom",
                "data-tooltip": "Manage datasets",
                "onClick": _ => ReasonReactRouter.push("/datasets"),
              }),
@@ -77,7 +77,7 @@ let make = () => {
            "a",
            ~props=
              ReactDOMRe.objToDOMProps({
-               "className": "navbar-item tooltip is-tooltip-bottom",
+               "className": "navbar-item tooltip has-tooltip-bottom",
                "data-tooltip": "GraphQL console",
                "href": "/graphiql",
              }),

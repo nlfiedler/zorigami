@@ -67,7 +67,6 @@
 ***** can do it if we turn the input element into a full-fledged component
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
-*** TODO the tooltips on the navbar are not showing
 *** TODO use breadcrumbs in the tree navigator to get back to parent directories
 *** TODO improve the file restore user experience
 **** rather than a direct download link,
