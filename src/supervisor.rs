@@ -8,7 +8,7 @@
 //! This module assumes that `std::time::SystemTime` is UTC, which seems to be
 //! the case, but is not mentioned in the documentation.
 
-use super::core::{Dataset, Snapshot};
+use super::core::{self, Dataset, Snapshot};
 use super::database::Database;
 use super::engine;
 use super::state;
@@ -17,7 +17,6 @@ use cron::Schedule;
 use failure::{err_msg, Error};
 use log::{debug, error, info};
 use std::cmp::Ordering;
-use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
@@ -121,7 +120,7 @@ fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
 ///
 fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
-    let passphrase = env::var("PASSPHRASE").unwrap_or_else(|_| "keyboard cat".to_owned());
+    let passphrase = core::get_passphrase();
     thread::spawn(move || {
         info!("dataset {} to be backed up", &set_key);
         match dbase.get_dataset(&set_key) {

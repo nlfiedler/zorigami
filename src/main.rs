@@ -8,6 +8,7 @@
 use actix_files as afs;
 use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use env_logger;
+use failure::err_msg;
 use futures::future::Future;
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
@@ -16,8 +17,11 @@ use log::info;
 use std::env;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
+use zorigami::core;
 use zorigami::database::Database;
+use zorigami::engine;
 use zorigami::schema;
 use zorigami::state;
 use zorigami::supervisor;
@@ -53,6 +57,26 @@ fn graphql(
             .content_type("application/json")
             .body(body))
     })
+}
+
+fn restore(
+    info: web::Path<(String, String, String)>,
+) -> impl Future<Item = afs::NamedFile, Error = Error> {
+    web::block(move || {
+        let dbase = Database::new(DB_PATH.as_path())?;
+        let dataset = dbase
+            .get_dataset(info.0.as_ref())?
+            .ok_or_else(|| err_msg(format!("missing dataset: {:?}", info.0)))?;
+        let passphrase = core::get_passphrase();
+        let checksum = core::Checksum::from_str(&info.1)?;
+        let mut outfile = PathBuf::from(&dataset.workspace);
+        outfile.push(info.2.clone());
+        engine::restore_file(&dbase, &dataset, &passphrase, checksum, &outfile)?;
+        // NamedFile does everything we need from here.
+        let file = afs::NamedFile::open(&outfile)?;
+        Ok::<_, failure::Error>(file)
+    })
+    .map_err(Error::from)
 }
 
 fn log_state_changes(state: &state::State) {
@@ -107,6 +131,10 @@ pub fn main() -> io::Result<()> {
             .wrap(middleware::Logger::default())
             .service(web::resource("/graphql").route(web::post().to_async(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
+            .service(
+                web::resource("/restore/{dataset}/{checksum}/{filename}")
+                    .route(web::get().to_async(restore)),
+            )
             .service(afs::Files::new("/", "./public/").index_file("index.html"))
             .default_service(web::get().to(default_index))
     })

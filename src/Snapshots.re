@@ -8,6 +8,7 @@ type treeEntry = {
   .
   "name": string,
   "fstype": fstype,
+  "modTime": Js.Json.t,
   "reference": string,
 };
 
@@ -20,6 +21,7 @@ module GetTree = [%graphql
         entries {
           name
           fstype
+          modTime
           reference
         }
       }
@@ -156,13 +158,48 @@ let formatReference = (reference: string): string =>
     reference;
   };
 
-let buildTreeTable = (rows: array(ReasonReact.reactElement)) => {
+let makeFileModal = (~dataset: t, ~entry: treeEntry, ~cancel) => {
+  // trim the leading "file-" prefix from the reference
+  let checksum = Js.String.substringToEnd(~from=5, entry##reference);
+  // link directly to the file restore function
+  let fileUrl = "/restore/" ++ dataset##key ++ "/" ++ checksum ++ "/" ++ entry##name;
+  <div className="modal is-active">
+    <div className="modal-background" />
+    <div className="modal-card">
+      <header className="modal-card-head">
+        <p className="modal-card-title">
+          {ReasonReact.string(entry##name)}
+        </p>
+        <button className="delete" onClick=cancel />
+      </header>
+      <section className="modal-card-body">
+        <p> {ReasonReact.string(formatDate(entry##modTime))} </p>
+        <p>
+          <code>
+            {ReasonReact.string(formatReference(entry##reference))}
+          </code>
+        </p>
+      </section>
+      <footer className="modal-card-foot">
+        <a href=fileUrl className="button is-primary">
+          {ReasonReact.string("Restore")}
+        </a>
+        <button className="button" onClick=cancel>
+          {ReasonReact.string("Cancel")}
+        </button>
+      </footer>
+    </div>
+  </div>;
+};
+
+let makeTreeTable = (rows: array(ReasonReact.reactElement)) => {
   <table className="table is-hoverable is-fullwidth">
     <thead>
       <tr>
         <th> {ReasonReact.string("Name")} </th>
         <th> {ReasonReact.string("Type")} </th>
         <th> {ReasonReact.string("Reference")} </th>
+        <th> {ReasonReact.string("Date Modified")} </th>
       </tr>
     </thead>
     <tbody> {ReasonReact.array(rows)} </tbody>
@@ -180,21 +217,23 @@ let makeTreeEntry = (~entry: treeEntry, ~onClick) => {
     <td>
       <code> {ReasonReact.string(formatReference(entry##reference))} </code>
     </td>
+    <td> {ReasonReact.string(formatDate(entry##modTime))} </td>
   </tr>;
 };
 
 let makeNavUpElem = onClick => {
   <tr key="nav_up" onClick>
-    <td colSpan=3> {ReasonReact.string("Go Up")} </td>
+    <td colSpan=4> {ReasonReact.string("Go Up")} </td>
   </tr>;
 };
 
 module Tree = {
   [@react.component]
-  let make = (~digest: Js.Json.t) => {
+  let make = (~dataset: t, ~digest: Js.Json.t) => {
     let (snapshot, setSnapshot) = React.useState(() => digest);
     let (history, setHistory) = React.useState(() => []);
-    let buildOneRow = (entry: treeEntry) => {
+    let (selection, setSelection) = React.useState(() => None);
+    let makeOneRow = (entry: treeEntry) => {
       let onClick = _ =>
         if (entry##fstype == `DIRECTORY) {
           setHistory(h => [snapshot, ...h]);
@@ -203,12 +242,14 @@ module Tree = {
               Js.String.substringToEnd(~from=5, entry##reference),
             )
           );
+        } else if (entry##fstype == `FILE) {
+          setSelection(_ => Some(entry));
         };
       makeTreeEntry(~entry, ~onClick);
     };
-    let buildRows = (entries: array(treeEntry)) => {
+    let makeRows = (entries: array(treeEntry)) => {
       let base =
-        Array.map((entry: treeEntry) => buildOneRow(entry), entries);
+        Array.map((entry: treeEntry) => makeOneRow(entry), entries);
       if (List.length(history) > 0) {
         let upper =
           makeNavUpElem(_ => {
@@ -220,6 +261,12 @@ module Tree = {
         base;
       };
     };
+    let modal =
+      switch (selection) {
+      | Some(entry) =>
+        makeFileModal(~dataset, ~entry, ~cancel=_ => setSelection(_ => None))
+      | None => React.null
+      };
     let query = GetTree.make(~digest=snapshot, ());
     <GetTreeQuery variables=query##variables>
       ...{({result}) =>
@@ -231,7 +278,8 @@ module Tree = {
         | Data(data) =>
           switch (data##tree) {
           | None => <p> {ReasonReact.string("empty tree")} </p>
-          | Some(tree) => buildTreeTable(buildRows(tree##entries))
+          | Some(tree) =>
+            <div> modal {makeTreeTable(makeRows(tree##entries))} </div>
           }
         }
       }
@@ -241,8 +289,8 @@ module Tree = {
 
 module Snapshot = {
   [@react.component]
-  let make = (~snapshot: option(snapshot)) => {
-    switch (snapshot) {
+  let make = (~dataset: t) => {
+    switch (dataset##latestSnapshot) {
     | None => React.null
     | Some(snap) =>
       <div>
@@ -272,7 +320,7 @@ module Snapshot = {
             </div>
           </div>
         </nav>
-        <Tree digest={snap##tree} />
+        <Tree dataset digest={snap##tree} />
       </div>
     };
   };
@@ -281,10 +329,10 @@ module Snapshot = {
 module Datasets = {
   [@react.component]
   let make = (~datasets: array(t)) => {
-    let (snapshot, setSnapshot) = React.useState(() => None);
-    let buildRow = (dataset: t) => {
+    let (dataset, setDataset) = React.useState(() => None);
+    let makeRow = (dataset: t) => {
       let rowId = dataset##computerId ++ dataset##basepath;
-      <tr key=rowId onClick={_ => setSnapshot(_ => dataset##latestSnapshot)}>
+      <tr key=rowId onClick={_ => setDataset(_ => Some(dataset))}>
         <td> {ReasonReact.string(dataset##computerId)} </td>
         <td> {ReasonReact.string(dataset##basepath)} </td>
         <td> {ReasonReact.string(displaySchedule(dataset##schedule))} </td>
@@ -301,9 +349,12 @@ module Datasets = {
             <th> {ReasonReact.string("Latest")} </th>
           </tr>
         </thead>
-        <tbody> {ReasonReact.array(Array.map(buildRow, datasets))} </tbody>
+        <tbody> {ReasonReact.array(Array.map(makeRow, datasets))} </tbody>
       </table>
-      <Snapshot snapshot />
+      {switch (dataset) {
+       | Some(d) => <Snapshot dataset=d />
+       | None => React.null
+       }}
     </div>;
   };
 };

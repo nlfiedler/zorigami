@@ -160,6 +160,8 @@ struct TreeEntry {
     name: String,
     /// File system type of this entry.
     fstype: EntryType,
+    /// Modification time of the entry, may not be available.
+    mod_time: BigInt,
     /// Coordinates for this entry in the database.
     reference: String,
 }
@@ -169,6 +171,7 @@ impl From<core::TreeEntry> for TreeEntry {
         Self {
             name: entry.name,
             fstype: EntryType::from(entry.fstype),
+            mod_time: BigInt::from(entry.mtime),
             reference: entry.reference.to_string(),
         }
     }

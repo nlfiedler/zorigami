@@ -307,6 +307,13 @@ fn init_crypto() {
     });
 }
 
+/// Retrieve the user-defined passphrase.
+///
+/// Returns a default if one has not been defined.
+pub fn get_passphrase() -> String {
+    std::env::var("PASSPHRASE").unwrap_or_else(|_| "keyboard cat".to_owned())
+}
+
 // Hash the given user password using a computationally expensive algorithm.
 fn hash_password(passphrase: &str, salt: &Salt) -> Result<secretstream::Key, Error> {
     init_crypto();

@@ -1,27 +1,4 @@
 * Zorigami
-** restore file via webui
-*** DONE move datasets to their own page
-*** DONE add a navbar link for the datasets route
-*** DONE browse snapshots via webui
-**** DONE show list of datasets by computer id, basepath, and schedule
-**** DONE if a dataset has a latest snapshot with an end time, that row can be clicked
-**** DONE clicking on dataset will display information about the snapshot
-*** DONE browse directory tree via webui
-**** DONE write GetTreeQuery to fetch the tree
-**** DONE build a Tree component that displays a given tree
-**** DONE embed tree component in Snapshot and display the initial tree
-**** DONE clicking on tree entry will open that tree
-**** DONE when opening a tree push current tree onto a stack
-**** DONE when stack is non-empty, first row has a button to pop the stack
-*** TODO clicking on file entry will display file details somewhere
-**** tree will likely be vertically unlimited, so maybe next to the tree?
-**** or appear over the tree in a modal?
-*** TODO should sort the datasets so they are always in the same order
-**** maybe sort them by date, with most recent first
-*** TODO tree entries of =ERROR= type should be displayed as such
-**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
-***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** TODO restore a file to local disk via webui
 ** kohaku remote (SFTP) backup
 *** TODO form for defining an SFTP store
 **** TODO new store form needs to have a "kind" selector
@@ -39,6 +16,7 @@
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
+*** TODO file restore in =main.rs= should schedule cleanup of the temporary file
 ** Loose GraphQL tasks
 *** TODO test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
@@ -56,6 +34,11 @@
 *** TODO find out how to document arguments to mutations
 *** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
+*** TODO should sort the datasets so they are always in the same order
+**** maybe sort them by date, with most recent first
+*** TODO tree entries of =ERROR= type should be displayed as such
+**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
+***** e.g. =TreeReference.ERROR(String)= where the string is the error message
 *** TODO datasets selector on home page should highlight current selection
 **** need to keep selection state in =Datasets= component
 *** TODO snapshots page needs controls to select snapshot to examine
@@ -86,6 +69,14 @@
 ***** and use the =useRef()= hook to set the focus on the HTML element
 ***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
 *** TODO the tooltips on the navbar are not showing
+*** TODO use breadcrumbs in the tree navigator to get back to parent directories
+*** TODO improve the file restore user experience
+**** rather than a direct download link,
+**** use a GraphQL query to prepare the file on the backend,
+**** and when it is ready, the frontend displays the download link,
+**** and the file is retrieved from its temporary location,
+**** and later the temporary file is removed
+**** OTOH, "restore" could just put the file back where it belongs
 ** Robustness and Recovery
 *** TODO store database in a bucket named after the "computer UUID"
 **** pack file should be a ULID so that the most recent entry is sorted last
@@ -148,6 +139,9 @@
 **** should their stores be allowed to change?
 **** should their basepath be allowed to change?
 **** cannot change stores assigned to dataset once there are snapshots
+*** TODO consider how to restore symbolic links
+**** i.e. no file chooser to download anything
+**** what if the same path is now a file/directory?
 ** Architecture Review
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
