@@ -32,6 +32,8 @@ lazy_static! {
 pub struct Database {
     /// RocksDB instance.
     db: Arc<DB>,
+    /// Path to the database files.
+    path: Box<Path>,
 }
 
 // Mark the Database as a valid context type for Juniper.
@@ -48,14 +50,22 @@ impl Database {
         let mut db_refs = DBASE_REFS.lock().unwrap();
         if let Some(weak) = db_refs.get(db_path.as_ref()) {
             if let Some(arc) = weak.upgrade() {
-                return Ok(Self { db: arc });
+                let path = db_path.as_ref().to_path_buf().into_boxed_path();
+                return Ok(Self { db: arc, path });
             }
         }
         let buf = db_path.as_ref().to_path_buf();
         let db = DB::open_default(db_path)?;
         let arc = Arc::new(db);
-        db_refs.insert(buf, Arc::downgrade(&arc));
-        Ok(Self { db: arc })
+        db_refs.insert(buf.clone(), Arc::downgrade(&arc));
+        Ok(Self { db: arc, path: buf.into_boxed_path() })
+    }
+
+    ///
+    /// Return the path to the database files.
+    ///
+    pub fn get_path(&self) -> &Path {
+        self.path.as_ref()
     }
 
     ///

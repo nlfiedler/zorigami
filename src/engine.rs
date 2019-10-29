@@ -56,7 +56,16 @@ pub fn perform_backup(
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
-    let snap_opt = take_snapshot(&dataset.basepath, dataset.latest_snapshot.clone(), &dbase)?;
+    //
+    // For now, build a set of excludes for files we do not want to have in the
+    // backup set, such as the database and temporary files.
+    let excludes = vec![dbase.get_path(), dataset.workspace.as_ref()];
+    let snap_opt = take_snapshot(
+        &dataset.basepath,
+        dataset.latest_snapshot.clone(),
+        &dbase,
+        excludes,
+    )?;
     match snap_opt {
         None => Ok(None),
         Some(current_sha1) => {
@@ -225,9 +234,10 @@ pub fn take_snapshot(
     basepath: &Path,
     parent: Option<core::Checksum>,
     dbase: &Database,
+    excludes: Vec<&Path>,
 ) -> Result<Option<core::Checksum>, Error> {
     let start_time = SystemTime::now();
-    let tree = scan_tree(basepath, dbase)?;
+    let tree = scan_tree(basepath, dbase, &excludes)?;
     let tree_sha1 = tree.checksum();
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
@@ -703,7 +713,7 @@ fn read_link(path: &Path) -> String {
 /// database. The result will be that everything new will have been added as new
 /// records.
 ///
-fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
+fn scan_tree(basepath: &Path, dbase: &Database, excludes: &[&Path]) -> Result<core::Tree, Error> {
     let mut entries: Vec<core::TreeEntry> = Vec::new();
     let mut file_count = 0;
     match fs::read_dir(basepath) {
@@ -712,12 +722,15 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
                 match entry_result {
                     Ok(entry) => {
                         let path = entry.path();
+                        if is_excluded(&path, excludes) {
+                            continue;
+                        }
                         // DirEntry.metadata() does not follow symlinks
                         match entry.metadata() {
                             Ok(metadata) => {
                                 let file_type = metadata.file_type();
                                 if file_type.is_dir() {
-                                    let scan = scan_tree(&path, dbase)?;
+                                    let scan = scan_tree(&path, dbase, excludes)?;
                                     file_count += scan.file_count;
                                     let digest = scan.checksum();
                                     let tref = core::TreeReference::TREE(digest);
@@ -755,6 +768,18 @@ fn scan_tree(basepath: &Path, dbase: &Database) -> Result<core::Tree, Error> {
     let digest = tree.checksum();
     dbase.insert_tree(&digest, &tree)?;
     Ok(tree)
+}
+
+///
+/// Indicate if the given path is excluded or not.
+///
+fn is_excluded(fullpath: &Path, excludes: &[&Path]) -> bool {
+    for exclusion in excludes {
+        if fullpath.starts_with(exclusion) {
+            return true;
+        }
+    }
+    false
 }
 
 ///
@@ -1179,5 +1204,21 @@ mod tests {
         let input = Duration::from_secs(10090);
         let result = pretty_print_duration(Ok(input));
         assert_eq!(result, "2 hours 48 minutes 10 seconds");
+    }
+
+    #[test]
+    fn test_is_excluded() {
+        let path1 = PathBuf::from("/Users/susan/database");
+        let path2 = PathBuf::from("/Users/susan/dataset/.tmp");
+        let path3 = PathBuf::from("/Users/susan/private");
+        let excludes = vec![
+            path1.as_path(),
+            path2.as_path(),
+            path3.as_path(),
+        ];
+        assert!(!is_excluded(Path::new("/not/excluded"), &excludes));
+        assert!(!is_excluded(Path::new("/Users/susan/public"), &excludes));
+        assert!(is_excluded(Path::new("/Users/susan/database/LOCK"), &excludes));
+        assert!(is_excluded(Path::new("/Users/susan/dataset/.tmp/foobar"), &excludes));
     }
 }

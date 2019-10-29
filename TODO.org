@@ -8,15 +8,14 @@
 *** TODO allow private key that is locked with a passphrase
 *** TODO allow multiple stores per dataset
 **** really should run one backup, store local and sftp at the same time
+**** use a dynamic form with +/- buttons to add/remove stores
 *** TODO use this to replace =replicaz= for remote backup
 ** Loose issues
-*** TODO apparently the backup is including the =.tmp= entry from the dataset
-**** putting the =.tmp= in the dataset is probably a bad idea
-**** at the very least, need to exclude that from the tree scan
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
 *** TODO file restore in =main.rs= should schedule cleanup of the temporary file
+**** supervisor could delete anything last modified an hour ago
 ** Loose GraphQL tasks
 *** TODO test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
@@ -108,6 +107,8 @@
 ** Google Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
+**** part of dataset configuration
+**** merge with the defaults in =engine.rs=
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
@@ -133,7 +134,6 @@
 **** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
-*** TODO exclude the database files from the dataset(s)
 *** TODO allow assigning multiple stores to a given dataset
 *** TODO consider how datasets can be modified after creation
 **** should their stores be allowed to change?
