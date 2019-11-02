@@ -577,9 +577,9 @@ module SecureFtpFormRe = {
         {formInput(
            "Password",
            "password",
-           "text",
+           "password",
            Belt.Option.getWithDefault(form.state.password, ""),
-           "192.168.1.3:2222",
+           "correct horse battery staple",
            validateMsg(Password),
            _ => form.blur(Password),
            event =>
