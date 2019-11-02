@@ -1,9 +1,9 @@
 * Zorigami
 ** kohaku remote (SFTP) backup
-*** TODO form for defining an SFTP store
-**** TODO new store form needs to have a "kind" selector
-**** TODO selecting different kind will rebuild new store form accordingly
-**** TODO make a different form and validation module for each type of store
+*** DONE form for defining an SFTP store
+**** DONE new store form needs to have a "kind" selector
+**** DONE selecting different kind will rebuild new store form accordingly
+**** DONE make a different form and validation module for each type of store
 *** TODO support SFTP with private key authentication
 *** TODO allow private key that is locked with a passphrase
 *** TODO allow multiple stores per dataset
