@@ -81,9 +81,9 @@ On the build host:
 
 ```shell
 $ docker-compose build
-$ docker image rm 192.168.1.3:5000/zorigami_app
-$ docker image tag zorigami_app 192.168.1.3:5000/zorigami_app
-$ docker push 192.168.1.3:5000/zorigami_app
+$ docker image rm 192.168.1.1:5000/zorigami_app
+$ docker image tag zorigami_app 192.168.1.1:5000/zorigami_app
+$ docker push 192.168.1.1:5000/zorigami_app
 ```
 
 On the server, with a production version of the `docker-compose.yml` file:
