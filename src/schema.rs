@@ -316,6 +316,7 @@ impl Into<core::Dataset> for Dataset {
     fn into(self) -> core::Dataset {
         let store = self.stores[0].clone();
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
+        set.key = self.key;
         set.schedule = self.schedule;
         set.latest_snapshot = self.latest_snapshot.map(|s| s.checksum.into());
         // set.workspace = PathBuf::from(&self.workspace);
@@ -584,11 +585,9 @@ graphql_object!(MutationRoot: Database | &self | {
                         Value::null()
                     )),
                     Some(dset) => {
-                        let key = dset.key.clone();
                         let mut ds = Dataset::from(dset);
                         ds = ds.copy_input(dataset);
-                        let mut set: core::Dataset = ds.into();
-                        set.key = key;
+                        let set: core::Dataset = ds.into();
                         database.put_dataset(&set)?;
                         Ok(Dataset::from(set))
                     }

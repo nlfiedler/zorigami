@@ -4,8 +4,6 @@
 **** DONE new store form needs to have a "kind" selector
 **** DONE selecting different kind will rebuild new store form accordingly
 **** DONE make a different form and validation module for each type of store
-*** TODO support SFTP with private key authentication
-*** TODO allow private key that is locked with a passphrase
 *** TODO allow multiple stores per dataset
 **** really should run one backup, store local and sftp at the same time
 **** use a dynamic form with +/- buttons to add/remove stores
@@ -141,6 +139,11 @@
 *** TODO consider how to restore symbolic links
 **** i.e. no file chooser to download anything
 **** what if the same path is now a file/directory?
+*** TODO Secure FTP improvements
+**** TODO support SFTP with private key authentication
+***** use store form to take paths for public and private keys
+**** TODO allow private key that is locked with a passphrase
+***** passphrase for private key would be provided by envar
 ** Architecture Review
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
