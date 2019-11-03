@@ -318,7 +318,7 @@ impl Into<core::Dataset> for Dataset {
         let mut set = core::Dataset::new(&self.computer_id, Path::new(&self.basepath), &store);
         set.key = self.key;
         set.schedule = self.schedule;
-        set.latest_snapshot = self.latest_snapshot.map(|s| s.checksum.into());
+        set.latest_snapshot = self.latest_snapsum.map(|s| s.into());
         // set.workspace = PathBuf::from(&self.workspace);
         let new_pack_size = self.pack_size.0 as u64;
         if new_pack_size > 0 {
