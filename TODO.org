@@ -4,9 +4,8 @@
 **** DONE new store form needs to have a "kind" selector
 **** DONE selecting different kind will rebuild new store form accordingly
 **** DONE make a different form and validation module for each type of store
-*** TODO allow multiple stores per dataset
+*** DONE allow multiple stores per dataset
 **** really should run one backup, store local and sftp at the same time
-**** use a dynamic form with +/- buttons to add/remove stores
 *** TODO use this to replace =replicaz= for remote backup
 ** Loose issues
 *** TODO sometimes creating a new store results in a network error

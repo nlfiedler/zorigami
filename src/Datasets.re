@@ -208,15 +208,29 @@ let formInput =
       validateMsg: string,
       onBlur,
       onChange,
+      readOnly: bool,
     ) => {
   let formIsValid = validateMsg == "";
-  let inputClass = formIsValid ? "input" : "input is-danger";
   let validationTextDiv =
     <p className="help is-danger" key="the_message">
       {ReasonReact.string(validateMsg)}
     </p>;
-  let inputField =
-    <div className="control" key="the_control">
+  let inputElem =
+    switch (inputType) {
+    | "textarea" =>
+      let inputClass = formIsValid ? "textarea" : "textarea is-danger";
+      <textarea
+        id=inputId
+        className=inputClass
+        name=inputId
+        onBlur
+        onChange
+        placeholder=placeholderText
+        readOnly>
+        {ReasonReact.string(inputValue)}
+      </textarea>;
+    | _ =>
+      let inputClass = formIsValid ? "input" : "input is-danger";
       <input
         id=inputId
         className=inputClass
@@ -226,8 +240,11 @@ let formInput =
         onBlur
         onChange
         placeholder=placeholderText
-      />
-    </div>;
+        readOnly
+      />;
+    };
+  let inputField =
+    <div className="control" key="the_control"> inputElem </div>;
   let formGroupElems =
     if (formIsValid) {
       inputField;
@@ -302,6 +319,7 @@ module DatasetFormRe = {
       | Some(Ok(Valid | NoValue))
       | None => ""
       };
+    let isEditing = Belt.Option.isSome(datasetKey);
     <form onSubmit={form.submit->Formality.Dom.preventDefault}>
       <div
         className="container"
@@ -322,6 +340,7 @@ module DatasetFormRe = {
                  event->ReactEvent.Form.target##value,
                ),
              ),
+           isEditing,
          )}
         {formInput(
            "Schedule",
@@ -339,6 +358,7 @@ module DatasetFormRe = {
                  event->ReactEvent.Form.target##value,
                ),
              ),
+           false,
          )}
         {formInput(
            "Pack Size",
@@ -356,13 +376,14 @@ module DatasetFormRe = {
                  event->ReactEvent.Form.target##value,
                ),
              ),
+           false,
          )}
         {formInput(
-           "Pack Store",
+           "Pack Store(s)",
            "stores",
-           "text",
+           "textarea",
            form.state.stores,
-           "store/local/xyz123",
+           "store/local/xyz123, store/sftp/abc456",
            validateMsg(Stores),
            _ => form.blur(Stores),
            event =>
@@ -373,6 +394,7 @@ module DatasetFormRe = {
                  event->ReactEvent.Form.target##value,
                ),
              ),
+           isEditing,
          )}
         <div className="field is-horizontal">
           <div className="field-label" />
@@ -408,13 +430,12 @@ let packsizeToString = (str: string): Js.Json.t =>
   };
 
 /*
- * Split the string on commas, replacing None with empty string.
+ * Split the string on commas, discarding empty strings.
  */
 let stringToArray = (str: string): array(string) => {
-  let parts = Js.String.splitByRe([%bs.re "/,/"], str);
-  let splitStores = Array.map(a => Belt.Option.getWithDefault(a, ""), parts);
-  /* this may introduce a single blank tag, but it's easier to let the backend prune it */
-  Array.map(s => String.trim(s), splitStores);
+  let parts = Js.String.split(",", str);
+  let trimmed = Array.map(s => String.trim(s), parts);
+  Js.Array.filter(e => String.length(e) > 0, trimmed);
 };
 
 /**
