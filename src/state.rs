@@ -50,6 +50,8 @@ pub enum Action {
     UploadFiles(String, u64),
     /// Set the completion time for the backup of a given dataset.
     FinishBackup(String),
+    /// Sets the backup in the "error" state until a successful backup.
+    ErrorBackup(String),
 }
 
 ///
@@ -61,6 +63,7 @@ pub struct BackupState {
     end_time: Option<SystemTime>,
     packs_uploaded: u64,
     files_uploaded: u64,
+    had_error: bool,
 }
 
 impl Default for BackupState {
@@ -70,6 +73,7 @@ impl Default for BackupState {
             end_time: None,
             packs_uploaded: 0,
             files_uploaded: 0,
+            had_error: false,
         }
     }
 }
@@ -101,6 +105,13 @@ impl BackupState {
     ///
     pub fn files_uploaded(&self) -> u64 {
         self.files_uploaded
+    }
+
+    ///
+    /// Return the state of the error flag.
+    ///
+    pub fn had_error(&self) -> bool {
+        self.had_error
     }
 }
 
@@ -148,6 +159,11 @@ impl Reducer<Action> for State {
             Action::FinishBackup(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.end_time = Some(SystemTime::now());
+                }
+            }
+            Action::ErrorBackup(key) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.had_error = true;
                 }
             }
         }
@@ -234,5 +250,15 @@ mod tests {
         assert_eq!(backup.packs_uploaded(), 2);
         assert_eq!(backup.files_uploaded(), 5);
         assert!(get_state().backups("foobar").is_none());
+    }
+
+    #[test]
+    fn test_error_state() {
+        let key = "dataset1";
+        dispatch(Action::StartBackup(key.to_owned()));
+        dispatch(Action::ErrorBackup(key.to_owned()));
+        let state = get_state();
+        let backup = state.backups("dataset1").unwrap();
+        assert_eq!(backup.had_error(), true);
     }
 }

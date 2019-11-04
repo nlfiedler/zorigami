@@ -141,3 +141,30 @@ fn test_overdue_backup_running() -> Result<(), Error> {
     assert_eq!(should_run(&dbase, &dataset)?, false);
     Ok(())
 }
+
+#[test]
+fn test_overdue_had_error() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_overdue_had_error");
+    let dbase = Database::new(&db_path).unwrap();
+
+    // build a "latest" snapshot that started just now
+    let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+    let snapshot = Snapshot::new(None, tree_sha);
+    let sha1 = snapshot.checksum();
+    dbase.insert_snapshot(&sha1, &snapshot)?;
+
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let basepath = Path::new("/some/path");
+    let store = "store/local/stuff";
+    let mut dataset = Dataset::new(&unique_id, basepath, store);
+    dataset.schedule = Some("@daily".to_owned());
+    dataset.latest_snapshot = Some(sha1.clone());
+    dbase.put_dataset(&dataset)?;
+
+    // indicate that the backup started but then failed
+    state::dispatch(Action::StartBackup(dataset.key.clone()));
+    state::dispatch(Action::ErrorBackup(dataset.key.clone()));
+
+    assert_eq!(should_run(&dbase, &dataset)?, true);
+    Ok(())
+}

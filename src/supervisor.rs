@@ -11,7 +11,7 @@
 use super::core::{self, Dataset, Snapshot};
 use super::database::Database;
 use super::engine;
-use super::state;
+use super::state::{self, Action};
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
@@ -45,6 +45,7 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
                                 // passed all the checks, we can start this dataset
                                 if let Err(err) = run_dataset(db_path.clone(), set.key.clone()) {
                                     error!("error running backup for {}: {}", &set, err);
+                                    state::dispatch(Action::ErrorBackup(set.key));
                                 }
                             }
                             Ok(false) => (),
@@ -68,6 +69,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
     // only consider those datasets that have a schedule, otherwise
     // the user is expected to manually start the backup process
     if let Some(schedule) = set.schedule.as_ref() {
+        // check if backup overdue
         let mut maybe_run = if let Some(checksum) = set.latest_snapshot.as_ref() {
             let snapshot = dbase
                 .get_snapshot(checksum)?
@@ -76,14 +78,16 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         } else {
             true
         };
-        if maybe_run {
-            // check if a backup is already running
-            let redux = state::get_state();
-            if let Some(backup) = redux.backups(&set.key) {
-                if backup.end_time().is_none() {
-                    maybe_run = false;
-                    debug!("dataset {} backup already in progress", &set.key);
-                }
+        // check if a backup is still running or had an error
+        // if it had an error, definitely try running again
+        // if it is still running, then do nothing for now
+        let redux = state::get_state();
+        if let Some(backup) = redux.backups(&set.key) {
+            if backup.had_error() {
+                maybe_run = true;
+            } else if backup.end_time().is_none() {
+                maybe_run = false;
+                debug!("dataset {} backup already in progress", &set.key);
             }
         }
         Ok(maybe_run)

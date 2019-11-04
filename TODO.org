@@ -7,72 +7,8 @@
 *** DONE allow multiple stores per dataset
 **** really should run one backup, store local and sftp at the same time
 *** TODO use this to replace =replicaz= for remote backup
-** Loose issues
-*** TODO sometimes creating a new store results in a network error
-*** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
-**** seemingly only on Ubuntu (maybe Debian, need to test)
-*** TODO file restore in =main.rs= should schedule cleanup of the temporary file
-**** supervisor could delete anything last modified an hour ago
-** Loose GraphQL tasks
-*** TODO test the GraphQL schema and resolvers
-**** TODO "integers" that are not radix 10 integers
-**** TODO digests that lack the proper algorithm prefix
-**** TODO querying for things when there is nothing in the database
-**** TODO querying snapshots
-**** TODO querying trees
-**** TODO querying files
-**** DONE fetching configuration record
-**** TODO updating configuration record
-**** DONE querying datasets
-**** DONE mutating datasets
-**** DONE querying stores
-**** DONE mutating stores
-*** TODO find out how to document arguments to mutations
-*** TODO handle errors in getting Database ref in graphql handler
-** Loose WebUI tasks
-*** TODO should sort the datasets so they are always in the same order
-**** maybe sort them by date, with most recent first
-*** TODO tree entries of =ERROR= type should be displayed as such
-**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
-***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** TODO datasets selector on home page should highlight current selection
-**** need to keep selection state in =Datasets= component
-*** TODO snapshots page needs controls to select snapshot to examine
-*** TODO should have ui for listing all snapshots in a dataset
-**** probably need paging in the ui and graphql api
-*** TODO improve the page for defining datasets
-**** TODO for now, =basepath= and =stores= must be write-once
-***** changing them would screw up everything
-**** TODO store selection should be easier for the user
-**** TODO schedule input should be easier to use
-***** user should not have to type ~@daily~ literally
-**** TODO disable Save button until form is valid
-**** TODO store input validator should check stores actually exist
-**** TODO pack size should have minimum and maximum values
-*** TODO improve the page for defining stores
-**** TODO disable Save button until form is valid
-**** TODO remove the edit/cancel button, form is always in edit mode with save button
-**** TODO delete button should be far away from the other button(s)
-**** TODO delete button should require two clicks, with "are you sure?"
-**** TODO Display help text on stores page when there are no stores defined
-**** TODO Display help text on home page when there are no datasets defined
-**** TODO Scroll to form when edit button is clicked
-***** with a bunch of stores on the screen, click ~Edit~ for last one
-***** page refreshes and scrolls to the top
-**** TODO Autofocus input field on edit
-***** this is tricky with React, =autofocus= is not really honored
-***** can do it if we turn the input element into a full-fledged component
-***** and use the =useRef()= hook to set the focus on the HTML element
-***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
-*** TODO use breadcrumbs in the tree navigator to get back to parent directories
-*** TODO improve the file restore user experience
-**** rather than a direct download link,
-**** use a GraphQL query to prepare the file on the backend,
-**** and when it is ready, the frontend displays the download link,
-**** and the file is retrieved from its temporary location,
-**** and later the temporary file is removed
-**** OTOH, "restore" could just put the file back where it belongs
 ** Robustness and Recovery
+*** DONE should retry the backup if an error occurs
 *** TODO store database in a bucket named after the "computer UUID"
 **** pack file should be a ULID so that the most recent entry is sorted last
 **** glacier will use s3 to track the "compuuter UUID" to vault name mapping
@@ -113,6 +49,68 @@
 **** Define a set of hours each day when uploads should occur
 **** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
 *** TODO use this to replace =akashita= for online backups
+** Loose issues
+*** TODO sometimes creating a new store results in a network error
+*** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
+**** seemingly only on Ubuntu (maybe Debian, need to test)
+*** TODO file restore in =main.rs= should schedule cleanup of the temporary file
+**** supervisor could delete anything last modified an hour ago
+** Loose GraphQL tasks
+*** TODO test the GraphQL schema and resolvers
+**** TODO "integers" that are not radix 10 integers
+**** TODO digests that lack the proper algorithm prefix
+**** TODO querying for things when there is nothing in the database
+**** TODO querying snapshots
+**** TODO querying trees
+**** TODO querying files
+**** DONE fetching configuration record
+**** TODO updating configuration record
+**** DONE querying datasets
+**** DONE mutating datasets
+**** DONE querying stores
+**** DONE mutating stores
+*** TODO find out how to document arguments to mutations
+*** TODO handle errors in getting Database ref in graphql handler
+** Loose WebUI tasks
+*** TODO should sort the datasets so they are always in the same order
+**** maybe sort them by date, with most recent first
+*** TODO tree entries of =ERROR= type should be displayed as such
+**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
+***** e.g. =TreeReference.ERROR(String)= where the string is the error message
+*** TODO datasets selector on home page should highlight current selection
+**** need to keep selection state in =Datasets= component
+*** TODO snapshots page needs controls to select snapshot to examine
+*** TODO should have ui for listing all snapshots in a dataset
+**** probably need paging in the ui and graphql api
+*** TODO improve the page for defining datasets
+**** TODO store selection should be easier for the user
+**** TODO schedule input should be easier to use
+***** user should not have to type ~@daily~ literally
+**** TODO disable Save button until form is valid
+**** TODO store input validator should check stores actually exist
+**** TODO pack size should have minimum and maximum values
+*** TODO improve the page for defining stores
+**** TODO disable Save button until form is valid
+**** TODO delete button should be far away from the other button(s)
+**** TODO delete button should require two clicks, with "are you sure?"
+**** TODO display help text on stores page when there are no stores defined
+**** TODO display help text on home page when there are no datasets defined
+**** TODO scroll to form when edit button is clicked
+***** with a bunch of stores on the screen, click ~Edit~ for last one
+***** page refreshes and scrolls to the top
+**** TODO autofocus input field on edit
+***** this is tricky with React, =autofocus= is not really honored
+***** can do it if we turn the input element into a full-fledged component
+***** and use the =useRef()= hook to set the focus on the HTML element
+***** c.f. https://reactjs.org/docs/hooks-reference.html#useref
+*** TODO use breadcrumbs in the tree navigator to get back to parent directories
+*** TODO improve the file restore user experience
+**** rather than a direct download link,
+**** use a GraphQL query to prepare the file on the backend,
+**** and when it is ready, the frontend displays the download link,
+**** and the file is retrieved from its temporary location,
+**** and later the temporary file is removed
+**** OTOH, "restore" could just put the file back where it belongs
 ** More Functionality
 *** TODO Query to see histogram of file sizes, number of chunks, etc
 **** for a given snapshot...
