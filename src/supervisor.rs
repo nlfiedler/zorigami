@@ -89,6 +89,10 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
                 maybe_run = false;
                 debug!("dataset {} backup already in progress", &set.key);
             }
+        } else {
+            // kickstart the application state when it appears that our
+            // application has restarted while a backup was in progress
+            state::dispatch(Action::StartBackup(set.key.clone()));
         }
         Ok(maybe_run)
     } else {
@@ -98,7 +102,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 
 ///
 /// Determine if the snapshot finished a sufficiently long time ago to warrant
-/// running a backup now.
+/// running a backup now. If it has not finished, it is still overdue.
 ///
 fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
     if let Some(et) = snapshot.end_time {
@@ -115,7 +119,7 @@ fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
             return Err(err_msg("schedule expression could not be parsed"));
         }
     }
-    Ok(false)
+    Ok(true)
 }
 
 ///
@@ -161,11 +165,11 @@ mod tests {
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha);
         //
-        // test with no end time for latest snapshot, should not run
+        // test with no end time for latest snapshot
         //
         let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert_eq!(result.unwrap(), true);
         //
         // test with a time that should fire
         //
@@ -191,11 +195,11 @@ mod tests {
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha);
         //
-        // test with no end time for latest snapshot, should not run
+        // test with no end time for latest snapshot
         //
         let result = is_overdue(expression, &snapshot);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert_eq!(result.unwrap(), true);
         //
         // test with a date that should fire
         //

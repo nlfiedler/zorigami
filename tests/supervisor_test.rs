@@ -114,6 +114,32 @@ fn test_backup_overdue() -> Result<(), Error> {
 }
 
 #[test]
+fn test_backup_restarted() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_backup_restarted");
+    let dbase = Database::new(&db_path).unwrap();
+
+    // build a "latest" snapshot that did not finish
+    let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+    let snapshot = Snapshot::new(None, tree_sha);
+    let sha1 = snapshot.checksum();
+    dbase.insert_snapshot(&sha1, &snapshot)?;
+
+    // create the dataset with a schedule
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let basepath = Path::new("/some/path");
+    let store = "store/local/stuff";
+    let mut dataset = Dataset::new(&unique_id, basepath, store);
+    dataset.schedule = Some("@daily".to_owned());
+    dataset.latest_snapshot = Some(sha1);
+    dbase.put_dataset(&dataset)?;
+
+    // and the app restarted, so there is no state either
+
+    assert_eq!(should_run(&dbase, &dataset)?, true);
+    Ok(())
+}
+
+#[test]
 fn test_overdue_backup_running() -> Result<(), Error> {
     let db_path = DBPath::new("_test_overdue_backup_running");
     let dbase = Database::new(&db_path).unwrap();
