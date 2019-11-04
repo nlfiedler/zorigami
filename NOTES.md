@@ -46,7 +46,7 @@ They change the SSH config to run the backup command with "append only" flag.
 * HTTP backend as GraphQL server
 * Web frontend as GraphQL client
 * Desktop application as GraphQL client
-* Document-oriented database for metadata
+* Key/Value store for metadata
 * Local or Remote file store(s) for pack storage
 
 ## Design
@@ -61,13 +61,14 @@ They change the SSH config to run the backup command with "append only" flag.
 
 ### Initial Setup
 
-* Backend waits for initial setup via web or desktop
-* Upon startup of desktop app, walk user through setup
-* Offer choice of recovering from backup, or starting anew
+* Backend waits for initial setup via web or desktop.
+* Upon startup of desktop app, walk user through setup.
+* Offer choice of recovering from backup, or starting anew.
 
 ### Regular Backup
 
-* Backend performs backups according to configured schedule
+* Backend performs backups according to configured schedule.
+* Manual backup for data sets without a configured schedule.
 
 ### Full Restore
 
@@ -89,7 +90,6 @@ They change the SSH config to run the backup command with "append only" flag.
 * File content is stored in pack files
     - Large files are split across multiple pack files
     - Small files are stored in whole
-    - Pack files are used to minimize the number of files stored remotely
 * Pack files are stored remotely
 * Database is used to store metadata
     - Database is saved just like any other file
@@ -98,13 +98,14 @@ They change the SSH config to run the backup command with "append only" flag.
 
 1. Use type 5, with URL namespace
 1. The "name" is the computer host name and current user name, separated by slash
-    * e.g. `chihiro/nfiedler` yields `f6ce9ef2-3059-5f8d-9f3b-7d532fe15bf8`
+    * e.g. `localhost/charlie` yields `747267d5-6e70-5711-8a9a-a40c24c1730f`
+    * stored in the database using a shortened form (e.g. `dHJn1W5wVxGKmqQMJMFzDw`)
     * makes finding the backup records for a computer reproducible
 
 ### Bucket Name
 
 * bucket name will be ULID + computer UUID (without dash separators)
-    - e.g. `01arz3ndektsv4rrffq69g5favf6ce9ef230595f8d9f3b7d532fe15bf8`
+    - e.g. `01arz3ndektsv4rrffq69g5fav747267d56e7057118a9aa40c24c1730f`
     - conforms to Google bucket name restrictions
         + https://cloud.google.com/storage/docs/naming
         + should be sufficiently unique despite global bucket namespace
@@ -230,7 +231,7 @@ that has the most recent `upload_time`.
 #### Backup
 
 1. Sync with any configured peers to get recent chunk updates.
-1. Check for a existing snapshot:
+1. Check for an existing snapshot:
     1. If present but lacking `end_time` value, continue backup procedure
     1. Otherwise, generate the tree objects to represent the state of the dataset
 1. Find the differences from the previous snapshot.
