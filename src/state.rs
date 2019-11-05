@@ -52,6 +52,8 @@ pub enum Action {
     FinishBackup(String),
     /// Sets the backup in the "error" state until a successful backup.
     ErrorBackup(String),
+    /// Clear the error state and end time to indicate a restart.
+    RestartBackup(String),
 }
 
 ///
@@ -164,6 +166,12 @@ impl Reducer<Action> for State {
             Action::ErrorBackup(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.had_error = true;
+                }
+            }
+            Action::RestartBackup(key) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.had_error = false;
+                    record.end_time = None;
                 }
             }
         }

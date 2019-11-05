@@ -44,8 +44,7 @@ pub fn start(db_path: PathBuf) -> Result<(), Error> {
                             Ok(true) => {
                                 // passed all the checks, we can start this dataset
                                 if let Err(err) = run_dataset(db_path.clone(), set.key.clone()) {
-                                    error!("error running backup for {}: {}", &set, err);
-                                    state::dispatch(Action::ErrorBackup(set.key));
+                                    error!("error starting backup for {}: {}", &set, err);
                                 }
                             }
                             Ok(false) => (),
@@ -134,6 +133,8 @@ fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
         match dbase.get_dataset(&set_key) {
             Ok(Some(mut dataset)) => {
                 let start_time = SystemTime::now();
+                // reset any error state in the backup
+                state::dispatch(Action::RestartBackup(set_key.clone()));
                 match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
                     Ok(Some(checksum)) => {
                         let end_time = SystemTime::now();
@@ -143,7 +144,11 @@ fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
                         info!("dataset {} backup complete after {}", &set_key, pretty_time);
                     }
                     Ok(None) => info!("no new snapshot required"),
-                    Err(err) => error!("could not perform backup: {}", err),
+                    Err(err) => {
+                        error!("could not perform backup: {}", err);
+                        // put the backup in the error state so we try again
+                        state::dispatch(Action::ErrorBackup(set_key.clone()));
+                    }
                 }
             }
             Ok(None) => error!("dataset {} missing from database", &set_key),
