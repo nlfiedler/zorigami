@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use ssh2::{FileStat, Session};
 use std::fs::File;
 use std::io;
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 
 ///
@@ -36,7 +36,16 @@ impl super::Config for SftpConfig {
     fn from_json(&mut self, data: &str) -> Result<(), Error> {
         let conf: SftpConfig = serde_json::from_str(data)?;
         self.label = conf.label;
-        self.remote_addr = conf.remote_addr;
+        self.remote_addr = match conf.remote_addr.to_socket_addrs() {
+            Ok(_) => conf.remote_addr,
+            Err(_) => {
+                // if the address fails to parse, try adding the default SSH
+                // port on the end and hope for the best
+                let mut buf = conf.remote_addr;
+                buf.push_str(":22");
+                buf
+            }
+        };
         self.username = conf.username;
         self.password = conf.password;
         self.basepath = conf.basepath;
