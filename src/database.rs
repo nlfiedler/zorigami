@@ -10,6 +10,7 @@
 use super::core::{Checksum, Chunk, Configuration, Dataset, SavedFile, SavedPack, Snapshot, Tree};
 use failure::Error;
 use lazy_static::lazy_static;
+use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::{DBVector, DB};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -32,8 +33,6 @@ lazy_static! {
 pub struct Database {
     /// RocksDB instance.
     db: Arc<DB>,
-    /// Path to the database files.
-    path: Box<Path>,
 }
 
 // Mark the Database as a valid context type for Juniper.
@@ -50,22 +49,44 @@ impl Database {
         let mut db_refs = DBASE_REFS.lock().unwrap();
         if let Some(weak) = db_refs.get(db_path.as_ref()) {
             if let Some(arc) = weak.upgrade() {
-                let path = db_path.as_ref().to_path_buf().into_boxed_path();
-                return Ok(Self { db: arc, path });
+                return Ok(Self { db: arc });
             }
         }
         let buf = db_path.as_ref().to_path_buf();
         let db = DB::open_default(db_path)?;
         let arc = Arc::new(db);
         db_refs.insert(buf.clone(), Arc::downgrade(&arc));
-        Ok(Self { db: arc, path: buf.into_boxed_path() })
+        Ok(Self { db: arc })
     }
 
     ///
     /// Return the path to the database files.
     ///
     pub fn get_path(&self) -> &Path {
-        self.path.as_ref()
+        self.db.path()
+    }
+
+    ///
+    /// Create a backup of the database at the given path.
+    ///
+    pub fn create_backup<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
+        let backup_opts = BackupEngineOptions::default();
+        let mut backup_engine = BackupEngine::open(&backup_opts, path.as_ref())?;
+        backup_engine.create_new_backup(&self.db)?;
+        backup_engine.purge_old_backups(1)?;
+        Ok(())
+    }
+
+    ///
+    /// Restore the database from the backup path to the given db path.
+    ///
+    pub fn restore_from_backup<P: AsRef<Path>>(backup_path: P, db_path: P) -> Result<(), Error> {
+        let backup_opts = BackupEngineOptions::default();
+        let mut backup_engine = BackupEngine::open(&backup_opts, &backup_path).unwrap();
+        let mut restore_option = rocksdb::backup::RestoreOptions::default();
+        restore_option.set_keep_log_files(true);
+        backup_engine.restore_from_latest_backup(&db_path, &db_path, &restore_option)?;
+        Ok(())
     }
 
     ///

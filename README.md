@@ -176,6 +176,19 @@ size.
 * Pack file overhead: 0.4%
 * Size difference due largely to duplicate files
 
+### Local and SFTP
+
+* Linux ZFS system as above
+* Snapshot: 1 hours, 11 minutes, 59 seconds
+* 124,079 files
+* Packing: 20 hours, 25 minutes, 43 seconds
+* 4 MB chunk sizes
+* 64 MB pack sizes
+* 3,627 packs, 111,130 files
+* pack store: 239,880 MB
+* ZFS dataset: 307,205 MB
+* database: 67 MB
+
 ## Origin of the name
 
 A zorigami is a clock possessed by a spirit, as described on the

@@ -5,12 +5,44 @@ mod util;
 
 use failure::Error;
 use std::collections::HashMap;
+use std::fs;
 use std::ops::Deref;
 use std::thread;
 use std::time::SystemTime;
 use util::DBPath;
 use zorigami::core::*;
 use zorigami::database::*;
+
+#[test]
+fn test_get_path() {
+    let db_path = DBPath::new("_test_get_path");
+    let dbase = Database::new(&db_path).unwrap();
+    assert_eq!(db_path.as_ref(), dbase.get_path());
+}
+
+#[test]
+fn test_backup_restore() {
+    let db_path = DBPath::new("_test_backup_restore");
+    let dbase = Database::new(&db_path).unwrap();
+    assert!(dbase.insert_document(b"charlie", b"localhost").is_ok());
+
+    // backup the database
+    let backup_path = DBPath::new("_test_backup_restore_bup");
+    dbase.create_backup(&backup_path).unwrap();
+
+    // restore from backup (to a new path)
+    let new_path = DBPath::new("_test_backup_restore_new");
+    Database::restore_from_backup(&backup_path, &new_path).unwrap();
+
+    // open that new database and verify contents
+    let new_base = Database::new(&new_path).unwrap();
+    match new_base.get_document(b"charlie") {
+        Ok(Some(value)) => assert_eq!(value.deref(), b"localhost"),
+        Ok(None) => panic!("get document returned None!"),
+        Err(e) => panic!("get document error: {}", e),
+    };
+    let _ = fs::remove_dir_all(backup_path);
+}
 
 #[test]
 fn test_insert_document() {

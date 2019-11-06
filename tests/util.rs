@@ -4,6 +4,7 @@
 use lazy_static::lazy_static;
 use rocksdb::{Options, DB};
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use ulid::Ulid;
@@ -27,9 +28,9 @@ impl DBPath {
     ///
     /// The suffix prevents re-use of database files from a previous failed run
     /// in which the directory was not deleted.
-    pub fn new(prefix: &str) -> DBPath {
+    pub fn new(suffix: &str) -> DBPath {
         let mut path = Ulid::new().to_string();
-        path.push_str(prefix);
+        path.push_str(suffix);
         let db_path = PathBuf::from(path.to_lowercase());
         // keep track of the number of times this path has been opened
         let mut counts = PATH_COUNTS.lock().unwrap();
@@ -65,6 +66,9 @@ impl Drop for DBPath {
         if should_delete {
             let opts = Options::default();
             DB::destroy(&opts, &self.path).unwrap();
+            let mut backup_path = PathBuf::from(&self.path);
+            backup_path.set_extension("backup");
+            let _ = fs::remove_dir_all(&backup_path);
         }
     }
 }

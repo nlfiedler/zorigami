@@ -119,6 +119,7 @@ fn continue_backup(
     bmaster.finish_pack()?;
     // commit everything to the database
     bmaster.update_snapshot(&current_sha1)?;
+    bmaster.backup_database()?;
     Ok(Some(current_sha1))
 }
 
@@ -221,6 +222,24 @@ impl<'a> BackupMaster<'a> {
         snapshot = snapshot.end_time(SystemTime::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
         state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
+        Ok(())
+    }
+
+    /// Upload a compressed tarball of the database files to a special bucket.
+    fn backup_database(&self) -> Result<(), Error> {
+        // create a stable copy of the database
+        let mut backup_path: PathBuf = PathBuf::from(self.dbase.get_path());
+        backup_path.set_extension("backup");
+        self.dbase.create_backup(&backup_path)?;
+        // use a ULID as the object name so they sort by time
+        let object_name = ulid::Ulid::new().to_string();
+        let mut tarball = self.dataset.workspace.clone();
+        tarball.push(&object_name);
+        core::create_tar(&backup_path, &tarball)?;
+        // use a predictable bucket name so we can find it later
+        let bucket_name = core::computer_bucket_name(&self.dataset.computer_id);
+        store::store_pack(&tarball, &bucket_name, &object_name, &self.stores)?;
+        fs::remove_file(tarball)?;
         Ok(())
     }
 }
@@ -1211,14 +1230,16 @@ mod tests {
         let path1 = PathBuf::from("/Users/susan/database");
         let path2 = PathBuf::from("/Users/susan/dataset/.tmp");
         let path3 = PathBuf::from("/Users/susan/private");
-        let excludes = vec![
-            path1.as_path(),
-            path2.as_path(),
-            path3.as_path(),
-        ];
+        let excludes = vec![path1.as_path(), path2.as_path(), path3.as_path()];
         assert!(!is_excluded(Path::new("/not/excluded"), &excludes));
         assert!(!is_excluded(Path::new("/Users/susan/public"), &excludes));
-        assert!(is_excluded(Path::new("/Users/susan/database/LOCK"), &excludes));
-        assert!(is_excluded(Path::new("/Users/susan/dataset/.tmp/foobar"), &excludes));
+        assert!(is_excluded(
+            Path::new("/Users/susan/database/LOCK"),
+            &excludes
+        ));
+        assert!(is_excluded(
+            Path::new("/Users/susan/dataset/.tmp/foobar"),
+            &excludes
+        ));
     }
 }

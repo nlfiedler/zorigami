@@ -7,6 +7,9 @@
 
 use failure::{err_msg, Error};
 use fastcdc;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
 use log::error;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
@@ -56,6 +59,19 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
             ulid.push_str(&shorter);
             ulid.to_lowercase()
         }
+        Err(err) => {
+            error!("failed to convert unique ID: {:?}", err);
+            Ulid::new().to_string().to_lowercase()
+        }
+    }
+}
+
+///
+/// Return the unique bucket name for this computer and user.
+///
+pub fn computer_bucket_name(unique_id: &str) -> String {
+    match blob_uuid::to_uuid(unique_id) {
+        Ok(uuid) => uuid.to_simple().to_string(),
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
             Ulid::new().to_string().to_lowercase()
@@ -292,6 +308,29 @@ pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
         io::copy(&mut cfile, &mut file)?;
         fs::remove_file(infile)?;
     }
+    Ok(())
+}
+
+///
+/// Create a compressed tar file for the given directory structure.
+///
+pub fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
+    let file = File::create(outfile)?;
+    let encoder = ZlibEncoder::new(file, Compression::default());
+    let mut builder = Builder::new(encoder);
+    builder.append_dir_all(".", basepath)?;
+    let _output = builder.into_inner()?;
+    Ok(())
+}
+
+///
+/// Extract the contents of the compressed tar file to the given directory.
+///
+pub fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
+    let file = File::open(infile)?;
+    let decoder = ZlibDecoder::new(file);
+    let mut ar = Archive::new(decoder);
+    ar.unpack(outdir)?;
     Ok(())
 }
 
@@ -1489,5 +1528,34 @@ mod tests {
         assert_eq!(entries.next().unwrap().name, "lorem-ipsum.txt");
         assert!(entries.next().is_none());
         assert_eq!(tree.file_count, 2);
+    }
+
+    #[test]
+    fn test_tar_file() -> Result<(), Error> {
+        let outdir = tempdir()?;
+        let packfile = outdir.path().join("filename.tz");
+        create_tar(Path::new("./tests/fixtures"), &packfile)?;
+        extract_tar(&packfile, outdir.path())?;
+
+        let file = outdir.path().join("SekienAkashita.jpg");
+        let chksum = checksum_file(&file)?;
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+        );
+        let file = outdir.path().join("lorem-ipsum.txt");
+        let chksum = checksum_file(&file)?;
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
+        let file = outdir.path().join("washington-journal.txt");
+        let chksum = checksum_file(&file)?;
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
+        );
+
+        Ok(())
     }
 }

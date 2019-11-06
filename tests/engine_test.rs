@@ -536,7 +536,8 @@ fn test_perform_backup() -> Result<(), Error> {
     let result = store.list_buckets();
     assert!(result.is_ok());
     let buckets = result.unwrap();
-    assert_eq!(buckets.len(), 1);
+    // two buckets, one for the packs and one for the database
+    assert_eq!(buckets.len(), 2);
     let bucket = &buckets[0];
     let result = store.list_objects(bucket);
     assert!(result.is_ok());
