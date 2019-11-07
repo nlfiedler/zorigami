@@ -7,10 +7,6 @@
 *** DONE allow multiple stores per dataset
 **** really should run one backup, store local and sftp at the same time
 *** DONE need to add default port of 22 for sftp, if no port is given
-*** TODO use a persistent connection to speed up the process
-**** store the =Session= in a =Mutex= in the =SftpStore=
-**** change =connect()= to try to use existing session
-**** if session was closed, make a new one
 *** TODO use this to replace =replicaz= for remote backup
 ** Robustness and Recovery
 *** DONE should retry the backup if an error occurs
@@ -165,7 +161,7 @@
 **** A web conferencing tool was exploited via its hidden HTTP server
 ** macOS support
 *** TODO Use =launchd= to manage the process, have it start automatically
-*** TODO Use this to replace Time Machine (store on server using SFTP)
+*** TODO Use this to replace Time Machine (store on server using minio)
 ** Full Restore
 *** TODO Restore file attributes from tree entry
 **** TODO File mode

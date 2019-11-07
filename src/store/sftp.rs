@@ -96,6 +96,9 @@ impl SftpStore {
     /// instantiate the Sftp instance using the Session in connection.
     ///
     fn connect(&self) -> Result<Session, Error> {
+        // Simply build a new session and connection every time. Trying to reuse
+        // the session though a combination of Rc and RefCell does not improve
+        // the run time in the slightest.
         let tcp = TcpStream::connect(&self.config.remote_addr)?;
         let mut sess = Session::new()?;
         sess.set_tcp_stream(tcp);
