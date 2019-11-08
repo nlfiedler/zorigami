@@ -6,6 +6,7 @@ services:
     ports:
       - "2222:22"
     command: foo:pass:::upload
+    restart: always
   minio:
     # run the image to get help output:
     # $ docker run -p 9000:9000 --name minio1 minio/minio server
@@ -16,3 +17,4 @@ services:
       MINIO_ACCESS_KEY: AKIAJUI64O4WFEXAMPLE
       MINIO_SECRET_KEY: EdH8beEG6Qc9Th/irhm6YD+y1RQYivFyoExample
     command: --compat server /data
+    restart: always
