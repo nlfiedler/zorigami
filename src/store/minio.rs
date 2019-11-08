@@ -28,6 +28,10 @@ struct MinioConfig {
     /// that it includes the scheme and port number, otherwise the client
     /// library will default to https and port 80(?).
     endpoint: String,
+    /// The value for the AWS_ACCESS_KEY part of AWS credentials.
+    access_key: String,
+    /// The value for the AWS_SECRET_KEY part of AWS credentials.
+    secret_key: String,
 }
 
 impl super::Config for MinioConfig {
@@ -40,6 +44,8 @@ impl super::Config for MinioConfig {
         self.label = conf.label;
         self.region = conf.region;
         self.endpoint = conf.endpoint;
+        self.access_key = conf.access_key;
+        self.secret_key = conf.secret_key;
         Ok(())
     }
 
@@ -55,6 +61,8 @@ impl Default for MinioConfig {
             label: String::from("default minio"),
             region: String::from("us-west-1"),
             endpoint: String::from("http://localhost:9000"),
+            access_key: String::from("AKIAIOSFODNN7EXAMPLE"),
+            secret_key: String::from("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
         }
     }
 }
@@ -87,24 +95,18 @@ impl MinioStore {
         // Credentials are picked up in a variety of ways, see the rusoto docs:
         // https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         //
-        // Two different ways to get credentials via code (rather than the
-        // client library doing it automatically):
-        //
-        // let credentials = DefaultCredentialsProvider::new()
-        //     .unwrap()
-        //     .credentials()
-        //     .wait()
-        //     .unwrap();
-        //
-        // let access_key = env::var("AWS_ACCESS_KEY").unwrap();
-        // let secret_key = env::var("AWS_SECRET_KEY").unwrap();
-        // let credentials = AwsCredentials::new(access_key, secret_key, None, None);
-        //
         let region = Region::Custom {
             name: self.config.region.clone(),
             endpoint: self.config.endpoint.clone(),
         };
-        S3Client::new(region)
+        let client = rusoto_core::request::HttpClient::new().unwrap();
+        let creds = rusoto_credential::StaticProvider::new(
+            self.config.access_key.clone(),
+            self.config.secret_key.clone(),
+            None,
+            None,
+        );
+        S3Client::new_with(client, creds, region)
     }
 }
 

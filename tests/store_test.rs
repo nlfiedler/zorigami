@@ -55,6 +55,8 @@ fn test_store_config() -> Result<(), Error> {
         "label": "foobar",
         "region": "us-west-1",
         "endpoint": "http://localhost:9000",
+        "access_key": "catinthehat",
+        "secret_key": "mypasswordispassword",
     });
     let mut store = minio::MinioStore::new(unique_id);
     let value = config_json.to_string();
@@ -127,10 +129,14 @@ fn test_minio_roundtrip() -> Result<(), Error> {
     }
     let endpoint = endp_var.unwrap();
     let region = env::var("MINIO_REGION").unwrap();
+    let access_key = env::var("MINIO_ACCESS_KEY").unwrap();
+    let secret_key = env::var("MINIO_SECRET_KEY").unwrap();
     let config_json = json!({
         "label": "foobar",
         "region": region,
         "endpoint": endpoint,
+        "access_key": access_key,
+        "secret_key": secret_key,
     });
     let mut store = minio::MinioStore::new("testing");
     let value = config_json.to_string();

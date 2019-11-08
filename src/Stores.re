@@ -245,12 +245,16 @@ module MinioForm = {
   type field =
     | Label
     | Region
-    | Endpoint;
+    | Endpoint
+    | AccessKey
+    | SecretKey;
 
   type state = {
     label: string,
     region: string,
     endpoint: string,
+    access_key: string,
+    secret_key: string,
   };
 
   type message = string;
@@ -303,10 +307,42 @@ module MinioForm = {
     };
   };
 
+  module AccessKeyField = {
+    let update = (state, value) => {...state, access_key: value};
+
+    let validator = {
+      field: AccessKey,
+      strategy: Strategy.OnFirstSuccessOrFirstBlur,
+      dependents: None,
+      validate: state =>
+        switch (state.access_key) {
+        | "" => Error("Please enter an access key")
+        | _ => Ok(Valid)
+        },
+    };
+  };
+
+  module SecretKeyField = {
+    let update = (state, value) => {...state, secret_key: value};
+
+    let validator = {
+      field: SecretKey,
+      strategy: Strategy.OnFirstSuccessOrFirstBlur,
+      dependents: None,
+      validate: state =>
+        switch (state.secret_key) {
+        | "" => Error("Please enter a secret key")
+        | _ => Ok(Valid)
+        },
+    };
+  };
+
   let validators = [
     LabelField.validator,
     RegionField.validator,
     EndpointField.validator,
+    AccessKeyField.validator,
+    SecretKeyField.validator,
   ];
 };
 
@@ -696,6 +732,40 @@ module MinioFormRe = {
                ),
              ),
          )}
+        {formInput(
+           "Access Key",
+           "access_key",
+           "text",
+           form.state.access_key,
+           "AKIAIOSFODNN7EXAMPLE",
+           validateMsg(AccessKey),
+           _ => form.blur(AccessKey),
+           event =>
+             form.change(
+               AccessKey,
+               MinioForm.AccessKeyField.update(
+                 form.state,
+                 event->ReactEvent.Form.target##value,
+               ),
+             ),
+         )}
+        {formInput(
+           "Secret Key",
+           "secret_key",
+           "password",
+           form.state.secret_key,
+           "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+           validateMsg(SecretKey),
+           _ => form.blur(SecretKey),
+           event =>
+             form.change(
+               SecretKey,
+               MinioForm.SecretKeyField.update(
+                 form.state,
+                 event->ReactEvent.Form.target##value,
+               ),
+             ),
+         )}
         {switch (storeKey) {
          | Some(key) => formDisplay("Store Key", "storekey", "text", key)
          | None => React.null
@@ -791,13 +861,21 @@ module SecureFtpStore: Store = {
 
 module MinioStore: Store = {
   type state = MinioForm.state;
-  let initial = (): state => {label: "", region: "", endpoint: ""};
+  let initial = (): state => {
+    label: "",
+    region: "",
+    endpoint: "",
+    access_key: "",
+    secret_key: "",
+  };
   let kind = (): string => "minio";
   let decode = (json: Js.Json.t): state =>
     Json.Decode.{
       label: json |> field("label", string),
       region: json |> field("region", string),
       endpoint: json |> field("endpoint", string),
+      access_key: json |> field("access_key", string),
+      secret_key: json |> field("secret_key", string),
     };
   let encode = (self: state): Js.Json.t =>
     Json.Encode.(
@@ -805,6 +883,8 @@ module MinioStore: Store = {
         ("label", string(self.label)),
         ("region", string(self.region)),
         ("endpoint", string(self.endpoint)),
+        ("access_key", string(self.access_key)),
+        ("secret_key", string(self.secret_key)),
       ])
     );
   let component = (initial, onSubmit, storeKey) =>
