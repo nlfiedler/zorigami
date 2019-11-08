@@ -8,18 +8,7 @@
 **** really should run one backup, store local and sftp at the same time
 *** DONE need to add default port of 22 for sftp, if no port is given
 *** DONE change minio store to have access key and secret key
-*** TODO something else is wrong now, backup remains in progress indefinitely
-#+BEGIN_SRC
-[2019-11-08T01:45:20Z INFO  zorigami::supervisor] dataset 01ds22tpes59nynfpvgrd1zq1c to be backed up
-[2019-11-08T01:45:20Z DEBUG zorigami::engine] performing backup for dataset-01ds22tpes59nynfpvgrd1zq1c
-[2019-11-08T01:50:20Z DEBUG zorigami::supervisor] dataset 01ds22tpes59nynfpvgrd1zq1c backup already in progress
-...
-[2019-11-08T03:05:20Z DEBUG zorigami::supervisor] dataset 01ds22tpes59nynfpvgrd1zq1c backup already in progress
-[2019-11-08T03:10:05Z INFO  zorigami::supervisor] no new snapshot required
-[2019-11-08T03:10:20Z DEBUG zorigami::supervisor] dataset 01ds22tpes59nynfpvgrd1zq1c backup already in progress
-...
-[2019-11-08T04:40:20Z DEBUG zorigami::supervisor] dataset 01ds22tpes59nynfpvgrd1zq1c backup already in progress
-#+END_SRC
+*** DONE when no new snapshot, backup remains "running" forever
 *** TODO use this to replace =replicaz= for remote backup
 ** Robustness and Recovery
 *** DONE should retry the backup if an error occurs

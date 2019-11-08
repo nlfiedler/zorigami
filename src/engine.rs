@@ -67,7 +67,11 @@ pub fn perform_backup(
         excludes,
     )?;
     match snap_opt {
-        None => Ok(None),
+        None => {
+            // indicate that the backup has finished (doing nothing)
+            state::dispatch(Action::FinishBackup(dataset.key.clone()));
+            Ok(None)
+        }
         Some(current_sha1) => {
             let parent_sha1 = dataset.latest_snapshot.take();
             dataset.latest_snapshot = Some(current_sha1.clone());
