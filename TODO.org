@@ -1,15 +1,4 @@
 * Zorigami
-** kohaku remote (minio) backup
-*** DONE form for defining an SFTP store
-**** DONE new store form needs to have a "kind" selector
-**** DONE selecting different kind will rebuild new store form accordingly
-**** DONE make a different form and validation module for each type of store
-*** DONE allow multiple stores per dataset
-**** really should run one backup, store local and sftp at the same time
-*** DONE need to add default port of 22 for sftp, if no port is given
-*** DONE change minio store to have access key and secret key
-*** DONE when no new snapshot, backup remains "running" forever
-*** TODO use this to replace =replicaz= for remote backup
 ** Robustness and Recovery
 *** DONE should retry the backup if an error occurs
 *** DONE store database in a bucket named after the "computer UUID"

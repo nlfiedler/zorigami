@@ -189,6 +189,11 @@ size.
 * ZFS dataset: 307,205 MB
 * database: 67 MB
 
+### Local and Minio
+
+* Mostly same as above
+* Packing: 9 hours, 56 minutes, 9 seconds
+
 ## Origin of the name
 
 A zorigami is a clock possessed by a spirit, as described on the
