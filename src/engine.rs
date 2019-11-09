@@ -166,7 +166,18 @@ impl<'a> BackupMaster<'a> {
             Ok(entry) => {
                 // ignore files which already have records
                 if self.dbase.get_file(&entry.digest)?.is_none() {
-                    self.builder.add_file(&entry.path, entry.digest.clone())?;
+                    if self
+                        .builder
+                        .add_file(&entry.path, entry.digest.clone())
+                        .is_err()
+                    {
+                        // file disappeared out from under us, record it as
+                        // having zero length; file restore will handle it
+                        // without any problem
+                        error!("file {:?} went missing during backup", entry.path);
+                        let file = core::SavedFile::new(entry.digest, 0, vec![]);
+                        self.dbase.insert_file(&file)?;
+                    }
                     // loop until pack builder is below desired size
                     // (adding a very large file may require multiple packs)
                     while self.builder.is_full() {

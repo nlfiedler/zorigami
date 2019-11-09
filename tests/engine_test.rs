@@ -613,6 +613,8 @@ fn test_restore_file() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
+    let dest: PathBuf = [basepath, "zero-length.txt"].iter().collect();
+    assert!(fs::write(dest, vec![]).is_ok());
     let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
@@ -628,10 +630,10 @@ fn test_restore_file() -> Result<(), Error> {
     let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
-    // should be 8 chunks in database (pack size of 64kb means chunks around
+    // should be 9 chunks in database (pack size of 64kb means chunks around
     // 16kb; testing with two small files and one larger file)
     let count = dbase.count_prefix("chunk")?;
-    assert_eq!(count, 8);
+    assert_eq!(count, 9);
 
     // perform the fourth backup with shifted larger file
     let infile = Path::new("tests/fixtures/SekienAkashita.jpg");
@@ -642,7 +644,7 @@ fn test_restore_file() -> Result<(), Error> {
 
     // should be one more chunk in database
     let count = dbase.count_prefix("chunk")?;
-    assert_eq!(count, 9);
+    assert_eq!(count, 10);
 
     // restore the file from the first snapshot
     let digest_expected = Checksum::SHA256(String::from(
@@ -708,6 +710,23 @@ fn test_restore_file() -> Result<(), Error> {
     let digest_actual = checksum_file(&restored_file)?;
     assert_eq!(digest_expected, digest_actual);
 
+    // restore the zero length file from the first snapshot
+    let digest_expected = Checksum::SHA256(String::from(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ));
+    let outdir = tempdir().unwrap();
+    let restored_file = outdir.path().join("restored.bin");
+    restore_file(
+        &dbase,
+        &dataset,
+        "keyboard cat",
+        digest_expected.clone(),
+        &restored_file,
+    )?;
+    let attr = fs::metadata(&restored_file)?;
+    assert_eq!(0, attr.len());
+    let digest_actual = checksum_file(&restored_file)?;
+    assert_eq!(digest_expected, digest_actual);
     Ok(())
 }
 

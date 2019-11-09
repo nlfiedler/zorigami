@@ -16,8 +16,9 @@
 **** use tar and compression to produce a single "pack" file
 **** pack file should be a ULID so that the most recent entry is sorted last
 **** Glacier will use S3 to map the pack file to the archive name
-*** TODO detect file deletion during backup, mark file record as skipped
-**** handle the error and mark the record as "failed"
+*** DONE detect file deletion during backup
+**** handle the error when packing the file
+**** set the =length= to 0 and chunks to an empty list
 *** TODO verify checksum of downloaded packs during restore
 *** TODO consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
 **** it appears to support Erlang-style supervisor behavior
