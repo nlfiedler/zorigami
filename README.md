@@ -39,7 +39,7 @@ These commands will build backend and front-end, and then start the server.
 
 ```shell
 $ gulp build
-$ RUST_LOG=info ./target/debug/zorigami
+$ RUST_LOG=info cargo run
 ```
 
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
