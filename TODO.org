@@ -16,10 +16,6 @@
 **** use tar and compression to produce a single "pack" file
 **** pack file should be a ULID so that the most recent entry is sorted last
 **** Glacier will use S3 to map the pack file to the archive name
-*** TODO detect files changing between snapshot and pack building time
-**** use the =changed= record property to track this
-**** have to decide how much this really matters in practice
-**** there will always be a race condition of computing the digest and packing the file
 *** TODO detect file deletion during backup, mark file record as skipped
 **** handle the error and mark the record as "failed"
 *** TODO verify checksum of downloaded packs during restore
@@ -155,6 +151,7 @@
 **** TODO allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
 ** Architecture Review
+*** Database migrations (see =NOTES.md=)
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
 **** Consider https://github.com/spacejam/sled/

@@ -182,11 +182,10 @@ what type of record it is, such as `chunk/` for chunk records, and so on.
         + entry name
 * file records
     - key: `file/` + SHA256 at time of snapshot (with "sha256-" prefix)
-    - length: size of file in bytes (absent if `changed`)
-    - chunks: (absent if `changed`)
+    - length: size of file in bytes
+    - chunks:
         + offset: file position for this chunk
         + digest: chunk SHA256
-    - changed: SHA256 at time of backup, if different from key
 * extended attribute records
     - key: `xattr/` + SHA1 of the attribute value (with "sha1-" prefix)
     - value: attribute data as a Buffer
@@ -242,9 +241,6 @@ that has the most recent `upload_time`.
     1. For each chunk that does not exist in database, add to pack
     1. If pack file is large enough, upload to storage
     1. Add `chunk` and `pack` records upon successful pack storage
-    1. If file checksum changed after snapshot, add two records:
-        * set `changed` on the record with the checksum at time of snapshot
-        * set `chunks` on the record with the checksum at time of packing
 1. Set the `end_time` of snapshot record to indicate completion.
 1. Store latest snapshot identifier in `dataset/` record.
 1. Backup the database files.

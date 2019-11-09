@@ -921,17 +921,13 @@ pub struct SavedFile {
     /// Digest of file at time of snapshot.
     #[serde(skip)]
     pub digest: Checksum,
-    /// Length of the file in bytes, or zero if `changed`.
+    /// Length of the file in bytes.
     #[serde(rename = "len")]
     pub length: u64,
-    /// The set of the chunks contained in this file; will be empty if the
-    /// `changed` property is some value. There may be many of these for large
-    /// files, so they are represented compactly.
+    /// The set of the chunks contained in this file. There may be many of these
+    /// for large files, so they are represented compactly.
     #[serde(rename = "cnx")]
     pub chunks: Vec<(u64, Checksum)>,
-    /// Digest of file at time of backup, if different from `digest`.
-    #[serde(rename = "new")]
-    pub changed: Option<Checksum>,
 }
 
 impl SavedFile {
@@ -941,16 +937,7 @@ impl SavedFile {
             digest,
             length,
             chunks,
-            changed: None,
         }
-    }
-
-    /// Set the changed property and reset certain other fields.
-    pub fn set_changed(mut self, digest: Checksum) -> Self {
-        self.changed = Some(digest);
-        self.length = 0;
-        self.chunks.clear();
-        self
     }
 }
 
