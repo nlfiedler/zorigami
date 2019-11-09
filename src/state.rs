@@ -6,7 +6,7 @@
 
 use lazy_static::lazy_static;
 use reducer::{Dispatcher, Reactor, Reducer, Store};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
@@ -50,7 +50,7 @@ pub enum Action {
     UploadFiles(String, u64),
     /// Set the completion time for the backup of a given dataset.
     FinishBackup(String),
-    /// Sets the backup in the "error" state until a successful backup.
+    /// Sets the backup in the "error" state.
     ErrorBackup(String),
     /// Clear the error state and end time to indicate a restart.
     RestartBackup(String),
@@ -180,11 +180,10 @@ impl Reducer<Action> for State {
 
 impl State {
     ///
-    /// Return all of the datasets currently in the backups collection. Use
-    /// the `backups()` accessor to access individual entries.
+    /// Return all of the datasets currently in the backups collection.
     ///
-    pub fn active_datasets(&self) -> Vec<String> {
-        self.backups.keys().cloned().collect()
+    pub fn active_datasets(&self) -> hash_map::Iter<String, BackupState> {
+        self.backups.iter()
     }
 
     ///

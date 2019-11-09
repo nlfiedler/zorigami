@@ -80,9 +80,7 @@ fn restore(
 }
 
 fn log_state_changes(state: &state::State) {
-    let keys = state.active_datasets();
-    for key in keys {
-        let backup = state.backups(&key).unwrap();
+    for (key, backup) in state.active_datasets() {
         if let Some(end_time) = backup.end_time() {
             // the backup finished recently, log one last entry
             let sys_time = std::time::SystemTime::now();
@@ -90,7 +88,7 @@ fn log_state_changes(state: &state::State) {
                 if interval.as_secs() < 60 {
                     info!(
                         "complete for {}: packs: {}, files: {}",
-                        &key,
+                        key,
                         backup.packs_uploaded(),
                         backup.files_uploaded()
                     );
@@ -100,7 +98,7 @@ fn log_state_changes(state: &state::State) {
             // this backup is not yet finished
             info!(
                 "progress for {}: packs: {}, files: {}",
-                &key,
+                key,
                 backup.packs_uploaded(),
                 backup.files_uploaded()
             );

@@ -11,6 +11,7 @@
 *** DONE verify checksum of downloaded packs during restore
 *** TODO consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
 **** it appears to support Erlang-style supervisor behavior
+**** also consider https://github.com/actix/actix
 *** TODO recover from a backup thread that panicked
 **** For each spawned backup thread, spawn a supervisor thread
 **** Supervisor thread joins the backup thread
