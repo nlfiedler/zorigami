@@ -8,7 +8,7 @@
 *** DONE detect file deletion during backup
 **** handle the error when packing the file
 **** set the =length= to 0 and chunks to an empty list
-*** TODO verify checksum of downloaded packs during restore
+*** DONE verify checksum of downloaded packs during restore
 *** TODO consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
 **** it appears to support Erlang-style supervisor behavior
 *** TODO recover from a backup thread that panicked

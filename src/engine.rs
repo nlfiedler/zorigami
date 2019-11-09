@@ -370,6 +370,7 @@ pub fn restore_file(
             store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
             // extract chunks from pack (temporarily use the output file path)
             core::decrypt_file(passphrase, &salt, packfile.path(), outfile)?;
+            verify_pack_digest(pack_digest, outfile)?;
             let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
             fs::remove_file(outfile)?;
             // remove unrelated chunks to conserve space
@@ -398,6 +399,19 @@ pub fn restore_file(
     let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
     core::assemble_chunks(&chunk_paths, outfile)?;
     Ok(())
+}
+
+/// Verify the retrieved pack file digest matches the database record.
+fn verify_pack_digest(digest: &core::Checksum, path: &Path) -> Result<(), Error> {
+    let actual = core::checksum_file(path)?;
+    if &actual != digest {
+        Err(err_msg(format!(
+            "pack digest does not match: {} != {}",
+            &actual, digest
+        )))
+    } else {
+        Ok(())
+    }
 }
 
 ///
