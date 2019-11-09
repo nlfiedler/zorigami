@@ -218,43 +218,34 @@ pub fn retrieve_pack(
     locations: &[PackLocation],
     outfile: &Path,
 ) -> Result<(), Error> {
-    // look for a local store over a remote one
-    let mut store_index = 0;
-    let mut found_local = false;
-    for (idx, store) in stores.iter().enumerate() {
-        if store.get_type() == StoreType::LOCAL {
-            store_index = idx;
-            found_local = true;
-            break;
-        }
-    }
-    // if no local store is available, look for a "fast" store
-    if !found_local {
-        for (idx, store) in stores.iter().enumerate() {
-            if store.get_speed() == StoreSpeed::FAST {
-                store_index = idx;
-                break;
+    // find a local store, if available
+    for loc in locations.iter() {
+        for store in stores.iter() {
+            if loc.store == store.get_id() && store.get_type() == StoreType::LOCAL {
+                return store.retrieve_pack(loc, outfile);
             }
         }
     }
-    let store = &stores[store_index];
-    // find the pack location whose store id matches the first choice
-    let mut loc_index = 0;
-    let mut found_location = false;
-    for (idx, loc) in locations.iter().enumerate() {
-        if loc.store == store.get_id() {
-            loc_index = idx;
-            found_location = true;
-            break;
+
+    // find a fast store, if available
+    for loc in locations.iter() {
+        for store in stores.iter() {
+            if loc.store == store.get_id() && store.get_speed() == StoreSpeed::FAST {
+                return store.retrieve_pack(loc, outfile);
+            }
         }
     }
-    if !found_location {
-        return Err(err_msg(format!(
-            "cannot find store for pack: {}",
-            locations[loc_index].store
-        )));
+
+    // find any store at all
+    for loc in locations.iter() {
+        for store in stores.iter() {
+            if loc.store == store.get_id() {
+                return store.retrieve_pack(loc, outfile);
+            }
+        }
     }
-    store.retrieve_pack(&locations[loc_index], outfile)
+
+    Err(err_msg("cannot find any store for pack"))
 }
 
 ///
