@@ -1,34 +1,4 @@
 * Zorigami
-** Robustness and Recovery
-*** DONE should retry the backup if an error occurs
-*** DONE store database in a bucket named after the "computer UUID"
-**** use tar and compression to produce a single "pack" file
-**** pack file should be a ULID so that the most recent entry is sorted last
-**** Glacier will use S3 to map the pack file to the archive name
-*** DONE detect file deletion during backup
-**** handle the error when packing the file
-**** set the =length= to 0 and chunks to an empty list
-*** DONE verify checksum of downloaded packs during restore
-*** TODO consider using [[https://github.com/vertexclique/bastion][bastion]] for fault-tolerance (i.e. supervisor)
-**** it appears to support Erlang-style supervisor behavior
-**** also consider https://github.com/actix/actix
-*** TODO recover from a backup thread that panicked
-**** For each spawned backup thread, spawn a supervisor thread
-**** Supervisor thread joins the backup thread
-**** If the =Result= from =JoinHandle.join()= is =Err=, then restart
-**** see also example on docs for =std::thread::panicking()=
-*** TODO how to recover from the main supervisor thread panicking?
-**** Perhaps rely on cron, launchd, etc to keep things running
-*** TODO handle termination signals to exit even if backup is running
-**** leave the cleanup process for next time
-**** =actix_server= already handles =SIGINT= and =SIGTERM=
-*** TODO maybe use thread pools and futures in supervisor
-**** futures would help with reporting errors back to the main thread
-*** TODO support database integrity checks
-**** ensure all referenced records actually exist
-**** like git fsck, start at the top and traverse everything
-**** find and report dangling objects
-**** an automated scan could be run on occasion
 ** Google Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
@@ -39,8 +9,9 @@
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
-**** Define a set of hours each day when uploads should occur
-**** Can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
+**** define a set of hours each day when uploads should occur
+**** can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
+**** need to persist current progress to disk in case of restart
 *** TODO use this to replace =akashita= for online backups
 ** Loose issues
 *** TODO sometimes creating a new store results in a network error
@@ -179,6 +150,11 @@
 **** Hidden
 **** System
 ** More Better
+*** TODO support database integrity checks
+**** ensure all referenced records actually exist
+**** like git fsck, start at the top and traverse everything
+**** find and report dangling objects
+**** an automated scan could be run on occasion
 *** TODO Automatically prune backups more then N days old
 **** For Google and Amazon, anything older than 90 days is free to remove
 **** This would be a configuration setting, with defaults and path-specific

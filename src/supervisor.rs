@@ -12,50 +12,132 @@ use super::core::{self, Dataset, Snapshot};
 use super::database::Database;
 use super::engine;
 use super::state::{self, Action};
+use actix::prelude::*;
 use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
-use log::{debug, error, info};
+use lazy_static::lazy_static;
+use log::{debug, error, info, warn};
 use std::cmp::Ordering;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+#[derive(Message)]
+struct Start(PathBuf);
+
+#[derive(Default)]
+struct MySupervisor {
+    db_path: Option<PathBuf>,
+}
+
+impl Actor for MySupervisor {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        debug!("supervisor actor started");
+        ctx.run_interval(Duration::from_millis(300_000), |this, _ctx| {
+            debug!("supervisor interval fired");
+            if let Some(db_path) = this.db_path.as_ref() {
+                if let Err(err) = start_due_datasets(db_path) {
+                    error!("failed to check datasets: {}", err);
+                }
+            } else {
+                warn!("supervisor does not yet have a database path");
+            }
+        });
+    }
+}
+
+impl Supervised for MySupervisor {
+    fn restarting(&mut self, _ctx: &mut Context<MySupervisor>) {
+        debug!("supervisor actor restarting");
+    }
+}
+
+impl Handler<Start> for MySupervisor {
+    type Result = ();
+
+    fn handle(&mut self, msg: Start, _ctx: &mut Context<MySupervisor>) {
+        self.db_path = Some(msg.0);
+        debug!("supervisor received start message");
+    }
+}
+
+#[derive(Message)]
+struct StartBackup {
+    db_path: PathBuf,
+    dataset: String,
+}
+
+struct Runner;
+
+impl Actor for Runner {
+    type Context = Context<Self>;
+}
+
+impl Handler<StartBackup> for Runner {
+    type Result = ();
+
+    fn handle(&mut self, msg: StartBackup, ctx: &mut Context<Runner>) {
+        debug!("runner received backup message");
+        if let Err(err) = run_dataset(msg.db_path, msg.dataset.clone()) {
+            error!("error starting backup for {}: {}", msg.dataset, err);
+        }
+        debug!("runner finished backup");
+        ctx.stop();
+    }
+}
+
+lazy_static! {
+    // Address of our supervised actor. Need to keep this around lest our actor
+    // be terminated prematurely by the actix runtime.
+    static ref MY_SUPER: Addr<MySupervisor> = {
+        actix::Supervisor::start(|_| Default::default())
+    };
+    // Arbiter manages the runner actors that perform the backups. This will
+    // manage an event loop on a single thread. To allow for concurrent tasks
+    // use the SyncArbiter, which manages a single type of actor but runs them
+    // on multiple threads.
+    static ref MY_RUNNER: Arbiter = { Arbiter::new() };
+}
+
 ///
 /// Spawn a thread to monitor the datasets, ensuring that backups are started
 /// according to the assigned schedules. If a dataset does not have a schedule
 /// then it is not run automatically by this process.
 ///
-pub fn start(db_path: PathBuf) -> Result<(), Error> {
-    let dbase = Database::new(&db_path)?;
+pub fn start(db_path: PathBuf) -> std::io::Result<()> {
     thread::spawn(move || {
-        loop {
-            // sleep for 5 minutes before starting so it gives me a chance
-            // to change the configuration without having to wipe the
-            // database first
-            thread::sleep(Duration::from_millis(300_000));
-            // look for datasets that should be running, spawning a thread to
-            // run the backup for any waiting datasets
-            match dbase.get_all_datasets() {
-                Ok(datasets) => {
-                    for set in datasets {
-                        match should_run(&dbase, &set) {
-                            Ok(true) => {
-                                // passed all the checks, we can start this dataset
-                                if let Err(err) = run_dataset(db_path.clone(), set.key.clone()) {
-                                    error!("error starting backup for {}: {}", &set, err);
-                                }
-                            }
-                            Ok(false) => (),
-                            Err(err) => error!("error while checking schedule: {}", err),
-                        }
-                    }
-                }
-                Err(err) => error!("failed to retrieve datasets: {}", err),
+        let system = System::new("backup-supervisor");
+        // must send a message to get the system to run our actor
+        if let Err(err) = MY_SUPER.try_send(Start(db_path)) {
+            error!("error sending message to supervisor: {}", err);
+        }
+        system.run()
+    });
+    Ok(())
+}
+
+///
+/// Begin the backup process for all datasets that are ready to run.
+///
+fn start_due_datasets(db_path: &PathBuf) -> Result<(), Error> {
+    let dbase = Database::new(db_path)?;
+    let datasets = dbase.get_all_datasets()?;
+    for set in datasets {
+        if should_run(&dbase, &set)? {
+            let msg = StartBackup {
+                db_path: db_path.to_owned(),
+                dataset: set.key.clone(),
+            };
+            let addr = Actor::start_in_arbiter(&MY_RUNNER, |_| Runner {});
+            if let Err(err) = addr.try_send(msg) {
+                error!("error sending message to runner: {}", err);
             }
         }
-    });
+    }
     Ok(())
 }
 
@@ -128,33 +210,31 @@ fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
 fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
     let dbase = Database::new(&db_path)?;
     let passphrase = core::get_passphrase();
-    thread::spawn(move || {
-        info!("dataset {} to be backed up", &set_key);
-        match dbase.get_dataset(&set_key) {
-            Ok(Some(mut dataset)) => {
-                let start_time = SystemTime::now();
-                // reset any error state in the backup
-                state::dispatch(Action::RestartBackup(set_key.clone()));
-                match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
-                    Ok(Some(checksum)) => {
-                        let end_time = SystemTime::now();
-                        let time_diff = end_time.duration_since(start_time);
-                        let pretty_time = engine::pretty_print_duration(time_diff);
-                        info!("created new snapshot {}", &checksum);
-                        info!("dataset {} backup complete after {}", &set_key, pretty_time);
-                    }
-                    Ok(None) => info!("no new snapshot required"),
-                    Err(err) => {
-                        error!("could not perform backup: {}", err);
-                        // put the backup in the error state so we try again
-                        state::dispatch(Action::ErrorBackup(set_key.clone()));
-                    }
+    info!("dataset {} to be backed up", &set_key);
+    match dbase.get_dataset(&set_key) {
+        Ok(Some(mut dataset)) => {
+            let start_time = SystemTime::now();
+            // reset any error state in the backup
+            state::dispatch(Action::RestartBackup(set_key.clone()));
+            match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
+                Ok(Some(checksum)) => {
+                    let end_time = SystemTime::now();
+                    let time_diff = end_time.duration_since(start_time);
+                    let pretty_time = engine::pretty_print_duration(time_diff);
+                    info!("created new snapshot {}", &checksum);
+                    info!("dataset {} backup complete after {}", &set_key, pretty_time);
+                }
+                Ok(None) => info!("no new snapshot required"),
+                Err(err) => {
+                    error!("could not perform backup: {}", err);
+                    // put the backup in the error state so we try again
+                    state::dispatch(Action::ErrorBackup(set_key.clone()));
                 }
             }
-            Ok(None) => error!("dataset {} missing from database", &set_key),
-            Err(err) => error!("could not retrieve dataset {}: {}", &set_key, err),
         }
-    });
+        Ok(None) => error!("dataset {} missing from database", &set_key),
+        Err(err) => error!("could not retrieve dataset {}: {}", &set_key, err),
+    }
     Ok(())
 }
 
