@@ -9,10 +9,82 @@
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
-**** define a set of hours each day when uploads should occur
-**** can make use of [[https://crates.io/crates/chrono][chrono]] crate for time related operations
-**** need to persist current progress to disk in case of restart
+**** define a new type for the "schedule" field of dataset
+***** consider how we might migrate old database records
+***** schedule will consist of a frequency and range
+****** hourly, daily, weekly, monthly
+****** no range for hourly
+****** daily has an hour range
+****** weekly has certain days and optional hour range
+****** monthly has certain days and optional hour range
+***** everything is strongly typed, no string parsing/formatting
+***** encode this using enums in the GraphQL schema
+***** web ui should start with just one frequency/range combo for now
+***** backend will support multiple frequency/range pairs per dataset
+**** support a schedule with start and stop (e.g. time range)
+***** check the start time in =supervisor= to determine if it is ready to start
+***** check the end time in =BackupMaster.new()= and set a stop time
+***** check the current time vs end time in =BackupMaster.handle_file()=
+***** =handle_file()= returns an =OutOfTimeError= when out of time
+***** supervisor reports the =OutOfTimeError= a little better than normal errors
+***** be mindful that the default timezone for =SystemTime= is UTC
 *** TODO use this to replace =akashita= for online backups
+**** old akashita configuration file:
+#+BEGIN_SRC erlang
+{gcs_region, "us-west1"}.
+{gcp_credentials, "/working/config/credentials.json"}.
+{use_sudo, false}.
+{go_times, ["07:00-13:00"]}. % times are UTC
+{tmpdir, "/akashita"}.
+{split_size, "128M"}.
+{default_excludes, [".apdisk", ".DS_Store", ".localized", ".thumbnails"]}.
+
+{buckets, [
+    {"misc", [
+        {dataset, "zeniba/shared"},
+        {clone_base, "zeniba/akashita"},
+        {paths, [
+            "Antonia",
+            "Applications",
+            "Artwork",
+            "Books",
+            "Certificates",
+            "Correspondence",
+            "Documents",
+            "Historical",
+            "Medical",
+            "Nathan",
+            "Performances",
+            "Projects",
+            "Receipts",
+            "Sounds",
+            "Writings"
+        ]},
+        {compressed, true}
+    ]},
+    {"photos", [
+        {dataset, "zeniba/shared"},
+        {clone_base, "zeniba/akashita"},
+        {paths, [
+            "Pictures"
+        ]}
+    ]},
+    {"videos", [
+        {dataset, "zeniba/shared"},
+        {clone_base, "zeniba/akashita"},
+        {paths, [
+            "Movies"
+        ]}
+    ]},
+    {"tanuki", [
+        {dataset, "zeniba/shared"},
+        {clone_base, "zeniba/akashita"},
+        {paths, [
+            "tanuki"
+        ]}
+    ]}
+]}.
+#+END_SRC
 ** Loose issues
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
@@ -38,8 +110,6 @@
 ** Loose WebUI tasks
 *** TODO dataset status says "running" even though it had an error
 **** need to expose the error status via GraphQL
-*** TODO should not be able to click on a dataset that is not finished
-**** it is meaningless to browse an unfinished backup
 *** TODO should sort the datasets so they are always in the same order
 **** maybe sort them by date, with most recent first
 *** TODO tree entries of =ERROR= type should be displayed as such
@@ -99,7 +169,6 @@
 **** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
-*** TODO allow assigning multiple stores to a given dataset
 *** TODO consider how datasets can be modified after creation
 **** should their stores be allowed to change?
 **** should their basepath be allowed to change?
