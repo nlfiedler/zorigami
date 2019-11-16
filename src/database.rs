@@ -11,7 +11,7 @@ use super::core::{Checksum, Chunk, Configuration, Dataset, SavedFile, SavedPack,
 use failure::Error;
 use lazy_static::lazy_static;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
-use rocksdb::{DBVector, DB};
+use rocksdb::DB;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str;
@@ -103,7 +103,7 @@ impl Database {
     ///
     /// Retrieve the value with the given key.
     ///
-    pub fn get_document(&self, key: &[u8]) -> Result<Option<DBVector>, Error> {
+    pub fn get_document(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
         let result = self.db.get(key)?;
         Ok(result)
     }
