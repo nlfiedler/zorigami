@@ -80,7 +80,7 @@ the application in stages and produce a relatively small final image.
 On the build host:
 
 ```shell
-$ docker-compose build
+$ docker-compose build --pull
 $ docker image rm 192.168.1.1:5000/zorigami_app
 $ docker image tag zorigami_app 192.168.1.1:5000/zorigami_app
 $ docker push 192.168.1.1:5000/zorigami_app
