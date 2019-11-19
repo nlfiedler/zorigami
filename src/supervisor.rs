@@ -170,9 +170,10 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
                 maybe_run = false;
                 debug!("dataset {} backup already in progress", &set.key);
             }
-        } else {
+        } else if maybe_run {
             // kickstart the application state when it appears that our
             // application has restarted while a backup was in progress
+            debug!("missing backup state, re-starting process");
             state::dispatch(Action::StartBackup(set.key.clone()));
         }
         Ok(maybe_run)

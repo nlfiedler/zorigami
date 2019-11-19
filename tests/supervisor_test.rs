@@ -63,8 +63,8 @@ fn test_first_backup_running() -> Result<(), Error> {
 }
 
 #[test]
-fn test_backup_not_due() -> Result<(), Error> {
-    let db_path = DBPath::new("_test_backup_not_due");
+fn test_backup_not_overdue() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_backup_not_overdue");
     let dbase = Database::new(&db_path).unwrap();
 
     // build a "latest" snapshot that finished just now
@@ -134,8 +134,42 @@ fn test_backup_restarted() -> Result<(), Error> {
     dbase.put_dataset(&dataset)?;
 
     // and the app restarted, so there is no state either
+    assert!(state::get_state().backups(&dataset.key).is_none());
 
+    // the backup should run, and there is now state
     assert_eq!(should_run(&dbase, &dataset)?, true);
+    assert!(state::get_state().backups(&dataset.key).is_some());
+    Ok(())
+}
+
+#[test]
+fn test_backup_restarted_not_overdue() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_backup_restarted_not_overdue");
+    let dbase = Database::new(&db_path).unwrap();
+
+    // build a "latest" snapshot that finished just now
+    let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+    let mut snapshot = Snapshot::new(None, tree_sha);
+    let end_time = SystemTime::now();
+    snapshot = snapshot.end_time(end_time);
+    let sha1 = snapshot.checksum();
+    dbase.insert_snapshot(&sha1, &snapshot)?;
+
+    // create the dataset with a schedule
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let basepath = Path::new("/some/path");
+    let store = "store/local/stuff";
+    let mut dataset = Dataset::new(&unique_id, basepath, store);
+    dataset.schedule = Some("@daily".to_owned());
+    dataset.latest_snapshot = Some(sha1);
+    dbase.put_dataset(&dataset)?;
+
+    // and the app restarted, so there is no state either
+    assert!(state::get_state().backups(&dataset.key).is_none());
+
+    // the backup should not run and there is still no state
+    assert_eq!(should_run(&dbase, &dataset)?, false);
+    assert!(state::get_state().backups(&dataset.key).is_none());
     Ok(())
 }
 
