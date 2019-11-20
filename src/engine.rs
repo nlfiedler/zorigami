@@ -36,8 +36,7 @@ pub fn perform_backup(
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
     // that the previous backup did not complete successfully.
-    let latest_snap_ref = dataset.latest_snapshot.as_ref();
-    if let Some(latest) = latest_snap_ref {
+    if let Some(latest) = dataset.latest_snapshot.as_ref() {
         if let Some(snapshot) = dbase.get_snapshot(latest)? {
             if snapshot.end_time.is_none() {
                 // continue from the previous incomplete backup
@@ -162,32 +161,28 @@ impl<'a> BackupMaster<'a> {
     /// Handle a single changed file, adding it to the pack, and possibly
     /// uploading one or more pack files as needed.
     fn handle_file(&mut self, changed: Result<ChangedFile, Error>) -> Result<(), Error> {
-        match changed {
-            Ok(entry) => {
-                // ignore files which already have records
-                if self.dbase.get_file(&entry.digest)?.is_none() {
-                    if self
-                        .builder
-                        .add_file(&entry.path, entry.digest.clone())
-                        .is_err()
-                    {
-                        // file disappeared out from under us, record it as
-                        // having zero length; file restore will handle it
-                        // without any problem
-                        error!("file {:?} went missing during backup", entry.path);
-                        let file = core::SavedFile::new(entry.digest, 0, vec![]);
-                        self.dbase.insert_file(&file)?;
-                    }
-                    // loop until pack builder is below desired size
-                    // (adding a very large file may require multiple packs)
-                    while self.builder.is_full() {
-                        self.send_one_pack()?;
-                    }
-                }
-                Ok(())
+        let entry = changed?;
+        // ignore files which already have records
+        if self.dbase.get_file(&entry.digest)?.is_none() {
+            if self
+                .builder
+                .add_file(&entry.path, entry.digest.clone())
+                .is_err()
+            {
+                // file disappeared out from under us, record it as
+                // having zero length; file restore will handle it
+                // without any problem
+                error!("file {:?} went missing during backup", entry.path);
+                let file = core::SavedFile::new(entry.digest, 0, vec![]);
+                self.dbase.insert_file(&file)?;
             }
-            Err(err) => Err(err),
+            // loop until pack builder is below desired size
+            // (adding a very large file may require multiple packs)
+            while self.builder.is_full() {
+                self.send_one_pack()?;
+            }
         }
+        Ok(())
     }
 
     /// Build and send a single pack to the pack store. Record the results in

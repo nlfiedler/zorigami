@@ -17,7 +17,7 @@ use chrono::prelude::*;
 use cron::Schedule;
 use failure::{err_msg, Error};
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::cmp::Ordering;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -29,7 +29,7 @@ struct Start(PathBuf);
 
 #[derive(Default)]
 struct MySupervisor {
-    db_path: Option<PathBuf>,
+    dbase: Option<Database>,
 }
 
 impl Actor for MySupervisor {
@@ -38,9 +38,9 @@ impl Actor for MySupervisor {
     fn started(&mut self, ctx: &mut Self::Context) {
         debug!("supervisor actor started");
         ctx.run_interval(Duration::from_millis(300_000), |this, _ctx| {
-            debug!("supervisor interval fired");
-            if let Some(db_path) = this.db_path.as_ref() {
-                if let Err(err) = start_due_datasets(db_path) {
+            trace!("supervisor interval fired");
+            if let Some(dbase) = this.dbase.as_ref() {
+                if let Err(err) = start_due_datasets(dbase) {
                     error!("failed to check datasets: {}", err);
                 }
             } else {
@@ -60,8 +60,19 @@ impl Handler<Start> for MySupervisor {
     type Result = ();
 
     fn handle(&mut self, msg: Start, _ctx: &mut Context<MySupervisor>) {
-        self.db_path = Some(msg.0);
         debug!("supervisor received start message");
+        //
+        // Open the database and keep it open to avoid any subtle timing issues
+        // with the supervisor and arbiter threads opening and closing databases
+        // at the same time. Would occasionally fail to get the exclusive lock
+        // when opening the database.
+        //
+        // Also, opening the database repeatedly seems to create many log files.
+        //
+        match Database::new(msg.0) {
+            Ok(dbase) => self.dbase = Some(dbase),
+            Err(err) => error!("could not open database: {}", err),
+        }
     }
 }
 
@@ -82,9 +93,7 @@ impl Handler<StartBackup> for Runner {
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<Runner>) {
         debug!("runner received backup message");
-        if let Err(err) = run_dataset(msg.db_path, msg.dataset.clone()) {
-            error!("error starting backup for {}: {}", msg.dataset, err);
-        }
+        run_dataset(msg.db_path, msg.dataset.clone());
         debug!("runner finished backup");
         ctx.stop();
     }
@@ -123,13 +132,12 @@ pub fn start(db_path: PathBuf) -> std::io::Result<()> {
 ///
 /// Begin the backup process for all datasets that are ready to run.
 ///
-fn start_due_datasets(db_path: &PathBuf) -> Result<(), Error> {
-    let dbase = Database::new(db_path)?;
+fn start_due_datasets(dbase: &Database) -> Result<(), Error> {
     let datasets = dbase.get_all_datasets()?;
     for set in datasets {
         if should_run(&dbase, &set)? {
             let msg = StartBackup {
-                db_path: db_path.to_owned(),
+                db_path: dbase.get_path().to_owned(),
                 dataset: set.key.clone(),
             };
             let addr = Actor::start_in_arbiter(&MY_RUNNER, |_| Runner {});
@@ -173,7 +181,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         } else if maybe_run {
             // kickstart the application state when it appears that our
             // application has restarted while a backup was in progress
-            debug!("missing backup state, re-starting process");
+            debug!("set missing backup state to start");
             state::dispatch(Action::StartBackup(set.key.clone()));
         }
         Ok(maybe_run)
@@ -208,35 +216,42 @@ fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
 /// Run the backup procedure for the named dataset. Takes the passphrase from
 /// the environment.
 ///
-fn run_dataset(db_path: PathBuf, set_key: String) -> Result<(), Error> {
-    let dbase = Database::new(&db_path)?;
-    let passphrase = core::get_passphrase();
-    info!("dataset {} to be backed up", &set_key);
-    match dbase.get_dataset(&set_key) {
-        Ok(Some(mut dataset)) => {
-            let start_time = SystemTime::now();
-            // reset any error state in the backup
-            state::dispatch(Action::RestartBackup(set_key.clone()));
-            match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
-                Ok(Some(checksum)) => {
-                    let end_time = SystemTime::now();
-                    let time_diff = end_time.duration_since(start_time);
-                    let pretty_time = engine::pretty_print_duration(time_diff);
-                    info!("created new snapshot {}", &checksum);
-                    info!("dataset {} backup complete after {}", &set_key, pretty_time);
+fn run_dataset(db_path: PathBuf, set_key: String) {
+    match Database::new(&db_path) {
+        Ok(dbase) => {
+            let passphrase = core::get_passphrase();
+            info!("dataset {} to be backed up", &set_key);
+            match dbase.get_dataset(&set_key) {
+                Ok(Some(mut dataset)) => {
+                    let start_time = SystemTime::now();
+                    // reset any error state in the backup
+                    state::dispatch(Action::RestartBackup(set_key.clone()));
+                    match engine::perform_backup(&mut dataset, &dbase, &passphrase) {
+                        Ok(Some(checksum)) => {
+                            let end_time = SystemTime::now();
+                            let time_diff = end_time.duration_since(start_time);
+                            let pretty_time = engine::pretty_print_duration(time_diff);
+                            info!("created new snapshot {}", &checksum);
+                            info!("dataset {} backup complete after {}", &set_key, pretty_time);
+                        }
+                        Ok(None) => info!("no new snapshot required"),
+                        Err(err) => {
+                            error!("could not perform backup: {}", err);
+                            // put the backup in the error state so we try again
+                            state::dispatch(Action::ErrorBackup(set_key.clone()));
+                        }
+                    }
                 }
-                Ok(None) => info!("no new snapshot required"),
-                Err(err) => {
-                    error!("could not perform backup: {}", err);
-                    // put the backup in the error state so we try again
-                    state::dispatch(Action::ErrorBackup(set_key.clone()));
-                }
+                Ok(None) => error!("dataset {} missing from database", &set_key),
+                Err(err) => error!("could not retrieve dataset {}: {}", &set_key, err),
             }
         }
-        Ok(None) => error!("dataset {} missing from database", &set_key),
-        Err(err) => error!("could not retrieve dataset {}: {}", &set_key, err),
+        Err(err) => {
+            error!("error opening database for {}: {}", &set_key, err);
+            // put the backup in the error state so we try again
+            state::dispatch(Action::ErrorBackup(set_key.clone()));
+        }
     }
-    Ok(())
 }
 
 #[cfg(test)]
