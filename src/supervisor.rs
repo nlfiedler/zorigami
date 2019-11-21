@@ -8,7 +8,7 @@
 //! This module assumes that `std::time::SystemTime` is UTC, which seems to be
 //! the case, but is not mentioned in the documentation.
 
-use super::core::{self, Dataset, Snapshot};
+use super::core::{self, Dataset};
 use super::database::Database;
 use super::engine;
 use super::state::{self, Action};
@@ -163,19 +163,30 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
             let snapshot = dbase
                 .get_snapshot(checksum)?
                 .ok_or_else(|| err_msg(format!("snapshot {} missing from database", &checksum)))?;
-            is_overdue(schedule, &snapshot)?
+            if let Some(end_time) = snapshot.end_time {
+                is_overdue(schedule, end_time)?
+            } else {
+                true
+            }
         } else {
             true
         };
-        // check if a backup is still running or had an error
-        // if it had an error, definitely try running again
-        // if it is still running, then do nothing for now
+        // Check if a backup is still running or had an error; if it had an
+        // error, definitely try running again; if it is still running, then do
+        // nothing for now.
+        //
+        // Also consider recently finished backups where there were no changes
+        // in which case we clear the overdue flag.
         let redux = state::get_state();
         if let Some(backup) = redux.backups(&set.key) {
             if backup.had_error() {
                 maybe_run = true;
                 debug!("dataset {} backup had an error, will restart", &set.key);
-            } else if backup.end_time().is_none() {
+            } else if let Some(end_time) = backup.end_time() {
+                if !is_overdue(schedule, end_time)? {
+                    maybe_run = false;
+                }
+            } else {
                 maybe_run = false;
                 debug!("dataset {} backup already in progress", &set.key);
             }
@@ -195,22 +206,19 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 /// Determine if the snapshot finished a sufficiently long time ago to warrant
 /// running a backup now. If it has not finished, it is still overdue.
 ///
-fn is_overdue(schedule: &str, snapshot: &Snapshot) -> Result<bool, Error> {
-    if let Some(et) = snapshot.end_time {
-        let end_time = DateTime::<Utc>::from(et);
-        // cannot use ? because the error type is not thread-safe
-        if let Ok(sched) = Schedule::from_str(schedule) {
-            let mut events = sched.after(&end_time);
-            let utc_now = Utc::now();
-            let next = events
-                .next()
-                .ok_or_else(|| err_msg("scheduled event had no 'next'?"))?;
-            return Ok(next.cmp(&utc_now) == Ordering::Less);
-        } else {
-            return Err(err_msg("schedule expression could not be parsed"));
-        }
+fn is_overdue(schedule: &str, end_time: SystemTime) -> Result<bool, Error> {
+    let datetime = DateTime::<Utc>::from(end_time);
+    // cannot use ? because the error type is not thread-safe
+    if let Ok(sched) = Schedule::from_str(schedule) {
+        let mut events = sched.after(&datetime);
+        let utc_now = Utc::now();
+        let next = events
+            .next()
+            .ok_or_else(|| err_msg("scheduled event had no 'next'?"))?;
+        Ok(next.cmp(&utc_now) == Ordering::Less)
+    } else {
+        Err(err_msg("schedule expression could not be parsed"))
     }
-    Ok(true)
 }
 
 ///
@@ -258,35 +266,24 @@ fn run_dataset(db_path: PathBuf, set_key: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::*;
     use std::time::SystemTime;
 
     #[test]
     fn test_is_overdue_hourly() {
         let expression = "@hourly";
-        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha);
-        //
-        // test with no end time for latest snapshot
-        //
-        let result = is_overdue(expression, &snapshot);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
         //
         // test with a time that should fire
         //
         let hour_ago = Duration::new(3600, 0);
         let end_time = SystemTime::now() - hour_ago;
-        snapshot = snapshot.end_time(end_time);
-        let result = is_overdue(expression, &snapshot);
+        let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
         // test with a time that should not fire
         //
         let end_time = SystemTime::now();
-        snapshot = snapshot.end_time(end_time);
-        let result = is_overdue(expression, &snapshot);
+        let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
     }
@@ -294,29 +291,19 @@ mod tests {
     #[test]
     fn test_is_overdue_daily() {
         let expression = "@daily";
-        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha);
-        //
-        // test with no end time for latest snapshot
-        //
-        let result = is_overdue(expression, &snapshot);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
         //
         // test with a date that should fire
         //
         let day_ago = Duration::new(90_000, 0);
         let end_time = SystemTime::now() - day_ago;
-        snapshot = snapshot.end_time(end_time);
-        let result = is_overdue(expression, &snapshot);
+        let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
         // test with a date that should not fire
         //
         let end_time = SystemTime::now();
-        snapshot = snapshot.end_time(end_time);
-        let result = is_overdue(expression, &snapshot);
+        let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
     }

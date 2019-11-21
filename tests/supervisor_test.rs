@@ -114,6 +114,37 @@ fn test_backup_overdue() -> Result<(), Error> {
 }
 
 #[test]
+fn test_old_snapshot_recent_backup() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_old_snapshot_recent_backup");
+    let dbase = Database::new(&db_path).unwrap();
+
+    // build a "latest" snapshot that finished a while ago
+    let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+    let mut snapshot = Snapshot::new(None, tree_sha);
+    let day_ago = Duration::new(90_000, 0);
+    let end_time = SystemTime::now() - day_ago;
+    snapshot = snapshot.end_time(end_time);
+    let sha1 = snapshot.checksum();
+    dbase.insert_snapshot(&sha1, &snapshot)?;
+
+    let unique_id = generate_unique_id("charlie", "localhost");
+    let basepath = Path::new("/some/path");
+    let store = "store/local/stuff";
+    let mut dataset = Dataset::new(&unique_id, basepath, store);
+    dataset.schedule = Some("@daily".to_owned());
+    dataset.latest_snapshot = Some(sha1);
+    dbase.put_dataset(&dataset)?;
+
+    // insert a backup state that finished recently, which is the case when
+    // there were no file changes, but the backup "finished" nonetheless
+    state::dispatch(Action::StartBackup(dataset.key.clone()));
+    state::dispatch(Action::FinishBackup(dataset.key.clone()));
+
+    assert_eq!(should_run(&dbase, &dataset)?, false);
+    Ok(())
+}
+
+#[test]
 fn test_backup_restarted() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_restarted");
     let dbase = Database::new(&db_path).unwrap();
