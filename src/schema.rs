@@ -336,7 +336,7 @@ impl From<core::Dataset> for Dataset {
         let basepath = set
             .basepath
             .to_str()
-            .and_then(|v| Some(v.to_owned()))
+            .map(|v| v.to_owned())
             .unwrap_or_else(|| set.basepath.to_string_lossy().into_owned());
         let snapshot = set.latest_snapshot.map(Checksum::from);
         Self {
