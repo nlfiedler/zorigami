@@ -18,6 +18,7 @@ use zorigami::database::*;
 use zorigami::engine::*;
 use zorigami::state;
 use zorigami::store::*;
+use zorigami::supervisor;
 
 #[test]
 fn test_datasets() -> Result<(), Error> {
@@ -580,6 +581,10 @@ fn test_perform_backup() -> Result<(), Error> {
     assert!(backups.end_time().unwrap() > backups.start_time());
     assert_eq!(backups.packs_uploaded(), 2);
     assert_eq!(backups.files_uploaded(), 1);
+
+    // ensure supervisor agrees that no new backup is needed
+    assert_eq!(supervisor::should_run(&dbase, &dataset)?, false);
+
     Ok(())
 }
 
