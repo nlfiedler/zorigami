@@ -11,7 +11,7 @@ use super::core::{Checksum, Chunk, Configuration, Dataset, SavedFile, SavedPack,
 use failure::Error;
 use lazy_static::lazy_static;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
-use rocksdb::DB;
+use rocksdb::{Options, DB};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str;
@@ -53,7 +53,11 @@ impl Database {
             }
         }
         let buf = db_path.as_ref().to_path_buf();
-        let db = DB::open_default(db_path)?;
+        // prevent the proliferation of old log files
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.set_keep_log_file_num(10);
+        let db = DB::open(&opts, db_path)?;
         let arc = Arc::new(db);
         db_refs.insert(buf.clone(), Arc::downgrade(&arc));
         Ok(Self { db: arc })

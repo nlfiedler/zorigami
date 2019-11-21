@@ -174,6 +174,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         if let Some(backup) = redux.backups(&set.key) {
             if backup.had_error() {
                 maybe_run = true;
+                debug!("dataset {} backup had an error, will restart", &set.key);
             } else if backup.end_time().is_none() {
                 maybe_run = false;
                 debug!("dataset {} backup already in progress", &set.key);
@@ -181,7 +182,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         } else if maybe_run {
             // kickstart the application state when it appears that our
             // application has restarted while a backup was in progress
-            debug!("set missing backup state to start");
+            debug!("reset missing backup state to start");
             state::dispatch(Action::StartBackup(set.key.clone()));
         }
         Ok(maybe_run)

@@ -1,33 +1,4 @@
 * Zorigami
-** TODO New problem
-*** database =LOCK= file is present when backup starts
-*** works when testing locally
-*** stopping the application leaves the =LOCK= file behind
-*** starting the application with the =LOCK= does not cause any error
-*** it may be a timing issue between the supervisor and the runner
-**** one is dropping the database reference
-**** the other is opening the database because the Weak ref is gone
-**** but the actual lock file is still open for a very brief time
-*** backup state is stuck running despite having an error
-#+BEGIN_SRC
-[DEBUG zorigami] supervisor actor started
-[DEBUG zorigami] supervisor received start message
-[INFO  zorigami] listening on http://0.0.0.0:8080/...
-[DEBUG zorigami] supervisor interval fired
-[DEBUG zorigami] missing backup state, re-starting process
-[INFO  zorigami] progress for 01ds603f74xtcvrq173qeqvqgt: packs: 0, files: 0
-[DEBUG zorigami] runner received backup message
-[ERROR zorigami] error starting backup for 01ds603f74xtcvrq173qeqvqgt: IO error: lock : /database/LOCK: No locks available
-[DEBUG zorigami] runner finished backup
-[DEBUG zorigami] supervisor interval fired
-[DEBUG zorigami] dataset 01ds603f74xtcvrq173qeqvqgt backup already in progress
-[DEBUG zorigami] supervisor interval fired
-[DEBUG zorigami] dataset 01ds603f74xtcvrq173qeqvqgt backup already in progress
-[DEBUG zorigami] supervisor interval fired
-[DEBUG zorigami] dataset 01ds603f74xtcvrq173qeqvqgt backup already in progress
-#+END_SRC
-** TODO Too many "old" database log files
-*** is there a way to clean them up?
 ** Google Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
