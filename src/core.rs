@@ -11,6 +11,7 @@ use fastcdc;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use juniper::{GraphQLEnum, GraphQLObject};
 use log::error;
 use memmap::MmapOptions;
 use serde::{Deserialize, Serialize};
@@ -461,39 +462,40 @@ pub fn decrypt_file(
     Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+/// Tree entry type, such as a file or directory.
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, GraphQLEnum)]
 pub enum EntryType {
     /// Anything that is not a directory or symlink.
     FILE,
-    /// Definitely a directory.
+    /// Represents a directory.
     DIR,
-    /// Definitely a symbolic link.
-    SYMLINK,
+    /// Represents a symbolic link.
+    LINK,
     /// Error occurred while processing the entry.
     ERROR,
 }
 
 impl EntryType {
     /// Return `true` if this entry is for a file.
-    pub fn is_file(&self) -> bool {
-        match *self {
+    pub fn is_file(self) -> bool {
+        match self {
             EntryType::FILE => true,
             _ => false,
         }
     }
 
     /// Return `true` if this entry is for a directory.
-    pub fn is_dir(&self) -> bool {
-        match *self {
+    pub fn is_dir(self) -> bool {
+        match self {
             EntryType::DIR => true,
             _ => false,
         }
     }
 
     /// Return `true` if this entry is for a symbolic link.
-    pub fn is_link(&self) -> bool {
-        match *self {
-            EntryType::SYMLINK => true,
+    pub fn is_link(self) -> bool {
+        match self {
+            EntryType::LINK => true,
             _ => false,
         }
     }
@@ -504,7 +506,7 @@ impl From<FileType> for EntryType {
         if fstype.is_dir() {
             EntryType::DIR
         } else if fstype.is_symlink() {
-            EntryType::SYMLINK
+            EntryType::LINK
         } else {
             // default to file type for everything else
             EntryType::FILE
@@ -578,6 +580,24 @@ impl fmt::Display for TreeReference {
     }
 }
 
+impl FromStr for TreeReference {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with("link-") {
+            Ok(TreeReference::LINK(s[5..].to_owned()))
+        } else if s.starts_with("tree-") {
+            let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
+            Ok(TreeReference::TREE(digest.expect("invalid tree SHA1")))
+        } else if s.starts_with("file-") {
+            let digest: Result<Checksum, Error> = FromStr::from_str(&s[7..]);
+            Ok(TreeReference::FILE(digest.expect("invalid file SHA256")))
+        } else {
+            Err(err_msg(format!("not a recognized reference: {}", s)))
+        }
+    }
+}
+
 ///
 /// Return the last part of the path, converting to a String.
 ///
@@ -593,10 +613,8 @@ fn get_file_name(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-///
-/// A `TreeEntry` represents a file, directory, or symbolic link within a tree.
-///
-#[derive(Serialize, Deserialize, Debug)]
+/// A file, directory, or symbolic link within a tree.
+#[derive(Serialize, Deserialize, Debug, GraphQLObject)]
 pub struct TreeEntry {
     /// Name of the file, directory, or symbolic link.
     #[serde(rename = "nm")]
@@ -605,24 +623,31 @@ pub struct TreeEntry {
     #[serde(rename = "ty")]
     pub fstype: EntryType,
     /// Unix file mode of the entry.
+    #[graphql(skip)]
     #[serde(rename = "mo")]
     pub mode: Option<u32>,
     /// Unix user identifier
+    #[graphql(skip)]
     #[serde(rename = "ui")]
     pub uid: Option<u32>,
     /// Name of the owning user.
+    #[graphql(skip)]
     #[serde(rename = "us")]
     pub user: Option<String>,
     /// Unix group identifier
+    #[graphql(skip)]
     #[serde(rename = "gi")]
     pub gid: Option<u32>,
     /// Name of the owning group.
+    #[graphql(skip)]
     #[serde(rename = "gr")]
     pub group: Option<String>,
-    /// Created time.
+    /// Created time of the entry.
+    #[graphql(skip)]
     #[serde(rename = "ct")]
     pub ctime: DateTime<Utc>,
-    /// Modified time.
+    /// Modification time of the entry.
+    #[graphql(name = "modTime")]
     #[serde(rename = "mt")]
     pub mtime: DateTime<Utc>,
     /// Reference to the entry itself.
@@ -631,6 +656,7 @@ pub struct TreeEntry {
     /// Set of extended file attributes, if any. The key is the name of the
     /// extended attribute, and the value is the checksum for the value
     /// already recorded. Each unique value is meant to be stored once.
+    #[graphql(skip)]
     #[serde(rename = "xa")]
     pub xattrs: HashMap<String, Checksum>,
 }
@@ -770,16 +796,14 @@ impl fmt::Display for TreeEntry {
     }
 }
 
-///
-/// A Tree represents a set of file system entries, including files,
-/// directories, symbolic links, etc.
-///
-#[derive(Serialize, Deserialize, Debug)]
+/// A set of file system entries, such as files, directories, symbolic links.
+#[derive(Serialize, Deserialize, Debug, GraphQLObject)]
 pub struct Tree {
     /// Set of entries making up this tree.
     #[serde(rename = "en")]
     pub entries: Vec<TreeEntry>,
     /// The number of files contained within this tree and its subtrees.
+    #[graphql(skip)]
     #[serde(skip)]
     pub file_count: u32,
 }
@@ -1053,15 +1077,15 @@ impl fmt::Display for Dataset {
 }
 
 /// Contains the configuration of the application, pertaining to all datasets.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, GraphQLObject)]
 pub struct Configuration {
-    /// name of the computer on which this application is running
+    /// Name of the computer on which this application is running.
     #[serde(rename = "hn")]
     pub hostname: String,
-    /// name of the user running this application
+    /// Name of the user running this application.
     #[serde(rename = "un")]
     pub username: String,
-    /// computer UUID for generating bucket names
+    /// Computer UUID for generating bucket names.
     #[serde(rename = "id")]
     pub computer_id: String,
 }
@@ -1130,14 +1154,15 @@ mod tests {
 
     #[test]
     fn test_checksum_fromstr() {
-        let result = Checksum::from_str("sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c");
+        let result: Result<Checksum, Error> =
+            FromStr::from_str("sha1-e7505beb754bed863e3885f73e3bb6866bdd7f8c");
         assert!(result.is_ok());
         let checksum = result.unwrap();
         assert_eq!(
             checksum,
             Checksum::SHA1(String::from("e7505beb754bed863e3885f73e3bb6866bdd7f8c"))
         );
-        let result = Checksum::from_str(
+        let result: Result<Checksum, Error> = FromStr::from_str(
             "sha256-a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433",
         );
         assert!(result.is_ok());
@@ -1148,7 +1173,7 @@ mod tests {
                 "a58dd8680234c1f8cc2ef2b325a43733605a7f16f288e072de8eae81fd8d6433"
             ))
         );
-        let result = Checksum::from_str("foobar");
+        let result: Result<Checksum, Error> = FromStr::from_str("foobar");
         assert!(result.is_err());
     }
 

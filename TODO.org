@@ -9,19 +9,25 @@
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
-**** define a new type for the "schedule" field of dataset
+**** TODO define a new type for the "schedule" field of dataset
 ***** consider how we might migrate old database records
+****** just remove the =schedule= field and create a new named =schedules=
+****** =Dataset.schedules= is a =Vec= of the type data type
+****** add =#[serde(default)]= to the =Dataset= struct
+****** define a =default()= for =Dataset= that defaults schedule to daily
 ***** schedule will consist of a frequency and range
 ****** hourly, daily, weekly, monthly
 ****** no range for hourly
 ****** daily has an hour range
-****** weekly has certain days and optional hour range
-****** monthly has certain days and optional hour range
+****** weekly has optional days and hour range
+****** monthly has optional days and hour range
 ***** everything is strongly typed, no string parsing/formatting
-***** encode this using enums in the GraphQL schema
-***** web ui should start with just one frequency/range combo for now
-***** backend will support multiple frequency/range pairs per dataset
-**** support a schedule with start and stop (e.g. time range)
+***** TODO encode this using enums in the GraphQL schema
+***** TODO change GraphQL schema to use the new =schedules= field
+***** TODO change web ui to provide one frequency/range combo for now
+***** TODO backend will support multiple frequency/range pairs per dataset
+***** TODO remove the =cron= create and its usage
+**** TODO support a schedule with start and stop (e.g. time range)
 ***** check the start time in =supervisor= to determine if it is ready to start
 ***** check the end time in =BackupMaster.new()= and set a stop time
 ***** check the current time vs end time in =BackupMaster.handle_file()=
@@ -86,6 +92,9 @@
 ]}.
 #+END_SRC
 ** Loose issues
+*** TODO find out if libsodium compresses the data
+*** TODO should compute HMAC of the pack file, store hash in database
+**** then verify that HMAC when retrieving the pack file
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
@@ -106,6 +115,7 @@
 **** DONE querying stores
 **** DONE mutating stores
 *** TODO find out how to document arguments to mutations
+**** c.f. juniper API docs: Attribute Macro juniper::object
 *** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
 *** TODO dataset status says "running" even though it had an error

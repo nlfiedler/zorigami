@@ -213,7 +213,7 @@
           "fields": [
             {
               "name": "key",
-              "description": "Opaque identifier of this store.",
+              "description": "Identifier of this store.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -245,7 +245,7 @@
             },
             {
               "name": "kind",
-              "description": "The type, or kind, of the store (e.g. \"local\", \"minio\", \"glacier\").",
+              "description": "The type, or kind, of the store (e.g. \"local\", \"minio\", \"sftp\").",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -946,6 +946,16 @@
         },
         {
           "kind": "SCALAR",
+          "name": "TreeReference",
+          "description": "Reference for a tree entry, such as a file or tree.",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "SCALAR",
           "name": "BigInt",
           "description": "An integer type larger than the standard signed 32-bit.",
           "fields": null,
@@ -1056,7 +1066,7 @@
         {
           "kind": "OBJECT",
           "name": "Configuration",
-          "description": "Application configuration record.",
+          "description": "Contains the configuration of the application, pertaining to all datasets.",
           "fields": [
             {
               "name": "hostname",
@@ -1115,11 +1125,11 @@
         {
           "kind": "OBJECT",
           "name": "Dataset",
-          "description": "The directory structure which will be saved.",
+          "description": "Location, schedule, and pack store for a backup data set.",
           "fields": [
             {
               "name": "key",
-              "description": "Opaque identifier for this dataset (w/o db prefix).",
+              "description": "Identifier for this dataset.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1179,7 +1189,7 @@
             },
             {
               "name": "latestSnapshot",
-              "description": "Reference to most recent snapshot.",
+              "description": "Most recent snapshot for this dataset, if any.",
               "args": [],
               "type": {
                 "kind": "OBJECT",
@@ -1191,7 +1201,7 @@
             },
             {
               "name": "packSize",
-              "description": "Path to temporary workspace for backup process.\nSpecified byte length of pack files.",
+              "description": "Preferred byte length of pack files.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1238,11 +1248,11 @@
         {
           "kind": "OBJECT",
           "name": "TreeEntry",
-          "description": "A file, directory, or link within a tree.",
+          "description": "A file, directory, or symbolic link within a tree.",
           "fields": [
             {
               "name": "name",
-              "description": "File system name of this entry.",
+              "description": "Name of the file, directory, or symbolic link.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1258,7 +1268,7 @@
             },
             {
               "name": "fstype",
-              "description": "File system type of this entry.",
+              "description": "Basic type of the entry, e.g. file or directory.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1274,7 +1284,7 @@
             },
             {
               "name": "modTime",
-              "description": "Modification time of the entry, may not be available.",
+              "description": "Modification time of the entry.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1290,14 +1300,14 @@
             },
             {
               "name": "reference",
-              "description": "Coordinates for this entry in the database.",
+              "description": "Reference to the entry itself.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "String",
+                  "name": "TreeReference",
                   "ofType": null
                 }
               },
@@ -1313,7 +1323,7 @@
         {
           "kind": "OBJECT",
           "name": "Snapshot",
-          "description": "A single backup.",
+          "description": "A single backup, either in progress or completed.",
           "fields": [
             {
               "name": "checksum",
@@ -1547,7 +1557,7 @@
           "inputFields": [
             {
               "name": "key",
-              "description": "Identifier of dataset to update, None if creating.",
+              "description": "Identifier of dataset to update, null if creating.",
               "type": {
                 "kind": "SCALAR",
                 "name": "String",
@@ -1581,7 +1591,7 @@
             },
             {
               "name": "packSize",
-              "description": "Path to temporary workspace for backup process.\nDesired byte length of pack files.",
+              "description": "Desired byte length of pack files.",
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1623,32 +1633,32 @@
         {
           "kind": "ENUM",
           "name": "EntryType",
-          "description": "Type of the entry in the tree.",
+          "description": "Tree entry type, such as a file or directory.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
           "enumValues": [
             {
               "name": "FILE",
-              "description": "Represents a file.",
+              "description": "Anything that is not a directory or symlink.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
-              "name": "DIRECTORY",
+              "name": "DIR",
               "description": "Represents a directory.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
-              "name": "SYM_LINK",
+              "name": "LINK",
               "description": "Represents a symbolic link.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "ERROR",
-              "description": "An error occurred when processing this entry.",
+              "description": "Error occurred while processing the entry.",
               "isDeprecated": false,
               "deprecationReason": null
             }
@@ -1793,11 +1803,11 @@
         {
           "kind": "OBJECT",
           "name": "Tree",
-          "description": "A collection of files, directories, and links.",
+          "description": "A set of file system entries, such as files, directories, symbolic links.",
           "fields": [
             {
               "name": "entries",
-              "description": null,
+              "description": "Set of entries making up this tree.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",

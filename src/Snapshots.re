@@ -2,14 +2,14 @@
 // Copyright (c) 2019 Nathan Fiedler
 //
 
-type fstype = [ | `DIRECTORY | `ERROR | `FILE | `SYM_LINK];
+type fstype = [ | `DIR | `ERROR | `FILE | `LINK];
 
 type treeEntry = {
   .
   "name": string,
   "fstype": fstype,
   "modTime": Js.Json.t,
-  "reference": string,
+  "reference": Js.Json.t,
 };
 
 type tree = {. "entries": array(treeEntry)};
@@ -133,34 +133,48 @@ let displayLatest = (dataset: t): string => {
 
 let formatType = (fstype: fstype): string => {
   switch (fstype) {
-  | `DIRECTORY => "DIR"
+  | `DIR => "DIR"
   | `ERROR => "ERROR"
   | `FILE => "FILE"
-  | `SYM_LINK => "LINK"
+  | `LINK => "LINK"
   };
 };
 
 // Trim the uninteresting prefix from the reference value.
-let formatReference = (reference: string): string =>
-  if (Js.String.startsWith("file-", reference)) {
-    // file-sha256-54b96c41e653070fe5071f72c13818bf48dc7cfb8ba9f7160d4a423b9738bcde
-    Js.String.substringToEnd(
-      ~from=12,
-      reference,
-    );
-  } else if (Js.String.startsWith("tree-", reference)) {
-    // tree-sha1-72e186d5cf58cf0e2545b6ed254354e671e0a9f4
-    Js.String.substringToEnd(
-      ~from=10,
-      reference,
-    );
-  } else {
-    reference;
+let formatReference = (reference: Js.Json.t): string =>
+  switch (Js.Json.decodeString(reference)) {
+  | None => "INVALID REFERENCE"
+  | Some(str) =>
+    if (Js.String.startsWith("file-", str)) {
+      // file-sha256-54b96c41e653070fe5071f72c13818bf48dc7cfb8ba9f7160d4a423b9738bcde
+      Js.String.substringToEnd(
+        ~from=12,
+        str,
+      );
+    } else if (Js.String.startsWith("tree-", str)) {
+      // tree-sha1-72e186d5cf58cf0e2545b6ed254354e671e0a9f4
+      Js.String.substringToEnd(
+        ~from=10,
+        str,
+      );
+    } else {
+      str;
+    }
   };
 
+// Trim the leading "file-" prefix from the reference.
+let dereferenceFile = (reference: Js.Json.t): string => {
+  switch (Js.Json.decodeString(reference)) {
+  | None => "INVALID REFERENCE"
+  | Some(str) => Js.String.substringToEnd(~from=5, str)
+  };
+};
+
+// Trim the leading "tree-" prefix from the reference.
+let dereferenceTree = dereferenceFile;
+
 let makeFileModal = (~dataset: t, ~entry: treeEntry, ~cancel) => {
-  // trim the leading "file-" prefix from the reference
-  let checksum = Js.String.substringToEnd(~from=5, entry##reference);
+  let checksum = dereferenceFile(entry##reference);
   // link directly to the file restore function
   let fileUrl =
     "/restore/" ++ dataset##key ++ "/" ++ checksum ++ "/" ++ entry##name;
@@ -236,12 +250,10 @@ module Tree = {
     let (selection, setSelection) = React.useState(() => None);
     let makeOneRow = (entry: treeEntry) => {
       let onClick = _ =>
-        if (entry##fstype == `DIRECTORY) {
+        if (entry##fstype == `DIR) {
           setHistory(h => [snapshot, ...h]);
           setSnapshot(_ =>
-            Js.Json.string(
-              Js.String.substringToEnd(~from=5, entry##reference),
-            )
+            Js.Json.string(dereferenceTree(entry##reference))
           );
         } else if (entry##fstype == `FILE) {
           setSelection(_ => Some(entry));
