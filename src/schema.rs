@@ -7,12 +7,12 @@
 use super::core::{Checksum, Configuration, Dataset, Snapshot, Tree, TreeReference};
 use super::database::Database;
 use super::engine;
+use super::schedule::{self, DayOfWeek, TimeRange};
 use super::store;
 use chrono::prelude::*;
-use cron::Schedule;
 use juniper::{
-    graphql_scalar, FieldError, FieldResult, GraphQLInputObject, GraphQLObject, ParseScalarResult,
-    ParseScalarValue, RootNode, Value,
+    graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
+    ParseScalarResult, ParseScalarValue, RootNode, Value,
 };
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -179,9 +179,9 @@ impl Dataset {
             .unwrap_or_else(|| self.basepath.to_string_lossy().into_owned())
     }
 
-    /// Cron-like expression for the backup schedule.
-    fn schedule(&self) -> Option<String> {
-        self.schedule.clone()
+    /// Set of schedules that apply to this dataset.
+    fn schedules(&self) -> Vec<schedule::Schedule> {
+        self.schedules.clone()
     }
 
     /// Most recent snapshot for this dataset, if any.
@@ -212,8 +212,8 @@ pub struct InputDataset {
     pub key: Option<String>,
     /// Path that is being backed up.
     pub basepath: String,
-    /// Cron-like expression for the backup schedule.
-    pub schedule: Option<String>,
+    /// List of schedules to apply to this dataset.
+    pub schedules: Vec<InputSchedule>,
     // Path to temporary workspace for backup process.
     // pub workspace: String,
     /// Desired byte length of pack files.
@@ -250,26 +250,325 @@ impl InputDataset {
                 Value::null(),
             ));
         }
-        // ensure the schedule, if any, can be parsed successfully
-        if let Some(schedule) = self.schedule.as_ref() {
-            let result = Schedule::from_str(schedule);
-            if result.is_err() {
-                return Err(FieldError::new(
-                    format!("schedule expression could not be parsed: {}", schedule),
-                    Value::null(),
-                ));
-            }
+        // ensure the schedules, if any, make sense
+        for schedule in self.schedules.iter() {
+            schedule.validate()?;
         }
         Ok(())
     }
 
     /// Update the fields of the dataset with the values from this input.
-    fn copy_input(&self, dataset: &mut Dataset) {
+    fn copy_input(self, dataset: &mut Dataset) {
         dataset.basepath = PathBuf::from(self.basepath.clone());
-        dataset.schedule = self.schedule.clone();
+        dataset.schedules = self.schedules.into_iter().map(|e| e.into()).collect();
         // dataset.workspace = self.workspace;
         dataset.pack_size = self.pack_size.clone().into();
         dataset.stores = self.stores.clone();
+    }
+}
+
+#[juniper::object(description = "Range of time in which to run backup.")]
+impl TimeRange {
+    /// Seconds from midnight at which to start.
+    fn start_time(&self) -> i32 {
+        self.start as i32
+    }
+    /// Seconds from midnight at which to stop.
+    fn stop_time(&self) -> i32 {
+        self.stop as i32
+    }
+}
+
+#[derive(GraphQLInputObject)]
+pub struct InputTimeRange {
+    /// Seconds from midnight at which to start.
+    pub start_time: i32,
+    /// Seconds from midnight at which to stop.
+    pub stop_time: i32,
+}
+
+impl InputTimeRange {
+    /// Perform basic validation on the input time range.
+    fn validate(&self) -> FieldResult<()> {
+        if self.start_time < 0 && self.start_time > 86_400 {
+            return Err(FieldError::new(
+                "Start time must be between 0 and 86,400",
+                Value::null(),
+            ));
+        }
+        if self.stop_time < 0 && self.stop_time > 86_400 {
+            return Err(FieldError::new(
+                "Stop time must be between 0 and 86,400",
+                Value::null(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Into<TimeRange> for InputTimeRange {
+    fn into(self) -> TimeRange {
+        TimeRange::new_secs(self.start_time as u32, self.stop_time as u32)
+    }
+}
+
+/// In combination with DayOfWeek, selects the particular week.
+#[derive(Copy, Clone, GraphQLEnum)]
+pub enum WeekOfMonth {
+    /// First such weekday of the month.
+    First,
+    /// Second such weekday of the month.
+    Second,
+    /// Third such weekday of the month.
+    Third,
+    /// Fourth such weekday of the month.
+    Fourth,
+    /// Fifth such weekday of the month.
+    Fifth,
+}
+
+impl WeekOfMonth {
+    fn into_dow(self, dow: DayOfWeek) -> schedule::DayOfMonth {
+        match self {
+            WeekOfMonth::First => schedule::DayOfMonth::First(dow),
+            WeekOfMonth::Second => schedule::DayOfMonth::Second(dow),
+            WeekOfMonth::Third => schedule::DayOfMonth::Third(dow),
+            WeekOfMonth::Fourth => schedule::DayOfMonth::Fourth(dow),
+            WeekOfMonth::Fifth => schedule::DayOfMonth::Fifth(dow),
+        }
+    }
+}
+
+/// How often should the backup run for the dataset.
+#[derive(Copy, Clone, GraphQLEnum)]
+pub enum Frequency {
+    /// Run every hour.
+    Hourly,
+    /// Run every day, with optional time range.
+    Daily,
+    /// Run every week, with optional day-of-week and time range.
+    Weekly,
+    /// Run every month, with optional day-of-month and time range.
+    Monthly,
+}
+
+#[juniper::object(description = "A schedule for when to run the backup.")]
+impl schedule::Schedule {
+    /// How often the backup will be run. Combines with other elements to
+    /// control exactly when the backup is performed.
+    fn frequency(&self) -> Frequency {
+        match self {
+            schedule::Schedule::Hourly => Frequency::Hourly,
+            schedule::Schedule::Daily(_) => Frequency::Daily,
+            schedule::Schedule::Weekly(_) => Frequency::Weekly,
+            schedule::Schedule::Monthly(_) => Frequency::Monthly,
+        }
+    }
+
+    /// Time within the day when the backup will be run. The start time will
+    /// come before the stop time if the range spans midnight.
+    fn time_range(&self) -> Option<TimeRange> {
+        match self {
+            schedule::Schedule::Hourly => None,
+            schedule::Schedule::Daily(None) => None,
+            schedule::Schedule::Daily(Some(v)) => Some(v.clone()),
+            schedule::Schedule::Weekly(None) => None,
+            schedule::Schedule::Weekly(Some((_, None))) => None,
+            schedule::Schedule::Weekly(Some((_, Some(v)))) => Some(v.clone()),
+            schedule::Schedule::Monthly(None) => None,
+            schedule::Schedule::Monthly(Some((_, None))) => None,
+            schedule::Schedule::Monthly(Some((_, Some(v)))) => Some(v.clone()),
+        }
+    }
+
+    /// Which week, in combination with the day of the week, to run the backup.
+    fn week_of_month(&self) -> Option<WeekOfMonth> {
+        match self {
+            schedule::Schedule::Hourly => None,
+            schedule::Schedule::Daily(_) => None,
+            schedule::Schedule::Weekly(_) => None,
+            schedule::Schedule::Monthly(None) => None,
+            schedule::Schedule::Monthly(Some((v, _))) => match v {
+                schedule::DayOfMonth::First(_) => Some(WeekOfMonth::First),
+                schedule::DayOfMonth::Second(_) => Some(WeekOfMonth::Second),
+                schedule::DayOfMonth::Third(_) => Some(WeekOfMonth::Third),
+                schedule::DayOfMonth::Fourth(_) => Some(WeekOfMonth::Fourth),
+                schedule::DayOfMonth::Fifth(_) => Some(WeekOfMonth::Fifth),
+                schedule::DayOfMonth::Day(_) => None,
+            },
+        }
+    }
+
+    /// Day of the week on which to run the backup, for schedules with a weekly
+    /// or monthly frequency.
+    fn day_of_week(&self) -> Option<DayOfWeek> {
+        match self {
+            schedule::Schedule::Hourly => None,
+            schedule::Schedule::Daily(_) => None,
+            schedule::Schedule::Weekly(None) => None,
+            schedule::Schedule::Weekly(Some((v, _))) => Some(*v),
+            schedule::Schedule::Monthly(None) => None,
+            schedule::Schedule::Monthly(Some((v, _))) => match v {
+                schedule::DayOfMonth::First(v) => Some(*v),
+                schedule::DayOfMonth::Second(v) => Some(*v),
+                schedule::DayOfMonth::Third(v) => Some(*v),
+                schedule::DayOfMonth::Fourth(v) => Some(*v),
+                schedule::DayOfMonth::Fifth(v) => Some(*v),
+                schedule::DayOfMonth::Day(_) => None,
+            },
+        }
+    }
+
+    /// Day of the month, instead of a week and weekday, to run the backup, for
+    /// schedules with a monthly frequency.
+    fn day_of_month(&self) -> Option<i32> {
+        match self {
+            schedule::Schedule::Hourly => None,
+            schedule::Schedule::Daily(_) => None,
+            schedule::Schedule::Weekly(_) => None,
+            schedule::Schedule::Monthly(None) => None,
+            schedule::Schedule::Monthly(Some((v, _))) => match v {
+                schedule::DayOfMonth::First(_) => None,
+                schedule::DayOfMonth::Second(_) => None,
+                schedule::DayOfMonth::Third(_) => None,
+                schedule::DayOfMonth::Fourth(_) => None,
+                schedule::DayOfMonth::Fifth(_) => None,
+                schedule::DayOfMonth::Day(v) => Some(*v as i32),
+            },
+        }
+    }
+}
+
+/// New schedule for the dataset. Combine elements to get backups to run on a
+/// certain day of the week, month, and/or within a given time range.
+#[derive(GraphQLInputObject)]
+pub struct InputSchedule {
+    /// How often to run the backup.
+    pub frequency: Frequency,
+    /// Range of time during the day in which to run backup.
+    pub time_range: Option<InputTimeRange>,
+    /// Which week within the month to run the backup.
+    pub week_of_month: Option<WeekOfMonth>,
+    /// Which day of the week to run the backup.
+    pub day_of_week: Option<DayOfWeek>,
+    /// The day of the month to run the backup.
+    pub day_of_month: Option<i32>,
+}
+
+impl InputSchedule {
+    /// Construct a "hourly" schedule, for testing purposes.
+    pub fn hourly() -> Self {
+        Self {
+            frequency: Frequency::Hourly,
+            time_range: None,
+            week_of_month: None,
+            day_of_week: None,
+            day_of_month: None,
+        }
+    }
+
+    /// Construct a "daily" schedule, for testing purposes.
+    pub fn daily() -> Self {
+        Self {
+            frequency: Frequency::Daily,
+            time_range: None,
+            week_of_month: None,
+            day_of_week: None,
+            day_of_month: None,
+        }
+    }
+
+    fn validate(&self) -> FieldResult<()> {
+        match &self.frequency {
+            Frequency::Hourly => {
+                if self.week_of_month.is_some()
+                    || self.day_of_week.is_some()
+                    || self.day_of_month.is_some()
+                    || self.time_range.is_some()
+                {
+                    return Err(FieldError::new(
+                        "Hourly cannot take any range or days",
+                        Value::null(),
+                    ));
+                }
+            }
+            Frequency::Daily => {
+                if self.week_of_month.is_some()
+                    || self.day_of_week.is_some()
+                    || self.day_of_month.is_some()
+                {
+                    return Err(FieldError::new(
+                        "Daily can only take a time_range",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+            Frequency::Weekly => {
+                if self.week_of_month.is_some() || self.day_of_month.is_some() {
+                    return Err(FieldError::new(
+                        "Weekly can only take a time_range and day_of_week",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+            Frequency::Monthly => {
+                if self.day_of_month.is_some() && self.day_of_week.is_some() {
+                    return Err(FieldError::new(
+                        "Monthly can only take day_of_month *or* day_of_week and week_of_month",
+                        Value::null(),
+                    ));
+                }
+                if self.day_of_week.is_some() && self.week_of_month.is_none() {
+                    return Err(FieldError::new(
+                        "Monthly requires week_of_month when using day_of_week",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Into<schedule::Schedule> for InputSchedule {
+    fn into(self) -> schedule::Schedule {
+        match &self.frequency {
+            Frequency::Hourly => schedule::Schedule::Hourly,
+            Frequency::Daily => schedule::Schedule::Daily(self.time_range.map(|s| s.into())),
+            Frequency::Weekly => {
+                let dow = if let Some(dow) = self.day_of_week {
+                    Some((dow, self.time_range.map(|s| s.into())))
+                } else {
+                    None
+                };
+                schedule::Schedule::Weekly(dow)
+            }
+            Frequency::Monthly => {
+                let dom: Option<(schedule::DayOfMonth, Option<TimeRange>)> =
+                    if let Some(day) = self.day_of_month {
+                        Some((
+                            schedule::DayOfMonth::from(day as u32),
+                            self.time_range.map(|s| s.into()),
+                        ))
+                    } else if let Some(wn) = self.week_of_month {
+                        let dow = self.day_of_week.unwrap();
+                        let dom = wn.into_dow(dow);
+                        Some((dom, self.time_range.map(|s| s.into())))
+                    } else {
+                        None
+                    };
+                schedule::Schedule::Monthly(dom)
+            }
+        }
     }
 }
 

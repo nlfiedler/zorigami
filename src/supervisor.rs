@@ -8,16 +8,14 @@
 use super::core::{self, Dataset};
 use super::database::Database;
 use super::engine;
+use super::schedule::Schedule;
 use super::state::{self, Action};
 use actix::prelude::*;
 use chrono::prelude::*;
-use cron::Schedule;
 use failure::{err_msg, Error};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
-use std::cmp::Ordering;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -154,66 +152,66 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 
     // only consider those datasets that have a schedule, otherwise
     // the user is expected to manually start the backup process
-    if let Some(schedule) = set.schedule.as_ref() {
-        // check if backup overdue
-        let mut maybe_run = if let Some(checksum) = set.latest_snapshot.as_ref() {
+    if !set.schedules.is_empty() {
+        let end_time: Option<DateTime<Utc>> = if let Some(checksum) = set.latest_snapshot.as_ref() {
             let snapshot = dbase
                 .get_snapshot(checksum)?
                 .ok_or_else(|| err_msg(format!("snapshot {} missing from database", &checksum)))?;
-            if let Some(end_time) = snapshot.end_time {
-                is_overdue(schedule, end_time)?
+            snapshot.end_time
+        } else {
+            None
+        };
+        // consider each schedule until one is found that should start now
+        for schedule in set.schedules.iter() {
+            // check if backup overdue
+            let mut maybe_run = if let Some(et) = end_time {
+                is_overdue(schedule, et)
             } else {
                 true
-            }
-        } else {
-            true
-        };
-        // Check if a backup is still running or had an error; if it had an
-        // error, definitely try running again; if it is still running, then do
-        // nothing for now.
-        //
-        // Also consider recently finished backups where there were no changes
-        // in which case we clear the overdue flag.
-        let redux = state::get_state();
-        if let Some(backup) = redux.backups(&set.key) {
-            if backup.had_error() {
-                maybe_run = true;
-                debug!("dataset {} backup had an error, will restart", &set.key);
-            } else if let Some(end_time) = backup.end_time() {
-                if !is_overdue(schedule, end_time)? {
+            };
+            // Check if a backup is still running or had an error; if it had an
+            // error, definitely try running again; if it is still running, then do
+            // nothing for now.
+            //
+            // Also consider recently finished backups where there were no changes
+            // in which case we clear the overdue flag.
+            let redux = state::get_state();
+            if let Some(backup) = redux.backups(&set.key) {
+                if backup.had_error() {
+                    maybe_run = true;
+                    debug!("dataset {} backup had an error, will restart", &set.key);
+                } else if let Some(end_time) = backup.end_time() {
+                    if !is_overdue(schedule, end_time) {
+                        maybe_run = false;
+                    }
+                } else {
                     maybe_run = false;
+                    debug!("dataset {} backup already in progress", &set.key);
                 }
-            } else {
-                maybe_run = false;
-                debug!("dataset {} backup already in progress", &set.key);
+            } else if maybe_run {
+                // kickstart the application state when it appears that our
+                // application has restarted while a backup was in progress
+                debug!("reset missing backup state to start");
+                state::dispatch(Action::StartBackup(set.key.clone()));
             }
-        } else if maybe_run {
-            // kickstart the application state when it appears that our
-            // application has restarted while a backup was in progress
-            debug!("reset missing backup state to start");
-            state::dispatch(Action::StartBackup(set.key.clone()));
+            if maybe_run {
+                return Ok(true);
+            }
         }
-        Ok(maybe_run)
-    } else {
-        Ok(false)
     }
+    Ok(false)
 }
 
 ///
 /// Determine if the snapshot finished a sufficiently long time ago to warrant
 /// running a backup now. If it has not finished, it is still overdue.
 ///
-fn is_overdue(schedule: &str, end_time: DateTime<Utc>) -> Result<bool, Error> {
-    // cannot use ? because the error type is not thread-safe
-    if let Ok(sched) = Schedule::from_str(schedule) {
-        let mut events = sched.after(&end_time);
-        let utc_now = Utc::now();
-        let next = events
-            .next()
-            .ok_or_else(|| err_msg("scheduled event had no 'next'?"))?;
-        Ok(next.cmp(&utc_now) == Ordering::Less)
+fn is_overdue(schedule: &Schedule, end_time: DateTime<Utc>) -> bool {
+    if schedule.past_due(end_time.into()) {
+        let now = Utc::now();
+        schedule.within_range(now.into())
     } else {
-        Err(err_msg("schedule expression could not be parsed"))
+        false
     }
 }
 
@@ -240,11 +238,19 @@ fn run_dataset(db_path: PathBuf, set_key: String) {
                             info!("dataset {} backup complete after {}", &set_key, pretty_time);
                         }
                         Ok(None) => info!("no new snapshot required"),
-                        Err(err) => {
-                            error!("could not perform backup: {}", err);
-                            // put the backup in the error state so we try again
-                            state::dispatch(Action::ErrorBackup(set_key.clone()));
-                        }
+                        Err(err) => match err.downcast::<engine::OutOfTimeError>() {
+                            Ok(_) => {
+                                info!("backup window has reached its end");
+                                // put the backup in the error state so we try again
+                                state::dispatch(Action::ErrorBackup(set_key.clone()));
+                            }
+                            Err(err) => {
+                                // here `err` is the original error
+                                error!("could not perform backup: {}", err);
+                                // put the backup in the error state so we try again
+                                state::dispatch(Action::ErrorBackup(set_key.clone()));
+                            }
+                        },
                     }
                 }
                 Ok(None) => error!("dataset {} missing from database", &set_key),
@@ -265,41 +271,21 @@ mod tests {
 
     #[test]
     fn test_is_overdue_hourly() {
-        let expression = "@hourly";
-        //
-        // test with a time that should fire
-        //
-        let hour_ago = chrono::Duration::hours(1);
+        let schedule = Schedule::Hourly;
+        let hour_ago = chrono::Duration::hours(2);
         let end_time = Utc::now() - hour_ago;
-        let result = is_overdue(expression, end_time);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
-        //
-        // test with a time that should not fire
-        //
+        assert!(is_overdue(&schedule, end_time));
         let end_time = Utc::now();
-        let result = is_overdue(expression, end_time);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!is_overdue(&schedule, end_time));
     }
 
     #[test]
     fn test_is_overdue_daily() {
-        let expression = "@daily";
-        //
-        // test with a date that should fire
-        //
+        let schedule = Schedule::Daily(None);
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
-        let result = is_overdue(expression, end_time);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
-        //
-        // test with a date that should not fire
-        //
+        assert!(is_overdue(&schedule, end_time));
         let end_time = Utc::now();
-        let result = is_overdue(expression, end_time);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!is_overdue(&schedule, end_time));
     }
 }

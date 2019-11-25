@@ -10,23 +10,18 @@
 *** TODO form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
 **** TODO define a new type for the "schedule" field of dataset
-***** consider how we might migrate old database records
-****** just remove the =schedule= field and create a new named =schedules=
-****** =Dataset.schedules= is a =Vec= of the type data type
-****** add =#[serde(default)]= to the =Dataset= struct
-****** define a =default()= for =Dataset= that defaults schedule to daily
-***** schedule will consist of a frequency and range
-****** hourly, daily, weekly, monthly
-****** no range for hourly
-****** daily has an hour range
-****** weekly has optional days and hour range
-****** monthly has optional days and hour range
-***** everything is strongly typed, no string parsing/formatting
-***** TODO encode this using enums in the GraphQL schema
-***** TODO change GraphQL schema to use the new =schedules= field
-***** TODO change web ui to provide one frequency/range combo for now
-***** TODO backend will support multiple frequency/range pairs per dataset
-***** TODO remove the =cron= create and its usage
+***** DONE encode the schedule types in the GraphQL schema
+****** define new types for DayOfMonth and Schedule
+****** use enum for frequency
+****** separate TimeRange field
+***** DONE change GraphQL schema to use the new =schedules= field
+***** DONE change web ui to provide one frequency/range combo for now
+***** DONE change supervisor to use =schedules= rather than =schedule=
+***** DONE remove the =cron= create and its usage
+***** DONE remove the =schedule= field from the =Dataset= struct
+***** DONE remove the =schedule= field from the datasets page
+***** TODO change schedule code to not use =std::time= at all
+***** TODO move schedule related bits in RE code to a new file
 **** TODO support a schedule with start and stop (e.g. time range)
 ***** check the start time in =supervisor= to determine if it is ready to start
 ***** check the end time in =BackupMaster.new()= and set a stop time

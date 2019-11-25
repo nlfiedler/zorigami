@@ -16,6 +16,7 @@ use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, SystemTimeError};
@@ -125,6 +126,19 @@ fn continue_backup(
     bmaster.update_snapshot(&current_sha1)?;
     bmaster.backup_database()?;
     Ok(Some(current_sha1))
+}
+
+///
+/// Raised when the backup has run out of time and must stop temporarily,
+/// resuming at a later time.
+///
+#[derive(Fail, Debug)]
+pub struct OutOfTimeError;
+
+impl fmt::Display for OutOfTimeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ran out of time")
+    }
 }
 
 ///

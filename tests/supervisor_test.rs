@@ -10,6 +10,7 @@ use std::path::Path;
 use util::DBPath;
 use zorigami::core::*;
 use zorigami::database::*;
+use zorigami::schedule::Schedule;
 use zorigami::state::{self, Action};
 use zorigami::supervisor::*;
 
@@ -37,7 +38,7 @@ fn test_first_backup_due() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dbase.put_dataset(&dataset)?;
 
     assert_eq!(should_run(&dbase, &dataset)?, true);
@@ -53,7 +54,7 @@ fn test_first_backup_running() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dbase.put_dataset(&dataset)?;
 
     // indicate that the dataset is already running a backup
@@ -80,7 +81,7 @@ fn test_backup_not_overdue() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
@@ -106,7 +107,7 @@ fn test_backup_overdue() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
@@ -132,7 +133,7 @@ fn test_old_snapshot_recent_backup() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
@@ -161,7 +162,7 @@ fn test_backup_restarted() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
@@ -192,7 +193,7 @@ fn test_backup_restarted_not_overdue() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
@@ -223,7 +224,7 @@ fn test_overdue_backup_running() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1.clone());
     dbase.put_dataset(&dataset)?;
 
@@ -249,7 +250,7 @@ fn test_overdue_had_error() -> Result<(), Error> {
     let basepath = Path::new("/some/path");
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
-    dataset.schedule = Some("@daily".to_owned());
+    dataset.schedules = vec![Schedule::Daily(None)];
     dataset.latest_snapshot = Some(sha1.clone());
     dbase.put_dataset(&dataset)?;
 

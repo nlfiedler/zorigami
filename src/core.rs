@@ -5,6 +5,7 @@
 //! The `core` module defines the most basic of functions and the core data
 //! types used throughout the application.
 
+use super::schedule::Schedule;
 use chrono::prelude::*;
 use failure::{err_msg, Error};
 use fastcdc;
@@ -1010,6 +1011,7 @@ impl SavedPack {
 /// Represents a directory tree that will be backed up according to a schedule,
 /// with pack files saved to a particular local or remote store.
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct Dataset {
     /// Unique identifier of this dataset for persisting to database.
     #[serde(skip)]
@@ -1020,9 +1022,9 @@ pub struct Dataset {
     /// local base path of dataset to be saved
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
-    /// cron-like expression for the backup schedule
-    #[serde(rename = "sc")]
-    pub schedule: Option<String>,
+    /// Set of schedules for when to run the backup.
+    #[serde(rename = "sch")]
+    pub schedules: Vec<Schedule>,
     /// latest snapshot reference, if any
     #[serde(rename = "ls")]
     pub latest_snapshot: Option<Checksum>,
@@ -1055,7 +1057,7 @@ impl Dataset {
             key,
             computer_id: computer_id.to_owned(),
             basepath: basepath.to_owned(),
-            schedule: None,
+            schedules: vec![],
             latest_snapshot: None,
             workspace,
             pack_size: DEFAULT_PACK_SIZE,
@@ -1067,6 +1069,21 @@ impl Dataset {
     pub fn add_store(mut self, store: &str) -> Self {
         self.stores.push(store.to_owned());
         self
+    }
+}
+
+impl Default for Dataset {
+    fn default() -> Self {
+        Self {
+            key: String::new(),
+            computer_id: String::new(),
+            basepath: PathBuf::new(),
+            schedules: vec![],
+            latest_snapshot: None,
+            workspace: PathBuf::new(),
+            pack_size: 0,
+            stores: vec![],
+        }
     }
 }
 

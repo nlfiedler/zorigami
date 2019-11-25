@@ -47,7 +47,7 @@ type t = {
   "key": string,
   "computerId": string,
   "basepath": string,
-  "schedule": option(string),
+  "schedules": Js.Array.t(Datasets.schedule),
   "latestSnapshot": option(snapshot),
   "packSize": Js.Json.t,
   "stores": Js.Array.t(string),
@@ -60,7 +60,16 @@ module GetDatasets = [%graphql
         key
         computerId
         basepath
-        schedule
+        schedules {
+          frequency
+          timeRange {
+            startTime
+            stopTime
+          }
+          weekOfMonth
+          dayOfWeek
+          dayOfMonth
+        }
         latestSnapshot {
           checksum
           parent
@@ -97,14 +106,6 @@ let formatBigInt = (bigint: Js.Json.t): string =>
   | None => "INVALID BIGINT"
   | Some(str) => str
   };
-
-// Show the schedule, if any, otherwise "manual".
-let displaySchedule = (schedule: option(string)): string => {
-  switch (schedule) {
-  | None => "(manual)"
-  | Some(sched) => sched
-  };
-};
 
 // Show the time the latest snapshot finished, if there is one,
 // or the time that it started (and still running). Or none if
@@ -348,7 +349,11 @@ module Datasets = {
       <tr key=rowId onClick={_ => setDataset(_ => Some(dataset))}>
         <td> {ReasonReact.string(dataset##computerId)} </td>
         <td> {ReasonReact.string(dataset##basepath)} </td>
-        <td> {ReasonReact.string(displaySchedule(dataset##schedule))} </td>
+        <td>
+          {ReasonReact.string(
+             Datasets.stringFromSchedule(dataset##schedules),
+           )}
+        </td>
         <td> {ReasonReact.string(displayLatest(dataset))} </td>
       </tr>;
     };

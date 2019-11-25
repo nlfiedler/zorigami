@@ -2,13 +2,32 @@
 // Copyright (c) 2019 Nathan Fiedler
 //
 
+type timeRange = {
+  .
+  "startTime": int,
+  "stopTime": int,
+};
+
+type frequency = [ | `HOURLY | `DAILY | `WEEKLY | `MONTHLY];
+type weekOfMonth = [ | `FIRST | `SECOND | `THIRD | `FOURTH | `FIFTH];
+type dayOfWeek = [ | `SUN | `MON | `TUE | `WED | `THU | `FRI | `SAT];
+
+type schedule = {
+  .
+  "frequency": frequency,
+  "timeRange": option(timeRange),
+  "weekOfMonth": option(weekOfMonth),
+  "dayOfWeek": option(dayOfWeek),
+  "dayOfMonth": option(int),
+};
+
 // The expected shape of the datasets from GraphQL.
 type t = {
   .
   "key": string,
   "computerId": string,
   "basepath": string,
-  "schedule": option(string),
+  "schedules": Js.Array.t(schedule),
   "packSize": Js.Json.t,
   "stores": Js.Array.t(string),
 };
@@ -20,7 +39,16 @@ module GetDatasets = [%graphql
         key
         computerId
         basepath
-        schedule
+        schedules {
+          frequency
+          timeRange {
+            startTime
+            stopTime
+          }
+          weekOfMonth
+          dayOfWeek
+          dayOfMonth
+        }
         packSize
         stores
       }
@@ -34,7 +62,7 @@ type input = {
   .
   "key": option(string),
   "basepath": string,
-  "schedule": option(string),
+  "schedules": Js.Array.t(schedule),
   "packSize": Js.Json.t,
   "stores": Js.Array.t(string),
 };
@@ -50,7 +78,16 @@ module DefineDataset = [%graphql
         key
         computerId
         basepath
-        schedule
+        schedules {
+          frequency
+          timeRange {
+            startTime
+            stopTime
+          }
+          weekOfMonth
+          dayOfWeek
+          dayOfMonth
+        }
         packSize
         stores
       }
@@ -71,7 +108,16 @@ module UpdateDataset = [%graphql
         key
         computerId
         basepath
-        schedule
+        schedules {
+          frequency
+          timeRange {
+            startTime
+            stopTime
+          }
+          weekOfMonth
+          dayOfWeek
+          dayOfMonth
+        }
         packSize
         stores
       }
@@ -99,12 +145,13 @@ module DatasetForm = {
   type field =
     | Basepath
     | Schedule
+    | Schedules
     | PackSize
     | Stores;
 
   type state = {
     basepath: string,
-    schedule: string, // option(string)
+    schedules: string, // Js.Array.t(schedule)
     pack_size: string, // Js.Json.t
     stores: string // Js.Array.t(string)
   };
@@ -129,23 +176,14 @@ module DatasetForm = {
     };
   };
 
-  module ScheduleField = {
-    let update = (state, value) => {...state, schedule: value};
+  module SchedulesField = {
+    let update = (state, value) => {...state, schedules: value};
 
     let validator = {
-      field: Schedule,
+      field: Schedules,
       strategy: Strategy.OnFirstSuccessOrFirstBlur,
       dependents: None,
-      validate: state =>
-        if (state.schedule == "") {
-          Ok(Valid);
-        } else {
-          switch (state.schedule) {
-          | "@hourly"
-          | "@daily" => Ok(Valid)
-          | _ => Error("Please enter @hourly, @daily, or nothing")
-          };
-        },
+      validate: _state => Ok(Valid),
     };
   };
 
@@ -190,13 +228,103 @@ module DatasetForm = {
 
   let validators = [
     BasepathField.validator,
-    ScheduleField.validator,
+    SchedulesField.validator,
     PackSizeField.validator,
     StoresField.validator,
   ];
 };
 
 module DatasetFormHook = Formality.Make(DatasetForm);
+
+// For now just honoring an array of 0 or 1 elements, and only the
+// frequency, no time range or selected days.
+let stringFromSchedule = (inputs: Js.Array.t(schedule)): string => {
+  switch (inputs) {
+  | [||] => "none"
+  | [|sched|] =>
+    switch (sched##frequency) {
+    | `HOURLY => "hourly"
+    | `DAILY => "daily"
+    | `WEEKLY => "weekly"
+    | `MONTHLY => "monthly"
+    }
+  | _ => "none"
+  };
+};
+
+let hourlySchedule: schedule = {
+  "frequency": `HOURLY,
+  "timeRange": None,
+  "weekOfMonth": None,
+  "dayOfWeek": None,
+  "dayOfMonth": None,
+};
+
+let dailySchedule: schedule = {
+  "frequency": `DAILY,
+  "timeRange": None,
+  "weekOfMonth": None,
+  "dayOfWeek": None,
+  "dayOfMonth": None,
+};
+
+let weeklySchedule: schedule = {
+  "frequency": `WEEKLY,
+  "timeRange": None,
+  "weekOfMonth": None,
+  "dayOfWeek": None,
+  "dayOfMonth": None,
+};
+
+let monthlySchedule: schedule = {
+  "frequency": `MONTHLY,
+  "timeRange": None,
+  "weekOfMonth": None,
+  "dayOfWeek": None,
+  "dayOfMonth": None,
+};
+
+// For now just converting a simple frequency string (e.g. "daily") into
+// a schedule that reflects that frequency. And only one element, or none
+// at all if the value is "none".
+let scheduleFromString = (value: string): Js.Array.t(schedule) => {
+  switch (value) {
+  | "none" => [||]
+  | "hourly" => [|hourlySchedule|]
+  | "daily" => [|dailySchedule|]
+  | "weekly" => [|weeklySchedule|]
+  | "monthly" => [|monthlySchedule|]
+  | _ => [||]
+  };
+};
+
+let makeSchedule = (inputValue: string, onChange) => {
+  let makeRadio = (label: string, value: string) => {
+    let checked = value == inputValue;
+    <label className="radio">
+      <input type_="radio" name="frequency" value onChange checked />
+      {ReasonReact.string(label)}
+    </label>;
+  };
+  <div className="field is-horizontal" key="schedules">
+    <div className="field-label is-normal">
+      <label htmlFor="schedules" className="label">
+        {ReasonReact.string("Schedule")}
+      </label>
+    </div>
+    <div className="field-body">
+      <div className="field">
+        <div className="control">
+          {makeRadio(" Manual", "none")}
+          {makeRadio(" Hourly", "hourly")}
+          {makeRadio(" Daily", "daily")}
+          {makeRadio(" Weekly", "weekly")}
+          {makeRadio(" Monthly", "monthly")}
+        </div>
+      </div>
+    </div>
+  </div>;
+};
 
 let formInput =
     (
@@ -226,9 +354,9 @@ let formInput =
         onBlur
         onChange
         placeholder=placeholderText
-        readOnly>
-        {ReasonReact.string(inputValue)}
-      </textarea>;
+        value=inputValue
+        readOnly
+      />;
     | _ =>
       let inputClass = formIsValid ? "input" : "input is-danger";
       <input
@@ -342,23 +470,14 @@ module DatasetFormRe = {
              ),
            isEditing,
          )}
-        {formInput(
-           "Schedule",
-           "schedule",
-           "text",
-           form.state.schedule,
-           "@daily",
-           validateMsg(Schedule),
-           _ => form.blur(Schedule),
-           event =>
-             form.change(
-               Schedule,
-               DatasetForm.ScheduleField.update(
-                 form.state,
-                 event->ReactEvent.Form.target##value,
-               ),
+        {makeSchedule(form.state.schedules, event =>
+           form.change(
+             Basepath,
+             DatasetForm.SchedulesField.update(
+               form.state,
+               event->ReactEvent.Form.target##value,
              ),
-           false,
+           )
          )}
         {formInput(
            "Pack Size",
@@ -457,7 +576,7 @@ module NewDatasetPanel = {
     let newDataset: input = {
       "key": None,
       "basepath": values.basepath,
-      "schedule": stringToOption(values.schedule),
+      "schedules": [||],
       "packSize": packsizeToString(values.pack_size),
       "stores": stringToArray(values.stores),
     };
@@ -476,7 +595,12 @@ module NewDatasetPanel = {
       ...{(mutate, {result}) => {
         let datasetForm =
           <DatasetFormRe
-            initial={basepath: "", schedule: "", pack_size: "", stores: ""}
+            initial={
+              basepath: "",
+              schedules: "",
+              pack_size: "",
+              stores: "",
+            }
             onSubmit={submitNewDataset(mutate)}
           />;
         switch (result) {
@@ -518,7 +642,7 @@ module EditDatasetPanel = {
     let newDataset: input = {
       "key": Some(key),
       "basepath": values.basepath,
-      "schedule": stringToOption(values.schedule),
+      "schedules": scheduleFromString(values.schedules),
       "packSize": packsizeToString(values.pack_size),
       "stores": stringToArray(values.stores),
     };
@@ -531,14 +655,13 @@ module EditDatasetPanel = {
     )
     |> ignore;
   };
-  let computeInitial = (dataset: t) => {
-    let initial: DatasetForm.state = {
+  let computeInitial = (dataset: t): DatasetForm.state => {
+    {
       basepath: dataset##basepath,
-      schedule: Belt.Option.getWithDefault(dataset##schedule, ""),
+      schedules: stringFromSchedule(dataset##schedules),
       pack_size: stringToPacksize(dataset##packSize),
       stores: Js.Array.joinWith(", ", dataset##stores),
     };
-    initial;
   };
   [@react.component]
   let make = (~dataset: t) => {

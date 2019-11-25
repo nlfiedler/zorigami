@@ -216,7 +216,7 @@ fn test_dataset_access() -> Result<(), Error> {
     let input_set = InputDataset {
         key: None,
         basepath: "/path".to_owned(),
-        schedule: None,
+        schedules: vec![],
         // workspace: "/path/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec![],
@@ -243,7 +243,7 @@ fn test_dataset_access() -> Result<(), Error> {
     let input_set = InputDataset {
         key: None,
         basepath: "/path".to_owned(),
-        schedule: None,
+        schedules: vec![],
         // workspace: "/path/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec!["store/local/i_am_noman".to_owned()],
@@ -272,7 +272,7 @@ fn test_dataset_access() -> Result<(), Error> {
     let input_set = InputDataset {
         key: None,
         basepath: "/does_not_exist".to_owned(),
-        schedule: None,
+        schedules: vec![],
         // workspace: "/does_not_exist/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec!["store/local/exists".to_owned()],
@@ -294,13 +294,22 @@ fn test_dataset_access() -> Result<(), Error> {
     assert_eq!(errors.len(), 1);
     assert!(errors[0].error().message().contains("path does not exist"));
 
-    // dataset with an invalid schedule expression
+    // dataset with an invalid schedule combination
     let cwd = std::env::current_dir()?;
     let mut vars = Variables::new();
     let input_set = InputDataset {
         key: None,
         basepath: cwd.to_str().unwrap().to_owned(),
-        schedule: Some(String::from("1 2 3 2019")),
+        schedules: vec![InputSchedule {
+            frequency: Frequency::Hourly,
+            time_range: Some(InputTimeRange {
+                start_time: 0,
+                stop_time: 0,
+            }),
+            week_of_month: None,
+            day_of_week: None,
+            day_of_month: None,
+        }],
         // workspace: "/does_not_exist/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec!["store/local/exists".to_owned()],
@@ -323,14 +332,14 @@ fn test_dataset_access() -> Result<(), Error> {
     assert!(errors[0]
         .error()
         .message()
-        .contains("schedule expression could not be parsed"));
+        .contains("Hourly cannot take any range or days"));
 
     // finally define a valid dataset!
     let mut vars = Variables::new();
     let input_set = InputDataset {
         key: None,
         basepath: cwd.to_str().unwrap().to_owned(),
-        schedule: Some(String::from("@daily")),
+        schedules: vec![InputSchedule::daily()],
         // workspace: "/does_not_exist/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec!["store/local/exists".to_owned()],
@@ -360,7 +369,7 @@ fn test_dataset_access() -> Result<(), Error> {
     let input_set = InputDataset {
         key: None,
         basepath: cwd.to_str().unwrap().to_owned(),
-        schedule: Some(String::from("@hourly")),
+        schedules: vec![InputSchedule::hourly()],
         // workspace: "/does_not_exist/.tmp".to_owned(),
         pack_size: BigInt::new(42),
         stores: vec!["store/local/exists".to_owned()],
@@ -404,7 +413,7 @@ fn test_dataset_access() -> Result<(), Error> {
     let input_set = InputDataset {
         key: Some(key.to_owned()),
         basepath: cwd.to_str().unwrap().to_owned(),
-        schedule: Some(String::from("0 2,17,51 1-3,6,9-11 4,29 2,3,7 Wed")),
+        schedules: vec![InputSchedule::daily()],
         // workspace: "/does_not_exist/.tmp".to_owned(),
         pack_size: BigInt::new(33_554_432),
         stores: vec!["store/local/exists".to_owned()],
