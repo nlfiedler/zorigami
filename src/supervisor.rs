@@ -4,9 +4,6 @@
 
 //! The `supervisor` module spawns threads to perform backups, ensuring backups
 //! are performed for each dataset according to a schedule.
-//!
-//! This module assumes that `std::time::SystemTime` is UTC, which seems to be
-//! the case, but is not mentioned in the documentation.
 
 use super::core::{self, Dataset};
 use super::database::Database;
@@ -206,11 +203,10 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 /// Determine if the snapshot finished a sufficiently long time ago to warrant
 /// running a backup now. If it has not finished, it is still overdue.
 ///
-fn is_overdue(schedule: &str, end_time: SystemTime) -> Result<bool, Error> {
-    let datetime = DateTime::<Utc>::from(end_time);
+fn is_overdue(schedule: &str, end_time: DateTime<Utc>) -> Result<bool, Error> {
     // cannot use ? because the error type is not thread-safe
     if let Ok(sched) = Schedule::from_str(schedule) {
-        let mut events = sched.after(&datetime);
+        let mut events = sched.after(&end_time);
         let utc_now = Utc::now();
         let next = events
             .next()
@@ -266,7 +262,6 @@ fn run_dataset(db_path: PathBuf, set_key: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::SystemTime;
 
     #[test]
     fn test_is_overdue_hourly() {
@@ -274,15 +269,15 @@ mod tests {
         //
         // test with a time that should fire
         //
-        let hour_ago = Duration::new(3600, 0);
-        let end_time = SystemTime::now() - hour_ago;
+        let hour_ago = chrono::Duration::hours(1);
+        let end_time = Utc::now() - hour_ago;
         let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
         // test with a time that should not fire
         //
-        let end_time = SystemTime::now();
+        let end_time = Utc::now();
         let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
@@ -294,15 +289,15 @@ mod tests {
         //
         // test with a date that should fire
         //
-        let day_ago = Duration::new(90_000, 0);
-        let end_time = SystemTime::now() - day_ago;
+        let day_ago = chrono::Duration::hours(25);
+        let end_time = Utc::now() - day_ago;
         let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), true);
         //
         // test with a date that should not fire
         //
-        let end_time = SystemTime::now();
+        let end_time = Utc::now();
         let result = is_overdue(expression, end_time);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);

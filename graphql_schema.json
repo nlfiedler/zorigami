@@ -525,6 +525,16 @@
           "possibleTypes": null
         },
         {
+          "kind": "SCALAR",
+          "name": "DateTimeUtc",
+          "description": "DateTime",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
           "kind": "OBJECT",
           "name": "MutationRoot",
           "description": null,
@@ -1271,7 +1281,7 @@
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "BigInt",
+                  "name": "DateTimeUtc",
                   "ofType": null
                 }
               },
@@ -1342,7 +1352,7 @@
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "BigInt",
+                  "name": "DateTimeUtc",
                   "ofType": null
                 }
               },
@@ -1355,7 +1365,7 @@
               "args": [],
               "type": {
                 "kind": "SCALAR",
-                "name": "BigInt",
+                "name": "DateTimeUtc",
                 "ofType": null
               },
               "isDeprecated": false,

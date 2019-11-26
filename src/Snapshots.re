@@ -82,7 +82,7 @@ let formatDate = (datetime: Js.Json.t): string =>
   switch (Js.Json.decodeString(datetime)) {
   | None => "INVALID DATE"
   | Some(str) =>
-    let d = Js.Date.fromFloat(float_of_string(str) *. 1000.0);
+    let d = Js.Date.fromString(str);
     Js.Date.toLocaleString(d);
   };
 
@@ -162,7 +162,8 @@ let makeFileModal = (~dataset: t, ~entry: treeEntry, ~cancel) => {
   // trim the leading "file-" prefix from the reference
   let checksum = Js.String.substringToEnd(~from=5, entry##reference);
   // link directly to the file restore function
-  let fileUrl = "/restore/" ++ dataset##key ++ "/" ++ checksum ++ "/" ++ entry##name;
+  let fileUrl =
+    "/restore/" ++ dataset##key ++ "/" ++ checksum ++ "/" ++ entry##name;
   <div className="modal is-active">
     <div className="modal-background" />
     <div className="modal-card">

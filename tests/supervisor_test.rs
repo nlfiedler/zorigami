@@ -3,9 +3,10 @@
 //
 mod util;
 
+use chrono::prelude::*;
+use chrono::Duration;
 use failure::Error;
 use std::path::Path;
-use std::time::{Duration, SystemTime};
 use util::DBPath;
 use zorigami::core::*;
 use zorigami::database::*;
@@ -70,7 +71,7 @@ fn test_backup_not_overdue() -> Result<(), Error> {
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
     let mut snapshot = Snapshot::new(None, tree_sha);
-    let end_time = SystemTime::now();
+    let end_time = Utc::now();
     snapshot = snapshot.end_time(end_time);
     let sha1 = snapshot.checksum();
     dbase.insert_snapshot(&sha1, &snapshot)?;
@@ -95,8 +96,8 @@ fn test_backup_overdue() -> Result<(), Error> {
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
     let mut snapshot = Snapshot::new(None, tree_sha);
-    let day_ago = Duration::new(90_000, 0);
-    let end_time = SystemTime::now() - day_ago;
+    let day_ago = Duration::hours(25);
+    let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
     let sha1 = snapshot.checksum();
     dbase.insert_snapshot(&sha1, &snapshot)?;
@@ -121,8 +122,8 @@ fn test_old_snapshot_recent_backup() -> Result<(), Error> {
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
     let mut snapshot = Snapshot::new(None, tree_sha);
-    let day_ago = Duration::new(90_000, 0);
-    let end_time = SystemTime::now() - day_ago;
+    let day_ago = Duration::hours(25);
+    let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
     let sha1 = snapshot.checksum();
     dbase.insert_snapshot(&sha1, &snapshot)?;
@@ -181,7 +182,7 @@ fn test_backup_restarted_not_overdue() -> Result<(), Error> {
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
     let mut snapshot = Snapshot::new(None, tree_sha);
-    let end_time = SystemTime::now();
+    let end_time = Utc::now();
     snapshot = snapshot.end_time(end_time);
     let sha1 = snapshot.checksum();
     dbase.insert_snapshot(&sha1, &snapshot)?;
@@ -212,8 +213,8 @@ fn test_overdue_backup_running() -> Result<(), Error> {
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
     let mut snapshot = Snapshot::new(None, tree_sha);
-    let day_ago = Duration::new(90_000, 0);
-    let end_time = SystemTime::now() - day_ago;
+    let day_ago = Duration::hours(25);
+    let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
     let sha1 = snapshot.checksum();
     dbase.insert_snapshot(&sha1, &snapshot)?;

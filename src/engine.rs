@@ -11,6 +11,7 @@ use super::database::Database;
 use super::state::{self, Action};
 use super::store;
 use base64::encode;
+use chrono::Utc;
 use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
 use sodiumoxide::crypto::pwhash::Salt;
@@ -229,7 +230,7 @@ impl<'a> BackupMaster<'a> {
             .dbase
             .get_snapshot(snap_sha1)?
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
-        snapshot = snapshot.end_time(SystemTime::now());
+        snapshot = snapshot.end_time(Utc::now());
         self.dbase.put_snapshot(snap_sha1, &snapshot)?;
         state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
         Ok(())
@@ -1137,12 +1138,12 @@ pub fn get_configuration(dbase: &Database) -> Result<core::Configuration, Error>
 mod tests {
     use super::core::*;
     use super::*;
+    use chrono::TimeZone;
     use std::collections::HashMap;
     #[cfg(target_family = "unix")]
     use std::os::unix::fs;
     #[cfg(target_family = "windows")]
     use std::os::windows::fs;
-    use std::time::SystemTime;
     use tempfile::tempdir;
 
     #[test]
@@ -1172,8 +1173,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: SystemTime::UNIX_EPOCH,
-            mtime: SystemTime::UNIX_EPOCH,
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
             reference: tref1,
             xattrs: HashMap::new(),
         };
@@ -1186,8 +1187,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: SystemTime::UNIX_EPOCH,
-            mtime: SystemTime::UNIX_EPOCH,
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
             reference: tref2,
             xattrs: HashMap::new(),
         };
@@ -1200,8 +1201,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: SystemTime::UNIX_EPOCH,
-            mtime: SystemTime::UNIX_EPOCH,
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
             reference: tref3,
             xattrs: HashMap::new(),
         };

@@ -8,6 +8,7 @@ use super::core;
 use super::database::Database;
 use super::engine;
 use super::store;
+use chrono::prelude::*;
 use cron::Schedule;
 use juniper::{
     graphql_object, graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
@@ -15,7 +16,6 @@ use juniper::{
 };
 use std::path::Path;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // Our GraphQL version of the core::Checksum type. It is tedious to implement
 // all of the juniper interfaces, and the macro requires having a `from_str`
@@ -81,33 +81,6 @@ impl From<u32> for BigInt {
     }
 }
 
-// If the value is positive and successfully converts to a time then return
-// that, otherwise return Unix epoch (zero time).
-impl Into<SystemTime> for BigInt {
-    fn into(self) -> SystemTime {
-        if self.0 >= 0 {
-            let d = Duration::new(self.0 as u64, 0);
-            match UNIX_EPOCH.checked_add(d) {
-                Some(value) => value,
-                None => UNIX_EPOCH,
-            }
-        } else {
-            UNIX_EPOCH
-        }
-    }
-}
-
-// If the time can be converted to seconds since the Unix epoch, then return
-// that, otherwise return zero.
-impl From<SystemTime> for BigInt {
-    fn from(t: SystemTime) -> Self {
-        match t.duration_since(UNIX_EPOCH) {
-            Ok(value) => BigInt(value.as_secs() as i64),
-            Err(_err) => BigInt(0),
-        }
-    }
-}
-
 // need `where Scalar = <S>` parameterization to use this with objects
 // c.f. https://github.com/graphql-rust/juniper/issues/358 for details
 graphql_scalar!(BigInt where Scalar = <S> {
@@ -161,7 +134,7 @@ struct TreeEntry {
     /// File system type of this entry.
     fstype: EntryType,
     /// Modification time of the entry, may not be available.
-    mod_time: BigInt,
+    mod_time: DateTime<Utc>,
     /// Coordinates for this entry in the database.
     reference: String,
 }
@@ -171,7 +144,7 @@ impl From<core::TreeEntry> for TreeEntry {
         Self {
             name: entry.name,
             fstype: EntryType::from(entry.fstype),
-            mod_time: BigInt::from(entry.mtime),
+            mod_time: entry.mtime,
             reference: entry.reference.to_string(),
         }
     }
@@ -198,9 +171,9 @@ struct Snapshot {
     /// The snapshot before this one, if any.
     parent: Option<Checksum>,
     /// Time when the snapshot was first created.
-    start_time: BigInt,
+    start_time: DateTime<Utc>,
     /// Time when the snapshot completely finished.
-    end_time: Option<BigInt>,
+    end_time: Option<DateTime<Utc>>,
     /// Total number of files contained in this snapshot.
     file_count: BigInt,
     /// Reference to the tree containing all of the files.
@@ -212,8 +185,8 @@ impl Into<core::Snapshot> for Snapshot {
         let parent = self.parent.map(Checksum::into);
         let tree = Checksum::into(self.tree);
         let mut snap = core::Snapshot::new(parent, tree);
-        snap.start_time = self.start_time.into();
-        snap.end_time = self.end_time.map(|v| v.into());
+        snap.start_time = self.start_time;
+        snap.end_time = self.end_time;
         snap.file_count = self.file_count.into();
         snap
     }
@@ -224,8 +197,8 @@ impl From<core::Snapshot> for Snapshot {
         Self {
             checksum: Checksum::from(set.checksum()),
             parent: set.parent.map(|v| v.into()),
-            start_time: BigInt::from(set.start_time),
-            end_time: set.end_time.map(|v| v.into()),
+            start_time: set.start_time,
+            end_time: set.end_time,
             file_count: BigInt::from(set.file_count),
             tree: Checksum::from(set.tree),
         }

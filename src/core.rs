@@ -5,6 +5,7 @@
 //! The `core` module defines the most basic of functions and the core data
 //! types used throughout the application.
 
+use chrono::prelude::*;
 use failure::{err_msg, Error};
 use fastcdc;
 use flate2::read::ZlibDecoder;
@@ -620,10 +621,10 @@ pub struct TreeEntry {
     pub group: Option<String>,
     /// Created time.
     #[serde(rename = "ct")]
-    pub ctime: SystemTime,
+    pub ctime: DateTime<Utc>,
     /// Modified time.
     #[serde(rename = "mt")]
-    pub mtime: SystemTime,
+    pub mtime: DateTime<Utc>,
     /// Reference to the entry itself.
     #[serde(rename = "tr")]
     pub reference: TreeReference,
@@ -668,8 +669,8 @@ impl TreeEntry {
             gid: None,
             user: None,
             group: None,
-            ctime,
-            mtime,
+            ctime: DateTime::<Utc>::from(ctime),
+            mtime: DateTime::<Utc>::from(mtime),
             reference,
             xattrs: HashMap::new(),
         }
@@ -750,16 +751,8 @@ impl TreeEntry {
 
 impl fmt::Display for TreeEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ctime = self
-            .ctime
-            .duration_since(std::time::UNIX_EPOCH)
-            .and_then(|v| Ok(v.as_secs()))
-            .unwrap_or(0);
-        let mtime = self
-            .mtime
-            .duration_since(std::time::UNIX_EPOCH)
-            .and_then(|v| Ok(v.as_secs()))
-            .unwrap_or(0);
+        let ctime = self.ctime.timestamp();
+        let mtime = self.mtime.timestamp();
         // Format in a manner similar to git tree entries; this forms part of
         // the digest value for the overall tree, so it should remain relatively
         // stable over time.
@@ -834,11 +827,11 @@ pub struct Snapshot {
     pub parent: Option<Checksum>,
     /// Time when the snapshot was first created.
     #[serde(rename = "st")]
-    pub start_time: SystemTime,
+    pub start_time: DateTime<Utc>,
     /// Time when the snapshot completed its upload. Will be `None` until
     /// the backup has completed.
     #[serde(rename = "et")]
-    pub end_time: Option<SystemTime>,
+    pub end_time: Option<DateTime<Utc>>,
     /// Total number of files contained in this snapshot.
     #[serde(rename = "fc")]
     pub file_count: u32,
@@ -853,7 +846,7 @@ impl Snapshot {
     /// Use the builder-style functions to set the other fields.
     ///
     pub fn new(parent: Option<Checksum>, tree: Checksum) -> Self {
-        let start_time = SystemTime::now();
+        let start_time = Utc::now();
         Self {
             parent,
             start_time,
@@ -864,7 +857,7 @@ impl Snapshot {
     }
 
     /// Add the end_time property.
-    pub fn end_time(mut self, end_time: SystemTime) -> Self {
+    pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
         self.end_time = Some(end_time);
         self
     }
@@ -889,17 +882,8 @@ pub static NULL_SHA1: &str = "sha1-0000000000000000000000000000000000000000";
 
 impl fmt::Display for Snapshot {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let stime = self
-            .start_time
-            .duration_since(std::time::UNIX_EPOCH)
-            .and_then(|v| Ok(v.as_secs()))
-            .unwrap_or(0);
-        let etime = self
-            .end_time
-            .unwrap_or(std::time::UNIX_EPOCH)
-            .duration_since(std::time::UNIX_EPOCH)
-            .and_then(|v| Ok(v.as_secs()))
-            .unwrap_or(0);
+        let stime = self.start_time.timestamp();
+        let etime = self.end_time.unwrap_or_else(Utc::now).timestamp();
         // Format in a manner similar to git commit entries; this forms part of
         // the digest value for the snapshot, so it should remain relatively
         // stable over time.
@@ -980,7 +964,7 @@ pub struct SavedPack {
     pub locations: Vec<PackLocation>,
     /// Date/time of successful upload, for conflict resolution.
     #[serde(rename = "tm")]
-    pub upload_time: SystemTime,
+    pub upload_time: DateTime<Utc>,
     /// Salt used to encrypt this pack.
     #[serde(rename = "sa")]
     pub crypto_salt: Option<Salt>,
@@ -993,7 +977,7 @@ impl SavedPack {
         Self {
             digest,
             locations: coords,
-            upload_time: SystemTime::now(),
+            upload_time: Utc::now(),
             crypto_salt: None,
         }
     }
@@ -1468,7 +1452,7 @@ mod tests {
         let mut pack = SavedPack::new(digest, vec![pacloc]);
         pack.crypto_salt = Some(pwhash::gen_salt());
         let encoded: Vec<u8> = serde_cbor::to_vec(&pack).unwrap();
-        assert_eq!(encoded.len(), 262);
+        assert_eq!(encoded.len(), 245);
     }
 
     #[test]

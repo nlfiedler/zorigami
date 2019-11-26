@@ -83,16 +83,15 @@ fn log_state_changes(state: &state::State) {
     for (key, backup) in state.active_datasets() {
         if let Some(end_time) = backup.end_time() {
             // the backup finished recently, log one last entry
-            let sys_time = std::time::SystemTime::now();
-            if let Ok(interval) = sys_time.duration_since(end_time) {
-                if interval.as_secs() < 60 {
-                    info!(
-                        "complete for {}: packs: {}, files: {}",
-                        key,
-                        backup.packs_uploaded(),
-                        backup.files_uploaded()
-                    );
-                }
+            let sys_time = chrono::Utc::now();
+            let interval = sys_time - end_time;
+            if interval.num_seconds() < 60 {
+                info!(
+                    "complete for {}: packs: {}, files: {}",
+                    key,
+                    backup.packs_uploaded(),
+                    backup.files_uploaded()
+                );
             }
         } else {
             // this backup is not yet finished

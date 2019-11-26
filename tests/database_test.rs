@@ -3,12 +3,12 @@
 //
 mod util;
 
+use chrono::{TimeZone, Utc};
 use failure::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Deref;
 use std::thread;
-use std::time::SystemTime;
 use util::DBPath;
 use zorigami::core::*;
 use zorigami::database::*;
@@ -114,8 +114,8 @@ fn test_tree_records() {
         gid: Some(100),
         user: Some(String::from("user")),
         group: Some(String::from("group")),
-        ctime: SystemTime::UNIX_EPOCH,
-        mtime: SystemTime::UNIX_EPOCH,
+        ctime: Utc.timestamp(0, 0),
+        mtime: Utc.timestamp(0, 0),
         reference: tref1,
         xattrs: HashMap::new(),
     };
@@ -128,8 +128,8 @@ fn test_tree_records() {
         gid: Some(100),
         user: Some(String::from("user")),
         group: Some(String::from("group")),
-        ctime: SystemTime::UNIX_EPOCH,
-        mtime: SystemTime::UNIX_EPOCH,
+        ctime: Utc.timestamp(0, 0),
+        mtime: Utc.timestamp(0, 0),
         reference: tref2,
         xattrs: HashMap::new(),
     };
@@ -142,8 +142,8 @@ fn test_tree_records() {
         gid: Some(100),
         user: Some(String::from("user")),
         group: Some(String::from("group")),
-        ctime: SystemTime::UNIX_EPOCH,
-        mtime: SystemTime::UNIX_EPOCH,
+        ctime: Utc.timestamp(0, 0),
+        mtime: Utc.timestamp(0, 0),
         reference: tref3,
         xattrs: HashMap::new(),
     };

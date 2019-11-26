@@ -4,11 +4,11 @@
 
 //! The `state` module manages the application state.
 
+use chrono::prelude::*;
 use lazy_static::lazy_static;
 use reducer::{Dispatcher, Reactor, Reducer, Store};
-use std::collections::{HashMap, hash_map};
+use std::collections::{hash_map, HashMap};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 lazy_static! {
     /// Set of registered state change listeners.
@@ -61,8 +61,8 @@ pub enum Action {
 ///
 #[derive(Clone)]
 pub struct BackupState {
-    start_time: SystemTime,
-    end_time: Option<SystemTime>,
+    start_time: DateTime<Utc>,
+    end_time: Option<DateTime<Utc>>,
     packs_uploaded: u64,
     files_uploaded: u64,
     had_error: bool,
@@ -71,7 +71,7 @@ pub struct BackupState {
 impl Default for BackupState {
     fn default() -> Self {
         Self {
-            start_time: SystemTime::now(),
+            start_time: Utc::now(),
             end_time: None,
             packs_uploaded: 0,
             files_uploaded: 0,
@@ -84,14 +84,14 @@ impl BackupState {
     ///
     /// Return the start time for the backup of this dataset.
     ///
-    pub fn start_time(&self) -> SystemTime {
+    pub fn start_time(&self) -> DateTime<Utc> {
         self.start_time
     }
 
     ///
     /// Return the completion time for the backup of this dataset.
     ///
-    pub fn end_time(&self) -> Option<SystemTime> {
+    pub fn end_time(&self) -> Option<DateTime<Utc>> {
         self.end_time
     }
 
@@ -160,7 +160,7 @@ impl Reducer<Action> for State {
             }
             Action::FinishBackup(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
-                    record.end_time = Some(SystemTime::now());
+                    record.end_time = Some(Utc::now());
                 }
             }
             Action::ErrorBackup(key) => {
