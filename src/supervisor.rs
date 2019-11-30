@@ -203,16 +203,10 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
 }
 
 ///
-/// Determine if the snapshot finished a sufficiently long time ago to warrant
-/// running a backup now. If it has not finished, it is still overdue.
+/// Check if the dataset is both overdue and ready to run.
 ///
 fn is_overdue(schedule: &Schedule, end_time: DateTime<Utc>) -> bool {
-    if schedule.past_due(end_time.into()) {
-        let now = Utc::now();
-        schedule.within_range(now.into())
-    } else {
-        false
-    }
+    schedule.past_due(end_time) && schedule.within_range(Utc::now())
 }
 
 ///

@@ -20,7 +20,7 @@
 ***** DONE remove the =cron= create and its usage
 ***** DONE remove the =schedule= field from the =Dataset= struct
 ***** DONE remove the =schedule= field from the datasets page
-***** TODO change schedule code to not use =std::time= at all
+***** DONE change schedule code to not use =std::time= at all
 ***** TODO move schedule related bits in RE code to a new file
 **** TODO support a schedule with start and stop (e.g. time range)
 ***** check the start time in =supervisor= to determine if it is ready to start
