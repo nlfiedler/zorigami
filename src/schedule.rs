@@ -201,6 +201,12 @@ impl Schedule {
         }
     }
 
+    /// Return true if the given time is past due and the current time falls
+    /// within the specified range, if any.
+    pub fn is_ready(&self, then: DateTime<Utc>) -> bool {
+        self.past_due(then) && self.within_range(Utc::now())
+    }
+
     /// Return the time at which the backup should stop.
     ///
     /// Will return `None` if there is no stop time (i.e. no time range).
@@ -530,5 +536,25 @@ mod tests {
         assert_eq!(stop_time.day(), 1);
         assert_eq!(stop_time.hour(), 4);
         assert_eq!(stop_time.minute(), 0);
+    }
+
+    #[test]
+    fn test_is_ready_hourly() {
+        let schedule = Schedule::Hourly;
+        let hour_ago = chrono::Duration::hours(2);
+        let end_time = Utc::now() - hour_ago;
+        assert!(schedule.is_ready(end_time));
+        let end_time = Utc::now();
+        assert!(!schedule.is_ready(end_time));
+    }
+
+    #[test]
+    fn test_is_ready_daily() {
+        let schedule = Schedule::Daily(None);
+        let day_ago = chrono::Duration::hours(25);
+        let end_time = Utc::now() - day_ago;
+        assert!(schedule.is_ready(end_time));
+        let end_time = Utc::now();
+        assert!(!schedule.is_ready(end_time));
     }
 }

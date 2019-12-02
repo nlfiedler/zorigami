@@ -8,7 +8,6 @@
 use super::core::{self, Dataset};
 use super::database::Database;
 use super::engine;
-use super::schedule::Schedule;
 use super::state::{self, Action};
 use actix::prelude::*;
 use chrono::prelude::*;
@@ -165,7 +164,7 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         for schedule in set.schedules.iter() {
             // check if backup overdue
             let mut maybe_run = if let Some(et) = end_time {
-                is_overdue(schedule, et)
+                schedule.is_ready(et)
             } else {
                 true
             };
@@ -180,8 +179,8 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
                 if backup.had_error() {
                     maybe_run = true;
                     debug!("dataset {} backup had an error, will restart", &set.key);
-                } else if let Some(end_time) = backup.end_time() {
-                    if !is_overdue(schedule, end_time) {
+                } else if let Some(et) = backup.end_time() {
+                    if !schedule.is_ready(et) {
                         maybe_run = false;
                     }
                 } else {
@@ -200,13 +199,6 @@ pub fn should_run(dbase: &Database, set: &Dataset) -> Result<bool, Error> {
         }
     }
     Ok(false)
-}
-
-///
-/// Check if the dataset is both overdue and ready to run.
-///
-fn is_overdue(schedule: &Schedule, end_time: DateTime<Utc>) -> bool {
-    schedule.past_due(end_time) && schedule.within_range(Utc::now())
 }
 
 ///
@@ -256,30 +248,5 @@ fn run_dataset(db_path: PathBuf, set_key: String) {
             // put the backup in the error state so we try again
             state::dispatch(Action::ErrorBackup(set_key.clone()));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_overdue_hourly() {
-        let schedule = Schedule::Hourly;
-        let hour_ago = chrono::Duration::hours(2);
-        let end_time = Utc::now() - hour_ago;
-        assert!(is_overdue(&schedule, end_time));
-        let end_time = Utc::now();
-        assert!(!is_overdue(&schedule, end_time));
-    }
-
-    #[test]
-    fn test_is_overdue_daily() {
-        let schedule = Schedule::Daily(None);
-        let day_ago = chrono::Duration::hours(25);
-        let end_time = Utc::now() - day_ago;
-        assert!(is_overdue(&schedule, end_time));
-        let end_time = Utc::now();
-        assert!(!is_overdue(&schedule, end_time));
     }
 }

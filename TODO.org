@@ -9,26 +9,13 @@
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
-**** TODO define a new type for the "schedule" field of dataset
-***** DONE encode the schedule types in the GraphQL schema
-****** define new types for DayOfMonth and Schedule
-****** use enum for frequency
-****** separate TimeRange field
-***** DONE change GraphQL schema to use the new =schedules= field
-***** DONE change web ui to provide one frequency/range combo for now
-***** DONE change supervisor to use =schedules= rather than =schedule=
-***** DONE remove the =cron= create and its usage
-***** DONE remove the =schedule= field from the =Dataset= struct
-***** DONE remove the =schedule= field from the datasets page
-***** DONE change schedule code to not use =std::time= at all
-***** TODO move schedule related bits in RE code to a new file
 **** TODO support a schedule with start and stop (e.g. time range)
+***** add time range support to the web interface
 ***** check the start time in =supervisor= to determine if it is ready to start
 ***** check the end time in =BackupMaster.new()= and set a stop time
 ***** check the current time vs end time in =BackupMaster.handle_file()=
 ***** =handle_file()= returns an =OutOfTimeError= when out of time
 ***** supervisor reports the =OutOfTimeError= a little better than normal errors
-***** be mindful that the default timezone for =SystemTime= is UTC
 *** TODO use this to replace =akashita= for online backups
 **** old akashita configuration file:
 #+BEGIN_SRC erlang
