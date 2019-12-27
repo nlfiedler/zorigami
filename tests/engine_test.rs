@@ -12,7 +12,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 use util::DBPath;
-use xattr;
 use zorigami::core::*;
 use zorigami::database::*;
 use zorigami::engine::*;
@@ -63,24 +62,32 @@ fn test_basic_snapshots() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_basic_snapshots");
     let dbase = Database::new(&db_path).unwrap();
-    let basepath = "tmp/test/engine/snapshots/fixtures";
-    let _ = fs::remove_dir_all(basepath);
-    fs::create_dir_all(basepath)?;
-    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    let basepath: PathBuf = ["tmp", "test", "engine", "snapshots", "fixtures"].iter().collect();
+    let _ = fs::remove_dir_all(&basepath);
+    fs::create_dir_all(&basepath)?;
+    let mut dest: PathBuf = basepath.clone();
+    dest.push("lorem-ipsum.txt");
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     // take a snapshot of the test data
-    let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
+    let snap1_sha = take_snapshot(&basepath, None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
     assert_eq!(snapshot1.file_count, 1);
     // make a change to the data set
-    let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
+    let mut dest: PathBuf = basepath.clone();
+    dest.push("SekienAkashita.jpg");
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let xattr_worked =
-        xattr::SUPPORTED_PLATFORM && xattr::set(&dest, "me.fiedlers.test", b"foobar").is_ok();
+    #[allow(unused_mut)]
+    let mut xattr_worked = false;
+    #[cfg(target_family = "unix")]
+    {
+        use xattr;
+        xattr_worked =
+            xattr::SUPPORTED_PLATFORM && xattr::set(&dest, "me.fiedlers.test", b"foobar").is_ok();
+    }
     // take another snapshot
     let snap2_sha =
-        take_snapshot(Path::new(basepath), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+        take_snapshot(&basepath, Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
     let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
     assert!(snapshot2.parent.is_some());
     assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
@@ -90,7 +97,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     // compute the differences
     let iter = find_changed_files(
         &dbase,
-        PathBuf::from(basepath),
+        PathBuf::from(&basepath),
         snap1_sha,
         snap2_sha.clone(),
     )?;
@@ -121,7 +128,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     }
 
     // take another snapshot, should indicate no changes
-    let snap3_opt = take_snapshot(Path::new(basepath), Some(snap2_sha.clone()), &dbase, vec![])?;
+    let snap3_opt = take_snapshot(&basepath, Some(snap2_sha.clone()), &dbase, vec![])?;
     assert!(snap3_opt.is_none());
     Ok(())
 }
@@ -131,7 +138,10 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_snapshot_symlinks");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/symlinks/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\symlinks\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let dest: PathBuf = [basepath, "meaningless"].iter().collect();
@@ -172,7 +182,10 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_snapshot_ordering");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/ordering/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\ordering\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let ccc: PathBuf = [basepath, "ccc", "ccc.txt"].iter().collect();
@@ -236,7 +249,10 @@ fn test_snapshot_types() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_snapshot_types");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/types/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\types\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let ccc: PathBuf = [basepath, "ccc"].iter().collect();
@@ -277,7 +293,10 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_snapshot_ignore_links");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/ignore_links/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\ignore_links\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let bbb: PathBuf = [basepath, "bbb"].iter().collect();
@@ -331,7 +350,10 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_snapshot_was_links");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/was_links/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\was_links\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let mmm: PathBuf = [basepath, "mmm.txt"].iter().collect();
@@ -386,7 +408,10 @@ fn test_pack_builder() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_pack_builder");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/builder/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\builder\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let mut builder = PackBuilder::new(&dbase, 65536);
@@ -448,10 +473,19 @@ fn test_pack_builder() -> Result<(), Error> {
     let option = dbase.get_file(&lorem_sha)?;
     assert!(option.is_some());
     let saved_file = option.unwrap();
+    #[cfg(target_family = "unix")]
     assert_eq!(saved_file.length, 3_129);
+    #[cfg(target_family = "windows")]
+    assert_eq!(saved_file.length, 3_138);
+    #[cfg(target_family = "unix")]
     assert_eq!(
         saved_file.digest.to_string(),
         "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+    );
+    #[cfg(target_family = "windows")]
+    assert_eq!(
+        saved_file.digest.to_string(),
+        "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
     );
     Ok(())
 }
@@ -504,7 +538,10 @@ fn test_perform_backup() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_perform_backup");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/engine/backup/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\engine\\backup\\packs";
     let _ = fs::remove_dir_all(pack_path);
 
     // create a local store
@@ -518,7 +555,10 @@ fn test_perform_backup() -> Result<(), Error> {
     save_store(&dbase, &store)?;
 
     // create a dataset
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/backup/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\backup\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -593,7 +633,10 @@ fn test_restore_file() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_restore_file");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/engine/restore_file/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\engine\\restore_file\\packs";
     let _ = fs::remove_dir_all(pack_path);
 
     // create a local store
@@ -652,8 +695,13 @@ fn test_restore_file() -> Result<(), Error> {
     assert_eq!(count, 10);
 
     // restore the file from the first snapshot
+    #[cfg(target_family = "unix")]
     let digest_expected = Checksum::SHA256(String::from(
         "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+    ));
+    #[cfg(target_family = "windows")]
+    let digest_expected = Checksum::SHA256(String::from(
+        "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let outdir = tempdir().unwrap();
     let restored_file = outdir.path().join("restored.bin");
@@ -684,8 +732,13 @@ fn test_restore_file() -> Result<(), Error> {
     assert_eq!(digest_expected, digest_actual);
 
     // restore the file from the third snapshot
+    #[cfg(target_family = "unix")]
     let digest_expected = Checksum::SHA256(String::from(
         "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
+    ));
+    #[cfg(target_family = "windows")]
+    let digest_expected = Checksum::SHA256(String::from(
+        "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
     ));
     let outdir = tempdir().unwrap();
     let restored_file = outdir.path().join("restored.bin");
@@ -760,7 +813,10 @@ fn test_multiple_stores() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_multiple_stores");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/engine/multi_store/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\engine\\multi_store\\packs";
     let _ = fs::remove_dir_all(pack_path);
 
     // create a local store
@@ -791,7 +847,10 @@ fn test_multiple_stores() -> Result<(), Error> {
     save_store(&dbase, &minio_store)?;
 
     // create a dataset
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/multi_store/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\multi_store\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -842,7 +901,10 @@ fn test_continue_backup() -> Result<(), Error> {
     // create a clean database for each test
     let db_path = DBPath::new("_test_continue_backup");
     let dbase = Database::new(&db_path).unwrap();
+    #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/engine/continue/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\engine\\continue\\packs";
     let _ = fs::remove_dir_all(pack_path);
 
     // create a local store
@@ -856,7 +918,10 @@ fn test_continue_backup() -> Result<(), Error> {
     save_store(&dbase, &store)?;
 
     // create a dataset
+    #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/continue/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\engine\\continue\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let unique_id = generate_unique_id("charlie", "localhost");

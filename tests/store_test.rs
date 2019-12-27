@@ -7,7 +7,7 @@ use dotenv::dotenv;
 use failure::Error;
 use serde_json::json;
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 use util::DBPath;
 use zorigami::core::*;
@@ -82,9 +82,10 @@ fn run_config_tests(config: &str, store: &mut dyn Store, dbase: &Database) -> Re
 
 #[test]
 fn test_local_roundtrip() -> Result<(), Error> {
+    let base_path: PathBuf = ["tmp", "test", "local_store"].iter().collect();
     let config_json = json!({
         "label": "foobar",
-        "basepath": "tmp/test/local_store",
+        "basepath": base_path,
     });
     let mut store = local::LocalStore::new("testing");
     let value = config_json.to_string();
@@ -188,9 +189,15 @@ fn run_store_tests(store: &dyn Store) {
     let result = store.retrieve_pack(&pack_loc, &ptmpfile);
     assert!(result.is_ok());
     let sha256 = checksum_file(&ptmpfile);
+    #[cfg(target_family = "unix")]
     assert_eq!(
         sha256.unwrap().to_string(),
         "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
+    );
+    #[cfg(target_family = "windows")]
+    assert_eq!(
+        sha256.unwrap().to_string(),
+        "sha256-b917dfd10f50d2f6eee14f822df5bcca89c0d02d29ed5db372c32c97a41ba837"
     );
 
     // remove all objects from all buckets, and the buckets, too

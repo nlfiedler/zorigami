@@ -464,7 +464,7 @@ pub fn decrypt_file(
 }
 
 /// Tree entry type, such as a file or directory.
-#[derive(Clone, Copy, Serialize, Deserialize, Debug, GraphQLEnum)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, GraphQLEnum, PartialEq)]
 pub enum EntryType {
     /// Anything that is not a directory or symlink.
     FILE,
@@ -707,24 +707,28 @@ impl TreeEntry {
     /// Set the `mode` property to either the Unix file mode or the
     /// Windows attributes value, both of which are u32 values.
     ///
+    #[cfg(target_family = "unix")]
     pub fn mode(mut self, path: &Path) -> Self {
         // Either mode or file attributes will be sufficient to cover all
         // supported systems; the "permissions" field only has one bit,
         // read-only, and that is already in mode and file attributes.
-        #[cfg(target_family = "unix")]
-        {
-            use std::os::unix::fs::MetadataExt;
-            if let Ok(meta) = fs::symlink_metadata(path) {
-                self.mode = Some(meta.mode());
-            }
+        use std::os::unix::fs::MetadataExt;
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            self.mode = Some(meta.mode());
         }
-        #[cfg(target_family = "windows")]
-        {
-            use std::os::windows::prelude::*;
-            if let Ok(meta) = fs::symlink_metadata(path) {
-                self.mode = Some(metadata.file_attributes());
-            }
-        }
+    }
+
+    #[cfg(target_family = "windows")]
+    pub fn mode(self, _path: &Path) -> Self {
+        //
+        // The Windows attributes value is a number but it is not anything like
+        // a Unix file mode, which is what we really want so that we get a value
+        // similar to a Git tree entry.
+        //
+        // use std::os::windows::prelude::*; if let Ok(meta) =
+        //     fs::symlink_metadata(path) {self.mode =
+        //     Some(meta.file_attributes());
+        //     }
         self
     }
 
@@ -732,52 +736,62 @@ impl TreeEntry {
     /// Set the user and group ownership of the given path. At present, only
     /// Unix systems have this information.
     ///
+    #[cfg(target_family = "unix")]
     pub fn owners(mut self, path: &Path) -> Self {
-        #[cfg(target_family = "unix")]
-        {
-            use std::ffi::CStr;
-            use std::os::unix::fs::MetadataExt;
-            if let Ok(meta) = fs::symlink_metadata(path) {
-                self.uid = Some(meta.uid());
-                self.gid = Some(meta.gid());
-                // get the user name
-                let username: String = unsafe {
-                    let passwd = libc::getpwuid(meta.uid());
-                    if passwd.is_null() {
+        use std::ffi::CStr;
+        use std::os::unix::fs::MetadataExt;
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            self.uid = Some(meta.uid());
+            self.gid = Some(meta.gid());
+            // get the user name
+            let username: String = unsafe {
+                let passwd = libc::getpwuid(meta.uid());
+                if passwd.is_null() {
+                    String::new()
+                } else {
+                    let c_buf = (*passwd).pw_name;
+                    if c_buf.is_null() {
                         String::new()
                     } else {
-                        let c_buf = (*passwd).pw_name;
-                        if c_buf.is_null() {
-                            String::new()
-                        } else {
-                            CStr::from_ptr(c_buf).to_string_lossy().into_owned()
-                        }
+                        CStr::from_ptr(c_buf).to_string_lossy().into_owned()
                     }
-                };
-                self.user = Some(username);
-                // get the group name
-                let groupname = unsafe {
-                    let group = libc::getgrgid(meta.gid());
-                    if group.is_null() {
+                }
+            };
+            self.user = Some(username);
+            // get the group name
+            let groupname = unsafe {
+                let group = libc::getgrgid(meta.gid());
+                if group.is_null() {
+                    String::new()
+                } else {
+                    let c_buf = (*group).gr_name;
+                    if c_buf.is_null() {
                         String::new()
                     } else {
-                        let c_buf = (*group).gr_name;
-                        if c_buf.is_null() {
-                            String::new()
-                        } else {
-                            CStr::from_ptr(c_buf).to_string_lossy().into_owned()
-                        }
+                        CStr::from_ptr(c_buf).to_string_lossy().into_owned()
                     }
-                };
-                self.group = Some(groupname);
-            }
+                }
+            };
+            self.group = Some(groupname);
         }
+        self
+    }
+
+    #[cfg(target_family = "windows")]
+    pub fn owners(self, _path: &Path) -> Self {
         self
     }
 }
 
 impl fmt::Display for TreeEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let form_mode = if let Some(mode) = self.mode {
+            mode
+        } else if self.fstype == EntryType::DIR {
+            0o040_000
+        } else {
+            0o100_644
+        };
         let ctime = self.ctime.timestamp();
         let mtime = self.mtime.timestamp();
         // Format in a manner similar to git tree entries; this forms part of
@@ -786,7 +800,7 @@ impl fmt::Display for TreeEntry {
         write!(
             f,
             "{:o} {}:{} {} {} {} {}",
-            self.mode.unwrap_or(0),
+            form_mode,
             self.uid.unwrap_or(0),
             self.gid.unwrap_or(0),
             ctime,
@@ -1324,9 +1338,16 @@ mod tests {
         let outdir = tempdir()?;
         let packfile = outdir.path().join("pack.tar");
         let digest = pack_chunks(&chunks[..], &packfile)?;
+        #[cfg(target_family = "unix")]
         assert_eq!(
             digest.to_string(),
             "sha256-9fd73dfe8b3815ebbf9b0932816306526104336017d9ba308e37e48bce5ab150"
+        );
+        // line endings differ
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            digest.to_string(),
+            "sha256-b917dfd10f50d2f6eee14f822df5bcca89c0d02d29ed5db372c32c97a41ba837"
         );
         // verify by unpacking
         let entries: Vec<String> = unpack_chunks(&packfile, outdir.path())?;
@@ -1336,9 +1357,15 @@ mod tests {
             "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
         );
         let sha256 = checksum_file(&outdir.path().join(&entries[0]))?;
+        #[cfg(target_family = "unix")]
         assert_eq!(
             sha256.to_string(),
             "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            sha256.to_string(),
+            "sha256-a8ff0257a5fe4fa03ad46d33805b08c7e889a573898d295e0a653cdcdb0250c9"
         );
         Ok(())
     }
@@ -1494,7 +1521,9 @@ mod tests {
         let mut pack = SavedPack::new(digest, vec![pacloc]);
         pack.crypto_salt = Some(pwhash::gen_salt());
         let encoded: Vec<u8> = serde_cbor::to_vec(&pack).unwrap();
-        assert_eq!(encoded.len(), 245);
+        let enc_len = encoded.len();
+        // the length differs sometimes on Windows
+        assert!(enc_len == 245 || enc_len == 248);
     }
 
     #[test]
@@ -1558,15 +1587,28 @@ mod tests {
         );
         let file = outdir.path().join("lorem-ipsum.txt");
         let chksum = checksum_file(&file)?;
+        #[cfg(target_family = "unix")]
         assert_eq!(
             chksum.to_string(),
             "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
         );
+        // line endings differ
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
+        );
         let file = outdir.path().join("washington-journal.txt");
         let chksum = checksum_file(&file)?;
+        #[cfg(target_family = "unix")]
         assert_eq!(
             chksum.to_string(),
             "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
+        );
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
         );
 
         Ok(())

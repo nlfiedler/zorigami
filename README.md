@@ -23,6 +23,28 @@ $ xcode-select --install
 $ brew install node
 ```
 
+#### Windows
+
+1. [Node.js](https://nodejs.org/en/)
+    * Also install the native toolchain (chocolatey)
+1. Visual Studio [Code](https://code.visualstudio.com/)
+1. [Git](https://git-scm.com/)
+1. [Visual Studio](https://visualstudio.microsoft.com/) (to build `vcpkg`)
+    * Choose "desktop" C++ toolchain
+1. [vcpkg](https://github.com/Microsoft/vcpkg) (to install `openssl`)
+1. `vcpkg install openssl`
+1. `Set-Item -path env:OPENSSL_DIR -value C:\bin\vcpkg\installed\x86-windows`
+1. Install [clang](http://clang.llvm.org/) (to build RocksDB)
+    * Need 32-bit because other pieces are 32-bit?
+1. `Set-Item -path env:LIBCLANG_PATH -value C:\bin\LLVM\bin`
+
+Rather than `Set-Item` it may be better to set the environment variables in the
+system settings, then VS Code will be able to build everything.
+
+The `openssl` Rust crate must not be "vendored" otherwise it will attempt to
+build OpenSSL from source, which requires Perl in addition to the tools listed
+above, _and_ it will likely fail to compile on 32-bit Windows.
+
 ### Running Automated Tests
 
 These commands will build the backend and run the tests.
