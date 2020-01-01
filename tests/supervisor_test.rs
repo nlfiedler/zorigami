@@ -225,7 +225,7 @@ fn test_overdue_backup_running() -> Result<(), Error> {
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
     dataset.schedules = vec![Schedule::Daily(None)];
-    dataset.latest_snapshot = Some(sha1.clone());
+    dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
     // indicate that the dataset is already running a backup
@@ -251,7 +251,7 @@ fn test_overdue_had_error() -> Result<(), Error> {
     let store = "store/local/stuff";
     let mut dataset = Dataset::new(&unique_id, basepath, store);
     dataset.schedules = vec![Schedule::Daily(None)];
-    dataset.latest_snapshot = Some(sha1.clone());
+    dataset.latest_snapshot = Some(sha1);
     dbase.put_dataset(&dataset)?;
 
     // indicate that the backup started but then failed

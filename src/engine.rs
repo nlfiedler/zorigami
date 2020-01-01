@@ -855,7 +855,6 @@ fn process_path(
     trace!("processed path entry {:?}", fullpath);
     #[cfg(target_family = "unix")]
     {
-        use xattr;
         if xattr::SUPPORTED_PLATFORM {
             // The "supported" flag is not all that helpful, as it will be true even
             // for platforms where xattr operations will result in an error.

@@ -77,7 +77,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let mut dest: PathBuf = basepath.clone();
     dest.push("SekienAkashita.jpg");
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    #[allow(unused_mut)]
+    #[allow(unused_mut, unused_assignments)]
     let mut xattr_worked = false;
     #[cfg(target_family = "unix")]
     {
@@ -128,7 +128,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     }
 
     // take another snapshot, should indicate no changes
-    let snap3_opt = take_snapshot(&basepath, Some(snap2_sha.clone()), &dbase, vec![])?;
+    let snap3_opt = take_snapshot(&basepath, Some(snap2_sha), &dbase, vec![])?;
     assert!(snap3_opt.is_none());
     Ok(())
 }
@@ -218,7 +218,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     let iter = find_changed_files(
         &dbase,
         PathBuf::from(basepath),
-        snap1_sha.clone(),
+        snap1_sha,
         snap2_sha.clone(),
     )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
@@ -278,8 +278,8 @@ fn test_snapshot_types() -> Result<(), Error> {
     let iter = find_changed_files(
         &dbase,
         PathBuf::from(basepath),
-        snap1_sha.clone(),
-        snap2_sha.clone(),
+        snap1_sha,
+        snap2_sha,
     )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
@@ -336,8 +336,8 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     let iter = find_changed_files(
         &dbase,
         PathBuf::from(basepath),
-        snap1_sha.clone(),
-        snap2_sha.clone(),
+        snap1_sha,
+        snap2_sha,
     )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 1);
@@ -393,8 +393,8 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     let iter = find_changed_files(
         &dbase,
         PathBuf::from(basepath),
-        snap1_sha.clone(),
-        snap2_sha.clone(),
+        snap1_sha,
+        snap2_sha,
     )?;
     let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
     assert_eq!(changed.len(), 2);
@@ -521,13 +521,13 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
     builder.add_file(lorem_path, lorem_sha.clone())?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
     builder.add_file(lorem_path, lorem_sha.clone())?;
-    builder.add_file(lorem_path, lorem_sha.clone())?;
+    builder.add_file(lorem_path, lorem_sha)?;
     let sekien_path = Path::new("tests/fixtures/SekienAkashita.jpg");
     let sekien_sha = checksum_file(&sekien_path)?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
     builder.add_file(sekien_path, sekien_sha.clone())?;
-    builder.add_file(sekien_path, sekien_sha.clone())?;
+    builder.add_file(sekien_path, sekien_sha)?;
     assert_eq!(builder.file_count(), 2);
     assert_eq!(builder.chunk_count(), 7);
     Ok(())

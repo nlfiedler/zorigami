@@ -716,6 +716,7 @@ impl TreeEntry {
         if let Ok(meta) = fs::symlink_metadata(path) {
             self.mode = Some(meta.mode());
         }
+        self
     }
 
     #[cfg(target_family = "windows")]
