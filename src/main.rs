@@ -1,15 +1,14 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The main application binary that starts the web server and spawns the
 //! supervisor threads to manage the backups.
 
-use actix_files as afs;
-use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_files::{Files, NamedFile};
+use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use env_logger;
 use failure::err_msg;
-use futures::future::Future;
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
 use lazy_static::lazy_static;
@@ -42,41 +41,31 @@ fn graphiql() -> HttpResponse {
         .body(html)
 }
 
-fn graphql(
+async fn graphql(
     st: web::Data<Arc<schema::Schema>>,
     data: web::Json<GraphQLRequest>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    web::block(move || {
-        let ctx = Database::new(DB_PATH.as_path()).unwrap();
-        let res = data.execute(&st, &ctx);
-        Ok::<_, serde_json::error::Error>(serde_json::to_string(&res)?)
-    })
-    .map_err(Error::from)
-    .and_then(|body| {
-        Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(body))
-    })
+) -> Result<HttpResponse> {
+    let ctx = Database::new(DB_PATH.as_path()).unwrap();
+    let res = data.execute(&st, &ctx);
+    let body = serde_json::to_string(&res)?;
+    Ok(HttpResponse::Ok()
+        .content_type("application/json")
+        .body(body))
 }
 
-fn restore(
-    info: web::Path<(String, String, String)>,
-) -> impl Future<Item = afs::NamedFile, Error = Error> {
-    web::block(move || {
-        let dbase = Database::new(DB_PATH.as_path())?;
-        let dataset = dbase
-            .get_dataset(info.0.as_ref())?
-            .ok_or_else(|| err_msg(format!("missing dataset: {:?}", info.0)))?;
-        let passphrase = core::get_passphrase();
-        let checksum = core::Checksum::from_str(&info.1)?;
-        let mut outfile = PathBuf::from(&dataset.workspace);
-        outfile.push(info.2.clone());
-        engine::restore_file(&dbase, &dataset, &passphrase, checksum, &outfile)?;
-        // NamedFile does everything we need from here.
-        let file = afs::NamedFile::open(&outfile)?;
-        Ok::<_, failure::Error>(file)
-    })
-    .map_err(Error::from)
+async fn restore(info: web::Path<(String, String, String)>) -> Result<NamedFile> {
+    let dbase = Database::new(DB_PATH.as_path())?;
+    let dataset = dbase
+        .get_dataset(info.0.as_ref())?
+        .ok_or_else(|| err_msg(format!("missing dataset: {:?}", info.0)))?;
+    let passphrase = core::get_passphrase();
+    let checksum = core::Checksum::from_str(&info.1)?;
+    let mut outfile = PathBuf::from(&dataset.workspace);
+    outfile.push(info.2.clone());
+    engine::restore_file(&dbase, &dataset, &passphrase, checksum, &outfile)?;
+    // NamedFile does everything we need from here.
+    let file = NamedFile::open(&outfile)?;
+    Ok(file)
 }
 
 fn log_state_changes(state: &state::State) {
@@ -108,12 +97,13 @@ fn log_state_changes(state: &state::State) {
 // All requests that fail to match anything else will be directed to the index
 // page, where the client-side code will handle the routing and "page not found"
 // error condition.
-fn default_index(_req: HttpRequest) -> Result<afs::NamedFile, Error> {
-    let file = afs::NamedFile::open("./public/index.html")?;
+async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
+    let file = NamedFile::open("./public/index.html")?;
     Ok(file.use_last_modified(true))
 }
 
-pub fn main() -> io::Result<()> {
+#[actix_rt::main]
+async fn main() -> io::Result<()> {
     env_logger::init();
     state::subscribe("main-logger", log_state_changes);
     supervisor::start(DB_PATH.clone()).unwrap();
@@ -126,15 +116,16 @@ pub fn main() -> io::Result<()> {
         App::new()
             .data(schema.clone())
             .wrap(middleware::Logger::default())
-            .service(web::resource("/graphql").route(web::post().to_async(graphql)))
+            .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
             .service(
                 web::resource("/restore/{dataset}/{checksum}/{filename}")
-                    .route(web::get().to_async(restore)),
+                    .route(web::get().to(restore)),
             )
-            .service(afs::Files::new("/", "./public/").index_file("index.html"))
+            .service(Files::new("/", "./public/").index_file("index.html"))
             .default_service(web::get().to(default_index))
     })
     .bind(addr)?
     .run()
+    .await
 }

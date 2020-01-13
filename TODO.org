@@ -2,8 +2,8 @@
 ** latest time crate is incompatible with chrono for now
 ** latest future crate is incompatible with something
 ** TODO Update dependencies
-*** actix, actix-files, actix-web
-*** reducer
+*** DONE actix, actix-files, actix-web
+*** TODO reducer
 ** Google Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup

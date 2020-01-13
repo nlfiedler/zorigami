@@ -10,9 +10,10 @@ keywords = ["backup", "archival"]
 license = "BSD-2-Clause"
 
 [dependencies]
-actix = "0.8"
-actix-files = "0.1.4"
-actix-web = "1.0.5"
+actix = "0.9"
+actix-files = "0.2"
+actix-rt = "1.0.0"
+actix-web = "2.0"
 base64 = "0.11.0"
 blob-uuid = "0.4.0"
 chrono = "0.4.10"

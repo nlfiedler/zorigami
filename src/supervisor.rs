@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `supervisor` module spawns threads to perform backups, ensuring backups
@@ -19,6 +19,7 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 #[derive(Message)]
+#[rtype(result = "()")]
 struct Start(PathBuf);
 
 #[derive(Default)]
@@ -71,6 +72,7 @@ impl Handler<Start> for MySupervisor {
 }
 
 #[derive(Message)]
+#[rtype(result = "()")]
 struct StartBackup {
     db_path: PathBuf,
     dataset: String,
