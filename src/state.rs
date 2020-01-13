@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `state` module manages the application state.
@@ -26,7 +26,7 @@ lazy_static! {
 ///
 pub fn dispatch(action: Action) {
     let mut store = STORE.lock().unwrap();
-    store.dispatch(action);
+    let _ = store.dispatch(action);
 }
 
 ///
@@ -205,8 +205,9 @@ impl State {
 struct Display;
 
 impl Reactor<State> for Display {
-    type Output = ();
-    fn react(&self, state: &State) -> Self::Output {
+    type Error = std::io::Error;
+
+    fn react(&mut self, state: &State) -> std::io::Result<()> {
         // get a copy of the registered listeners to allow for a listener to
         // remove listeners from the list during the event dispatch
         let listeners: Vec<Subscription<State>> = {
@@ -216,6 +217,7 @@ impl Reactor<State> for Display {
         for entry in listeners {
             entry(state);
         }
+        Ok(())
     }
 }
 
