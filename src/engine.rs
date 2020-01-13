@@ -101,7 +101,7 @@ fn continue_backup(
             let snapshot = dbase
                 .get_snapshot(&current_sha1)?
                 .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", current_sha1)))?;
-            let tree = snapshot.tree.clone();
+            let tree = snapshot.tree;
             let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
             for result in iter {
                 bmaster.handle_file(result)?;
@@ -395,7 +395,7 @@ pub fn restore_file(
         }
     }
     // sort the chunks by offset to produce the ordered file list
-    let mut chunks = saved_file.chunks.clone();
+    let mut chunks = saved_file.chunks;
     chunks.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     let chunk_bufs: Vec<PathBuf> = chunks
         .iter()

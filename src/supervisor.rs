@@ -246,7 +246,7 @@ fn run_dataset(db_path: PathBuf, set_key: String) {
         Err(err) => {
             error!("error opening database for {}: {}", &set_key, err);
             // put the backup in the error state so we try again
-            state::dispatch(Action::ErrorBackup(set_key.clone()));
+            state::dispatch(Action::ErrorBackup(set_key));
         }
     }
 }

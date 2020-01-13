@@ -59,7 +59,7 @@ impl Database {
         opts.set_keep_log_file_num(10);
         let db = DB::open(&opts, db_path)?;
         let arc = Arc::new(db);
-        db_refs.insert(buf.clone(), Arc::downgrade(&arc));
+        db_refs.insert(buf, Arc::downgrade(&arc));
         Ok(Self { db: arc })
     }
 

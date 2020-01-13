@@ -37,7 +37,7 @@ rusoto_core = "0.42.0"
 rusoto_credential = "0.42.0"
 rusoto_s3 = "0.42.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_cbor = "0.10.1"
+serde_cbor = "0.11"
 serde_json = "1.0"
 sha-1 = "0.8.1"
 sha2 = "0.8.0"
@@ -48,7 +48,7 @@ tempfile = "3.1.0"
 time = "0.1"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 ulid = "0.3.1"
-whoami = "0.6.0"
+whoami = "0.7.0"
 
 [target.'cfg(unix)'.dependencies]
 xattr = "0.2.2"
