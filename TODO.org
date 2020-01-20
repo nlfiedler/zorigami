@@ -104,6 +104,10 @@
 ** Loose issues
 *** TODO switch out =ulid= for https://crates.io/crates/rusty_ulid
 *** TODO find out if libsodium compresses the data
+*** TODO need a solution for =openssl= crate that works on Windows
+**** needs to be vendored so it is linked in statically
+**** but building on Windows is extra difficult (see README)
+**** if vendored, may need =openssl-probe= to load system root certs
 *** TODO should compute HMAC of the pack file, store hash in database
 **** then verify that HMAC when retrieving the pack file
 *** TODO sometimes creating a new store results in a network error
