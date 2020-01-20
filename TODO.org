@@ -75,7 +75,34 @@
     ]}
 ]}.
 #+END_SRC
+** Web Framework
+*** actix-web has imploded (it was loaded with =unsafe= anyway)
+*** find a replacement web framework
+*** consider how to integrate with juniper
+*** candidates
+**** gotham https://crates.io/crates/gotham
+***** infrequently updated
+***** 37k downloads
+**** iron https://crates.io/crates/iron
+***** very infrequently updated
+***** 640k downloads
+**** nickel https://crates.io/crates/nickel
+***** infrequently updated
+***** 107k downloads
+**** rocket https://crates.io/crates/rocket
+***** (still) requires Rust nightly
+***** infrequently updated
+***** 387k downloads
+**** rouille https://crates.io/crates/rouille
+***** untouched for over a year
+***** 138k downloads
+**** tide https://github.com/http-rs/tide
+***** one to watch for in the future
+**** warp https://crates.io/crates/warp
+***** regular updates
+***** 123k downloads
 ** Loose issues
+*** TODO switch out =ulid= for https://crates.io/crates/rusty_ulid
 *** TODO find out if libsodium compresses the data
 *** TODO should compute HMAC of the pack file, store hash in database
 **** then verify that HMAC when retrieving the pack file
@@ -367,7 +394,7 @@
 ****** integrates with juniper
 ***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
 ****** pretty basic compared to Rocket
-***** pretty basic https://github.com/carllerche/tower-web (MIT)
+***** tower-web https://github.com/carllerche/tower-web (MIT)
 ****** competing with warp? hyper?
 **** DONE Database
 ***** ideally want something well maintained, reliable

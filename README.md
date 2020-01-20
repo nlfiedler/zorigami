@@ -11,7 +11,7 @@ where it should go.
 * [Rust](https://www.rust-lang.org) stable (2018 edition)
 * [Node.js](https://nodejs.org/) LTS
 
-#### Example for macOS
+#### macOS
 
 This example assumes you are using [Homebrew](http://brew.sh) to install the
 dependencies, which provides up-to-date versions of everything needed. The
@@ -26,7 +26,7 @@ $ brew install node
 #### Windows
 
 1. [Node.js](https://nodejs.org/en/)
-    * Also install the native toolchain (chocolatey)
+    * Also install the native toolchain from chocolatey
 1. Visual Studio [Code](https://code.visualstudio.com/)
 1. [Git](https://git-scm.com/)
 1. [Visual Studio](https://visualstudio.microsoft.com/) (to build `vcpkg`)
@@ -65,8 +65,8 @@ $ RUST_LOG=info cargo run
 ```
 
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
-For extremely verbose logging, use `RUST_LOG=trace` which will dump volumes of
-output.
+For extremely verbose logging, use `RUST_LOG=trace` which will dump large
+volumes of output.
 
 ### Updating the GraphQL PPX schema
 
