@@ -30,7 +30,7 @@ $ brew install node
 1. Visual Studio [Code](https://code.visualstudio.com/)
 1. [Git](https://git-scm.com/)
 1. [Visual Studio](https://visualstudio.microsoft.com/) (to build `vcpkg`)
-    * Choose "desktop" C++ toolchain
+    * Choose **Desktop development with C++** "workload"
 1. [vcpkg](https://github.com/Microsoft/vcpkg) (to install `openssl`)
 1. `vcpkg install openssl`
 1. `Set-Item -path env:OPENSSL_DIR -value C:\bin\vcpkg\installed\x86-windows`

@@ -75,36 +75,11 @@
     ]}
 ]}.
 #+END_SRC
-** Web Framework
-*** actix-web has imploded (it was loaded with =unsafe= anyway)
-*** find a replacement web framework
-*** consider how to integrate with juniper
-*** candidates
-**** gotham https://crates.io/crates/gotham
-***** infrequently updated
-***** 37k downloads
-**** iron https://crates.io/crates/iron
-***** very infrequently updated
-***** 640k downloads
-**** nickel https://crates.io/crates/nickel
-***** infrequently updated
-***** 107k downloads
-**** rocket https://crates.io/crates/rocket
-***** (still) requires Rust nightly
-***** infrequently updated
-***** 387k downloads
-**** rouille https://crates.io/crates/rouille
-***** untouched for over a year
-***** 138k downloads
-**** tide https://github.com/http-rs/tide
-***** one to watch for in the future
-**** warp https://crates.io/crates/warp
-***** regular updates
-***** 123k downloads
-** Loose issues
+** Loose backend issues
 *** TODO switch out =ulid= for https://crates.io/crates/rusty_ulid
 *** TODO find out if libsodium compresses the data
-*** TODO need a solution for =openssl= crate that works on Windows
+*** TODO the monthly fuzzy schedule test fails on the 30th of the month
+*** TODO need a solution for =openssl= crate that will work on Windows
 **** needs to be vendored so it is linked in statically
 **** but building on Windows is extra difficult (see README)
 **** if vendored, may need =openssl-probe= to load system root certs
@@ -207,7 +182,13 @@
 **** TODO allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
 ** Architecture Review
-*** Database migrations (see =NOTES.md=)
+*** Database migrations
+**** Use the =serde= crate features (c.f. https://serde.rs)
+**** Use =#[serde(default)]= on struct to fill in blanks for new fields
+**** Add =#[serde(skip_serializing)]= to a deprecated struct field
+**** New fields will need accessors that convert from old fields as needed
+***** reset the old field to indicate it is no longer relevant
+**** Removing a field is no problem for serde
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
 **** Consider https://github.com/spacejam/sled/
@@ -238,7 +219,6 @@
 *** TODO Restore the backup database
 **** TODO Restore to a different directory, then copy over records
 ** Windows support
-*** TODO Try building on Windows
 *** TODO Support Windows file types
 **** ReadOnly
 **** Hidden

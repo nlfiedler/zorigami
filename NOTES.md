@@ -293,18 +293,6 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 
 Remove the snapshot record to be deleted, then garbage collect.
 
-#### Database Migrations
-
-* Store the version information in a `meta` record.
-* Move the old struct implementations into a separate, versioned module.
-* Use the old structs to deserialize and convert to the new struct.
-* Two choices for migration procedure:
-    1. Each version iterates entire database, processing records as needed
-    1. Main code iterates database and calls each version with a record to update
-* Some versions will only need to change certain records.
-* Could use `#[serde(default)]` and `Default` to fill in blanks of new fields.
-    - i.e. avoid writing a migration for simple things like adding a new optional field
-
 ### Encryption
 
 #### Master Password
