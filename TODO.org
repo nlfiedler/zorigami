@@ -9,24 +9,27 @@
 *** TODO query for stores, show in a list
 **** probabaly a list of cards
 *** TODO query for datasets, show in a list
+**** probabaly a list of cards
 *** TODO show details of a pack store
 **** clicking on entry in list view will open hero with details
 *** TODO show details of a dataset
 **** clicking on entry in list view will open hero with details
 *** TODO support defining a new pack store
+**** need a "plus" button somewhere
+**** use https://pub.dev/packages/flutter_form_builder for forms and validation
 *** TODO support defining a new dataset
-*** TODO set up input validation
+**** need a "plus" button somewhere
+**** use https://pub.dev/packages/flutter_form_builder for forms and validation
 *** TODO allow deleting a pack store
 *** TODO allow deleting a dataset
 *** TODO allow editing a pack store
 **** clicking an edit button on the detail page will switch to edit mode
-**** use https://pub.dev/packages/flutter_form_builder for forms and validation
 *** TODO allow editing a dataset
 **** clicking an edit button on the detail page will switch to edit mode
-**** use https://pub.dev/packages/flutter_form_builder for forms and validation
-*** TODO show status of a dataset (i.e. last backup)
-*** TODO allow browsing the backup snapshot
+*** TODO show status of the datasets on the home page
+*** TODO allow browsing the dataset snapshot
 **** display using a stateful widget (path) on the home page
+**** need button to navigate up to the parent
 *** TODO add a button for restoring a file
 **** currently using an =href= to the URL that returns the file
 **** use https://pub.dev/packages/url_launcher, it supports web
@@ -40,8 +43,13 @@
 *** TODO figure out how to manage the GraphQL endpoint
 **** currently hard-coded to =localhost:8080= in the code
 **** using a relative endpoint is not supported by the package
+**** maybe there is a browser/flutter-web function for getting the current address
 **** may have to do the old solution of the build stuffing the value into the code
 **** maybe there is a way to inject build-time settings (a la rust)
+*** TODO change =main.rs= to serve up the flutter interface
+**** use =flutter build web= and see where the output goes
+**** change the paths in =main.rs= to serve up that compiled content
+**** probably start cleaning up the files in =public=
 *** TODO update =Dockerfile= to build flutter web ui
 *** TODO document how to test, build, run, etc
 **** =flutter build web= for release build
@@ -52,7 +60,6 @@
 **** =public/stylesheets=
 **** =public/webfonts=
 **** =bsconfig.json=
-**** =config=
 **** =graphql_schema.json=
 **** =gulpfile.js=
 **** =node_modules=
@@ -61,9 +68,9 @@
 **** =src/*.re=
 **** =lib/js=
 **** =lib/bs=
-**** =views=
 **** update =.gitignore= and =.dockerignore=
-**** update the =README.md= file regarding Node, Reason, etc
+**** update =README.md= file regarding Node, Reason, etc
+**** update =NOTES.md= file regarding everything
 ** Online Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
