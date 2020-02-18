@@ -5,8 +5,9 @@
 //! The main application binary that starts the web server and spawns the
 //! supervisor threads to manage the backups.
 
+use actix_cors::Cors;
 use actix_files::{Files, NamedFile};
-use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result};
+use actix_web::{http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result};
 use env_logger;
 use failure::err_msg;
 use juniper::http::graphiql::graphiql_source;
@@ -116,6 +117,16 @@ async fn main() -> io::Result<()> {
         App::new()
             .data(schema.clone())
             .wrap(middleware::Logger::default())
+            .wrap(
+                // Respond to OPTIONS requests for CORS support, which is common
+                // with some GraphQL clients, including the Dart package.
+                Cors::new()
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+                    .allowed_header(http::header::CONTENT_TYPE)
+                    .max_age(3600)
+                    .finish(),
+            )
             .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
             .service(

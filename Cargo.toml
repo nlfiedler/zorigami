@@ -11,6 +11,7 @@ license = "BSD-2-Clause"
 
 [dependencies]
 actix = "0.9"
+actix-cors = "0.2"
 actix-files = "0.2"
 actix-rt = "1.0.0"
 actix-web = "2.0"
