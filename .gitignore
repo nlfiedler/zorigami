@@ -1,8 +1,9 @@
+.DS_Store
 .vagrant
-node_modules
+.vscode
 ssh_config
 
-# Build artifacts
+# Rust build artifacts
 Cargo.lock
 target
 
@@ -12,12 +13,27 @@ target
 # temporary data
 tmp
 
-.DS_Store
-.vscode
-
 # ReasonML/BuckleScript
-.merlin
 .graphql_ppx_cache
+.merlin
 lib/bs
 lib/js
+node_modules
 public/javascripts/main.js
+
+# Flutter/Dart/Pub related
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+*.lock
+
+# Web related
+lib/generated_plugin_registrant.dart
+
+# Exceptions to above rules.
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages

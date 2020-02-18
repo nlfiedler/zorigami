@@ -1,11 +1,76 @@
 * Zorigami
 ** latest =time= crate is incompatible with =chrono= for now
 ** latest =futures= crate is incompatible with =minio= for now
-** Google Backup
+** Flutter Action Plan
+*** DONE set up dev environment with flutter web
+*** DONE get something on the screen (in chrome?)
+*** DONE add graphql client support
+*** DONE query configuration details and show in a panel
+*** TODO query for stores, show in a list
+**** probabaly a list of cards
+*** TODO query for datasets, show in a list
+*** TODO show details of a pack store
+**** clicking on entry in list view will open hero with details
+*** TODO show details of a dataset
+**** clicking on entry in list view will open hero with details
+*** TODO support defining a new pack store
+*** TODO support defining a new dataset
+*** TODO set up input validation
+*** TODO allow deleting a pack store
+*** TODO allow deleting a dataset
+*** TODO allow editing a pack store
+**** clicking an edit button on the detail page will switch to edit mode
+**** use https://pub.dev/packages/flutter_form_builder for forms and validation
+*** TODO allow editing a dataset
+**** clicking an edit button on the detail page will switch to edit mode
+**** use https://pub.dev/packages/flutter_form_builder for forms and validation
+*** TODO show status of a dataset (i.e. last backup)
+*** TODO allow browsing the backup snapshot
+**** display using a stateful widget (path) on the home page
+*** TODO add a button for restoring a file
+**** currently using an =href= to the URL that returns the file
+**** use https://pub.dev/packages/url_launcher, it supports web
+***** https://levelup.gitconnected.com/flutter-hyperlinks-d2eee3fd24f
+***** uses =url_launcher= and =universal_html= to support web and mobile
+***** note that safari requies a JS hack, but only if using the =openLink= functions?
+**** can use =Window.open()= from =dart:html=, like =window.open(url);=
+***** by default it opens a new window/tab for the link
+*** TODO make a navbar or navigation rail
+**** c.f. https://www.material.io/components/navigation-rail/
+*** TODO figure out how to manage the GraphQL endpoint
+**** currently hard-coded to =localhost:8080= in the code
+**** using a relative endpoint is not supported by the package
+**** may have to do the old solution of the build stuffing the value into the code
+**** maybe there is a way to inject build-time settings (a la rust)
+*** TODO update =Dockerfile= to build flutter web ui
+*** TODO document how to test, build, run, etc
+**** =flutter build web= for release build
+**** =flutter run -d chrome= for development
+**** =flutter test= for testing (currently no tests)
+*** TODO remove all of the old webui files
+**** should be nothing JavaScript/Node/Reason left at this point
+**** =public/stylesheets=
+**** =public/webfonts=
+**** =bsconfig.json=
+**** =config=
+**** =graphql_schema.json=
+**** =gulpfile.js=
+**** =node_modules=
+**** =package.json=
+**** =package-lock.json=
+**** =src/*.re=
+**** =lib/js=
+**** =lib/bs=
+**** =views=
+**** update =.gitignore= and =.dockerignore=
+**** update the =README.md= file regarding Node, Reason, etc
+** Online Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
 **** merge with the defaults in =engine.rs=
+*** TODO consider if it would be easier to use Amazon initially
+**** already have rusoto and using it successfully
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
@@ -104,6 +169,10 @@
 **** DONE mutating datasets
 **** DONE querying stores
 **** DONE mutating stores
+*** TODO probably should use a better client cache
+**** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
+**** uses the "type" of the object and its unique identifier as the caching key
+**** our objects would need to have a "typename" for this to work
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 *** TODO handle errors in getting Database ref in graphql handler
@@ -149,6 +218,11 @@
 **** and the file is retrieved from its temporary location,
 **** and later the temporary file is removed
 **** OTOH, "restore" could just put the file back where it belongs
+*** TODO consider and improve accessibility
+**** enable testing for a11y sanity
+**** add hints to improve the presentation of information
+***** configuration panel
+***** snapshot browser
 ** More Functionality
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
@@ -318,6 +392,13 @@
 **** Hawaiian: ~kaukau~
 **** Latin: ~atticae~
 * Technical Information
+** JS Build Artifacts
+*** ReasonML + Webpack => main.js
+| State       |    Size |
+|-------------+---------|
+| development | 2761882 |
+| production  |  536345 |
+| gzipped     |  145785 |
 ** Exploring other languages
 *** Compile to native for easy deployment
 *** Compile to native for code obfuscation

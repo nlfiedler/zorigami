@@ -9,6 +9,7 @@ where it should go.
 ### Prerequisites
 
 * [Rust](https://www.rust-lang.org) stable (2018 edition)
+* [Flutter](https://flutter.dev) beta channel
 * [Node.js](https://nodejs.org/) LTS
 
 #### macOS
@@ -117,6 +118,11 @@ $ docker-compose up -d
 ```
 
 ## Tools
+
+### Visual Studio Code and Dart Language Server
+
+When adding new Dart/Flutter dependencies to the project, it may be necessary to
+restart VS Code so that references to the new code will be resolved correctly.
 
 ### Visual Studio Code and Reason Language Server
 
