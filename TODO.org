@@ -46,10 +46,6 @@
 **** maybe there is a browser/flutter-web function for getting the current address
 **** may have to do the old solution of the build stuffing the value into the code
 **** maybe there is a way to inject build-time settings (a la rust)
-*** TODO change =main.rs= to serve up the flutter interface
-**** use =flutter build web= and see where the output goes
-**** change the paths in =main.rs= to serve up that compiled content
-**** probably start cleaning up the files in =public=
 *** TODO update =Dockerfile= to build flutter web ui
 *** TODO document how to test, build, run, etc
 **** =flutter build web= for release build
@@ -57,8 +53,7 @@
 **** =flutter test= for testing (currently no tests)
 *** TODO remove all of the old webui files
 **** should be nothing JavaScript/Node/Reason left at this point
-**** =public/stylesheets=
-**** =public/webfonts=
+**** probably everything in =public= should go away
 **** =bsconfig.json=
 **** =graphql_schema.json=
 **** =gulpfile.js=

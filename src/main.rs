@@ -114,6 +114,7 @@ async fn main() -> io::Result<()> {
     let schema = std::sync::Arc::new(schema::create_schema());
     info!("listening on http://{}/...", addr);
     HttpServer::new(move || {
+        let static_path = env::var("STATIC_FILES").unwrap_or_else(|_| "./public/".to_owned());
         App::new()
             .data(schema.clone())
             .wrap(middleware::Logger::default())
@@ -133,7 +134,7 @@ async fn main() -> io::Result<()> {
                 web::resource("/restore/{dataset}/{checksum}/{filename}")
                     .route(web::get().to(restore)),
             )
-            .service(Files::new("/", "./public/").index_file("index.html"))
+            .service(Files::new("/", static_path).index_file("index.html"))
             .default_service(web::get().to(default_index))
     })
     .bind(addr)?
