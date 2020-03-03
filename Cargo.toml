@@ -32,7 +32,6 @@ libc = "0.2.60"
 log = "0.4.7"
 md-5 = "0.8.0"
 memmap = "0.7.0"
-openssl = { version = "0.10", features = ["vendored"] }
 reducer = "2.0"
 rocksdb = "0.13.0"
 rusoto_core = "0.42.0"
@@ -52,5 +51,9 @@ uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 ulid = "0.3.1"
 whoami = "0.8"
 
+[target.'cfg(windows)'.dependencies]
+openssl = { version = "0.10" }
+
 [target.'cfg(unix)'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 xattr = "0.2.2"
