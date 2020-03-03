@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `engine` module performs backups by taking a snapshot of a dataset,
@@ -14,6 +14,7 @@ use base64::encode;
 use chrono::Utc;
 use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
+use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
@@ -256,7 +257,7 @@ impl<'a> BackupMaster<'a> {
         backup_path.set_extension("backup");
         self.dbase.create_backup(&backup_path)?;
         // use a ULID as the object name so they sort by time
-        let object_name = ulid::Ulid::new().to_string();
+        let object_name = generate_ulid_string();
         let mut tarball = self.dataset.workspace.clone();
         tarball.push(&object_name);
         core::create_tar(&backup_path, &tarball)?;

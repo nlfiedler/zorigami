@@ -42,7 +42,7 @@ $ brew install node
 Rather than `Set-Item` it may be better to set the environment variables in the
 system settings, then VS Code will be able to build everything.
 
-The `openssl` Rust crate must not be "vendored" otherwise it will attempt to
+The `openssl` Rust crate must _not_ be "vendored" otherwise it will attempt to
 build OpenSSL from source, which requires Perl in addition to the tools listed
 above, _and_ it will likely fail to compile on 32-bit Windows.
 

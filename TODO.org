@@ -6,6 +6,16 @@
 *** DONE get something on the screen (in chrome?)
 *** DONE add graphql client support
 *** DONE query configuration details and show in a panel
+*** TODO add =pedantic= and the =analysis_options.yaml= file from tanuki
+*** TODO play with changing the CORS headers a bit
+**** allow =OPTIONS= method as well
+**** could leave off the default allowed headers
+***** Accept, Accept-Language, Content-Language, Content-Type
+*** TODO set up the page routing
+**** c.f. https://flutter.dev/docs/development/ui/navigation
+**** define an index component to hold the nav rail
+**** add the index to the scaffold body
+**** define a home page to hold the configuration and snapshot browser
 *** TODO query for stores, show in a list
 **** probabaly a list of cards
 *** TODO query for datasets, show in a list
@@ -67,6 +77,7 @@
 **** update =README.md= file regarding Node, Reason, etc
 **** update =NOTES.md= file regarding everything
 ** Online Backup
+*** TODO consider how the user might change the passphrase over time
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
@@ -143,13 +154,8 @@
 ]}.
 #+END_SRC
 ** Loose backend issues
-*** TODO switch out =ulid= for https://crates.io/crates/rusty_ulid
 *** TODO find out if libsodium compresses the data
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
-*** TODO need a solution for =openssl= crate that will work on Windows
-**** needs to be vendored so it is linked in statically
-**** but building on Windows is extra difficult (see README)
-**** if vendored, may need =openssl-probe= to load system root certs
 *** TODO should compute HMAC of the pack file, store hash in database
 **** then verify that HMAC when retrieving the pack file
 *** TODO sometimes creating a new store results in a network error
@@ -500,7 +506,7 @@
 ***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
 ***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
 **** DONE ULID
-***** https://github.com/dylanhart/ulid-rs (MIT)
+***** https://crates.io/crates/rusty_ulid (MIT)
 **** DONE SFTP client
 ***** https://github.com/alexcrichton/ssh2-rs (MIT/Apache 2.0)
 **** DONE AWS client

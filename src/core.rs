@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `core` module defines the most basic of functions and the core data
@@ -15,6 +15,7 @@ use flate2::Compression;
 use juniper::{GraphQLEnum, GraphQLObject};
 use log::error;
 use memmap::MmapOptions;
+use rusty_ulid::generate_ulid_string;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::pwhash::{self, Salt};
 use sodiumoxide::crypto::secretstream::{self, Stream, Tag};
@@ -28,7 +29,6 @@ use std::str::FromStr;
 use std::sync::Once;
 use std::time::SystemTime;
 use tar::{Archive, Builder, Header};
-use ulid::Ulid;
 use uuid::Uuid;
 
 ///
@@ -58,13 +58,13 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => {
             let shorter = uuid.to_simple().to_string();
-            let mut ulid = Ulid::new().to_string();
+            let mut ulid = generate_ulid_string();
             ulid.push_str(&shorter);
             ulid.to_lowercase()
         }
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
-            Ulid::new().to_string().to_lowercase()
+            generate_ulid_string().to_lowercase()
         }
     }
 }
@@ -77,7 +77,7 @@ pub fn computer_bucket_name(unique_id: &str) -> String {
         Ok(uuid) => uuid.to_simple().to_string(),
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
-            Ulid::new().to_string().to_lowercase()
+            generate_ulid_string().to_lowercase()
         }
     }
 }
@@ -1065,7 +1065,7 @@ impl Dataset {
     /// store that will receive the pack files.
     ///
     pub fn new(computer_id: &str, basepath: &Path, store: &str) -> Dataset {
-        let key = Ulid::new().to_string().to_lowercase();
+        let key = generate_ulid_string().to_lowercase();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {

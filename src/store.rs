@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `store` module defines functions for uploading and retrieving pack files
@@ -8,9 +8,9 @@
 use super::core::PackLocation;
 use super::database::Database;
 use failure::{err_msg, Error};
+use rusty_ulid::generate_ulid_string;
 use std::path::Path;
 use std::str::{self, FromStr};
-use ulid::Ulid;
 
 pub mod local;
 pub mod minio;
@@ -72,7 +72,7 @@ pub fn build_store(store_type: StoreType, id: Option<&str>) -> Box<dyn Store> {
     let uuid = if let Some(idd) = id {
         idd.to_owned()
     } else {
-        Ulid::new().to_string().to_lowercase()
+        generate_ulid_string().to_lowercase()
     };
     match store_type {
         StoreType::LOCAL => Box::new(local::LocalStore::new(&uuid)),
