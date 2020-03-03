@@ -6,9 +6,8 @@
 *** DONE get something on the screen (in chrome?)
 *** DONE add graphql client support
 *** DONE query configuration details and show in a panel
-*** TODO add =pedantic= and the =analysis_options.yaml= file from tanuki
 *** TODO play with changing the CORS headers a bit
-**** allow =OPTIONS= method as well
+**** allow all HTTP methods
 **** could leave off the default allowed headers
 ***** Accept, Accept-Language, Content-Language, Content-Type
 *** TODO set up the page routing
@@ -78,6 +77,8 @@
 **** update =NOTES.md= file regarding everything
 ** Online Backup
 *** TODO consider how the user might change the passphrase over time
+*** TODO should compute HMAC of the pack file, store hash in database
+**** then verify that HMAC when retrieving the pack file
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
@@ -87,7 +88,7 @@
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
-*** TODO form for defining a Google Cloud Storage store
+*** TODO add form for defining a Google Cloud Storage store
 *** TODO support scheduling upload times, like akashita does
 **** TODO support a schedule with start and stop (e.g. time range)
 ***** add time range support to the web interface
@@ -156,8 +157,6 @@
 ** Loose backend issues
 *** TODO find out if libsodium compresses the data
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
-*** TODO should compute HMAC of the pack file, store hash in database
-**** then verify that HMAC when retrieving the pack file
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
