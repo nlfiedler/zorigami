@@ -6,10 +6,7 @@
 *** DONE get something on the screen (in chrome?)
 *** DONE add graphql client support
 *** DONE query configuration details and show in a panel
-*** TODO play with changing the CORS headers a bit
-**** allow all HTTP methods
-**** could leave off the default allowed headers
-***** Accept, Accept-Language, Content-Language, Content-Type
+*** cookbooks reference: https://flutter.dev/docs/cookbook
 *** TODO set up the page routing
 **** c.f. https://flutter.dev/docs/development/ui/navigation
 **** define an index component to hold the nav rail
@@ -51,6 +48,11 @@
 **** c.f. https://www.material.io/components/navigation-rail/
 *** TODO figure out how to manage the GraphQL endpoint
 **** currently hard-coded to =localhost:8080= in the code
+**** try this SO answer:
+#+BEGIN_SRC dart
+import 'dart:html';
+var url = window.location.href;
+#+END_SRC
 **** using a relative endpoint is not supported by the package
 **** maybe there is a browser/flutter-web function for getting the current address
 **** may have to do the old solution of the build stuffing the value into the code
@@ -76,9 +78,9 @@
 **** update =README.md= file regarding Node, Reason, etc
 **** update =NOTES.md= file regarding everything
 ** Online Backup
-*** TODO consider how the user might change the passphrase over time
-*** TODO should compute HMAC of the pack file, store hash in database
-**** then verify that HMAC when retrieving the pack file
+*** TODO =PackBuilder.add_file()= should use an order map for =file_chunks=
+**** that way it always processes files in the same order rather than randomly
+**** use a =BTreeMap= and invoke =first_entry()= to get the first one
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
@@ -155,13 +157,16 @@
 ]}.
 #+END_SRC
 ** Loose backend issues
-*** TODO find out if libsodium compresses the data
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)
 *** TODO file restore in =main.rs= should schedule cleanup of the temporary file
 **** supervisor could delete anything last modified an hour ago
+*** TODO need to schedule pruning old database snapshots on remote store
+**** there is no deduplication of the database files, so it uses more space
+**** only really need the most recent copy
+**** be mindful of remote storage deletion policies
 ** Loose GraphQL tasks
 *** TODO test the GraphQL schema and resolvers
 **** TODO "integers" that are not radix 10 integers
@@ -305,6 +310,9 @@
 **** Hidden
 **** System
 ** More Better
+*** TODO document how the user might change the passphrase over time
+**** user must remember their old passwords in order to decrypt old pack files
+**** the application will never store the actual password anywhere
 *** TODO support database integrity checks
 **** ensure all referenced records actually exist
 **** like git fsck, start at the top and traverse everything

@@ -373,13 +373,18 @@ pub fn restore_file(
                 .crypto_salt
                 .ok_or_else(|| err_msg(format!("missing pack salt: {:?}", pack_digest)))?;
             // retrieve the pack file
-            let packfile = tempfile::Builder::new()
+            let encrypted = tempfile::Builder::new()
                 .prefix("pack")
                 .suffix(".bin")
                 .tempfile_in(&dataset.workspace)?;
-            store::retrieve_pack(&stores_boxed, &saved_pack.locations, packfile.path())?;
-            // extract chunks from pack (temporarily use the output file path)
-            core::decrypt_file(passphrase, &salt, packfile.path(), outfile)?;
+            store::retrieve_pack(&stores_boxed, &saved_pack.locations, encrypted.path())?;
+            // decrypt and then decompress before unpacking the contents
+            let mut zipped = outfile.to_path_buf();
+            zipped.set_extension("gz");
+            core::decrypt_file(passphrase, &salt, encrypted.path(), &zipped)?;
+            fs::remove_file(encrypted)?;
+            core::decompress_file(&zipped, outfile)?;
+            fs::remove_file(zipped)?;
             verify_pack_digest(pack_digest, outfile)?;
             let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
             fs::remove_file(outfile)?;
@@ -1075,8 +1080,8 @@ impl Pack {
         self.digest.as_ref()
     }
 
-    /// Write the chunks in this pack to the specified path, encrypting using
-    /// libsodium with the given passphrase.
+    /// Write the chunks in this pack to the specified path, compressing using
+    /// zlib, and then encrypting using libsodium and the given passphrase.
     pub fn build_pack(&mut self, outfile: &Path, passphrase: &str) -> Result<(), Error> {
         // sort the chunks by digest to produce identical results
         self.chunks
@@ -1084,11 +1089,15 @@ impl Pack {
         // Write to a temporary file first, encrypt that to the desired path,
         // and then delete the temporary file. Trying to rename a file is tricky
         // on Windows, for whatever reason, but this works.
-        let mut temp = outfile.to_path_buf();
-        temp.set_extension("tmp");
-        self.digest = Some(core::pack_chunks(&self.chunks, &temp)?);
-        self.salt = Some(core::encrypt_file(passphrase, &temp, outfile)?);
-        fs::remove_file(&temp)?;
+        let mut packed = outfile.to_path_buf();
+        packed.set_extension("pack");
+        self.digest = Some(core::pack_chunks(&self.chunks, &packed)?);
+        let mut zipped = outfile.to_path_buf();
+        zipped.set_extension("gz");
+        core::compress_file(&packed, &zipped)?;
+        fs::remove_file(packed)?;
+        self.salt = Some(core::encrypt_file(passphrase, &zipped, outfile)?);
+        fs::remove_file(zipped)?;
         Ok(())
     }
 

@@ -337,6 +337,28 @@ pub fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
     Ok(())
 }
 
+///
+/// Compress the file at the given path using zlib.
+///
+pub fn compress_file(infile: &Path, outfile: &Path) -> Result<(), Error> {
+    let mut input = File::open(infile)?;
+    let output = File::create(outfile)?;
+    let mut encoder = ZlibEncoder::new(output, Compression::default());
+    io::copy(&mut input, &mut encoder)?;
+    Ok(())
+}
+
+///
+/// Decompress the zlib-encoded file at the given path.
+///
+pub fn decompress_file(infile: &Path, outfile: &Path) -> Result<(), Error> {
+    let input = File::open(infile)?;
+    let mut output = File::create(outfile)?;
+    let mut decoder = ZlibDecoder::new(input);
+    io::copy(&mut decoder, &mut output)?;
+    Ok(())
+}
+
 // Used to avoid initializing the crypto library more than once. Not a
 // requirement, but seems sensible and it is easy.
 static CRYPTO_INIT: Once = Once::new();
