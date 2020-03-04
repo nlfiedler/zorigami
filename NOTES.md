@@ -351,6 +351,12 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Seems to rely on their servers
 * Probably stores data elsewhere
 
+#### Rebel Backup
+
+* https://www.svsware.com/rebelbackup
+* Encrypted backups to Dropbox or Google Drive
+* macOS only
+
 #### qBackup
 
 * https://www.qualeed.com/en/qbackup/
