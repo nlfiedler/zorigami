@@ -86,7 +86,7 @@ pub fn computer_bucket_name(unique_id: &str) -> String {
 /// The `Checksum` represents a hash digest for an object, such as a tree,
 /// snapshot, file, chunk, or pack file.
 ///
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub enum Checksum {
     SHA1(String),
     SHA256(String),

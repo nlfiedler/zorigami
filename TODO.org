@@ -78,9 +78,6 @@ var url = window.location.href;
 **** update =README.md= file regarding Node, Reason, etc
 **** update =NOTES.md= file regarding everything
 ** Online Backup
-*** TODO =PackBuilder.add_file()= should use an order map for =file_chunks=
-**** that way it always processes files in the same order rather than randomly
-**** use a =BTreeMap= and invoke =first_entry()= to get the first one
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration

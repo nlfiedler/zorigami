@@ -16,7 +16,7 @@ use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
 use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -898,7 +898,7 @@ pub struct PackBuilder<'a> {
     chunk_size: u64,
     /// Map of file checksum to the chunks it contains that have not yet been
     /// uploaded in a pack file.
-    file_chunks: HashMap<core::Checksum, Vec<core::Chunk>>,
+    file_chunks: BTreeMap<core::Checksum, Vec<core::Chunk>>,
     /// Those chunks that have been packed using this builder.
     packed_chunks: HashSet<core::Checksum>,
     /// Those chunks that have been uploaded previously.
@@ -920,7 +920,7 @@ impl<'a> PackBuilder<'a> {
             dbase,
             pack_size,
             chunk_size,
-            file_chunks: HashMap::new(),
+            file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),
             done_chunks: HashSet::new(),
         }
@@ -1019,8 +1019,10 @@ impl<'a> PackBuilder<'a> {
         let mut bytes_packed: u64 = 0;
         // while there are files to process and the pack is not too big...
         while !self.file_chunks.is_empty() && bytes_packed < self.pack_size {
-            // get a random file from the map and start putting its chunks into
-            // the pack, ignoring any duplicates
+            // Get the first file from the map and start putting its chunks into
+            // the pack, ignoring any duplicates.
+            //
+            // Would use first_key_value() but that is experimental in 1.41.
             let filesum = self.file_chunks.keys().take(1).next().unwrap().to_owned();
             let mut chunks_processed = 0;
             let chunks = &self.file_chunks[&filesum];
