@@ -2,100 +2,86 @@
 ** latest =time= crate is incompatible with =chrono= for now
 ** latest =futures= crate is incompatible with =minio= for now
 ** Flutter Action Plan
-*** DONE set up dev environment with flutter web
-*** DONE get something on the screen (in chrome?)
-*** DONE add graphql client support
-*** DONE query configuration details and show in a panel
 *** cookbooks reference: https://flutter.dev/docs/cookbook
-*** DONE read about BLoC and state management
-**** c.f. https://www.didierboelens.com/2018/08/reactive-programming---streams---bloc/
-**** c.f. https://bloclibrary.dev/
-**** c.f. https://pub.dev/packages/bloc
-**** c.f. http://reactivex.io (and RxDart)
-**** c.f. https://pub.dev/packages/rxdart
-**** DONE VS Code extension: =FelixAngelov.bloc=
-*** DONE read about flutter code organziation
-**** c.f. https://medium.com/flutter-community/flutter-code-organization-revised-b09ad5cef7f6
-**** study https://github.com/boeledi/Streams-Block-Reactive-Programming-in-Flutter
-**** =api/= for remote calls
-**** =blocs/= for all of the blocs
-**** =models/= for data objects
-**** =pages/= for page definitions
-**** =widgets/= for shared widgets
-*** DONE read about clean architecture and code layout
-**** c.f. https://resocoder.com/category/tutorials/flutter/tdd-clean-architecture/
-**** c.f. https://github.com/ResoCoder/flutter-tdd-clean-architecture-course
-**** DONE part 1
-**** DONE part 2
-**** DONE part 3
-**** DONE part 4
-**** DONE part 5
-**** DONE part 6
-**** DONE part 7
-**** DONE part 8
-**** DONE part 9
-**** DONE part 10
-**** DONE part 11
-**** DONE part 12
-**** DONE part 13
-**** DONE part 14
-**** DONE https://resocoder.com/2019/10/26/flutter-bloc-library-tutorial-1-0-0-stable-reactive-state-management/
-*** DONE look at https://pub.dev/packages/dartz
-**** maybe copy their =Either= and make our own =Result=
-**** code is coupled with the entire library, difficult to extract one piece
-**** code is likely falling out of maintenance
-**** code has many Dart-2 transition issues, not as good as it was before
-*** DONE look for a dart package license checker: there is no up-to-date package
-*** TODO reorganize these notes
-**** capture the information in one section
-***** widgets use presentation logic holder (BLoC), do not interact with domain/data layers
-**** the actionable items need to be ordered by Clean layers: domain, data, preso
-***** preso
-****** add =flutter_bloc= and =equatable= packages
-****** use =BlocBuilder= to react to changes in the Bloc state
-****** use =BlocListener= to listen for state changes, e.g. display an error in a snackbar
-****** find a service locator for dependency injection
-*** TODO design the architecture using the "clean" architecture
-**** TODO decide on what the "features" are going to be
-***** Android has dynamic feature packages that are separately downloaded modules
-****** c.f. https://developer.android.com/guide/app-bundle/dynamic-delivery
-****** e.g. account mgmt, product search, listing items for sale, processing payments
-***** the entire application is essentially one "feature", backup
-***** or are the features instead the stores, datasets, snapshots, etc?
-***** or maybe the screens?
-**** list of functionality that needs to fit somewhere
-1) define entities
-2) display entities
-3) edit entities
-4) delete entities
-5) browse snapshots
-6) restore files
-7) display snapshot status
-*** TODO write basic models, use cases, etc, and tests
-**** start from the inside out: domain, then data, then preso
-**** copy https://github.com/LiewLi/result and make it better, more Rust-like
-***** c.f. https://pub.dev/packages/sum_types
-***** c.f. https://resocoder.com/2019/10/19/designing-with-types-in-dart-flutter-sum-types-tutorial/
-***** the =Ok= case holds the generic type
-***** the =Err= case holds the =Exception=
-***** make it easy to check for =Ok= and =Err= cases
-***** provide functions for mapping over ok and err
-***** use the Rust =Result= API as a guide, it encourages type safety
-**** create a "core" feature that holds base classes (e.g. base class for =UseCase=)
-**** use the Dart callable classes feature for use cases (see part 3 of tdd-clean-architecture)
-**** dependency injection
-***** look for "service locators"
-***** tdd clean tutorial suggests https://pub.dev/packages/get_it
-*** TODO using clean architecture likely means not using =graphql_flutter= at all
-**** instead the data layer would use the =graphql= package, like mujina does
-**** look for the "future builder" and devise patterns for the "loading", "error", and "ready" states
-**** or copy whatever =graphql_flutter= is doing
-**** tdd clean tutorial encodes the remote data states in the bloc state itself (c.f. part 10)
-*** presentation layer testing
-**** use Bloc to receive events and invoke the use cases, yielding updated state
-***** there will be a Bloc for each of the domain entities and their use cases
-**** use https://pub.dev/packages/bloc_test and https://pub.dev/packages/mockito
-*** TODO document this decision to use the clear architecture, include references
+*** TODO implement interface using clean architecture
+**** prep work
+***** TODO copy https://github.com/LiewLi/result and make it better, more Rust-like
+****** c.f. https://pub.dev/packages/sum_types
+****** c.f. https://resocoder.com/2019/10/19/designing-with-types-in-dart-flutter-sum-types-tutorial/
+****** the =Ok= case holds the generic type
+****** the =Err= case holds the =Exception=
+****** make it easy to check for =Ok= and =Err= cases
+****** provide functions for mapping over ok and err
+****** use the Rust =Result= API as a guide, it encourages type safety
+**** domain
+***** TODO define the features for organizing the code
+1) config
+2) browse
+3) restore
+***** TODO define the entities (data sets, pack stores, snapshots, file entries)
+***** TODO define the repository contract
+***** TODO define the use cases
+****** use Dart's callable class feature to make use cases easy to use
+****** see part 3 of the tdd clean tutorial
+***** TODO use TDD and mock objects to test everything
+**** data
+***** TODO implement the repository
+***** TODO define the models (data sets, etc)
+***** TODO develop the GraphQL data source
+****** use the =graphql= package to query server
+***** TODO use TDD and mock objects to test everything
+**** preso
+***** TODO add =flutter_bloc= and =equatable= packages
+***** TODO use =BlocBuilder= to react to changes in the Bloc state
+***** TODO use =BlocListener= to listen for state changes, e.g. display an error in a snackbar
+***** TODO find a service locator for dependency injection (e.g. =get_it=)
+***** TODO use Bloc to receive events and invoke the use cases, yielding updated state
+****** there will be a Bloc for each of the domain entities and their use cases
+***** TODO learn how to test the Bloc implementation
+***** TODO use https://pub.dev/packages/bloc_test and https://pub.dev/packages/mockito
+***** TODO set up the page routing
+****** c.f. https://flutter.dev/docs/development/ui/navigation
+****** define an index component to hold the nav rail
+****** add the index to the scaffold body
+****** define a home page to hold the configuration and snapshot browser
+***** TODO query for stores, show in a list
+****** use a progress indicator during the loading phase
+****** probabaly a list of cards
+***** TODO query for datasets, show in a list
+****** probabaly a list of cards
+***** TODO show details of a pack store
+****** clicking on entry in list view will open hero with details
+***** TODO show details of a dataset
+****** clicking on entry in list view will open hero with details
+***** TODO support defining a new pack store
+****** need a "plus" button somewhere
+****** see https://github.com/felangel/bloc/tree/master/examples/flutter_form_validation for form validation with BLoC
+****** use https://pub.dev/packages/flutter_form_builder for forms and validation
+****** if using bloc: https://pub.dev/packages/flutter_form_bloc
+***** TODO support defining a new dataset
+****** need a "plus" button somewhere
+****** use https://pub.dev/packages/flutter_form_builder for forms and validation
+***** TODO allow deleting a pack store
+***** TODO allow deleting a dataset
+***** TODO allow editing a pack store
+****** clicking an edit button on the detail page will switch to edit mode
+***** TODO allow editing a dataset
+****** clicking an edit button on the detail page will switch to edit mode
+***** TODO show status of the datasets on the home page
+***** TODO allow browsing the dataset snapshot
+****** display using a stateful widget (path) on the home page
+****** need button to navigate up to the parent
+***** TODO add a button for restoring a file
+****** currently using an =href= to the URL that returns the file
+****** use https://pub.dev/packages/url_launcher, it supports web
+******* https://levelup.gitconnected.com/flutter-hyperlinks-d2eee3fd24f
+******* uses =url_launcher= and =universal_html= to support web and mobile
+******* note that safari requies a JS hack, but only if using the =openLink= functions?
+****** can use =Window.open()= from =dart:html=, like =window.open(url);=
+******* by default it opens a new window/tab for the link
+***** TODO make a navbar or navigation rail
+****** c.f. https://www.material.io/components/navigation-rail/
+*** TODO document decision to use clean architecture
 **** Clean Architecture is suitable for large and small applications
 **** Clean Architecture notes
 ***** 3 layers
@@ -103,57 +89,14 @@
 ****** domain (business logic: entities, use cases, repo interface)
 ****** data (repo impl, data models, data sources)
 ***** tdd-clean-architecture tutorial
-****** the "presentation logic holders" is where BLoC sits (within the presentation layer)
-****** organizing the features and core components
-******* he has a "core" and a "features" directory which has the nested features
-******* let's instead have the features and "core" at the same level
-***** flutter package: https://pub.dev/packages/flutter_clean_architecture
-****** has no concept of features
-****** splits presentation layer into "app" and "device"
-****** comes with a bunch of interfaces and such around MVC
-*** TODO look at other backup programs interface design
-*** TODO set up the page routing
-**** c.f. https://flutter.dev/docs/development/ui/navigation
-**** define an index component to hold the nav rail
-**** add the index to the scaffold body
-**** define a home page to hold the configuration and snapshot browser
-*** TODO query for stores, show in a list
-**** use a progress indicator during the loading phase
-**** probabaly a list of cards
-*** TODO query for datasets, show in a list
-**** probabaly a list of cards
-*** TODO show details of a pack store
-**** clicking on entry in list view will open hero with details
-*** TODO show details of a dataset
-**** clicking on entry in list view will open hero with details
-*** TODO support defining a new pack store
-**** need a "plus" button somewhere
-**** see https://github.com/felangel/bloc/tree/master/examples/flutter_form_validation for form validation with BLoC
-**** use https://pub.dev/packages/flutter_form_builder for forms and validation
-**** if using bloc: https://pub.dev/packages/flutter_form_bloc
-*** TODO support defining a new dataset
-**** need a "plus" button somewhere
-**** use https://pub.dev/packages/flutter_form_builder for forms and validation
-*** TODO allow deleting a pack store
-*** TODO allow deleting a dataset
-*** TODO allow editing a pack store
-**** clicking an edit button on the detail page will switch to edit mode
-*** TODO allow editing a dataset
-**** clicking an edit button on the detail page will switch to edit mode
-*** TODO show status of the datasets on the home page
-*** TODO allow browsing the dataset snapshot
-**** display using a stateful widget (path) on the home page
-**** need button to navigate up to the parent
-*** TODO add a button for restoring a file
-**** currently using an =href= to the URL that returns the file
-**** use https://pub.dev/packages/url_launcher, it supports web
-***** https://levelup.gitconnected.com/flutter-hyperlinks-d2eee3fd24f
-***** uses =url_launcher= and =universal_html= to support web and mobile
-***** note that safari requies a JS hack, but only if using the =openLink= functions?
-**** can use =Window.open()= from =dart:html=, like =window.open(url);=
-***** by default it opens a new window/tab for the link
-*** TODO make a navbar or navigation rail
-**** c.f. https://www.material.io/components/navigation-rail/
+****** the "presentation logic holders" is where BLoC sits
+***** widgets use presentation logic holder (BLoC), do not interact with domain/data layers
+***** c.f. https://www.didierboelens.com/2018/08/reactive-programming---streams---bloc/
+***** c.f. https://bloclibrary.dev/
+***** VS Code bloc extension: =FelixAngelov.bloc=
+***** c.f. https://resocoder.com/category/tutorials/flutter/tdd-clean-architecture/
+***** c.f. https://github.com/ResoCoder/flutter-tdd-clean-architecture-course
+***** c.f. https://resocoder.com/2019/10/26/flutter-bloc-library-tutorial-1-0-0-stable-reactive-state-management/
 *** TODO figure out how to manage the GraphQL endpoint
 **** using a relative endpoint is not supported by the package
 **** currently hard-coded to =127.0.0.1:8080= in the code
@@ -497,8 +440,6 @@ var url = window.location.href;
 *** TODO What sets this application apart from the other polished products?
 **** Cross-platform (e.g. macOS, Windows)
 **** Linux server ready
-** Packaging
-*** Need to bundle the gpgme library
 ** Windows Certified
 *** CloudBerry(?) has bunches of certifications
 *** is that really so meaningful? *I* never cared
