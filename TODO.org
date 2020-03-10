@@ -20,9 +20,11 @@
 ***** DONE define a pack store
 ***** DONE update a pack store
 ***** DONE delete a pack store
-***** TODO do all that again for data sets
+***** DONE do all that again for data sets
 ***** TODO do all that again for snapshots
-***** TODO do all that again for file entries
+***** TODO do all that again for trees
+***** TODO do all that again for tree entries
+***** TODO use case to get configuration info
 **** data
 ***** TODO implement the repository
 ***** TODO define the models (data sets, etc)
