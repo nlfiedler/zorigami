@@ -10,11 +10,16 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^0.1.2
+  equatable: ^1.1.1
   graphql_flutter: ^3.0.1-beta.2
+  # oxidized: ^1.0.0
+  oxidized:
+    git: https://github.com/nlfiedler/oxidized.git
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  mockito: ^4.1.1
   pedantic: ^1.8.0
 
 flutter:

@@ -5,28 +5,28 @@
 *** cookbooks reference: https://flutter.dev/docs/cookbook
 *** TODO implement interface using clean architecture
 **** prep work
-***** TODO copy https://github.com/LiewLi/result and make it better, more Rust-like
-****** c.f. https://pub.dev/packages/sum_types
-****** c.f. https://resocoder.com/2019/10/19/designing-with-types-in-dart-flutter-sum-types-tutorial/
-****** the =Ok= case holds the generic type
-****** the =Err= case holds the =Exception=
-****** make it easy to check for =Ok= and =Err= cases
-****** provide functions for mapping over ok and err
-****** use the Rust =Result= API as a guide, it encourages type safety
+***** DONE copy https://github.com/LiewLi/result and make it better, more Rust-like
+***** DONE make an =Option= type like Rust
+***** DONE define the features for organizing the code
+1) backup: defining entities
+2) browse: viewing snapshots
+3) restore: restoring entries
 **** domain
-***** TODO define the features for organizing the code
-1) config
-2) browse
-3) restore
-***** TODO define the entities (data sets, pack stores, snapshots, file entries)
+***** TODO define the entities
 ***** TODO define the repository contract
 ***** TODO define the use cases
-****** use Dart's callable class feature to make use cases easy to use
-****** see part 3 of the tdd clean tutorial
 ***** TODO use TDD and mock objects to test everything
+***** DONE get all pack stores
+***** DONE define a pack store
+***** DONE update a pack store
+***** DONE delete a pack store
+***** TODO do all that again for data sets
+***** TODO do all that again for snapshots
+***** TODO do all that again for file entries
 **** data
 ***** TODO implement the repository
 ***** TODO define the models (data sets, etc)
+****** need serde for GraphQL results of pack stores
 ***** TODO develop the GraphQL data source
 ****** use the =graphql= package to query server
 ***** TODO use TDD and mock objects to test everything
