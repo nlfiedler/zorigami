@@ -4,35 +4,34 @@
 ** Flutter Action Plan
 *** cookbooks reference: https://flutter.dev/docs/cookbook
 *** TODO implement interface using clean architecture
-**** prep work
+**** DONE prep work
 ***** DONE copy https://github.com/LiewLi/result and make it better, more Rust-like
 ***** DONE make an =Option= type like Rust
 ***** DONE define the features for organizing the code
 1) backup: defining entities
 2) browse: viewing snapshots
 3) restore: restoring entries
-**** domain
-***** TODO define the entities
-***** TODO define the repository contract
-***** TODO define the use cases
-***** TODO use TDD and mock objects to test everything
+**** DONE domain
+***** DONE define the entities
+***** DONE define the repository contract
+***** DONE define the use cases
+***** DONE use TDD and mock objects to test everything
 ***** DONE get all pack stores
 ***** DONE define a pack store
 ***** DONE update a pack store
 ***** DONE delete a pack store
-***** DONE do all that again for data sets
-***** TODO do all that again for snapshots
-***** TODO do all that again for trees
-***** TODO do all that again for tree entries
-***** TODO use case to get configuration info
-**** data
+***** DONE do all that for data sets
+***** DONE do all that for snapshots
+***** DONE do all that for trees
+***** DONE do all that for configuration info
+**** TODO data
 ***** TODO implement the repository
 ***** TODO define the models (data sets, etc)
 ****** need serde for GraphQL results of pack stores
 ***** TODO develop the GraphQL data source
 ****** use the =graphql= package to query server
 ***** TODO use TDD and mock objects to test everything
-**** preso
+**** TODO preso
 ***** TODO add =flutter_bloc= and =equatable= packages
 ***** TODO use =BlocBuilder= to react to changes in the Bloc state
 ***** TODO use =BlocListener= to listen for state changes, e.g. display an error in a snackbar
@@ -85,6 +84,7 @@
 ****** c.f. https://www.material.io/components/navigation-rail/
 *** TODO document decision to use clean architecture
 **** Clean Architecture is suitable for large and small applications
+**** Based on [[https://en.wikipedia.org/wiki/SOLID][SOLID]] principles
 **** Clean Architecture notes
 ***** 3 layers
 ****** preso (presentation: i.e. widgets)

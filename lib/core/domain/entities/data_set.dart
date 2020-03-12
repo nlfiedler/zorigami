@@ -31,21 +31,27 @@ class Schedule extends Equatable {
   final Option<DayOfWeek> dayOfWeek;
   final Option<int> dayOfMonth;
 
-  Schedule(
-      {@required this.frequency,
-      @required this.timeRange,
-      @required this.weekOfMonth,
-      @required this.dayOfWeek,
-      @required this.dayOfMonth});
+  Schedule({
+    @required this.frequency,
+    @required this.timeRange,
+    @required this.weekOfMonth,
+    @required this.dayOfWeek,
+    @required this.dayOfMonth,
+  });
 
   @override
-  List<Object> get props =>
-      [frequency, timeRange, weekOfMonth, dayOfWeek, dayOfMonth];
+  List<Object> get props => [
+        frequency,
+        timeRange,
+        weekOfMonth,
+        dayOfWeek,
+        dayOfMonth,
+      ];
 }
 
 /// A `DataSet` may have zero or more schedules.
 ///
-/// With no schedules, the data set is backed up manually by the user.
+/// With no [schedules], the data set is backed up manually by the user.
 class DataSet extends Equatable {
   final String key;
   final String computerId;
@@ -54,6 +60,9 @@ class DataSet extends Equatable {
   final int packSize;
   final List<String> stores;
 
+  /// The snapshot is the hash digest of the most recent snapshot.
+  final Option<String> snapshot;
+
   DataSet({
     @required this.key,
     @required this.computerId,
@@ -61,6 +70,7 @@ class DataSet extends Equatable {
     @required this.schedules,
     @required this.packSize,
     @required this.stores,
+    @required this.snapshot,
   });
 
   @override
