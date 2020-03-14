@@ -29,13 +29,13 @@ void main() {
     'should get all pack stores from the repository',
     () async {
       // arrange
-      when(mockPackStoreRepository.getPackStores())
+      when(mockPackStoreRepository.getAllPackStores())
           .thenAnswer((_) async => Result.ok(tPackStores));
       // act
       final result = await usecase(NoParams());
       // assert
       expect(result, Result.ok(tPackStores));
-      verify(mockPackStoreRepository.getPackStores());
+      verify(mockPackStoreRepository.getAllPackStores());
       verifyNoMoreInteractions(mockPackStoreRepository);
     },
   );

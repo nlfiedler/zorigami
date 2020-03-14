@@ -25,21 +25,36 @@
 ***** DONE do all that for trees
 ***** DONE do all that for configuration info
 **** TODO data
-***** TODO implement the repository
-***** TODO define the models (data sets, etc)
-****** need serde for GraphQL results of pack stores
-***** TODO develop the GraphQL data source
-****** use the =graphql= package to query server
+***** TODO define the models
+****** DONE pack store
+****** TODO data set
+****** TODO configuration
+****** TODO tree
+****** TODO snapshot
+***** TODO implement the repositories
+****** DONE pack store
+****** TODO data set
+****** TODO configuration
+****** TODO tree
+****** TODO snapshot
+***** TODO develop the (GraphQL) data source
+****** DONE pack store
+****** TODO data set
+****** TODO configuration
+****** TODO tree
+****** TODO snapshot
 ***** TODO use TDD and mock objects to test everything
 **** TODO preso
-***** TODO add =flutter_bloc= and =equatable= packages
+***** remember to develop this code in the ~features~ directory
+***** TODO remove =graphql_flutter= and its use in UI code
+***** TODO add =flutter_bloc= package
 ***** TODO use =BlocBuilder= to react to changes in the Bloc state
 ***** TODO use =BlocListener= to listen for state changes, e.g. display an error in a snackbar
 ***** TODO find a service locator for dependency injection (e.g. =get_it=)
 ***** TODO use Bloc to receive events and invoke the use cases, yielding updated state
 ****** there will be a Bloc for each of the domain entities and their use cases
 ***** TODO learn how to test the Bloc implementation
-***** TODO use https://pub.dev/packages/bloc_test and https://pub.dev/packages/mockito
+****** possibly use https://pub.dev/packages/bloc_test
 ***** TODO set up the page routing
 ****** c.f. https://flutter.dev/docs/development/ui/navigation
 ****** define an index component to hold the nav rail
@@ -47,9 +62,9 @@
 ****** define a home page to hold the configuration and snapshot browser
 ***** TODO query for stores, show in a list
 ****** use a progress indicator during the loading phase
-****** probabaly a list of cards
+****** probably a list of cards
 ***** TODO query for datasets, show in a list
-****** probabaly a list of cards
+****** probably a list of cards
 ***** TODO show details of a pack store
 ****** clicking on entry in list view will open hero with details
 ***** TODO show details of a dataset
@@ -61,7 +76,9 @@
 ****** if using bloc: https://pub.dev/packages/flutter_form_bloc
 ***** TODO support defining a new dataset
 ****** need a "plus" button somewhere
+****** see https://github.com/felangel/bloc/tree/master/examples/flutter_form_validation for form validation with BLoC
 ****** use https://pub.dev/packages/flutter_form_builder for forms and validation
+****** if using bloc: https://pub.dev/packages/flutter_form_bloc
 ***** TODO allow deleting a pack store
 ***** TODO allow deleting a dataset
 ***** TODO allow editing a pack store
@@ -70,7 +87,7 @@
 ****** clicking an edit button on the detail page will switch to edit mode
 ***** TODO show status of the datasets on the home page
 ***** TODO allow browsing the dataset snapshot
-****** display using a stateful widget (path) on the home page
+****** display using a stateful widget (to hold the current path)
 ****** need button to navigate up to the parent
 ***** TODO add a button for restoring a file
 ****** currently using an =href= to the URL that returns the file
@@ -82,7 +99,10 @@
 ******* by default it opens a new window/tab for the link
 ***** TODO make a navbar or navigation rail
 ****** c.f. https://www.material.io/components/navigation-rail/
+*** TODO update package dependencies (e.g. oxidized)
+*** TODO fix the copyright year in all of the dart files
 *** TODO document decision to use clean architecture
+**** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications
 **** Based on [[https://en.wikipedia.org/wiki/SOLID][SOLID]] principles
 **** Clean Architecture notes
@@ -205,6 +225,8 @@ var url = window.location.href;
 ]}.
 #+END_SRC
 ** Loose backend issues
+*** TODO Use =matches!= macro in places (mostly =core.rs=) with simple boolean match expressions
+(look for ~=> true~ and ~=> false~)
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
@@ -237,6 +259,8 @@ var url = window.location.href;
 **** c.f. juniper API docs: Attribute Macro juniper::object
 *** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
+*** TODO improve (server) error handling
+**** when a temporary server error occurs, offer a "Retry" button
 *** TODO consider l10n
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
 *** TODO dataset status says "running" even though it had an error

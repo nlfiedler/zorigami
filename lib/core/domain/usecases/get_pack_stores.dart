@@ -14,6 +14,6 @@ class GetPackStores implements UseCase<List<PackStore>, NoParams> {
 
   @override
   Future<Result<List<PackStore>, Failure>> call(NoParams params) async {
-    return await repository.getPackStores();
+    return await repository.getAllPackStores();
   }
 }
