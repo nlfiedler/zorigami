@@ -22,7 +22,7 @@ class DefinePackStore implements UseCase<PackStore, Params> {
 
 class Params extends Equatable {
   final String kind;
-  final String options;
+  final Map<String, dynamic> options;
 
   Params({@required this.kind, @required this.options});
 

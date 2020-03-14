@@ -20,7 +20,7 @@ void main() {
   });
 
   final tPackStore = PackStore(
-      key: 'cafebabe', label: 'ok go', kind: StoreKind.local, options: '');
+      key: 'cafebabe', label: 'ok go', kind: StoreKind.local, options: {});
 
   test(
     'should define a pack store within the repository',
@@ -29,7 +29,7 @@ void main() {
       when(mockPackStoreRepository.definePackStore(any, any))
           .thenAnswer((_) async => Result.ok(tPackStore));
       // act
-      final result = await usecase(Params(kind: 'local', options: ''));
+      final result = await usecase(Params(kind: 'local', options: {}));
       // assert
       expect(result, Result.ok(tPackStore));
       verify(mockPackStoreRepository.definePackStore(any, any));

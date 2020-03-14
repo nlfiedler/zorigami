@@ -22,7 +22,7 @@ class UpdatePackStore implements UseCase<PackStore, Params> {
 
 class Params extends Equatable {
   final String key;
-  final String options;
+  final Map<String, dynamic> options;
 
   Params({@required this.key, @required this.options});
 

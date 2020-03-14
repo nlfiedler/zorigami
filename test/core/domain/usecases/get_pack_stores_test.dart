@@ -21,7 +21,7 @@ void main() {
   });
 
   final tPackStore = PackStore(
-      key: 'cafebabe', label: 'ok go', kind: StoreKind.local, options: '');
+      key: 'cafebabe', label: 'ok go', kind: StoreKind.local, options: {});
   // annotate the type to assist with matching
   final List<PackStore> tPackStores = List.from([tPackStore]);
 

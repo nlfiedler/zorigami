@@ -16,8 +16,8 @@ class PackStore extends Equatable {
   /// The kind of store this represents.
   final StoreKind kind;
 
-  /// JSON encoded options for configuring this pack store.
-  final String options;
+  /// Map of names and values for configuring this pack store.
+  final Map<String, dynamic> options;
 
   PackStore({
     @required this.key,

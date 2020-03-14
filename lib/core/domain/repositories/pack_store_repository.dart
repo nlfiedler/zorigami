@@ -11,12 +11,12 @@ abstract class PackStoreRepository {
 
   /// Define a new pack store.
   Future<Result<PackStore, Failure>> definePackStore(
-      String kind, String options);
+      String kind, Map<String, dynamic> options);
 
   /// Update an existing pack store.
   Future<Result<PackStore, Failure>> updatePackStore(
-      String key, String options);
+      String key, Map<String, dynamic> options);
 
   /// Remove a pack store.
-  Future<Result<String, Failure>> deletePackStore(String key);
+  Future<Result<PackStore, Failure>> deletePackStore(String key);
 }

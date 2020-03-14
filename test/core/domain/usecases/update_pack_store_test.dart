@@ -21,7 +21,7 @@ void main() {
 
   final key = 'cafebabe';
   final tPackStore =
-      PackStore(key: key, label: 'ok go', kind: StoreKind.local, options: '');
+      PackStore(key: key, label: 'ok go', kind: StoreKind.local, options: {});
 
   test(
     'should update an existing pack store within the repository',
@@ -30,7 +30,7 @@ void main() {
       when(mockPackStoreRepository.updatePackStore(any, any))
           .thenAnswer((_) async => Result.ok(tPackStore));
       // act
-      final result = await usecase(Params(key: key, options: ''));
+      final result = await usecase(Params(key: key, options: {}));
       // assert
       expect(result, Result.ok(tPackStore));
       verify(mockPackStoreRepository.updatePackStore(any, any));
