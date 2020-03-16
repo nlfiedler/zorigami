@@ -29,22 +29,23 @@
 ****** DONE pack store
 ****** DONE data set
 ****** TODO configuration
-****** TODO tree
+****** DONE tree
 ****** DONE snapshot
 ***** TODO implement the repositories
 ****** DONE pack store
 ****** DONE data set
 ****** TODO configuration
-****** TODO tree
+****** DONE tree
 ****** DONE snapshot
 ***** TODO develop the (GraphQL) data source
 ****** DONE pack store
 ****** DONE data set
 ****** TODO configuration
-****** TODO tree
+****** DONE tree
 ****** DONE snapshot
 ***** TODO use TDD and mock objects to test everything
 ***** TODO add data source tests where result is =null=
+****** change the data sources to return an =Option= if the value is =null=
 #+BEGIN_SRC javascript
 {
   "data": {
