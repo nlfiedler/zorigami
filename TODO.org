@@ -36,14 +36,22 @@
 ****** DONE data set
 ****** TODO configuration
 ****** TODO tree
-****** TODO snapshot
+****** DONE snapshot
 ***** TODO develop the (GraphQL) data source
 ****** DONE pack store
 ****** DONE data set
 ****** TODO configuration
 ****** TODO tree
-****** TODO snapshot
+****** DONE snapshot
 ***** TODO use TDD and mock objects to test everything
+***** TODO add data source tests where result is =null=
+#+BEGIN_SRC javascript
+{
+  "data": {
+    "snapshot": null
+  }
+}
+#+END_SRC
 **** TODO preso
 ***** remember to develop this code in the ~features~ directory
 ***** TODO remove =graphql_flutter= and its use in UI code
@@ -227,6 +235,24 @@ var url = window.location.href;
 ** Loose backend issues
 *** TODO Use =matches!= macro in places (mostly =core.rs=) with simple boolean match expressions
 (look for ~=> true~ and ~=> false~)
+*** TODO something seems off about the snapshot and GraphQL response
+**** the "checksum" to get the snapshot is this: =sha1-1f669e6034710cc97c8a839d0f3d038387d39398=
+**** but when querying the snapshot, it gives a different value in the response
+**** maybe need to insert the actual value into the response as "self" or something
+#+BEGIN_SRC javascript
+{
+  "data": {
+    "snapshot": {
+      "checksum": "sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b",
+      "parent": "sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634",
+      "startTime": "2020-03-15T05:36:04.960782134+00:00",
+      "endTime": "2020-03-15T05:36:05.141905479+00:00",
+      "fileCount": "125331",
+      "tree": "sha1-698058583b2283b8c02ea5e40272c8364a0d6e78"
+    }
+  }
+}
+#+END_SRC
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
