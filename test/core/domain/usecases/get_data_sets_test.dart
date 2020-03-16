@@ -34,13 +34,13 @@ void main() {
     'should get all data sets from the repository',
     () async {
       // arrange
-      when(mockDataSetRepository.getDataSets())
+      when(mockDataSetRepository.getAllDataSets())
           .thenAnswer((_) async => Result.ok(tDataSets));
       // act
       final result = await usecase(NoParams());
       // assert
       expect(result, Result.ok(tDataSets));
-      verify(mockDataSetRepository.getDataSets());
+      verify(mockDataSetRepository.getAllDataSets());
       verifyNoMoreInteractions(mockDataSetRepository);
     },
   );

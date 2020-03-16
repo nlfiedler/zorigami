@@ -20,5 +20,5 @@ class Configuration extends Equatable {
   });
 
   @override
-  List<Object> get props => [computerId];
+  List<Object> get props => [hostname, username, computerId];
 }

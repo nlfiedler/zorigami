@@ -27,5 +27,5 @@ class PackStore extends Equatable {
   });
 
   @override
-  List<Object> get props => [key];
+  List<Object> get props => [key, label, kind, options];
 }

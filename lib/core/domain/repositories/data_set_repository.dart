@@ -7,7 +7,7 @@ import 'package:zorigami/core/error/failures.dart';
 
 abstract class DataSetRepository {
   /// Retrieve all data sets.
-  Future<Result<List<DataSet>, Failure>> getDataSets();
+  Future<Result<List<DataSet>, Failure>> getAllDataSets();
 
   /// Define a new data set.
   Future<Result<DataSet, Failure>> defineDataSet(DataSet input);
@@ -16,5 +16,5 @@ abstract class DataSetRepository {
   Future<Result<DataSet, Failure>> updateDataSet(DataSet input);
 
   /// Remove a data set.
-  Future<Result<String, Failure>> deleteDataSet(String key);
+  Future<Result<DataSet, Failure>> deleteDataSet(String key);
 }

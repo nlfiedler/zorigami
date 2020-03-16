@@ -27,23 +27,25 @@
 **** TODO data
 ***** TODO define the models
 ****** DONE pack store
-****** TODO data set
+****** DONE data set
 ****** TODO configuration
 ****** TODO tree
-****** TODO snapshot
+****** DONE snapshot
 ***** TODO implement the repositories
 ****** DONE pack store
-****** TODO data set
+****** DONE data set
 ****** TODO configuration
 ****** TODO tree
 ****** TODO snapshot
 ***** TODO develop the (GraphQL) data source
 ****** DONE pack store
-****** TODO data set
+****** DONE data set
 ****** TODO configuration
 ****** TODO tree
 ****** TODO snapshot
 ***** TODO use TDD and mock objects to test everything
+***** TODO use =List.from()= and =List.map()= to convert from one list to another
+****** there may be some instances in the pack store and data sets in the data layer
 **** TODO preso
 ***** remember to develop this code in the ~features~ directory
 ***** TODO remove =graphql_flutter= and its use in UI code
@@ -228,6 +230,8 @@ var url = window.location.href;
 *** TODO Use =matches!= macro in places (mostly =core.rs=) with simple boolean match expressions
 (look for ~=> true~ and ~=> false~)
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
+*** TODO schema custom types need some unit tests
+**** especially the schedule validation code
 *** TODO sometimes creating a new store results in a network error
 *** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
 **** seemingly only on Ubuntu (maybe Debian, need to test)

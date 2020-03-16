@@ -23,16 +23,17 @@ void main() {
     );
   });
 
-  group('getAllPackStores', () {
-    final tPackStoreModel = PackStoreModel(
-      key: 'abc123',
-      label: 'Label1',
-      kind: StoreKind.local,
-      options: {},
-    );
-    final tPackModelList = [tPackStoreModel];
-    final List<PackStore> tPackStores = [tPackStoreModel];
+  final tPackStoreModel = PackStoreModel(
+    key: 'abc123',
+    label: 'Label1',
+    kind: StoreKind.local,
+    options: {},
+  );
+  final tPackModelList = [tPackStoreModel];
+  final List<PackStore> tPackStores = [tPackStoreModel];
+  final PackStore tPackStore = tPackStoreModel;
 
+  group('getAllPackStores', () {
     test(
       'should return remote data when the call to remote data source is successful',
       () async {
@@ -63,14 +64,6 @@ void main() {
   });
 
   group('definePackStore', () {
-    final tPackStoreModel = PackStoreModel(
-      key: 'abc123',
-      label: 'Label1',
-      kind: StoreKind.local,
-      options: {},
-    );
-    final PackStore tPackStore = tPackStoreModel;
-
     test(
       'should return remote data when the call to remote data source is successful',
       () async {
@@ -101,14 +94,6 @@ void main() {
   });
 
   group('updatePackStore', () {
-    final tPackStoreModel = PackStoreModel(
-      key: 'abc123',
-      label: 'Label1',
-      kind: StoreKind.local,
-      options: {},
-    );
-    final PackStore tPackStore = tPackStoreModel;
-
     test(
       'should return remote data when the call to remote data source is successful',
       () async {
@@ -139,14 +124,6 @@ void main() {
   });
 
   group('deletePackStore', () {
-    final tPackStoreModel = PackStoreModel(
-      key: 'abc123',
-      label: 'Label1',
-      kind: StoreKind.local,
-      options: {},
-    );
-    final PackStore tPackStore = tPackStoreModel;
-
     test(
       'should return remote data when the call to remote data source is successful',
       () async {

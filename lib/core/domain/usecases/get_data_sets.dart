@@ -14,6 +14,6 @@ class GetDataSets implements UseCase<List<DataSet>, NoParams> {
 
   @override
   Future<Result<List<DataSet>, Failure>> call(NoParams params) async {
-    return await repository.getDataSets();
+    return await repository.getAllDataSets();
   }
 }
