@@ -290,13 +290,13 @@ pub struct InputTimeRange {
 impl InputTimeRange {
     /// Perform basic validation on the input time range.
     fn validate(&self) -> FieldResult<()> {
-        if self.start_time < 0 && self.start_time > 86_400 {
+        if self.start_time < 0 || self.start_time > 86_400 {
             return Err(FieldError::new(
                 "Start time must be between 0 and 86,400",
                 Value::null(),
             ));
         }
-        if self.stop_time < 0 && self.stop_time > 86_400 {
+        if self.stop_time < 0 || self.stop_time > 86_400 {
             return Err(FieldError::new(
                 "Stop time must be between 0 and 86,400",
                 Value::null(),
