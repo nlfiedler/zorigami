@@ -21,4 +21,7 @@ class Configuration extends Equatable {
 
   @override
   List<Object> get props => [hostname, username, computerId];
+
+  @override
+  bool get stringify => true;
 }

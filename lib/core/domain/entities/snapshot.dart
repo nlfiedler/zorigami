@@ -31,4 +31,7 @@ class Snapshot extends Equatable {
 
   @override
   List<Object> get props => [checksum];
+
+  @override
+  bool get stringify => true;
 }

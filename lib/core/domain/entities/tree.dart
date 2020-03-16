@@ -22,6 +22,9 @@ class TreeReference extends Equatable {
 
   @override
   List<Object> get props => [type, value];
+
+  @override
+  bool get stringify => true;
 }
 
 /// A tree entry consists of a (file) name, a modified time, and the
@@ -39,6 +42,9 @@ class TreeEntry extends Equatable {
 
   @override
   List<Object> get props => [name, reference];
+
+  @override
+  bool get stringify => true;
 }
 
 /// A `Tree` may have zero or more instances of [TreeEntry].
@@ -49,4 +55,7 @@ class Tree extends Equatable {
 
   @override
   List<Object> get props => [entries];
+
+  @override
+  bool get stringify => true;
 }

@@ -28,4 +28,7 @@ class PackStore extends Equatable {
 
   @override
   List<Object> get props => [key, label, kind, options];
+
+  @override
+  bool get stringify => true;
 }
