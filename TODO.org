@@ -44,8 +44,6 @@
 ****** TODO tree
 ****** TODO snapshot
 ***** TODO use TDD and mock objects to test everything
-***** TODO use =List.from()= and =List.map()= to convert from one list to another
-****** there may be some instances in the pack store and data sets in the data layer
 **** TODO preso
 ***** remember to develop this code in the ~features~ directory
 ***** TODO remove =graphql_flutter= and its use in UI code

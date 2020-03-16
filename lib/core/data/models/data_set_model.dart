@@ -126,10 +126,9 @@ class DataSetModel extends DataSet {
   }
 
   factory DataSetModel.fromJson(Map<String, dynamic> json) {
-    final List<Schedule> schedules = [];
-    for (final schedule in json['schedules']) {
-      schedules.add(ScheduleModel.fromJson(schedule));
-    }
+    final List<Schedule> schedules = List.from(
+      json['schedules'].map((s) => ScheduleModel.fromJson(s)),
+    );
     final snapshot = Option.some(json['snapshot']).map(
       (v) => SnapshotModel.fromJson(v),
     );
@@ -150,10 +149,9 @@ class DataSetModel extends DataSet {
   }
 
   Map<String, dynamic> toJson() {
-    final List<Map<String, dynamic>> schedules = [];
-    for (final schedule in this.schedules) {
-      schedules.add(ScheduleModel.from(schedule).toJson());
-    }
+    final List<Map<String, dynamic>> schedules = List.from(
+      this.schedules.map((s) => ScheduleModel.from(s).toJson()),
+    );
     return {
       'key': key,
       'computerId': computerId,
