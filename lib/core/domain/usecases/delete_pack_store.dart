@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';

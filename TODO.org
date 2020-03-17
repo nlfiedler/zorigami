@@ -99,7 +99,6 @@
 ***** TODO make a navbar or navigation rail
 ****** c.f. https://www.material.io/components/navigation-rail/
 *** TODO update package dependencies (e.g. oxidized)
-*** TODO fix the copyright year in all of the dart files
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications
