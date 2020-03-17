@@ -19,10 +19,13 @@ class ConfigurationRepositoryImpl extends ConfigurationRepository {
   @override
   Future<Result<Configuration, Failure>> getConfiguration() async {
     try {
-      final Configuration = await remoteDataSource.getConfiguration();
-      return Result.ok(Configuration);
-    } on ServerException {
-      return Result.err(ServerFailure());
+      final configuration = await remoteDataSource.getConfiguration();
+      if (configuration == null) {
+        return Result.err(ServerFailure('got null result'));
+      }
+      return Result.ok(configuration);
+    } on ServerException catch (e) {
+      return Result.err(ServerFailure(e.toString()));
     }
   }
 }

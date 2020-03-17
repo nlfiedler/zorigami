@@ -10,8 +10,10 @@ abstract class PackStoreRemoteDataSource {
   Future<List<PackStoreModel>> getAllPackStores();
   Future<PackStoreModel> getPackStore(String key);
   Future<PackStoreModel> deletePackStore(String key);
-  Future<PackStoreModel> definePackStore(String kind, Map<String, dynamic> options);
-  Future<PackStoreModel> updatePackStore(String key, Map<String, dynamic> options);
+  Future<PackStoreModel> definePackStore(
+      String kind, Map<String, dynamic> options);
+  Future<PackStoreModel> updatePackStore(
+      String key, Map<String, dynamic> options);
 }
 
 class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
@@ -47,7 +49,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
 
   @override
   Future<PackStoreModel> getPackStore(String key) async {
-    final getStore = r'''
+    final query = r'''
       query Fetch($identifier: String!) {
         store(key: $identifier) {
           key
@@ -58,7 +60,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
       }
     ''';
     final queryOptions = QueryOptions(
-      documentNode: gql(getStore),
+      documentNode: gql(query),
       variables: <String, dynamic>{
         'identifier': key,
       },
@@ -67,9 +69,9 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> store =
+    final Map<String, dynamic> object =
         result.data['store'] as Map<String, dynamic>;
-    return PackStoreModel.fromJson(store);
+    return object == null ? null : PackStoreModel.fromJson(object);
   }
 
   @override
@@ -99,7 +101,8 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   }
 
   @override
-  Future<PackStoreModel> definePackStore(String kind, Map<String, dynamic> options) async {
+  Future<PackStoreModel> definePackStore(
+      String kind, Map<String, dynamic> options) async {
     final defineStore = r'''
       mutation DefineStore($typeName: String!, $options: String!) {
         defineStore(typeName: $typeName, options: $options) {
@@ -127,7 +130,8 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   }
 
   @override
-  Future<PackStoreModel> updatePackStore(String key, Map<String, dynamic> options) async {
+  Future<PackStoreModel> updatePackStore(
+      String key, Map<String, dynamic> options) async {
     final updateStore = r'''
       mutation UpdateStore($key: String!, $options: String!) {
         updateStore(key: $key, options: $options) {

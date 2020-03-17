@@ -63,7 +63,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<DataSetModel> getDataSet(String key) async {
-    final getDataset = '''
+    final query = '''
       query FetchDataset(\$identifier: String!) {
         dataset(key: \$identifier) {
           ${dataSetFields}
@@ -71,7 +71,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
       }
     ''';
     final queryOptions = QueryOptions(
-      documentNode: gql(getDataset),
+      documentNode: gql(query),
       variables: <String, dynamic>{
         'identifier': key,
       },
@@ -80,9 +80,9 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> dataset =
+    final Map<String, dynamic> object =
         result.data['dataset'] as Map<String, dynamic>;
-    return DataSetModel.fromJson(dataset);
+    return object == null ? null : DataSetModel.fromJson(object);
   }
 
   @override

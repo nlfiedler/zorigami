@@ -19,8 +19,11 @@ class TreeRepositoryImpl extends TreeRepository {
   @override
   Future<Result<Tree, Failure>> getTree(String checksum) async {
     try {
-      final Tree = await remoteDataSource.getTree(checksum);
-      return Result.ok(Tree);
+      final tree = await remoteDataSource.getTree(checksum);
+      if (tree == null) {
+        return Result.err(ServerFailure('got null result'));
+      }
+      return Result.ok(tree);
     } on ServerException {
       return Result.err(ServerFailure());
     }

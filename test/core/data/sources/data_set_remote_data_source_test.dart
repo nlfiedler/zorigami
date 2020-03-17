@@ -90,6 +90,18 @@ void main() {
     ),
   );
 
+  void setUpMockGraphQLNullResponse() {
+    final response = {
+      'data': {'dataset': null}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   void setUpMockHttpClientGraphQLResponse() {
     final response = {
       'data': {
@@ -357,6 +369,15 @@ void main() {
         }
       },
     );
+
+    test('should return null when response is null', () async {
+      // arrange
+      setUpMockGraphQLNullResponse();
+      // act
+      final result = await dataSource.getDataSet('foobar');
+      // assert
+      expect(result, isNull);
+    });
   });
 
   group('deleteDataSet', () {

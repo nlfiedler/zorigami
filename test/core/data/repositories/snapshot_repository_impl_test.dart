@@ -36,7 +36,7 @@ void main() {
 
   group('getSnapshot', () {
     test(
-      'should return remote data when the call to remote data source is successful',
+      'should return remote data when remote data source returns data',
       () async {
         // arrange
         when(mockRemoteDataSource.getSnapshot(any))
@@ -50,7 +50,21 @@ void main() {
     );
 
     test(
-      'should return server failure when the call to remote data source is unsuccessful',
+      'should return failure when remote data source returns null',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getSnapshot(any))
+            .thenAnswer((_) async => null);
+        // act
+        final result = await repository.getSnapshot('sha1-cafebabe');
+        // assert
+        verify(mockRemoteDataSource.getSnapshot(any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+
+    test(
+      'should return server failure when remote data source is unsuccessful',
       () async {
         // arrange
         when(mockRemoteDataSource.getSnapshot(any))

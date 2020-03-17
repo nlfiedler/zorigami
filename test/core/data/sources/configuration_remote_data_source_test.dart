@@ -53,6 +53,18 @@ void main() {
     });
   }
 
+  void setUpMockGraphQLNullResponse() {
+    final response = {
+      'data': {'configuration': null}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   void setUpMockHttpClientGraphQLError() {
     when(mockHttpClient.send(any)).thenAnswer((_) async {
       final response = {
@@ -121,6 +133,18 @@ void main() {
         } catch (e) {
           expect(e, isA<ServerException>());
         }
+      },
+    );
+
+    test(
+      'should return null when response is null',
+      () async {
+        // arrange
+        setUpMockGraphQLNullResponse();
+        // act
+        final result = await dataSource.getConfiguration();
+        // assert
+        expect(result, isNull);
       },
     );
   });

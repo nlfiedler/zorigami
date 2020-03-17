@@ -61,6 +61,19 @@ void main() {
     );
 
     test(
+      'should return failure when remote data source returns null',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getTree(any)).thenAnswer((_) async => null);
+        // act
+        final result = await repository.getTree('sha1-cafebabe');
+        // assert
+        verify(mockRemoteDataSource.getTree(any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+
+    test(
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange

@@ -17,7 +17,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<SnapshotModel> getSnapshot(String checksum) async {
-    final getSnapshot = r'''
+    final query = r'''
       query Fetch($checksum: Checksum!) {
         snapshot(digest: $checksum) {
           checksum
@@ -30,7 +30,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
       }
     ''';
     final queryOptions = QueryOptions(
-      documentNode: gql(getSnapshot),
+      documentNode: gql(query),
       variables: <String, dynamic>{
         'checksum': checksum,
       },
@@ -39,8 +39,8 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> snapshot =
+    final Map<String, dynamic> object =
         result.data['snapshot'] as Map<String, dynamic>;
-    return SnapshotModel.fromJson(snapshot);
+    return object == null ? null : SnapshotModel.fromJson(object);
   }
 }

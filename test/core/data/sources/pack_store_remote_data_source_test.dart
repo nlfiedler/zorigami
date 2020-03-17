@@ -76,6 +76,18 @@ void main() {
     });
   }
 
+  void setUpMockGraphQLNullResponse() {
+    final response = {
+      'data': {'store': null}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   void setUpMockHttpClientFailure403() {
     when(mockHttpClient.send(any)).thenAnswer((_) async {
       final bytes = List<int>();
@@ -257,6 +269,18 @@ void main() {
         }
       },
     );
+
+    test(
+      'should return null when response is null',
+      () async {
+        // arrange
+        setUpMockGraphQLNullResponse();
+        // act
+        final result = await dataSource.getPackStore('foobar');
+        // assert
+        expect(result, isNull);
+      },
+    );
   });
 
   group('deletePackStore', () {
@@ -317,7 +341,10 @@ void main() {
         final encodedOptions = encodeOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse(encodedOptions);
         // act
-        final result = await dataSource.definePackStore('local', tPackStoreModel.options);
+        final result = await dataSource.definePackStore(
+          'local',
+          tPackStoreModel.options,
+        );
         // assert
         expect(result, equals(tPackStoreModel));
       },
@@ -362,7 +389,10 @@ void main() {
         final encodedOptions = encodeOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse(encodedOptions);
         // act
-        final result = await dataSource.updatePackStore('abc123', tPackStoreModel.options);
+        final result = await dataSource.updatePackStore(
+          'abc123',
+          tPackStoreModel.options,
+        );
         // assert
         expect(result, equals(tPackStoreModel));
       },

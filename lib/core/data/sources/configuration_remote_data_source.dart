@@ -31,8 +31,8 @@ class ConfigurationRemoteDataSourceImpl extends ConfigurationRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> configuration =
+    final Map<String, dynamic> object =
         result.data['configuration'] as Map<String, dynamic>;
-    return ConfigurationModel.fromJson(configuration);
+    return object == null ? null : ConfigurationModel.fromJson(object);
   }
 }

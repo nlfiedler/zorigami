@@ -17,7 +17,7 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
 
   @override
   Future<TreeModel> getTree(String checksum) async {
-    final getTree = r'''
+    final query = r'''
       query Fetch($checksum: Checksum!) {
         tree(digest: $checksum) {
           name
@@ -28,7 +28,7 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
       }
     ''';
     final queryOptions = QueryOptions(
-      documentNode: gql(getTree),
+      documentNode: gql(query),
       variables: <String, dynamic>{
         'checksum': checksum,
       },
@@ -37,8 +37,8 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> tree =
+    final Map<String, dynamic> object =
         result.data['tree'] as Map<String, dynamic>;
-    return TreeModel.fromJson(tree);
+    return object == null ? null : TreeModel.fromJson(object);
   }
 }

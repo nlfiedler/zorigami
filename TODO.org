@@ -24,7 +24,7 @@
 ***** DONE do all that for snapshots
 ***** DONE do all that for trees
 ***** DONE do all that for configuration info
-**** TODO data
+**** DONE data
 ***** DONE define the models
 ****** DONE pack store
 ****** DONE data set
@@ -43,16 +43,6 @@
 ****** DONE configuration
 ****** DONE tree
 ****** DONE snapshot
-***** DONE use TDD and mock objects to test everything
-***** TODO add data source tests where result is =null=
-****** change the data sources to return an =Option= if the value is =null=
-#+BEGIN_SRC javascript
-{
-  "data": {
-    "snapshot": null
-  }
-}
-#+END_SRC
 **** TODO preso
 ***** remember to develop this code in the ~features~ directory
 ***** TODO remove =graphql_flutter= and its use in UI code

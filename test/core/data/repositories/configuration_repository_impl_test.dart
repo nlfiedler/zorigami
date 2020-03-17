@@ -31,7 +31,7 @@ void main() {
 
   group('getConfiguration', () {
     test(
-      'should return remote data when the call to remote data source is successful',
+      'should return remote data when remote data source returns data',
       () async {
         // arrange
         when(mockRemoteDataSource.getConfiguration())
@@ -45,7 +45,21 @@ void main() {
     );
 
     test(
-      'should return server failure when the call to remote data source is unsuccessful',
+      'should return failure when remote data source returns null',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getConfiguration())
+            .thenAnswer((_) async => null);
+        // act
+        final result = await repository.getConfiguration();
+        // assert
+        verify(mockRemoteDataSource.getConfiguration());
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+
+    test(
+      'should return failure when remote data source is unsuccessful',
       () async {
         // arrange
         when(mockRemoteDataSource.getConfiguration())
@@ -54,7 +68,7 @@ void main() {
         final result = await repository.getConfiguration();
         // assert
         verify(mockRemoteDataSource.getConfiguration());
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });

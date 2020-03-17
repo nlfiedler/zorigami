@@ -102,6 +102,18 @@ void main() {
     });
   }
 
+  void setUpMockGraphQLNullResponse() {
+    final response = {
+      'data': {'tree': null}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   void setUpMockHttpClientFailure403() {
     when(mockHttpClient.send(any)).thenAnswer((_) async {
       final bytes = List<int>();
@@ -150,6 +162,18 @@ void main() {
         } catch (e) {
           expect(e, isA<ServerException>());
         }
+      },
+    );
+
+    test(
+      'should return null when response is null',
+      () async {
+        // arrange
+        setUpMockGraphQLNullResponse();
+        // act
+        final result = await dataSource.getTree('sha1-cafebabe');
+        // assert
+        expect(result, isNull);
       },
     );
   });

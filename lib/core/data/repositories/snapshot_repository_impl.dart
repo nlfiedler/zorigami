@@ -19,8 +19,11 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   @override
   Future<Result<Snapshot, Failure>> getSnapshot(String checksum) async {
     try {
-      final Snapshot = await remoteDataSource.getSnapshot(checksum);
-      return Result.ok(Snapshot);
+      final snapshot = await remoteDataSource.getSnapshot(checksum);
+      if (snapshot == null) {
+        return Result.err(ServerFailure('got null result'));
+      }
+      return Result.ok(snapshot);
     } on ServerException {
       return Result.err(ServerFailure());
     }
