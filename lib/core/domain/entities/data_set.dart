@@ -73,53 +73,53 @@ class Schedule extends Equatable {
   Result<dynamic, Failure> validate() {
     switch (frequency) {
       case Frequency.hourly:
-        if (weekOfMonth.isSome ||
-            dayOfWeek.isSome ||
-            dayOfMonth.isSome ||
-            timeRange.isSome) {
+        if (weekOfMonth is Some ||
+            dayOfWeek is Some ||
+            dayOfMonth is Some ||
+            timeRange is Some) {
           return Result.err(
             ValidationFailure('Hourly cannot take any range or days'),
           );
         }
         break;
       case Frequency.daily:
-        if (weekOfMonth.isSome || dayOfWeek.isSome || dayOfMonth.isSome) {
+        if (weekOfMonth is Some || dayOfWeek is Some || dayOfMonth is Some) {
           return Result.err(
             ValidationFailure('Daily can only take a time range'),
           );
         }
-        if (timeRange.isSome) {
+        if (timeRange is Some) {
           return timeRange.unwrap().validate();
         }
         break;
       case Frequency.weekly:
-        if (weekOfMonth.isSome || dayOfMonth.isSome) {
+        if (weekOfMonth is Some || dayOfMonth is Some) {
           return Result.err(
             ValidationFailure(
               'Weekly can only take a time range and day-of-week',
             ),
           );
         }
-        if (timeRange.isSome) {
+        if (timeRange is Some) {
           return timeRange.unwrap().validate();
         }
         break;
       case Frequency.monthly:
-        if (dayOfMonth.isSome && dayOfWeek.isSome) {
+        if (dayOfMonth is Some && dayOfWeek is Some) {
           return Result.err(
             ValidationFailure(
               'Monthly can only take either day-of-month or day-of-week',
             ),
           );
         }
-        if (dayOfWeek.isSome && weekOfMonth.isNone) {
+        if (dayOfWeek is Some && weekOfMonth is None) {
           return Result.err(
             ValidationFailure(
               'Monthly requires week-of-month when using day-of-week',
             ),
           );
         }
-        if (timeRange.isSome) {
+        if (timeRange is Some) {
           return timeRange.unwrap().validate();
         }
         break;
@@ -168,7 +168,7 @@ class DataSet extends Equatable {
     }
     for (final schedule in schedules) {
       final result = schedule.validate();
-      if (result.isErr) {
+      if (result is Err) {
         return result;
       }
     }

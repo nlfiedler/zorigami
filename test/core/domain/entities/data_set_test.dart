@@ -11,12 +11,12 @@ void main() {
       'should reject invalid start time',
       () {
         expect(
-          TimeRange(start: -1, stop: 0).validate().isErr,
-          isTrue,
+          TimeRange(start: -1, stop: 0).validate(),
+          isA<Err>(),
         );
         expect(
-          TimeRange(start: 86401, stop: 0).validate().isErr,
-          isTrue,
+          TimeRange(start: 86401, stop: 0).validate(),
+          isA<Err>(),
         );
       },
     );
@@ -25,12 +25,12 @@ void main() {
       'should reject invalid stop time',
       () {
         expect(
-          TimeRange(start: 0, stop: -1).validate().isErr,
-          isTrue,
+          TimeRange(start: 0, stop: -1).validate(),
+          isA<Err>(),
         );
         expect(
-          TimeRange(start: 0, stop: 86401).validate().isErr,
-          isTrue,
+          TimeRange(start: 0, stop: 86401).validate(),
+          isA<Err>(),
         );
       },
     );
@@ -39,20 +39,20 @@ void main() {
       'should accept valid time range',
       () {
         expect(
-          TimeRange(start: 0, stop: 0).validate().isOk,
-          isTrue,
+          TimeRange(start: 0, stop: 0).validate(),
+          isA<Ok>(),
         );
         expect(
-          TimeRange(start: 86400, stop: 86400).validate().isOk,
-          isTrue,
+          TimeRange(start: 86400, stop: 86400).validate(),
+          isA<Ok>(),
         );
         expect(
-          TimeRange(start: 72000, stop: 14400).validate().isOk,
-          isTrue,
+          TimeRange(start: 72000, stop: 14400).validate(),
+          isA<Ok>(),
         );
         expect(
-          TimeRange(start: 14400, stop: 72000).validate().isOk,
-          isTrue,
+          TimeRange(start: 14400, stop: 72000).validate(),
+          isA<Ok>(),
         );
       },
     );
@@ -65,42 +65,42 @@ void main() {
         expect(
           Schedule(
             frequency: Frequency.hourly,
-            weekOfMonth: Option.some(WeekOfMonth.first),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: Some(WeekOfMonth.first),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.hourly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.hourly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.some(10),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: Some(10),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.hourly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.some(TimeRange(start: 0, stop: 0)),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: Some(TimeRange(start: 0, stop: 0)),
+          ).validate(),
+          isA<Err>(),
         );
       },
     );
@@ -111,42 +111,42 @@ void main() {
         expect(
           Schedule(
             frequency: Frequency.daily,
-            weekOfMonth: Option.some(WeekOfMonth.first),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: Some(WeekOfMonth.first),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.daily,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.daily,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.some(10),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: Some(10),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.daily,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.some(TimeRange(start: 0, stop: 0)),
-          ).validate().isOk,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: Some(TimeRange(start: 0, stop: 0)),
+          ).validate(),
+          isA<Ok>(),
         );
       },
     );
@@ -157,42 +157,42 @@ void main() {
         expect(
           Schedule(
             frequency: Frequency.weekly,
-            weekOfMonth: Option.some(WeekOfMonth.first),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: Some(WeekOfMonth.first),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.weekly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
-          ).validate().isOk,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).validate(),
+          isA<Ok>(),
         );
         expect(
           Schedule(
             frequency: Frequency.weekly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.some(10),
-            timeRange: Option.none(),
-          ).validate().isErr,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: Some(10),
+            timeRange: None(),
+          ).validate(),
+          isA<Err>(),
         );
         expect(
           Schedule(
             frequency: Frequency.weekly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.none(),
-            dayOfMonth: Option.none(),
-            timeRange: Option.some(TimeRange(start: 0, stop: 0)),
-          ).validate().isOk,
-          isTrue,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: Some(TimeRange(start: 0, stop: 0)),
+          ).validate(),
+          isA<Ok>(),
         );
       },
     );
@@ -202,12 +202,12 @@ void main() {
       () {
         final result = Schedule(
           frequency: Frequency.monthly,
-          weekOfMonth: Option.some(WeekOfMonth.first),
-          dayOfWeek: Option.some(DayOfWeek.thu),
-          dayOfMonth: Option.some(10),
-          timeRange: Option.none(),
+          weekOfMonth: Some(WeekOfMonth.first),
+          dayOfWeek: Some(DayOfWeek.thu),
+          dayOfMonth: Some(10),
+          timeRange: None(),
         ).validate();
-        expect(result.isErr, isTrue);
+        expect(result, isA<Err>());
         expect(
           result.err().unwrap().message,
           contains('can only take either day-of-month or day-of-week'),
@@ -220,12 +220,12 @@ void main() {
       () {
         final result = Schedule(
           frequency: Frequency.monthly,
-          weekOfMonth: Option.none(),
-          dayOfWeek: Option.some(DayOfWeek.thu),
-          dayOfMonth: Option.none(),
-          timeRange: Option.none(),
+          weekOfMonth: None(),
+          dayOfWeek: Some(DayOfWeek.thu),
+          dayOfMonth: None(),
+          timeRange: None(),
         ).validate();
-        expect(result.isErr, isTrue);
+        expect(result, isA<Err>());
         expect(
           result.err().unwrap().message,
           contains('requires week-of-month when using day-of-week'),
@@ -245,9 +245,9 @@ void main() {
           schedules: [],
           packSize: 0,
           stores: [],
-          snapshot: Option.none(),
+          snapshot: None(),
         ).validate();
-        expect(result.isErr, isTrue);
+        expect(result, isA<Err>());
         expect(
           result.err().unwrap().message,
           contains('must have at least one pack'),
@@ -263,17 +263,17 @@ void main() {
         schedules: [
           Schedule(
             frequency: Frequency.monthly,
-            weekOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            dayOfMonth: Option.none(),
-            timeRange: Option.none(),
+            weekOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            dayOfMonth: None(),
+            timeRange: None(),
           )
         ],
         packSize: 0,
         stores: ['foo'],
-        snapshot: Option.none(),
+        snapshot: None(),
       ).validate();
-      expect(result.isErr, isTrue);
+      expect(result, isA<Err>());
       expect(
         result.err().unwrap().message,
         contains('requires week-of-month when using day-of-week'),
@@ -290,9 +290,9 @@ void main() {
           schedules: [],
           packSize: 0,
           stores: ['foo'],
-          snapshot: Option.none(),
+          snapshot: None(),
         ).validate();
-        expect(result.isOk, isTrue);
+        expect(result, isA<Ok>());
       },
     );
   });

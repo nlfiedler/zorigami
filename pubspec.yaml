@@ -15,7 +15,7 @@ dependencies:
   graphql_flutter: ^3.0.1-beta.3
   # oxidized: ^2.0.0
   oxidized:
-    path: /Users/nfiedler/projects/oxidized
+    git: https://github.com/nlfiedler/oxidized.git
 
 dev_dependencies:
   flutter_test:
