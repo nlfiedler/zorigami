@@ -9,9 +9,9 @@ class InputConverter {
     try {
       final integer = int.parse(str);
       if (integer < 0) throw FormatException();
-      return Result.ok(integer);
+      return Ok(integer);
     } on FormatException {
-      return Result.err(InvalidInputFailure());
+      return Err(InvalidInputFailure());
     }
   }
 }

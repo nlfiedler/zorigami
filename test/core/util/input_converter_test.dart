@@ -21,7 +21,7 @@ void main() {
         // act
         final result = inputConverter.stringToUnsignedInteger(str);
         // assert
-        expect(result, Result.ok(123));
+        expect(result, Ok(123));
       },
     );
 
@@ -33,7 +33,7 @@ void main() {
         // act
         final result = inputConverter.stringToUnsignedInteger(str);
         // assert
-        expect(result, Result.err(InvalidInputFailure()));
+        expect(result, Err(InvalidInputFailure()));
       },
     );
 
@@ -45,7 +45,7 @@ void main() {
         // act
         final result = inputConverter.stringToUnsignedInteger(str);
         // assert
-        expect(result, Result.err(InvalidInputFailure()));
+        expect(result, Err(InvalidInputFailure()));
       },
     );
   });

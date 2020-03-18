@@ -27,7 +27,7 @@ void main() {
     schedules: [],
     stores: ['storytime'],
     packSize: 65536,
-    snapshot: Option.none(),
+    snapshot: None(),
   );
 
   test(
@@ -35,11 +35,11 @@ void main() {
     () async {
       // arrange
       when(mockDataSetRepository.deleteDataSet(any))
-          .thenAnswer((_) async => Result.ok(tDataSet));
+          .thenAnswer((_) async => Ok(tDataSet));
       // act
       final result = await usecase(Params(key: key));
       // assert
-      expect(result, Result.ok(tDataSet));
+      expect(result, Ok(tDataSet));
       verify(mockDataSetRepository.deleteDataSet(any));
       verifyNoMoreInteractions(mockDataSetRepository);
     },

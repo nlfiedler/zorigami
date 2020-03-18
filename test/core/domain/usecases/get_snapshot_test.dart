@@ -21,9 +21,9 @@ void main() {
 
   final tSnapshot = Snapshot(
     checksum: 'cafebabe',
-    parent: Option.none(),
+    parent: None(),
     startTime: DateTime.now(),
-    endTime: Option.none(),
+    endTime: None(),
     fileCount: 101,
     tree: 'deadbeef',
   );
@@ -33,11 +33,11 @@ void main() {
     () async {
       // arrange
       when(mockSnapshotRepository.getSnapshot(any))
-          .thenAnswer((_) async => Result.ok(tSnapshot));
+          .thenAnswer((_) async => Ok(tSnapshot));
       // act
       final result = await usecase(Params(checksum: 'deadbeef'));
       // assert
-      expect(result, Result.ok(tSnapshot));
+      expect(result, Ok(tSnapshot));
       verify(mockSnapshotRepository.getSnapshot(any));
       verifyNoMoreInteractions(mockSnapshotRepository);
     },

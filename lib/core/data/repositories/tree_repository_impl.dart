@@ -21,11 +21,11 @@ class TreeRepositoryImpl extends TreeRepository {
     try {
       final tree = await remoteDataSource.getTree(checksum);
       if (tree == null) {
-        return Result.err(ServerFailure('got null result'));
+        return Err(ServerFailure('got null result'));
       }
-      return Result.ok(tree);
+      return Ok(tree);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 }

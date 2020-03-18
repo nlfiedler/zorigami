@@ -30,11 +30,11 @@ void main() {
     () async {
       // arrange
       when(mockPackStoreRepository.getAllPackStores())
-          .thenAnswer((_) async => Result.ok(tPackStores));
+          .thenAnswer((_) async => Ok(tPackStores));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Result.ok(tPackStores));
+      expect(result, Ok(tPackStores));
       verify(mockPackStoreRepository.getAllPackStores());
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

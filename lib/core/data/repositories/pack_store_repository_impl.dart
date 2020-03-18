@@ -20,9 +20,9 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
   Future<Result<List<PackStore>, Failure>> getAllPackStores() async {
     try {
       final packStore = await remoteDataSource.getAllPackStores();
-      return Result.ok(packStore);
+      return Ok(packStore);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -31,9 +31,9 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
       String kind, Map<String, dynamic> options) async {
     try {
       final packStore = await remoteDataSource.definePackStore(kind, options);
-      return Result.ok(packStore);
+      return Ok(packStore);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -42,9 +42,9 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
       String key, Map<String, dynamic> options) async {
     try {
       final packStore = await remoteDataSource.updatePackStore(key, options);
-      return Result.ok(packStore);
+      return Ok(packStore);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -52,9 +52,9 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
   Future<Result<PackStore, Failure>> deletePackStore(String key) async {
     try {
       final packStore = await remoteDataSource.deletePackStore(key);
-      return Result.ok(packStore);
+      return Ok(packStore);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 }

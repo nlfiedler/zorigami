@@ -31,7 +31,7 @@ void main() {
     schedules: [],
     packSize: 67108864,
     stores: ['foo'],
-    snapshot: Option.none(),
+    snapshot: None(),
   );
   final tDataSetList = [tDataSetModel];
   final List<DataSet> tDataSets = [tDataSetModel];

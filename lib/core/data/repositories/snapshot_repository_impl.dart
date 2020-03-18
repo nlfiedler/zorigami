@@ -21,11 +21,11 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
     try {
       final snapshot = await remoteDataSource.getSnapshot(checksum);
       if (snapshot == null) {
-        return Result.err(ServerFailure('got null result'));
+        return Err(ServerFailure('got null result'));
       }
-      return Result.ok(snapshot);
+      return Ok(snapshot);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 }

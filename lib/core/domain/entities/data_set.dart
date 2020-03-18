@@ -24,16 +24,16 @@ class TimeRange extends Equatable {
 
   Result<dynamic, Failure> validate() {
     if (start < 0 || start > 86400) {
-      return Result.err(
+      return Err(
         ValidationFailure('Start time must be between 0 and 86,400'),
       );
     }
     if (stop < 0 || stop > 86400) {
-      return Result.err(
+      return Err(
         ValidationFailure('Stop time must be between 0 and 86,400'),
       );
     }
-    return Result.ok(0);
+    return Ok(0);
   }
 }
 
@@ -77,14 +77,14 @@ class Schedule extends Equatable {
             dayOfWeek is Some ||
             dayOfMonth is Some ||
             timeRange is Some) {
-          return Result.err(
+          return Err(
             ValidationFailure('Hourly cannot take any range or days'),
           );
         }
         break;
       case Frequency.daily:
         if (weekOfMonth is Some || dayOfWeek is Some || dayOfMonth is Some) {
-          return Result.err(
+          return Err(
             ValidationFailure('Daily can only take a time range'),
           );
         }
@@ -94,7 +94,7 @@ class Schedule extends Equatable {
         break;
       case Frequency.weekly:
         if (weekOfMonth is Some || dayOfMonth is Some) {
-          return Result.err(
+          return Err(
             ValidationFailure(
               'Weekly can only take a time range and day-of-week',
             ),
@@ -106,14 +106,14 @@ class Schedule extends Equatable {
         break;
       case Frequency.monthly:
         if (dayOfMonth is Some && dayOfWeek is Some) {
-          return Result.err(
+          return Err(
             ValidationFailure(
               'Monthly can only take either day-of-month or day-of-week',
             ),
           );
         }
         if (dayOfWeek is Some && weekOfMonth is None) {
-          return Result.err(
+          return Err(
             ValidationFailure(
               'Monthly requires week-of-month when using day-of-week',
             ),
@@ -126,7 +126,7 @@ class Schedule extends Equatable {
       default:
         throw ArgumentError('frequency is not recognized');
     }
-    return Result.ok(0);
+    return Ok(0);
   }
 }
 
@@ -160,7 +160,7 @@ class DataSet extends Equatable {
 
   Result<dynamic, Failure> validate() {
     if (stores.isEmpty) {
-      return Result.err(
+      return Err(
         ValidationFailure(
           'Data set must have at least one pack store',
         ),
@@ -172,6 +172,6 @@ class DataSet extends Equatable {
         return result;
       }
     }
-    return Result.ok(0);
+    return Ok(0);
   }
 }

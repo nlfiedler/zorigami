@@ -27,11 +27,11 @@ void main() {
     () async {
       // arrange
       when(mockPackStoreRepository.definePackStore(any, any))
-          .thenAnswer((_) async => Result.ok(tPackStore));
+          .thenAnswer((_) async => Ok(tPackStore));
       // act
       final result = await usecase(Params(kind: 'local', options: {}));
       // assert
-      expect(result, Result.ok(tPackStore));
+      expect(result, Ok(tPackStore));
       verify(mockPackStoreRepository.definePackStore(any, any));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

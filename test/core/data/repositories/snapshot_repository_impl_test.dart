@@ -25,9 +25,9 @@ void main() {
 
   final tSnapshotModel = SnapshotModel(
     checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-    parent: Option.some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+    parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
     startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-    endTime: Option.some(
+    endTime: Some(
       DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
     ),
     fileCount: 125331,

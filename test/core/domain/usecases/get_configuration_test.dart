@@ -31,11 +31,11 @@ void main() {
     () async {
       // arrange
       when(mockConfigurationRepository.getConfiguration())
-          .thenAnswer((_) async => Result.ok(tConfiguration));
+          .thenAnswer((_) async => Ok(tConfiguration));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Result.ok(tConfiguration));
+      expect(result, Ok(tConfiguration));
       verify(mockConfigurationRepository.getConfiguration());
       verifyNoMoreInteractions(mockConfigurationRepository);
     },

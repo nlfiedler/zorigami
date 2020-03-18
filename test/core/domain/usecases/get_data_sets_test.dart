@@ -35,11 +35,11 @@ void main() {
     () async {
       // arrange
       when(mockDataSetRepository.getAllDataSets())
-          .thenAnswer((_) async => Result.ok(tDataSets));
+          .thenAnswer((_) async => Ok(tDataSets));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Result.ok(tDataSets));
+      expect(result, Ok(tDataSets));
       verify(mockDataSetRepository.getAllDataSets());
       verifyNoMoreInteractions(mockDataSetRepository);
     },

@@ -165,7 +165,7 @@ class DataSetModel extends DataSet {
 
 Option<TimeRange> decodeTimeRange(Map<String, dynamic> timeRange) {
   if (timeRange == null) {
-    return Option.none();
+    return None();
   }
   return Option.some(TimeRangeModel.fromJson(timeRange));
 }
@@ -207,17 +207,17 @@ String encodeFrequency(Frequency frequency) {
 
 Option<WeekOfMonth> decodeWeekOfMonth(String weekOfMonth) {
   if (weekOfMonth == null) {
-    return Option.none();
+    return None();
   } else if (weekOfMonth == 'FIRST') {
-    return Option.some(WeekOfMonth.first);
+    return Some(WeekOfMonth.first);
   } else if (weekOfMonth == 'SECOND') {
-    return Option.some(WeekOfMonth.second);
+    return Some(WeekOfMonth.second);
   } else if (weekOfMonth == 'THIRD') {
-    return Option.some(WeekOfMonth.third);
+    return Some(WeekOfMonth.third);
   } else if (weekOfMonth == 'FOURTH') {
-    return Option.some(WeekOfMonth.fourth);
+    return Some(WeekOfMonth.fourth);
   } else if (weekOfMonth == 'FIFTH') {
-    return Option.some(WeekOfMonth.fifth);
+    return Some(WeekOfMonth.fifth);
   } else {
     throw ArgumentError('weekOfMonth is not recognized');
   }
@@ -244,21 +244,21 @@ String encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
 
 Option<DayOfWeek> decodeDayOfWeek(String dayOfWeek) {
   if (dayOfWeek == null) {
-    return Option.none();
+    return None();
   } else if (dayOfWeek == 'SUN') {
-    return Option.some(DayOfWeek.sun);
+    return Some(DayOfWeek.sun);
   } else if (dayOfWeek == 'MON') {
-    return Option.some(DayOfWeek.mon);
+    return Some(DayOfWeek.mon);
   } else if (dayOfWeek == 'TUE') {
-    return Option.some(DayOfWeek.tue);
+    return Some(DayOfWeek.tue);
   } else if (dayOfWeek == 'WED') {
-    return Option.some(DayOfWeek.wed);
+    return Some(DayOfWeek.wed);
   } else if (dayOfWeek == 'THU') {
-    return Option.some(DayOfWeek.thu);
+    return Some(DayOfWeek.thu);
   } else if (dayOfWeek == 'FRI') {
-    return Option.some(DayOfWeek.fri);
+    return Some(DayOfWeek.fri);
   } else if (dayOfWeek == 'SAT') {
-    return Option.some(DayOfWeek.sat);
+    return Some(DayOfWeek.sat);
   } else {
     throw ArgumentError('dayOfWeek is not recognized');
   }
@@ -289,7 +289,7 @@ String encodeDayOfWeek(Option<DayOfWeek> dayOfWeek) {
 
 Option<int> decodeDayOfMonth(dynamic dayOfMonth) {
   if (dayOfMonth == null) {
-    return Option.none();
+    return None();
   }
   return Option.some((dayOfMonth as num).toInt());
 }

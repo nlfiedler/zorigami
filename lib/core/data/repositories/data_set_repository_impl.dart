@@ -20,9 +20,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<List<DataSet>, Failure>> getAllDataSets() async {
     try {
       final DataSet = await remoteDataSource.getAllDataSets();
-      return Result.ok(DataSet);
+      return Ok(DataSet);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -30,9 +30,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<DataSet, Failure>> defineDataSet(DataSet input) async {
     try {
       final DataSet = await remoteDataSource.defineDataSet(input);
-      return Result.ok(DataSet);
+      return Ok(DataSet);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -40,9 +40,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<DataSet, Failure>> updateDataSet(DataSet input) async {
     try {
       final DataSet = await remoteDataSource.updateDataSet(input);
-      return Result.ok(DataSet);
+      return Ok(DataSet);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 
@@ -50,9 +50,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<DataSet, Failure>> deleteDataSet(String key) async {
     try {
       final DataSet = await remoteDataSource.deleteDataSet(key);
-      return Result.ok(DataSet);
+      return Ok(DataSet);
     } on ServerException {
-      return Result.err(ServerFailure());
+      return Err(ServerFailure());
     }
   }
 }

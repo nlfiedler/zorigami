@@ -32,11 +32,11 @@ void main() {
     () async {
       // arrange
       when(mockTreeRepository.getTree(any))
-          .thenAnswer((_) async => Result.ok(tTree));
+          .thenAnswer((_) async => Ok(tTree));
       // act
       final result = await usecase(Params(checksum: 'deadbeef'));
       // assert
-      expect(result, Result.ok(tTree));
+      expect(result, Ok(tTree));
       verify(mockTreeRepository.getTree(any));
       verifyNoMoreInteractions(mockTreeRepository);
     },

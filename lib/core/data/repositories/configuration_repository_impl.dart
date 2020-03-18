@@ -21,11 +21,11 @@ class ConfigurationRepositoryImpl extends ConfigurationRepository {
     try {
       final configuration = await remoteDataSource.getConfiguration();
       if (configuration == null) {
-        return Result.err(ServerFailure('got null result'));
+        return Err(ServerFailure('got null result'));
       }
-      return Result.ok(configuration);
+      return Ok(configuration);
     } on ServerException catch (e) {
-      return Result.err(ServerFailure(e.toString()));
+      return Err(ServerFailure(e.toString()));
     }
   }
 }

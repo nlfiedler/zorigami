@@ -40,20 +40,20 @@ void main() {
     schedules: [
       Schedule(
         frequency: Frequency.weekly,
-        timeRange: Option.none(),
-        dayOfMonth: Option.none(),
-        dayOfWeek: Option.some(DayOfWeek.thu),
-        weekOfMonth: Option.none(),
+        timeRange: None(),
+        dayOfMonth: None(),
+        dayOfWeek: Some(DayOfWeek.thu),
+        weekOfMonth: None(),
       )
     ],
     packSize: 67108864,
     stores: ['store/local/setkey1'],
-    snapshot: Option.some(
+    snapshot: Some(
       Snapshot(
         checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-        parent: Option.some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+        parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
         startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-        endTime: Option.some(
+        endTime: Some(
           DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
         ),
         fileCount: 125331,
@@ -68,20 +68,20 @@ void main() {
     schedules: [
       ScheduleModel(
         frequency: Frequency.weekly,
-        timeRange: Option.none(),
-        dayOfMonth: Option.none(),
-        dayOfWeek: Option.some(DayOfWeek.thu),
-        weekOfMonth: Option.none(),
+        timeRange: None(),
+        dayOfMonth: None(),
+        dayOfWeek: Some(DayOfWeek.thu),
+        weekOfMonth: None(),
       )
     ],
     packSize: 67108864,
     stores: ['store/local/setkey1'],
-    snapshot: Option.some(
+    snapshot: Some(
       SnapshotModel(
         checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-        parent: Option.some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+        parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
         startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-        endTime: Option.some(
+        endTime: Some(
           DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
         ),
         fileCount: 125331,
@@ -224,7 +224,7 @@ void main() {
           schedules: [],
           packSize: 67108864,
           stores: ['foo'],
-          snapshot: Option.none(),
+          snapshot: None(),
         );
         expect(result, contains(simpleModel));
       },
@@ -284,7 +284,7 @@ void main() {
           schedules: [],
           packSize: 67108864,
           stores: ['foo'],
-          snapshot: Option.none(),
+          snapshot: None(),
         );
         expect(result, contains(simpleModel));
       },

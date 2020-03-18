@@ -10,9 +10,9 @@ void main() {
   group('SnapshotModel', () {
     final tSnapshotModel = SnapshotModel(
       checksum: 'cafebabe',
-      parent: Option.none(),
+      parent: None(),
       startTime: DateTime.now(),
-      endTime: Option.none(),
+      endTime: None(),
       fileCount: 123,
       tree: 'deadbeef',
     );
@@ -33,9 +33,9 @@ void main() {
         );
         final model = SnapshotModel(
           checksum: 'cafebabe',
-          parent: Option.some('ebebebeb'),
+          parent: Some('ebebebeb'),
           startTime: DateTime.now(),
-          endTime: Option.some(DateTime.now()),
+          endTime: Some(DateTime.now()),
           fileCount: 1234567890,
           tree: 'deadbeef',
         );

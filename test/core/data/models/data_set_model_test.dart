@@ -59,28 +59,28 @@ void main() {
       'should convert to and from JSON',
       () {
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.none())),
-          equals(Option.none()),
+          decodeWeekOfMonth(encodeWeekOfMonth(None())),
+          equals(None()),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.some(WeekOfMonth.first))),
-          Option.some(WeekOfMonth.first),
+          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.first))),
+          Some(WeekOfMonth.first),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.some(WeekOfMonth.second))),
-          Option.some(WeekOfMonth.second),
+          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.second))),
+          Some(WeekOfMonth.second),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.some(WeekOfMonth.third))),
-          Option.some(WeekOfMonth.third),
+          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.third))),
+          Some(WeekOfMonth.third),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.some(WeekOfMonth.fourth))),
-          Option.some(WeekOfMonth.fourth),
+          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.fourth))),
+          Some(WeekOfMonth.fourth),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Option.some(WeekOfMonth.fifth))),
-          Option.some(WeekOfMonth.fifth),
+          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.fifth))),
+          Some(WeekOfMonth.fifth),
         );
       },
     );
@@ -91,36 +91,36 @@ void main() {
       'should convert to and from JSON',
       () {
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.none())),
-          equals(Option.none()),
+          decodeDayOfWeek(encodeDayOfWeek(None())),
+          equals(None()),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.sun))),
-          Option.some(DayOfWeek.sun),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sun))),
+          Some(DayOfWeek.sun),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.mon))),
-          Option.some(DayOfWeek.mon),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.mon))),
+          Some(DayOfWeek.mon),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.tue))),
-          Option.some(DayOfWeek.tue),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.tue))),
+          Some(DayOfWeek.tue),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.wed))),
-          Option.some(DayOfWeek.wed),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.wed))),
+          Some(DayOfWeek.wed),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.thu))),
-          Option.some(DayOfWeek.thu),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.thu))),
+          Some(DayOfWeek.thu),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.fri))),
-          Option.some(DayOfWeek.fri),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.fri))),
+          Some(DayOfWeek.fri),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Option.some(DayOfWeek.sat))),
-          Option.some(DayOfWeek.sat),
+          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sat))),
+          Some(DayOfWeek.sat),
         );
       },
     );
@@ -129,10 +129,10 @@ void main() {
   group('ScheduleModel', () {
     final tScheduleModel = ScheduleModel(
       frequency: Frequency.hourly,
-      timeRange: Option.none(),
-      dayOfMonth: Option.none(),
-      dayOfWeek: Option.none(),
-      weekOfMonth: Option.none(),
+      timeRange: None(),
+      dayOfMonth: None(),
+      dayOfWeek: None(),
+      weekOfMonth: None(),
     );
     test(
       'should be a subclass of Schedule entity',
@@ -151,10 +151,10 @@ void main() {
         );
         final weeklyThursday = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: Option.none(),
-          dayOfMonth: Option.none(),
-          dayOfWeek: Option.some(DayOfWeek.thu),
-          weekOfMonth: Option.none(),
+          timeRange: None(),
+          dayOfMonth: None(),
+          dayOfWeek: Some(DayOfWeek.thu),
+          weekOfMonth: None(),
         );
         expect(
           ScheduleModel.fromJson(weeklyThursday.toJson()),
@@ -162,10 +162,10 @@ void main() {
         );
         final monthlyThirdWed = ScheduleModel(
           frequency: Frequency.monthly,
-          timeRange: Option.none(),
-          dayOfMonth: Option.none(),
-          dayOfWeek: Option.some(DayOfWeek.wed),
-          weekOfMonth: Option.some(WeekOfMonth.third),
+          timeRange: None(),
+          dayOfMonth: None(),
+          dayOfWeek: Some(DayOfWeek.wed),
+          weekOfMonth: Some(WeekOfMonth.third),
         );
         expect(
           ScheduleModel.fromJson(monthlyThirdWed.toJson()),
@@ -173,10 +173,10 @@ void main() {
         );
         final weeklySaturdayNight = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: Option.some(TimeRangeModel(start: 72000, stop: 14400)),
-          dayOfMonth: Option.none(),
-          dayOfWeek: Option.none(),
-          weekOfMonth: Option.none(),
+          timeRange: Some(TimeRangeModel(start: 72000, stop: 14400)),
+          dayOfMonth: None(),
+          dayOfWeek: None(),
+          weekOfMonth: None(),
         );
         expect(
           ScheduleModel.fromJson(weeklySaturdayNight.toJson()),
@@ -194,20 +194,20 @@ void main() {
       schedules: [
         ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: Option.none(),
-          dayOfMonth: Option.none(),
-          dayOfWeek: Option.some(DayOfWeek.thu),
-          weekOfMonth: Option.none(),
+          timeRange: None(),
+          dayOfMonth: None(),
+          dayOfWeek: Some(DayOfWeek.thu),
+          weekOfMonth: None(),
         )
       ],
       packSize: 67108864,
       stores: ['store/local/storey'],
-      snapshot: Option.some(
+      snapshot: Some(
         SnapshotModel(
           checksum: 'cafebabe',
-          parent: Option.some('ebebebeb'),
+          parent: Some('ebebebeb'),
           startTime: DateTime.now(),
-          endTime: Option.some(DateTime.now()),
+          endTime: Some(DateTime.now()),
           fileCount: 1234567890,
           tree: 'deadbeef',
         ),
@@ -238,7 +238,7 @@ void main() {
           schedules: [],
           packSize: 0,
           stores: ['store/local/storey'],
-          snapshot: Option.none(),
+          snapshot: None(),
         );
         // assert
         expect(
@@ -257,21 +257,21 @@ void main() {
         schedules: [
           Schedule(
             frequency: Frequency.weekly,
-            timeRange: Option.none(),
-            dayOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            weekOfMonth: Option.none(),
+            timeRange: None(),
+            dayOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            weekOfMonth: None(),
           )
         ],
         packSize: 67108864,
         stores: ['store/local/setkey1'],
-        snapshot: Option.some(
+        snapshot: Some(
           Snapshot(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
             parent:
-                Option.some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+                Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-            endTime: Option.some(
+            endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
             ),
             fileCount: 125331,
@@ -286,21 +286,21 @@ void main() {
         schedules: [
           ScheduleModel(
             frequency: Frequency.weekly,
-            timeRange: Option.none(),
-            dayOfMonth: Option.none(),
-            dayOfWeek: Option.some(DayOfWeek.thu),
-            weekOfMonth: Option.none(),
+            timeRange: None(),
+            dayOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.thu),
+            weekOfMonth: None(),
           )
         ],
         packSize: 67108864,
         stores: ['store/local/setkey1'],
-        snapshot: Option.some(
+        snapshot: Some(
           SnapshotModel(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
             parent:
-                Option.some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+                Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-            endTime: Option.some(
+            endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
             ),
             fileCount: 125331,
