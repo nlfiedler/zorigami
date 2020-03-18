@@ -31,21 +31,3 @@ class ConfigurationModel extends Configuration {
     };
   }
 }
-
-// query {
-//   configuration {
-//     hostname
-//     username
-//     computerId
-//   }
-// }
-
-// {
-//   "data": {
-//     "configuration": {
-//       "hostname": "kohaku",
-//       "username": "zorigami",
-//       "computerId": "r9c7i5l6VFK5Smt8VkBBsQ"
-//     }
-//   }
-// }
