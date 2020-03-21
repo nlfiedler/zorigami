@@ -2,11 +2,13 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
-import 'package:zorigami/features/browse/preso/widgets/configuration.dart';
-import 'container.dart' as di;
+import 'package:zorigami/features/backup/preso/screens/data_sets_screen.dart';
+import 'package:zorigami/features/backup/preso/screens/pack_stores_screen.dart';
+import 'package:zorigami/features/browse/preso/screens/home_screen.dart';
+import 'container.dart' as ioc;
 
 void main() {
-  di.init();
+  ioc.init();
   runApp(MyApp());
 }
 
@@ -15,12 +17,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Zorigami',
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text('ZORIGAMI'),
-        ),
-        body: Configuration(),
-      ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => HomeScreen(),
+        '/sets': (context) => DataSetsScreen(),
+        '/stores': (context) => PackStoresScreen(),
+      },
     );
   }
 }

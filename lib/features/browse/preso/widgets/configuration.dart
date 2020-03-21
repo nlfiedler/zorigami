@@ -17,7 +17,7 @@ class Configuration extends StatelessWidget {
             // kick off the initial remote request
             BlocProvider.of<ConfigurationBloc>(context)
                 .add(LoadConfiguration());
-            return Text('Initializing...');
+            return Text('Starting...');
           }
           if (state is Error) {
             return Text('Error: ' + state.message);
@@ -25,15 +25,17 @@ class Configuration extends StatelessWidget {
           if (state is Loaded) {
             final config = state.config;
             final title = config.username + '@' + config.hostname;
-            return Card(
-              child: ListTile(
-                leading: Icon(Icons.computer),
-                title: Text(title),
-                subtitle: Text(config.computerId),
+            return UserAccountsDrawerHeader(
+              currentAccountPicture: Icon(
+                Icons.computer,
+                color: Colors.white,
+                size: 64.0,
               ),
+              accountEmail: Text(title),
+              accountName: Text(config.computerId),
             );
           }
-          return Text('Loading configuration...');
+          return Text('Loading...');
         },
       ),
     );
