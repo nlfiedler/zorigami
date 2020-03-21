@@ -89,10 +89,10 @@ They change the SSH config to run the backup command with "append only" flag.
     - Trees are nested, a la git
 * File content is stored in pack files
     - Large files are split across multiple pack files
-    - Small files are stored in whole
+    - Small files are combined into pack files
 * Pack files are stored remotely
 * Database is used to store metadata
-    - Database is saved just like any other file
+    - Database is saved just like any other file set
 
 ### Computer UUID
 
@@ -121,11 +121,12 @@ They change the SSH config to run the backup command with "append only" flag.
 * contains raw file content
 * default pack file size of 64MB
     - allow configuring pack file size, since it is inconsequential
-    - restrict pack files to between 16 to 256 MB in size
+    - should restrict pack files to between 16 to 256 MB in size
 * pack file format
-    - tar file format
+    - plain tar file
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
+    - compressed using zlib
     - encrypted with libsodium using passphrase
 
 ### Database Schema
