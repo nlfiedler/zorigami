@@ -1,6 +1,9 @@
 name: zorigami
-description: Graphical interface for the zorigami application.
+description: Graphical user interface for the zorigami backup/restore application.
 version: 1.0.0+1
+homepage: https://github.com/nlfiedler/zorigami
+repository: https://github.com/nlfiedler/zorigami.git
+issue_tracker: https://github.com/nlfiedler/zorigami/issues
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
@@ -11,15 +14,16 @@ dependencies:
 
   cupertino_icons: ^0.1.2
   equatable: ^1.1.1
+  flutter_bloc: ^3.2.0
+  get_it: ^4.0.0
   graphql: ^3.0.1-beta.3
-  graphql_flutter: ^3.0.1-beta.3
-  # oxidized: ^2.0.0
   oxidized:
     git: https://github.com/nlfiedler/oxidized.git
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  bloc_test: ^4.0.0
   http: ^0.12.0+4
   mockito: ^4.1.1
   pedantic: ^1.8.0

@@ -44,16 +44,6 @@
 ****** DONE tree
 ****** DONE snapshot
 **** TODO preso
-***** remember to develop this code in the ~features~ directory
-***** TODO remove =graphql_flutter= and its use in UI code
-***** TODO add =flutter_bloc= package
-***** TODO use =BlocBuilder= to react to changes in the Bloc state
-***** TODO use =BlocListener= to listen for state changes, e.g. display an error in a snackbar
-***** TODO find a service locator for dependency injection (e.g. =get_it=)
-***** TODO use Bloc to receive events and invoke the use cases, yielding updated state
-****** there will be a Bloc for each of the domain entities and their use cases
-***** TODO learn how to test the Bloc implementation
-****** possibly use https://pub.dev/packages/bloc_test
 ***** TODO set up the page routing
 ****** c.f. https://flutter.dev/docs/development/ui/navigation
 ****** define an index component to hold the nav rail
@@ -125,6 +115,7 @@
 import 'dart:html';
 var url = window.location.href;
 #+END_SRC
+**** the compile-time dependency injection in [[https://pub.dev/packages/injectable][injectable]] may be helpful here
 *** TODO update =Dockerfile= to build flutter web ui
 *** TODO document how to test, build, run, etc
 **** =flutter build web= for release build
