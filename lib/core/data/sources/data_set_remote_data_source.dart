@@ -29,6 +29,14 @@ const String dataSetFields = '''
     dayOfWeek
     dayOfMonth
   }
+  latestSnapshot {
+    checksum
+    parent
+    startTime
+    endTime
+    fileCount
+    tree
+  }
   packSize
   stores
 ''';

@@ -90,6 +90,8 @@
 ******* note that safari requies a JS hack, but only if using the =openLink= functions?
 ****** can use =Window.open()= from =dart:html=, like =window.open(url);=
 ******* by default it opens a new window/tab for the link
+***** TODO improve the navigation draw
+****** currently selected option should be highlighted, not actionable
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications

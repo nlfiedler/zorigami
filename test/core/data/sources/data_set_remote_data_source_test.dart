@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
-import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/data/sources/data_set_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
@@ -61,34 +60,7 @@ void main() {
       ),
     ),
   );
-  final tDataSetModel = DataSetModel(
-    key: 'setkey1',
-    computerId: 'cray-11',
-    basepath: '/home/planet',
-    schedules: [
-      ScheduleModel(
-        frequency: Frequency.weekly,
-        timeRange: None(),
-        dayOfMonth: None(),
-        dayOfWeek: Some(DayOfWeek.thu),
-        weekOfMonth: None(),
-      )
-    ],
-    packSize: 67108864,
-    stores: ['store/local/setkey1'],
-    snapshot: Some(
-      SnapshotModel(
-        checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-        parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
-        startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
-        endTime: Some(
-          DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
-        ),
-        fileCount: 125331,
-        tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
-      ),
-    ),
-  );
+  final tDataSetModel = DataSetModel.from(tDataSet);
 
   void setUpMockGraphQLNullResponse() {
     final response = {
@@ -111,22 +83,22 @@ void main() {
           'basepath': '/home/planet',
           'schedules': [
             {
-              "frequency": "WEEKLY",
-              "timeRange": null,
-              "weekOfMonth": null,
-              "dayOfWeek": "THU",
-              "dayOfMonth": null
+              'frequency': 'WEEKLY',
+              'timeRange': null,
+              'weekOfMonth': null,
+              'dayOfWeek': 'THU',
+              'dayOfMonth': null
             }
           ],
-          'packSize': "67108864",
+          'packSize': '67108864',
           'stores': ['store/local/setkey1'],
-          'snapshot': {
-            "checksum": "sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b",
-            "parent": "sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634",
-            "startTime": "2020-03-15T05:36:04.960782134+00:00",
-            "endTime": "2020-03-15T05:36:05.141905479+00:00",
-            "fileCount": "125331",
-            "tree": "sha1-698058583b2283b8c02ea5e40272c8364a0d6e78"
+          'latestSnapshot': {
+            'checksum': 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
+            'parent': 'sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634',
+            'startTime': '2020-03-15T05:36:04.960782134+00:00',
+            'endTime': '2020-03-15T05:36:05.141905479+00:00',
+            'fileCount': '125331',
+            'tree': 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78'
           },
         }
       }
@@ -161,7 +133,7 @@ void main() {
 
   void setUpMockHttpClientFailure403() {
     when(mockHttpClient.send(any)).thenAnswer((_) async {
-      final bytes = List<int>();
+      final bytes = <int>[];
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 403);
     });
@@ -200,9 +172,9 @@ void main() {
                 'computerId': 's1',
                 'basepath': '/home/planet',
                 'schedules': [],
-                'packSize': "67108864",
+                'packSize': '67108864',
                 'stores': ['foo'],
-                'snapshot': null,
+                'latestSnapshot': null,
               },
             ]
           }
@@ -242,27 +214,27 @@ void main() {
                 'computerId': 's1',
                 'basepath': '/home/planet',
                 'schedules': [],
-                'packSize': "67108864",
+                'packSize': '67108864',
                 'stores': ['foo'],
-                'snapshot': null,
+                'latestSnapshot': null,
               },
               {
                 'key': 'a2',
                 'computerId': 's2',
                 'basepath': '/home/town',
                 'schedules': [],
-                'packSize': "1024",
+                'packSize': '1024',
                 'stores': ['store/local/foo'],
-                'snapshot': null,
+                'latestSnapshot': null,
               },
               {
                 'key': 'a3',
                 'computerId': 's3',
                 'basepath': '/home/sweet/home',
                 'schedules': [],
-                'packSize': "113",
+                'packSize': '113',
                 'stores': ['store/minio/minnie'],
-                'snapshot': null,
+                'latestSnapshot': null,
               },
             ]
           }
@@ -337,6 +309,9 @@ void main() {
         final result = await dataSource.getDataSet('abc123');
         // assert
         expect(result, equals(tDataSetModel));
+        expect(result.packSize, equals(tDataSetModel.packSize));
+        expect(result.schedules, equals(tDataSetModel.schedules));
+        expect(result.snapshot, equals(tDataSetModel.snapshot));
       },
     );
 

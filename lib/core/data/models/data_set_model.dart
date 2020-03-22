@@ -98,7 +98,7 @@ class DataSetModel extends DataSet {
     @required String key,
     @required String computerId,
     @required String basepath,
-    @required List<Schedule> schedules,
+    @required List<ScheduleModel> schedules,
     @required int packSize,
     @required List<String> stores,
     @required Option<SnapshotModel> snapshot,
@@ -113,12 +113,15 @@ class DataSetModel extends DataSet {
         );
 
   factory DataSetModel.from(DataSet dataset) {
+    final List<ScheduleModel> schedules = List.from(
+      dataset.schedules.map((s) => ScheduleModel.from(s)),
+    );
     final snapshot = dataset.snapshot.map((e) => SnapshotModel.from(e));
     return DataSetModel(
       key: dataset.key,
       computerId: dataset.computerId,
       basepath: dataset.basepath,
-      schedules: dataset.schedules,
+      schedules: schedules,
       packSize: dataset.packSize,
       stores: dataset.stores,
       snapshot: snapshot,
@@ -126,10 +129,10 @@ class DataSetModel extends DataSet {
   }
 
   factory DataSetModel.fromJson(Map<String, dynamic> json) {
-    final List<Schedule> schedules = List.from(
+    final List<ScheduleModel> schedules = List.from(
       json['schedules'].map((s) => ScheduleModel.fromJson(s)),
     );
-    final snapshot = Option.some(json['snapshot']).map(
+    final snapshot = Option.some(json['latestSnapshot']).map(
       (v) => SnapshotModel.fromJson(v),
     );
     // ensure the stores are of type String (they ought to be)
