@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
+import 'package:zorigami/features/browse/preso/widgets/data_sets_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -11,9 +12,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('ZORIGAMI'),
       ),
-      body: Center(
-        child: Text('Snapshots'),
-      ),
+      body: DataSetsList(),
       drawer: NavigationDrawer(),
     );
   }

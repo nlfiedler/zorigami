@@ -13,19 +13,19 @@ class NavigationDrawer extends StatelessWidget {
         children: <Widget>[
           Configuration(),
           ListTile(
-            leading: Icon(Icons.settings),
+            leading: Icon(Icons.history),
             title: Text('Snapshots'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context, '/', ModalRoute.withName('/')),
           ),
           ListTile(
-            leading: Icon(Icons.message),
+            leading: Icon(Icons.dns),
             title: Text('Data Sets'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context, '/sets', ModalRoute.withName('/')),
           ),
           ListTile(
-            leading: Icon(Icons.account_circle),
+            leading: Icon(Icons.archive),
             title: Text('Pack Stores'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context, '/stores', ModalRoute.withName('/')),

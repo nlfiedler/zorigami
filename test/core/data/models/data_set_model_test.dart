@@ -225,10 +225,15 @@ void main() {
       'should convert to and from JSON',
       () {
         // assert (round-trip)
-        expect(
-          DataSetModel.fromJson(tDataSetModel.toJson()),
-          equals(tDataSetModel),
-        );
+        final encoded = tDataSetModel.toJson();
+        final decoded = DataSetModel.fromJson(encoded);
+        expect(decoded, equals(tDataSetModel));
+        // compare everything else not listed in props
+        expect(decoded.schedules, equals(tDataSetModel.schedules));
+        expect(decoded.packSize, equals(tDataSetModel.packSize));
+        expect(decoded.stores, equals(tDataSetModel.stores));
+        // except this one we don't care about
+        // expect(decoded.snapshot, equals(tDataSetModel.snapshot));
 
         // arrange (with minimal data)
         final model = DataSetModel(
@@ -268,8 +273,7 @@ void main() {
         snapshot: Some(
           Snapshot(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-            parent:
-                Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+            parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
             endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
@@ -297,8 +301,7 @@ void main() {
         snapshot: Some(
           SnapshotModel(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-            parent:
-                Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+            parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
             endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),

@@ -16,8 +16,7 @@ dependencies:
   flutter_bloc: ^3.2.0
   get_it: ^4.0.0
   graphql: ^3.0.1-beta.3
-  oxidized:
-    git: https://github.com/nlfiedler/oxidized.git
+  oxidized: ^3.1.0
 
 dev_dependencies:
   flutter_test:

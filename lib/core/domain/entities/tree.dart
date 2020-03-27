@@ -41,7 +41,7 @@ class TreeEntry extends Equatable {
   });
 
   @override
-  List<Object> get props => [name, reference];
+  List<Object> get props => [name, modTime, reference];
 
   @override
   bool get stringify => true;

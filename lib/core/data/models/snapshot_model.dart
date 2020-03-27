@@ -38,7 +38,7 @@ class SnapshotModel extends Snapshot {
     final endTime = Option.some(json['endTime']).map((v) => DateTime.parse(v));
     return SnapshotModel(
       checksum: json['checksum'],
-      parent: Option.some(json['checksum']),
+      parent: Option.some(json['parent']),
       startTime: startTime,
       endTime: endTime,
       // limiting file count to 2^53 (in JavaScript) is acceptable

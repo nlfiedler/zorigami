@@ -9,8 +9,51 @@ import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/usecases/usecase.dart';
 
-part 'configuration_event.dart';
-part 'configuration_state.dart';
+//
+// events
+//
+
+abstract class ConfigurationEvent extends Equatable {
+  @override
+  List<Object> get props => [];
+}
+
+class LoadConfiguration extends ConfigurationEvent {}
+
+//
+// states
+//
+
+abstract class ConfigurationState extends Equatable {
+  @override
+  List<Object> get props => [];
+}
+
+class Empty extends ConfigurationState {}
+
+class Loading extends ConfigurationState {}
+
+class Loaded extends ConfigurationState {
+  final Configuration config;
+
+  Loaded({@required this.config});
+
+  @override
+  List<Object> get props => [config];
+}
+
+class Error extends ConfigurationState {
+  final String message;
+
+  Error({@required this.message});
+
+  @override
+  List<Object> get props => [message];
+}
+
+//
+// bloc
+//
 
 class ConfigurationBloc extends Bloc<ConfigurationEvent, ConfigurationState> {
   final GetConfiguration usecase;

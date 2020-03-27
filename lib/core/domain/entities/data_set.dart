@@ -22,6 +22,10 @@ class TimeRange extends Equatable {
   @override
   bool get stringify => true;
 
+  String toPrettyString() {
+    return 'from ${formatTime(start)} to ${formatTime(stop)}';
+  }
+
   Result<dynamic, Failure> validate() {
     if (start < 0 || start > 86400) {
       return Err(
@@ -69,6 +73,25 @@ class Schedule extends Equatable {
 
   @override
   bool get stringify => true;
+
+  String toPrettyString() {
+    final buffer = StringBuffer();
+    buffer.write(prettyFrequency(frequency));
+    if (dayOfMonth is Some) {
+      buffer.write(' on day ${dayOfMonth.unwrap()}');
+    } else if (weekOfMonth is Some) {
+      buffer.write(' on the ');
+      buffer.write(prettyWeekOfMonth(weekOfMonth.unwrap()));
+      buffer.write(' ${prettyDayOfWeek(dayOfWeek.unwrap())}');
+    } else if (dayOfWeek is Some) {
+      buffer.write(' on ${prettyDayOfWeek(dayOfWeek.unwrap())}');
+    }
+    if (timeRange is Some) {
+      buffer.write(' ');
+      buffer.write(timeRange.unwrap().toPrettyString());
+    }
+    return buffer.toString();
+  }
 
   Result<dynamic, Failure> validate() {
     switch (frequency) {
@@ -173,5 +196,69 @@ class DataSet extends Equatable {
       }
     }
     return Ok(0);
+  }
+}
+
+// Format the seconds-since-midnight value as hour:minute format, with leading
+// zeros (e.g. 12:01, 04:30).
+String formatTime(int seconds) {
+  if (seconds == 0 || seconds == 86400) {
+    return '12:00';
+  }
+  final hour = (seconds / 3600).truncate().toString().padLeft(2, '0');
+  final minute = ((seconds % 3600) / 60).truncate().toString().padLeft(2, '0');
+  return '${hour}:${minute}';
+}
+
+String prettyFrequency(Frequency frequency) {
+  switch (frequency) {
+    case Frequency.hourly:
+      return 'hourly';
+    case Frequency.daily:
+      return 'daily';
+    case Frequency.weekly:
+      return 'weekly';
+    case Frequency.monthly:
+      return 'monthly';
+    default:
+      throw ArgumentError('frequency is not recognized');
+  }
+}
+
+String prettyDayOfWeek(DayOfWeek dow) {
+  switch (dow) {
+    case DayOfWeek.sun:
+      return 'Sunday';
+    case DayOfWeek.mon:
+      return 'Monday';
+    case DayOfWeek.tue:
+      return 'Tuesday';
+    case DayOfWeek.wed:
+      return 'Wednesday';
+    case DayOfWeek.thu:
+      return 'Thursday';
+    case DayOfWeek.fri:
+      return 'Friday';
+    case DayOfWeek.sat:
+      return 'Saturday';
+    default:
+      throw ArgumentError('day of week is not recognized');
+  }
+}
+
+String prettyWeekOfMonth(WeekOfMonth wom) {
+  switch (wom) {
+    case WeekOfMonth.first:
+      return 'first';
+    case WeekOfMonth.second:
+      return 'second';
+    case WeekOfMonth.third:
+      return 'third';
+    case WeekOfMonth.fourth:
+      return 'fourth';
+    case WeekOfMonth.fifth:
+      return 'fifth';
+    default:
+      throw ArgumentError('week of month is not recognized');
   }
 }

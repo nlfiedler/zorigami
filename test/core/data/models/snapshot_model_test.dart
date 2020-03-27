@@ -31,7 +31,7 @@ void main() {
           SnapshotModel.fromJson(tSnapshotModel.toJson()),
           equals(tSnapshotModel),
         );
-        final model = SnapshotModel(
+        final actual = SnapshotModel(
           checksum: 'cafebabe',
           parent: Some('ebebebeb'),
           startTime: DateTime.now(),
@@ -39,10 +39,15 @@ void main() {
           fileCount: 1234567890,
           tree: 'deadbeef',
         );
-        expect(
-          SnapshotModel.fromJson(model.toJson()),
-          equals(model),
-        );
+        final encoded = actual.toJson();
+        final decoded = SnapshotModel.fromJson(encoded);
+        expect(decoded, equals(actual));
+        // compare everything else not listed in props
+        expect(decoded.parent, equals(actual.parent));
+        expect(decoded.startTime, equals(actual.startTime));
+        expect(decoded.endTime, equals(actual.endTime));
+        expect(decoded.fileCount, equals(actual.fileCount));
+        expect(decoded.tree, equals(actual.tree));
       },
     );
   });

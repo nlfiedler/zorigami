@@ -52,6 +52,8 @@
 ****** title in appbar should be the page title
 ***** DONE make a navbar or navigation rail
 ****** c.f. https://www.material.io/components/navigation-rail/
+***** DONE allow browsing the dataset snapshots
+***** TODO allow browsing the snapshot tree
 ***** TODO query for stores, show in a list
 ****** use a progress indicator during the loading phase
 ****** probably a list of cards
@@ -78,10 +80,7 @@
 ****** clicking an edit button on the detail page will switch to edit mode
 ***** TODO allow editing a dataset
 ****** clicking an edit button on the detail page will switch to edit mode
-***** TODO show status of the datasets on the home page
-***** TODO allow browsing the dataset snapshot
-****** display using a stateful widget (to hold the current path)
-****** need button to navigate up to the parent
+***** DONE show status of the datasets on the home page
 ***** TODO add a button for restoring a file
 ****** currently using an =href= to the URL that returns the file
 ****** use https://pub.dev/packages/url_launcher, it supports web
@@ -90,8 +89,10 @@
 ******* note that safari requies a JS hack, but only if using the =openLink= functions?
 ****** can use =Window.open()= from =dart:html=, like =window.open(url);=
 ******* by default it opens a new window/tab for the link
-***** TODO improve the navigation draw
+***** TODO improve the navigation drawer
 ****** currently selected option should be highlighted, not actionable
+***** TODO consider using =BlocDelegate= to catch errors in all blocs
+****** gives a chance to log errors
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications

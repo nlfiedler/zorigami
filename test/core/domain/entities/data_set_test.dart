@@ -56,6 +56,28 @@ void main() {
         );
       },
     );
+
+    test(
+      'should pretty print various ranges',
+      () {
+        expect(
+          TimeRange(start: 0, stop: 0).toPrettyString(),
+          equals('from 12:00 to 12:00'),
+        );
+        expect(
+          TimeRange(start: 86400, stop: 86400).toPrettyString(),
+          equals('from 12:00 to 12:00'),
+        );
+        expect(
+          TimeRange(start: 72000, stop: 14400).toPrettyString(),
+          equals('from 20:00 to 04:00'),
+        );
+        expect(
+          TimeRange(start: 12660, stop: 54060).toPrettyString(),
+          equals('from 03:31 to 15:01'),
+        );
+      },
+    );
   });
 
   group('Schedule', () {
@@ -229,6 +251,52 @@ void main() {
         expect(
           result.err().unwrap().message,
           contains('requires week-of-month when using day-of-week'),
+        );
+      },
+    );
+
+    test(
+      'should pretty print the schedule',
+      () {
+        expect(
+          Schedule(
+            frequency: Frequency.hourly,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).toPrettyString(),
+          equals('hourly'),
+        );
+        expect(
+          Schedule(
+            frequency: Frequency.daily,
+            weekOfMonth: None(),
+            dayOfWeek: None(),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).toPrettyString(),
+          equals('daily'),
+        );
+        expect(
+          Schedule(
+            frequency: Frequency.weekly,
+            weekOfMonth: None(),
+            dayOfWeek: Some(DayOfWeek.mon),
+            dayOfMonth: None(),
+            timeRange: None(),
+          ).toPrettyString(),
+          equals('weekly on Monday'),
+        );
+        expect(
+          Schedule(
+            frequency: Frequency.monthly,
+            weekOfMonth: Some(WeekOfMonth.second),
+            dayOfWeek: Some(DayOfWeek.thu),
+            dayOfMonth: None(),
+            timeRange: Some(TimeRange(start: 79200, stop: 16200)),
+          ).toPrettyString(),
+          equals('monthly on the second Thursday from 22:00 to 04:30'),
         );
       },
     );
