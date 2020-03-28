@@ -82,7 +82,7 @@ void main() {
         final result = await repository.getTree('sha1-cafebabe');
         // assert
         verify(mockRemoteDataSource.getTree(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), equals(ServerFailure('ServerException')));
       },
     );
   });

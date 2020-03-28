@@ -20,10 +20,12 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
     final query = r'''
       query Fetch($checksum: Checksum!) {
         tree(digest: $checksum) {
-          name
-          fstype
-          modTime
-          reference
+          entries {
+            name
+            fstype
+            modTime
+            reference
+          }
         }
       }
     ''';

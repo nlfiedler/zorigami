@@ -24,8 +24,8 @@ class TreeRepositoryImpl extends TreeRepository {
         return Err(ServerFailure('got null result'));
       }
       return Ok(tree);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 }
