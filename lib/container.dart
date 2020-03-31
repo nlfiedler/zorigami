@@ -12,6 +12,7 @@ import 'package:zorigami/features/browse/preso/bloc/datasets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -31,6 +32,9 @@ void init() {
   );
   getIt.registerFactory(
     () => TreeBloc(usecase: getIt()),
+  );
+  getIt.registerFactory(
+    () => TreeBrowserBloc(usecase: getIt()),
   );
 
   initUseCases(getIt);

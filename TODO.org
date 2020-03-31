@@ -273,6 +273,11 @@ var url = window.location.href;
 ** Loose WebUI tasks
 *** TODO improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
+*** TODO improvements to the interface
+**** snapshot/tree browser
+***** for larger number of entries, should use PaginatedDataTable
+***** nice to have: sticky table header
+***** nice to have: sort by file type
 *** TODO consider l10n
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
 *** TODO dataset status says "running" even though it had an error

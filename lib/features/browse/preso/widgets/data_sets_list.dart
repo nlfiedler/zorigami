@@ -3,6 +3,7 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -68,7 +69,7 @@ String getSchedule(DataSet dataset) {
 String getStatus(DataSet dataset) {
   return dataset.snapshot.mapOrElse(
     (s) => s.endTime.mapOrElse(
-      (e) => 'finished at ' + e.toLocal().toString(),
+      (e) => 'finished at ' + DateFormat.yMd().add_jm().format(e.toLocal()),
       () => 'still running',
     ),
     () => 'not yet run',

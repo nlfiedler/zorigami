@@ -3,175 +3,231 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
+import 'package:zorigami/core/domain/repositories/tree_repository.dart';
+import 'package:zorigami/core/domain/usecases/get_tree.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
+class MockSnapshotRepository extends Mock implements TreeRepository {}
+
 void main() {
+  MockSnapshotRepository mockSnapshotRepository;
+  GetTree usecase;
+
+  final tTree1 = Tree(
+    entries: [
+      TreeEntry(
+        name: 'file1',
+        modTime: DateTime.utc(2018, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.file,
+          value: 'sha256-8c983bd',
+        ),
+      ),
+      TreeEntry(
+        name: 'folder1',
+        modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.tree,
+          value: 'sha1-cafed00d',
+        ),
+      ),
+    ],
+  );
+
+  final tTree2 = Tree(
+    entries: [
+      TreeEntry(
+        name: 'file2',
+        modTime: DateTime.utc(2019, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.file,
+          value: 'sha256-89c8b3d',
+        ),
+      ),
+      TreeEntry(
+        name: 'folder2',
+        modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.tree,
+          value: 'sha1-deadbeef',
+        ),
+      ),
+    ],
+  );
+
+  final tTree3 = Tree(
+    entries: [
+      TreeEntry(
+        name: 'file3',
+        modTime: DateTime.utc(2020, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.file,
+          value: 'sha256-98c8bd3',
+        ),
+      ),
+      TreeEntry(
+        name: 'folder3',
+        modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
+        reference: TreeReference(
+          type: EntryType.tree,
+          value: 'sha1-beefcafe',
+        ),
+      ),
+    ],
+  );
+
+  setUp(() {
+    mockSnapshotRepository = MockSnapshotRepository();
+    usecase = GetTree(mockSnapshotRepository);
+    when(mockSnapshotRepository.getTree('sha1-cafebabe'))
+        .thenAnswer((_) async => Ok(tTree1));
+    when(mockSnapshotRepository.getTree('sha1-cafed00d'))
+        .thenAnswer((_) async => Ok(tTree2));
+    when(mockSnapshotRepository.getTree('sha1-deadbeef'))
+        .thenAnswer((_) async => Ok(tTree3));
+  });
+
   group('TreeBrowserBloc', () {
-    final tTreeEntry1 = TreeEntry(
-      name: 'subfolder',
-      modTime: DateTime.now(),
-      reference: TreeReference(
-        type: EntryType.tree,
-        value: 'sha1-cafebabe',
-      ),
-    );
-
-    final tTreeEntry2 = TreeEntry(
-      name: 'foldersub',
-      modTime: DateTime.now(),
-      reference: TreeReference(
-        type: EntryType.tree,
-        value: 'sha1-cafed00d',
-      ),
-    );
-
-    final tFileEntry = TreeEntry(
-      name: 'filename.ext',
-      modTime: DateTime.now(),
-      reference: TreeReference(
-        type: EntryType.file,
-        value: 'sha1-deadbeef',
-      ),
-    );
-
     blocTest(
       'emits [] when nothing is added',
-      build: () async => TreeBrowserBloc(),
+      build: () async => TreeBrowserBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
-      'emits updated state when VisitTree is added',
-      build: () async => TreeBrowserBloc(),
-      act: (bloc) => bloc.add(VisitTree(entry: tTreeEntry1)),
-      expect: [
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [],
-        )
-      ],
+      'emits updated state when LoadTree is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
+      expect: [Loading(), Loaded(tree: tTree1, selections: [], path: [])],
     );
 
     blocTest(
-      'emits updated state when ToggleSelection is added',
-      build: () async => TreeBrowserBloc(),
-      act: (bloc) => bloc.add(ToggleSelection(entry: tFileEntry)),
+      'selects an entry when ToggleSelection is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) {
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        return;
+      },
       expect: [
-        TreeBrowserState(
-          history: [],
-          path: [],
-          selections: [tFileEntry],
-        )
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
       ],
     );
 
     blocTest(
       'toggles on and off when ToggleSelection is added twice',
-      build: () async => TreeBrowserBloc(),
+      build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
-        bloc.add(ToggleSelection(entry: tFileEntry));
-        bloc.add(ToggleSelection(entry: tFileEntry));
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
         return;
       },
       expect: [
-        TreeBrowserState(
-          history: [],
-          path: [],
-          selections: [tFileEntry],
-        ),
-        TreeBrowserState(
-          history: [],
-          path: [],
-          selections: [],
-        )
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: [], path: []),
       ],
     );
 
     blocTest(
-      'clears selections when VisitTree is added',
-      build: () async => TreeBrowserBloc(),
+      'should emit nothing when LoadEntry is added without a tree',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadEntry(entry: tTree1.entries[1])),
+      expect: [],
+    );
+
+    blocTest(
+      'clears selections when LoadEntry is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
-        bloc.add(ToggleSelection(entry: tFileEntry));
-        bloc.add(VisitTree(entry: tTreeEntry1));
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(LoadEntry(entry: tTree1.entries[1]));
         return;
       },
       expect: [
-        TreeBrowserState(
-          history: [],
-          path: [],
-          selections: [tFileEntry],
-        ),
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [],
-        )
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loading(),
+        Loaded(tree: tTree2, selections: [], path: ['folder1']),
+      ],
+      verify: (TreeBrowserBloc bloc) async {
+        expect(bloc.path.length, equals(1));
+        expect(bloc.history.length, equals(2));
+      },
+    );
+
+    blocTest(
+      'clears state when LoadTree is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) {
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(LoadTree(digest: 'sha1-cafed00d'));
+        return;
+      },
+      expect: [
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loading(),
+        Loaded(tree: tTree2, selections: [], path: []),
       ],
     );
 
     blocTest(
-      'clears state when StartNewTree is added',
-      build: () async => TreeBrowserBloc(),
+      'clears state when ResetTree is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
-        bloc.add(VisitTree(entry: tTreeEntry1));
-        bloc.add(ToggleSelection(entry: tFileEntry));
-        bloc.add(StartNewTree());
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(ResetTree());
         return;
       },
       expect: [
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [],
-        ),
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [tFileEntry],
-        ),
-        TreeBrowserState(
-          history: [],
-          path: [],
-          selections: [],
-        )
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Empty(),
       ],
     );
 
     blocTest(
       'should emit nothing when NavigateUpward is added without history',
-      build: () async => TreeBrowserBloc(),
+      build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) => bloc.add(NavigateUpward()),
       expect: [],
     );
 
     blocTest(
       'should pop history when NavigateUpward is added',
-      build: () async => TreeBrowserBloc(),
+      build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
-        bloc.add(VisitTree(entry: tTreeEntry1));
-        bloc.add(VisitTree(entry: tTreeEntry2));
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(LoadEntry(entry: tTree1.entries[1]));
         bloc.add(NavigateUpward());
         return;
       },
       expect: [
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [],
-        ),
-        TreeBrowserState(
-          history: ['sha1-cafebabe', 'sha1-cafed00d'],
-          path: ['subfolder', 'foldersub'],
-          selections: [],
-        ),
-        TreeBrowserState(
-          history: ['sha1-cafebabe'],
-          path: ['subfolder'],
-          selections: [],
-        )
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loading(),
+        Loaded(tree: tTree2, selections: [], path: ['folder1']),
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
       ],
+      verify: (TreeBrowserBloc bloc) async {
+        expect(bloc.path.length, equals(0));
+        expect(bloc.history.length, equals(1));
+      },
     );
   });
 }
