@@ -95,18 +95,12 @@ pub enum Checksum {
 impl Checksum {
     /// Return `true` if this checksum is a SHA1.
     pub fn is_sha1(&self) -> bool {
-        match *self {
-            Checksum::SHA1(_) => true,
-            _ => false,
-        }
+        matches!(*self, Checksum::SHA1(_))
     }
 
     /// Return `true` if this checksum is a SHA256.
     pub fn is_sha256(&self) -> bool {
-        match *self {
-            Checksum::SHA256(_) => true,
-            _ => false,
-        }
+        matches!(*self, Checksum::SHA256(_))
     }
 }
 
@@ -501,26 +495,17 @@ pub enum EntryType {
 impl EntryType {
     /// Return `true` if this entry is for a file.
     pub fn is_file(self) -> bool {
-        match self {
-            EntryType::FILE => true,
-            _ => false,
-        }
+        matches!(self, EntryType::FILE)
     }
 
     /// Return `true` if this entry is for a directory.
     pub fn is_dir(self) -> bool {
-        match self {
-            EntryType::DIR => true,
-            _ => false,
-        }
+        matches!(self, EntryType::DIR)
     }
 
     /// Return `true` if this entry is for a symbolic link.
     pub fn is_link(self) -> bool {
-        match self {
-            EntryType::LINK => true,
-            _ => false,
-        }
+        matches!(self, EntryType::LINK)
     }
 }
 
@@ -553,26 +538,17 @@ pub enum TreeReference {
 impl TreeReference {
     /// Return `true` if this reference is for a symbolic link.
     pub fn is_link(&self) -> bool {
-        match *self {
-            TreeReference::LINK(_) => true,
-            _ => false,
-        }
+        matches!(*self, TreeReference::LINK(_))
     }
 
     /// Return `true` if this reference is for a tree.
     pub fn is_tree(&self) -> bool {
-        match *self {
-            TreeReference::TREE(_) => true,
-            _ => false,
-        }
+        matches!(*self, TreeReference::TREE(_))
     }
 
     /// Return `true` if this reference is for a file.
     pub fn is_file(&self) -> bool {
-        match *self {
-            TreeReference::FILE(_) => true,
-            _ => false,
-        }
+        matches!(*self, TreeReference::FILE(_))
     }
 
     /// Return the checksum for this reference, if possible.
