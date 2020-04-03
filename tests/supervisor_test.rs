@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 mod util;
 
@@ -71,10 +71,10 @@ fn test_backup_not_overdue() -> Result<(), Error> {
 
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let mut snapshot = Snapshot::new(None, tree_sha);
+    let mut snapshot = Snapshot::new(None, tree_sha, 0);
     let end_time = Utc::now();
     snapshot = snapshot.end_time(end_time);
-    let sha1 = snapshot.checksum();
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -96,11 +96,11 @@ fn test_backup_overdue() -> Result<(), Error> {
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let mut snapshot = Snapshot::new(None, tree_sha);
+    let mut snapshot = Snapshot::new(None, tree_sha, 0);
     let day_ago = Duration::hours(25);
     let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
-    let sha1 = snapshot.checksum();
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -122,11 +122,11 @@ fn test_old_snapshot_recent_backup() -> Result<(), Error> {
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let mut snapshot = Snapshot::new(None, tree_sha);
+    let mut snapshot = Snapshot::new(None, tree_sha, 0);
     let day_ago = Duration::hours(25);
     let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
-    let sha1 = snapshot.checksum();
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -153,8 +153,8 @@ fn test_backup_restarted() -> Result<(), Error> {
 
     // build a "latest" snapshot that did not finish
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let snapshot = Snapshot::new(None, tree_sha);
-    let sha1 = snapshot.checksum();
+    let snapshot = Snapshot::new(None, tree_sha, 0);
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     // create the dataset with a schedule
@@ -182,10 +182,10 @@ fn test_backup_restarted_not_overdue() -> Result<(), Error> {
 
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let mut snapshot = Snapshot::new(None, tree_sha);
+    let mut snapshot = Snapshot::new(None, tree_sha, 0);
     let end_time = Utc::now();
     snapshot = snapshot.end_time(end_time);
-    let sha1 = snapshot.checksum();
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     // create the dataset with a schedule
@@ -213,11 +213,11 @@ fn test_overdue_backup_running() -> Result<(), Error> {
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let mut snapshot = Snapshot::new(None, tree_sha);
+    let mut snapshot = Snapshot::new(None, tree_sha, 0);
     let day_ago = Duration::hours(25);
     let end_time = Utc::now() - day_ago;
     snapshot = snapshot.end_time(end_time);
-    let sha1 = snapshot.checksum();
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     let unique_id = generate_unique_id("charlie", "localhost");
@@ -242,8 +242,8 @@ fn test_overdue_had_error() -> Result<(), Error> {
 
     // build a "latest" snapshot that started just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-    let snapshot = Snapshot::new(None, tree_sha);
-    let sha1 = snapshot.checksum();
+    let snapshot = Snapshot::new(None, tree_sha, 0);
+    let sha1 = snapshot.digest.clone();
     dbase.insert_snapshot(&sha1, &snapshot)?;
 
     let unique_id = generate_unique_id("charlie", "localhost");

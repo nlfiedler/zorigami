@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 mod util;
 
@@ -507,9 +507,8 @@ fn test_dataset_snapshot() -> Result<(), Error> {
     let unique_id = core::generate_unique_id("charlie", "localhost");
     let mut dataset = core::Dataset::new(&unique_id, Path::new("/path"), "store/local/foobar");
     let tree_sha1 = core::Checksum::SHA1("df74b5ce78c615f29e84081fc7faef4d5a9761f3".to_owned());
-    let mut snapshot = core::Snapshot::new(None, tree_sha1);
-    snapshot = snapshot.file_count(101);
-    let snapsum = snapshot.checksum();
+    let snapshot = core::Snapshot::new(None, tree_sha1, 101);
+    let snapsum = snapshot.digest.clone();
     dataset.latest_snapshot = Some(snapsum.clone());
     ctx.put_dataset(&dataset)?;
     ctx.insert_snapshot(&snapsum, &snapshot)?;

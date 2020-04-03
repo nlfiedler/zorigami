@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `database` module provides high-level functions for storing and
@@ -300,7 +300,8 @@ impl Database {
         let encoded = self.get_document(key.as_bytes())?;
         match encoded {
             Some(dbv) => {
-                let serde_result: Snapshot = serde_cbor::from_slice(&dbv)?;
+                let mut serde_result: Snapshot = serde_cbor::from_slice(&dbv)?;
+                serde_result.digest = digest.clone();
                 Ok(Some(serde_result))
             }
             None => Ok(None),

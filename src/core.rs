@@ -884,6 +884,9 @@ impl fmt::Display for Tree {
 ///
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Snapshot {
+    /// Unique identifier of this snapshot for persisting to database.
+    #[serde(skip)]
+    pub digest: Checksum,
     /// Digest of the parent snapshot, if any.
     #[serde(rename = "pa")]
     pub parent: Option<Checksum>,
@@ -905,37 +908,29 @@ pub struct Snapshot {
 impl Snapshot {
     ///
     /// Construct a new `Snapshot` for the given tree, and optional parent.
-    /// Use the builder-style functions to set the other fields.
     ///
-    pub fn new(parent: Option<Checksum>, tree: Checksum) -> Self {
+    pub fn new(parent: Option<Checksum>, tree: Checksum, file_count: u32) -> Self {
         let start_time = Utc::now();
-        Self {
+        let mut snapshot = Self {
+            digest: Checksum::SHA1(String::from("sha1-cafebabe")),
             parent,
             start_time,
             end_time: None,
-            file_count: 0,
+            file_count,
             tree,
-        }
+        };
+        // Need to compute a checksum and save that as the "key" for this
+        // snapshot, cannot compute the checksum later because the object is
+        // mutable (e.g. end time).
+        let formed = snapshot.to_string();
+        snapshot.digest = checksum_data_sha1(formed.as_bytes());
+        snapshot
     }
 
     /// Add the end_time property.
     pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
         self.end_time = Some(end_time);
         self
-    }
-
-    /// Add the file_count property.
-    pub fn file_count(mut self, file_count: u32) -> Self {
-        self.file_count = file_count;
-        self
-    }
-
-    ///
-    /// Calculate the SHA1 digest for the snapshot.
-    ///
-    pub fn checksum(&self) -> Checksum {
-        let formed = self.to_string();
-        checksum_data_sha1(formed.as_bytes())
     }
 }
 

@@ -295,15 +295,13 @@ pub fn take_snapshot(
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
     let pretty_time = pretty_print_duration(time_diff);
-    let mut snap = core::Snapshot::new(parent, tree_sha1);
-    snap = snap.file_count(tree.file_count);
-    let sha1 = snap.checksum();
+    let snap = core::Snapshot::new(parent, tree_sha1, tree.file_count);
     info!(
         "took snapshot {} with {} files after {}",
-        sha1, tree.file_count, pretty_time
+        snap.digest, tree.file_count, pretty_time
     );
-    dbase.insert_snapshot(&sha1, &snap)?;
-    Ok(Some(sha1))
+    dbase.insert_snapshot(&snap.digest, &snap)?;
+    Ok(Some(snap.digest))
 }
 
 // Return a clear and accurate description of the duration.

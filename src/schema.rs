@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `schema` module defines the GraphQL schema and resolvers.
@@ -125,9 +125,9 @@ graphql_scalar!(TreeReference where Scalar = <S> {
 
 #[juniper::object(description = "A single backup, either in progress or completed.")]
 impl Snapshot {
-    /// Computed checksum of the snapshot.
+    /// Original computed checksum of the snapshot.
     fn checksum(&self) -> Checksum {
-        self.checksum()
+        self.digest.clone()
     }
 
     /// The snapshot before this one, if any.
