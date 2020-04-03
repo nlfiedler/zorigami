@@ -105,11 +105,11 @@ void main() {
     );
 
     blocTest(
-      'selects an entry when ToggleSelection is added',
+      'selects an entry when SetSelection is added',
       build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
         return;
       },
       expect: [
@@ -120,12 +120,12 @@ void main() {
     );
 
     blocTest(
-      'toggles on and off when ToggleSelection is added twice',
+      'toggle entry selection on and off',
       build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: false));
         return;
       },
       expect: [
@@ -133,6 +133,23 @@ void main() {
         Loaded(tree: tTree1, selections: [], path: []),
         Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
         Loaded(tree: tTree1, selections: [], path: []),
+      ],
+    );
+
+    blocTest(
+      'selection emitted once for multiple identical SetSelection events',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) {
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
+        return;
+      },
+      expect: [
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
       ],
     );
 
@@ -148,7 +165,7 @@ void main() {
       build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
         bloc.add(LoadEntry(entry: tTree1.entries[1]));
         return;
       },
@@ -170,7 +187,7 @@ void main() {
       build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
         bloc.add(LoadTree(digest: 'sha1-cafed00d'));
         return;
       },
@@ -188,7 +205,7 @@ void main() {
       build: () async => TreeBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
-        bloc.add(ToggleSelection(entry: tTree1.entries[0]));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
         bloc.add(ResetTree());
         return;
       },

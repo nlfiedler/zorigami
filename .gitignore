@@ -12,6 +12,7 @@ target
 
 # temporary data
 tmp
+.tmp
 
 # ReasonML/BuckleScript
 .graphql_ppx_cache

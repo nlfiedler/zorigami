@@ -4,17 +4,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart' as launcher;
+import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
-
-// tree browser bloc logic:
-// --> onTap for "file" entry
-// 1) use onSelectChanged param in DataRow constructor
-// 2) fire ToggleSelection
-// 3) set `selected` parameter of the DataRow based on bloc state
-//
-// --> appbar action restore-selection(s)
-// 1) already has the Loaded state, uses that to get selections
 
 class TreeViewer extends StatelessWidget {
   final String rootTree;
@@ -39,7 +33,7 @@ class TreeViewer extends StatelessWidget {
           if (state is Loaded) {
             return Column(
               children: <Widget>[
-                TreePath(path: state.path),
+                TreePath(state: state),
                 Expanded(child: TreeTable(state: state)),
               ],
             );
@@ -52,9 +46,25 @@ class TreeViewer extends StatelessWidget {
 }
 
 class TreePath extends StatelessWidget {
-  final List<String> path;
+  final Loaded state;
 
-  TreePath({@required this.path});
+  TreePath({@required this.state});
+
+  void restoreFile(DataSet dataset, TreeEntry entry) async {
+    // Just hard-code the base URL for now, eventually the usecase will have
+    // this configured via dependency injection and this function will simply
+    // initiate the request via the usecase and then display the progress (not
+    // to mention it will process multiple trees/files, not just one).
+    final baseUrl = 'http://127.0.0.1:8080';
+    final digest = entry.reference.value;
+    final url = '${baseUrl}/restore/${dataset.key}/${digest}/${entry.name}';
+    print('launching ${url}');
+    if (await launcher.canLaunch(url)) {
+      await launcher.launch(url);
+    } else {
+      throw 'Could not launch $url';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,9 +74,19 @@ class TreePath extends StatelessWidget {
         children: <Widget>[
           RaisedButton(
             child: Text('Up'),
-            onPressed: path.isNotEmpty
+            onPressed: state.path.isNotEmpty
                 ? () => BlocProvider.of<TreeBrowserBloc>(context).add(
                       NavigateUpward(),
+                    )
+                : null,
+          ),
+          SizedBox(width: 16.0),
+          RaisedButton(
+            child: Text('Restore'),
+            onPressed: state.selections.isNotEmpty
+                ? () async => restoreFile(
+                      Provider.of<DataSet>(context, listen: false),
+                      state.selections[0],
                     )
                 : null,
           ),
@@ -76,7 +96,7 @@ class TreePath extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           Text(
-            ' / ${path.join(' / ')}',
+            ' / ${state.path.join(' / ')}',
             style: TextStyle(fontFamily: 'RobotoMono'),
           )
         ],
@@ -122,7 +142,17 @@ class _TreeTableState extends State<TreeTable> {
         DateFormat.yMd().add_jm().format(e.modTime.toLocal()),
       ));
       final ref = DataCell(Text(e.reference.value, style: mono));
-      return DataRow(cells: [icon, name, date, ref]);
+      final onSelectChanged = e.reference.type == EntryType.file
+          ? (selected) => BlocProvider.of<TreeBrowserBloc>(context).add(
+                SetSelection(entry: e, selected: selected),
+              )
+          : null;
+      final selected = widget.state.selections.contains(e);
+      return DataRow(
+        cells: [icon, name, date, ref],
+        selected: selected,
+        onSelectChanged: onSelectChanged,
+      );
     }));
 
     // the sort is modifying the tree nested within the bloc state

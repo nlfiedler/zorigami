@@ -29,10 +29,11 @@ class LoadEntry extends TreeBrowserEvent {
   LoadEntry({@required this.entry});
 }
 
-class ToggleSelection extends TreeBrowserEvent {
+class SetSelection extends TreeBrowserEvent {
   final TreeEntry entry;
+  final bool selected;
 
-  ToggleSelection({@required this.entry});
+  SetSelection({@required this.entry, @required this.selected});
 }
 
 class NavigateUpward extends TreeBrowserEvent {}
@@ -109,10 +110,13 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
         path.add(event.entry.name);
         yield* _loadTree(event.entry.reference.value);
       }
-    } else if (event is ToggleSelection) {
+    } else if (event is SetSelection) {
       if (state is Loaded) {
         final tree = (state as Loaded).tree;
-        if (!selections.remove(event.entry)) {
+        // for both adding and removing the selection, start by removing it,
+        // then adding it only if selected, ensuring it is added only once
+        selections.remove(event.entry);
+        if (event.selected) {
           selections.add(event.entry);
         }
         yield Loaded(tree: tree, selections: selections, path: path);

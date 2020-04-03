@@ -3,11 +3,12 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart'
-    as tb;
+    as tbb;
 import 'package:zorigami/features/browse/preso/widgets/snapshot_viewer.dart';
 
 class SnapshotScreen extends StatelessWidget {
@@ -27,8 +28,8 @@ class SnapshotScreen extends StatelessWidget {
           BlocProvider<SnapshotBrowserBloc>(
             create: (_) => getIt<SnapshotBrowserBloc>(),
           ),
-          BlocProvider<tb.TreeBrowserBloc>(
-            create: (_) => getIt<tb.TreeBrowserBloc>(),
+          BlocProvider<tbb.TreeBrowserBloc>(
+            create: (_) => getIt<tbb.TreeBrowserBloc>(),
           ),
         ],
         child: BlocBuilder<SnapshotBrowserBloc, SnapshotBrowserState>(
@@ -41,10 +42,13 @@ class SnapshotScreen extends StatelessWidget {
               return Text('Starting...');
             }
             if (state is Error) {
-              return Text('Error: ' + state.message);
+              return Text('Error getting snapshot: ' + state.message);
             }
             if (state is Loaded) {
-              return SnapshotViewer(state: state);
+              return Provider<DataSet>.value(
+                value: dataset,
+                child: SnapshotViewer(state: state),
+              );
             }
             return Text('Loading...');
           },
