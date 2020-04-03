@@ -73,7 +73,7 @@ void main() {
         final result = await repository.getSnapshot('sha1-cafebabe');
         // assert
         verify(mockRemoteDataSource.getSnapshot(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });

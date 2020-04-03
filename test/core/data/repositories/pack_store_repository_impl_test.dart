@@ -58,7 +58,7 @@ void main() {
         final result = await repository.getAllPackStores();
         // assert
         verify(mockRemoteDataSource.getAllPackStores());
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -88,7 +88,7 @@ void main() {
         final result = await repository.definePackStore('minio', {});
         // assert
         verify(mockRemoteDataSource.definePackStore(any, any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -118,7 +118,7 @@ void main() {
         final result = await repository.updatePackStore('key', {});
         // assert
         verify(mockRemoteDataSource.updatePackStore(any, any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -148,7 +148,7 @@ void main() {
         final result = await repository.deletePackStore('key');
         // assert
         verify(mockRemoteDataSource.deletePackStore(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });

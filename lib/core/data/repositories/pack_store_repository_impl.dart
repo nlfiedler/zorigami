@@ -21,8 +21,8 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.getAllPackStores();
       return Ok(packStore);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -32,8 +32,8 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.definePackStore(kind, options);
       return Ok(packStore);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -43,8 +43,8 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.updatePackStore(key, options);
       return Ok(packStore);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -53,8 +53,8 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.deletePackStore(key);
       return Ok(packStore);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 }

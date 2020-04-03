@@ -21,8 +21,8 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final DataSet = await remoteDataSource.getAllDataSets();
       return Ok(DataSet);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -31,8 +31,8 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final DataSet = await remoteDataSource.defineDataSet(input);
       return Ok(DataSet);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -41,8 +41,8 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final DataSet = await remoteDataSource.updateDataSet(input);
       return Ok(DataSet);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 
@@ -51,8 +51,8 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final DataSet = await remoteDataSource.deleteDataSet(key);
       return Ok(DataSet);
-    } on ServerException {
-      return Err(ServerFailure());
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
     }
   }
 }

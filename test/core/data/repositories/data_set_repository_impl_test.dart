@@ -62,7 +62,7 @@ void main() {
         final result = await repository.getAllDataSets();
         // assert
         verify(mockRemoteDataSource.getAllDataSets());
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -92,7 +92,7 @@ void main() {
         final result = await repository.defineDataSet(tDataSet);
         // assert
         verify(mockRemoteDataSource.defineDataSet(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -122,7 +122,7 @@ void main() {
         final result = await repository.updateDataSet(tDataSet);
         // assert
         verify(mockRemoteDataSource.updateDataSet(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
@@ -152,7 +152,7 @@ void main() {
         final result = await repository.deleteDataSet('key');
         // assert
         verify(mockRemoteDataSource.deleteDataSet(any));
-        expect(result.err().unwrap(), equals(ServerFailure()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
   });
