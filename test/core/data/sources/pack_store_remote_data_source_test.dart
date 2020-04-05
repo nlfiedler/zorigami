@@ -37,10 +37,10 @@ void main() {
     options: {'path': '/home/user'},
   );
 
-  void setUpMockHttpClientGraphQLResponse(String options) {
+  void setUpMockHttpClientGraphQLResponse(String operation, String options) {
     final response = {
       'data': {
-        'store': {
+        operation: {
           'key': 'abc123',
           'label': 'lstore',
           'kind': 'local',
@@ -226,7 +226,7 @@ void main() {
       'should return a specific pack store',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse('');
+        setUpMockHttpClientGraphQLResponse('store', '');
         // act
         final result = await dataSource.getPackStore('abc123');
         // assert
@@ -288,7 +288,7 @@ void main() {
       'should delete a specific pack store',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse('');
+        setUpMockHttpClientGraphQLResponse('deleteStore', '');
         // act
         final result = await dataSource.deletePackStore('abc123');
         // assert
@@ -339,7 +339,7 @@ void main() {
       () async {
         // arrange
         final encodedOptions = encodeOptions(tPackStoreModel.options);
-        setUpMockHttpClientGraphQLResponse(encodedOptions);
+        setUpMockHttpClientGraphQLResponse('defineStore', encodedOptions);
         // act
         final result = await dataSource.definePackStore(
           'local',
@@ -387,7 +387,7 @@ void main() {
       () async {
         // arrange
         final encodedOptions = encodeOptions(tPackStoreModel.options);
-        setUpMockHttpClientGraphQLResponse(encodedOptions);
+        setUpMockHttpClientGraphQLResponse('updateStore', encodedOptions);
         // act
         final result = await dataSource.updatePackStore(
           'abc123',

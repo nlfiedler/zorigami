@@ -55,7 +55,10 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = QueryOptions(documentNode: gql(getAllDatasets));
+    final queryOptions = QueryOptions(
+      documentNode: gql(getAllDatasets),
+      fetchPolicy: FetchPolicy.noCache,
+    );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
@@ -83,6 +86,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
       variables: <String, dynamic>{
         'identifier': key,
       },
+      fetchPolicy: FetchPolicy.noCache,
     );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
@@ -112,7 +116,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final dataset = result.data['dataset'] as Map<String, dynamic>;
+    final dataset = result.data['deleteDataset'] as Map<String, dynamic>;
     return DataSetModel.fromJson(dataset);
   }
 
@@ -136,7 +140,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final dataset = result.data['dataset'] as Map<String, dynamic>;
+    final dataset = result.data['defineDataset'] as Map<String, dynamic>;
     return DataSetModel.fromJson(dataset);
   }
 
@@ -160,7 +164,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final dataset = result.data['dataset'] as Map<String, dynamic>;
+    final dataset = result.data['updateDataset'] as Map<String, dynamic>;
     return DataSetModel.fromJson(dataset);
   }
 }

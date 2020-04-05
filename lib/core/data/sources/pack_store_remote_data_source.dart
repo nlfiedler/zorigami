@@ -33,7 +33,10 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = QueryOptions(documentNode: gql(getAllStores));
+    final queryOptions = QueryOptions(
+      documentNode: gql(getAllStores),
+      fetchPolicy: FetchPolicy.noCache,
+    );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
@@ -64,6 +67,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
       variables: <String, dynamic>{
         'identifier': key,
       },
+      fetchPolicy: FetchPolicy.noCache,
     );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
@@ -96,7 +100,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final store = result.data['store'] as Map<String, dynamic>;
+    final store = result.data['deleteStore'] as Map<String, dynamic>;
     return PackStoreModel.fromJson(store);
   }
 
@@ -125,7 +129,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final store = result.data['store'] as Map<String, dynamic>;
+    final store = result.data['defineStore'] as Map<String, dynamic>;
     return PackStoreModel.fromJson(store);
   }
 
@@ -154,7 +158,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final store = result.data['store'] as Map<String, dynamic>;
+    final store = result.data['updateStore'] as Map<String, dynamic>;
     return PackStoreModel.fromJson(store);
   }
 }

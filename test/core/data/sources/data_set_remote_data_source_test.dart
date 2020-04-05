@@ -74,10 +74,10 @@ void main() {
     });
   }
 
-  void setUpMockHttpClientGraphQLResponse() {
+  void setUpMockHttpClientGraphQLResponse(String operation) {
     final response = {
       'data': {
-        'dataset': {
+        operation: {
           'key': 'setkey1',
           'computerId': 'cray-11',
           'basepath': '/home/planet',
@@ -304,7 +304,7 @@ void main() {
       'should return a specific data set',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse();
+        setUpMockHttpClientGraphQLResponse('dataset');
         // act
         final result = await dataSource.getDataSet('abc123');
         // assert
@@ -360,7 +360,7 @@ void main() {
       'should delete a specific data set',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse();
+        setUpMockHttpClientGraphQLResponse('deleteDataset');
         // act
         final result = await dataSource.deleteDataSet('abc123');
         // assert
@@ -404,7 +404,7 @@ void main() {
       'should define a new data set',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse();
+        setUpMockHttpClientGraphQLResponse('defineDataset');
         // act
         final result = await dataSource.defineDataSet(tDataSet);
         // assert
@@ -448,7 +448,7 @@ void main() {
       'should update an existing data set',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse();
+        setUpMockHttpClientGraphQLResponse('updateDataset');
         // act
         final result = await dataSource.updateDataSet(tDataSet);
         // assert

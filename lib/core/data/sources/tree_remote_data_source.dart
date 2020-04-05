@@ -34,6 +34,7 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
       variables: <String, dynamic>{
         'checksum': checksum,
       },
+      fetchPolicy: FetchPolicy.noCache,
     );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {

@@ -26,7 +26,10 @@ class ConfigurationRemoteDataSourceImpl extends ConfigurationRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = QueryOptions(documentNode: gql(query));
+    final queryOptions = QueryOptions(
+      documentNode: gql(query),
+      fetchPolicy: FetchPolicy.noCache,
+    );
     final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
