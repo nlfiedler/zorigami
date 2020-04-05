@@ -30,6 +30,7 @@ class DataSetsList extends StatelessWidget {
               state.sets.map((e) {
                 return Card(
                   child: ListTile(
+                    leading: Icon(Icons.dns),
                     title: Text(e.basepath + ', runs ' + getSchedule(e)),
                     subtitle: Text('Status: ' + getStatus(e)),
                     trailing: Icon(Icons.chevron_right),

@@ -63,32 +63,32 @@
 ******* note that safari requies a JS hack, but only if using the =openLink= functions?
 ****** can use =Window.open()= from =dart:html=, like =window.open(url);=
 ******* by default it opens a new window/tab for the link
-***** TODO query for stores, show in a list
-****** use a progress indicator during the loading phase
-****** probably a list of cards
-***** TODO query for datasets, show in a list
-****** probably a list of cards
+***** DONE query for stores, show in a list
 ***** TODO show details of a pack store
-****** clicking on entry in list view will open hero with details
-***** TODO show details of a dataset
-****** clicking on entry in list view will open hero with details
-***** TODO support defining a new pack store
-****** need a "plus" button somewhere (FAB in nav rail)
-****** use a "popup" route (c.f. Navigator API docs)
-****** see https://github.com/felangel/bloc/tree/master/examples/flutter_form_validation for form validation with BLoC
-****** use https://pub.dev/packages/flutter_form_builder for forms and validation
-****** if using bloc: https://pub.dev/packages/flutter_form_bloc
-***** TODO support defining a new dataset
-****** need a "plus" button somewhere
-****** see https://github.com/felangel/bloc/tree/master/examples/flutter_form_validation for form validation with BLoC
-****** use https://pub.dev/packages/flutter_form_builder for forms and validation
-****** if using bloc: https://pub.dev/packages/flutter_form_bloc
-***** TODO allow deleting a pack store
-***** TODO allow deleting a dataset
+****** DONE write a factory that builds out details for each kind of store
+****** DONE write impl for local pack store
+****** TODO write impl for minio pack store
+****** TODO write impl for sftp pack store
 ***** TODO allow editing a pack store
-****** clicking an edit button on the detail page will switch to edit mode
+****** use https://pub.dev/packages/flutter_form_builder for forms and validation
+****** define new events in the pack stores bloc for edit and delete
+****** show a "loading" thing while submitting the changes
+****** ensure that the basic form can be reused for defining a new store
+****** consider how to unit test the pack store forms
+****** DONE write impl for local pack store
+****** TODO write impl for minio pack store
+****** TODO write impl for sftp pack store
+***** TODO support defining a new pack store
+****** use a FAB on the pack stores screen
+****** use a "popup" route (c.f. Navigator API docs)
+****** step 1 is to select the store kind, then move to the kind-specific form
+****** add a new edit pack store event for defining a new store
+***** TODO allow deleting a pack store
+***** TODO show all datasets
+***** TODO show details of a dataset
+***** TODO support defining a new dataset
+***** TODO allow deleting a dataset
 ***** TODO allow editing a dataset
-****** clicking an edit button on the detail page will switch to edit mode
 ***** DONE show status of the datasets on the home page
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
@@ -255,6 +255,7 @@ var url = window.location.href;
 **** for larger number of entries, should use PaginatedDataTable
 **** nice to have: sticky table header
 **** nice to have: sort by file type
+*** TODO consider how to hide the minio secret key using a show/hide button
 *** TODO consider l10n
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
 *** TODO dataset status says "running" even though it had an error
@@ -312,10 +313,8 @@ var url = window.location.href;
 *** frontend
 **** write a usecase for submitting the tree/file digests
 **** write a usecase for checking the progress of the request
-**** show a dialog or something to indicate ongoing progress (spinner)
-**** progress dialog has a cancel button to stop the restore
+**** direct user to a "restore requests" page that shows progress
 **** when the request is ready, replace cancel button with download button
-**** consider what happens if user navigates away from this page
 *** desktop
 **** would not only download the zip file but also unzip the contents
 ** Manual Backup controls
@@ -333,13 +332,6 @@ var url = window.location.href;
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content
-*** TODO Query to see histogram of file sizes, number of chunks, etc
-**** for a given snapshot...
-**** count number of files with N chunks for all values of N
-*** TODO show details about snapshots and files
-**** show differences between two snapshots
-**** show pack/chunk metrics for   all   files in a snapshot
-**** show pack/chunk metrics for changed files in a snapshot
 *** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store
@@ -361,6 +353,16 @@ var url = window.location.href;
 ***** use store form to take paths for public and private keys
 **** TODO allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
+** More Information
+*** TODO Show details about snapshots and files
+**** show differences between two snapshots
+**** show pack/chunk metrics for   all   files in a snapshot
+**** show pack/chunk metrics for changed files in a snapshot
+*** TODO Query to see histogram of file sizes, number of chunks, etc
+**** for a given snapshot...
+**** count number of files with N chunks for all values of N
+*** TODO Show number of packs stored in a pack store
+**** would have to keep track in the database
 ** Architecture Review
 *** Database migrations
 **** Use the =serde= crate features (c.f. https://serde.rs)
