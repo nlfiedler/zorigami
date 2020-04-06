@@ -1,6 +1,9 @@
 * Tasks
 ** latest =time= crate is incompatible with =chrono= for now
-** latest =futures= crate is incompatible with =minio= for now
+** Update rusoto to latest
+*** with 0.43 they use std future now instead of futures
+*** remove the =futures= and =futures-fs= crates
+*** look at the rusoto_s3 API documentation to figure out how to use it now
 ** Flutter Action Plan
 *** cookbooks reference: https://flutter.dev/docs/cookbook
 *** TODO implement interface using clean architecture

@@ -15,7 +15,7 @@ actix-cors = "0.2"
 actix-files = "0.2"
 actix-rt = "1.0.0"
 actix-web = "2.0"
-base64 = "0.11.0"
+base64 = "0.12.0"
 blob-uuid = "0.4.0"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15.0"
