@@ -411,6 +411,13 @@ Remove the snapshot record to be deleted, then garbage collect.
 * Supports backends with a filesystem-like interface
 * Command-line interface
 
+#### rclone
+
+* https://github.com/rclone/rclone
+* Syncs a directory structure to the cloud
+* Offers chunking and encryption
+* Command-line interface
+
 #### restic
 
 * https://restic.net
