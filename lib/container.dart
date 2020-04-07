@@ -11,7 +11,7 @@ import 'package:zorigami/core/util/input_converter.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
-import 'package:zorigami/features/backup/preso/widgets/store_details_factory.dart';
+import 'package:zorigami/features/backup/preso/widgets/store_form_factory.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/datasets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_bloc.dart';
