@@ -30,11 +30,13 @@ class LocalStoreForm extends PackStoreForm {
   }
 
   @override
-  Map<String, dynamic> optionsFromState(FormBuilderState state) {
-    return {
-      'label': state.value['label'],
-      'basepath': state.value['basepath'],
-    };
+  PackStore storeFromState(FormBuilderState state) {
+    return PackStore(
+      key: state.value['key'],
+      label: state.value['label'],
+      kind: StoreKind.local,
+      options: {'basepath': state.value['basepath']},
+    );
   }
 
   @override

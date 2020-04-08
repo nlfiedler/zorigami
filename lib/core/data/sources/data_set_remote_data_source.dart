@@ -10,7 +10,7 @@ import 'package:zorigami/core/error/exceptions.dart';
 abstract class DataSetRemoteDataSource {
   Future<List<DataSetModel>> getAllDataSets();
   Future<DataSetModel> getDataSet(String key);
-  Future<DataSetModel> deleteDataSet(String key);
+  Future<DataSetModel> deleteDataSet(DataSet input);
   Future<DataSetModel> defineDataSet(DataSet input);
   Future<DataSetModel> updateDataSet(DataSet input);
 }
@@ -98,7 +98,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
   }
 
   @override
-  Future<DataSetModel> deleteDataSet(String key) async {
+  Future<DataSetModel> deleteDataSet(DataSet input) async {
     final deleteDataSet = '''
       mutation DeleteDataset(\$key: String!) {
         deleteDataset(key: \$key) {
@@ -109,7 +109,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final mutationOptions = MutationOptions(
       documentNode: gql(deleteDataSet),
       variables: <String, dynamic>{
-        'identifier': key,
+        'identifier': input.key,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);

@@ -290,7 +290,7 @@ void main() {
         // arrange
         setUpMockHttpClientGraphQLResponse('deleteStore', '');
         // act
-        final result = await dataSource.deletePackStore('abc123');
+        final result = await dataSource.deletePackStore(tPackStoreModel);
         // assert
         final store = PackStoreModel(
           key: 'abc123',
@@ -309,7 +309,7 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.deletePackStore('foobar');
+          await dataSource.deletePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -324,7 +324,7 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.deletePackStore('foobar');
+          await dataSource.deletePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -341,10 +341,7 @@ void main() {
         final encodedOptions = encodeOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse('defineStore', encodedOptions);
         // act
-        final result = await dataSource.definePackStore(
-          'local',
-          tPackStoreModel.options,
-        );
+        final result = await dataSource.definePackStore(tPackStoreModel);
         // assert
         expect(result, equals(tPackStoreModel));
       },
@@ -357,7 +354,7 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.definePackStore('foobar', {});
+          await dataSource.definePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -372,7 +369,7 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.definePackStore('foobar', {});
+          await dataSource.definePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -389,10 +386,7 @@ void main() {
         final encodedOptions = encodeOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse('updateStore', encodedOptions);
         // act
-        final result = await dataSource.updatePackStore(
-          'abc123',
-          tPackStoreModel.options,
-        );
+        final result = await dataSource.updatePackStore(tPackStoreModel);
         // assert
         expect(result, equals(tPackStoreModel));
       },
@@ -405,7 +399,7 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.updatePackStore('foobar', {});
+          await dataSource.updatePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -420,7 +414,7 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.updatePackStore('foobar', {});
+          await dataSource.updatePackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());

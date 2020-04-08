@@ -20,20 +20,24 @@ void main() {
   });
 
   final key = 'cafebabe';
-  final tPackStore =
-      PackStore(key: key, label: 'ok go', kind: StoreKind.local, options: {});
+  final tPackStore = PackStore(
+    key: key,
+    label: 'ok go',
+    kind: StoreKind.local,
+    options: {},
+  );
 
   test(
     'should update an existing pack store within the repository',
     () async {
       // arrange
-      when(mockPackStoreRepository.updatePackStore(any, any))
+      when(mockPackStoreRepository.updatePackStore(any))
           .thenAnswer((_) async => Ok(tPackStore));
       // act
-      final result = await usecase(Params(key: key, options: {}));
+      final result = await usecase(Params(store: tPackStore));
       // assert
       expect(result, Ok(tPackStore));
-      verify(mockPackStoreRepository.updatePackStore(any, any));
+      verify(mockPackStoreRepository.updatePackStore(any));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },
   );

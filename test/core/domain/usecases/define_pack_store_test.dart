@@ -20,19 +20,23 @@ void main() {
   });
 
   final tPackStore = PackStore(
-      key: 'cafebabe', label: 'ok go', kind: StoreKind.local, options: {});
+    key: 'cafebabe',
+    label: 'ok go',
+    kind: StoreKind.local,
+    options: {},
+  );
 
   test(
     'should define a pack store within the repository',
     () async {
       // arrange
-      when(mockPackStoreRepository.definePackStore(any, any))
+      when(mockPackStoreRepository.definePackStore(any))
           .thenAnswer((_) async => Ok(tPackStore));
       // act
-      final result = await usecase(Params(kind: 'local', options: {}));
+      final result = await usecase(Params(store: tPackStore));
       // assert
       expect(result, Ok(tPackStore));
-      verify(mockPackStoreRepository.definePackStore(any, any));
+      verify(mockPackStoreRepository.definePackStore(any));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },
   );

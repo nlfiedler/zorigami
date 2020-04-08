@@ -362,7 +362,7 @@ void main() {
         // arrange
         setUpMockHttpClientGraphQLResponse('deleteDataset');
         // act
-        final result = await dataSource.deleteDataSet('abc123');
+        final result = await dataSource.deleteDataSet(tDataSet);
         // assert
         expect(result, equals(tDataSetModel));
       },
@@ -375,7 +375,7 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.deleteDataSet('foobar');
+          await dataSource.deleteDataSet(tDataSet);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -390,7 +390,7 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.deleteDataSet('foobar');
+          await dataSource.deleteDataSet(tDataSet);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());

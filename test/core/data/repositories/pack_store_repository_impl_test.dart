@@ -68,12 +68,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.definePackStore(any, any))
+        when(mockRemoteDataSource.definePackStore(any))
             .thenAnswer((_) async => tPackStoreModel);
         // act
-        final result = await repository.definePackStore('minio', {});
+        final result = await repository.definePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.definePackStore(any, any));
+        verify(mockRemoteDataSource.definePackStore(any));
         expect(result.unwrap(), equals(tPackStore));
       },
     );
@@ -82,12 +82,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.definePackStore(any, any))
+        when(mockRemoteDataSource.definePackStore(any))
             .thenThrow(ServerException());
         // act
-        final result = await repository.definePackStore('minio', {});
+        final result = await repository.definePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.definePackStore(any, any));
+        verify(mockRemoteDataSource.definePackStore(any));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -98,12 +98,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.updatePackStore(any, any))
+        when(mockRemoteDataSource.updatePackStore(any))
             .thenAnswer((_) async => tPackStoreModel);
         // act
-        final result = await repository.updatePackStore('key', {});
+        final result = await repository.updatePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.updatePackStore(any, any));
+        verify(mockRemoteDataSource.updatePackStore(any));
         expect(result.unwrap(), equals(tPackStore));
       },
     );
@@ -112,12 +112,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.updatePackStore(any, any))
+        when(mockRemoteDataSource.updatePackStore(any))
             .thenThrow(ServerException());
         // act
-        final result = await repository.updatePackStore('key', {});
+        final result = await repository.updatePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.updatePackStore(any, any));
+        verify(mockRemoteDataSource.updatePackStore(any));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -131,7 +131,7 @@ void main() {
         when(mockRemoteDataSource.deletePackStore(any))
             .thenAnswer((_) async => tPackStoreModel);
         // act
-        final result = await repository.deletePackStore('key');
+        final result = await repository.deletePackStore(tPackStore);
         // assert
         verify(mockRemoteDataSource.deletePackStore(any));
         expect(result.unwrap(), equals(tPackStore));
@@ -145,7 +145,7 @@ void main() {
         when(mockRemoteDataSource.deletePackStore(any))
             .thenThrow(ServerException());
         // act
-        final result = await repository.deletePackStore('key');
+        final result = await repository.deletePackStore(tPackStore);
         // assert
         verify(mockRemoteDataSource.deletePackStore(any));
         expect(result.err().unwrap(), isA<ServerFailure>());

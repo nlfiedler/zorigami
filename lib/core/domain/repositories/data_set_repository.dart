@@ -16,5 +16,5 @@ abstract class DataSetRepository {
   Future<Result<DataSet, Failure>> updateDataSet(DataSet input);
 
   /// Remove a data set.
-  Future<Result<DataSet, Failure>> deleteDataSet(String key);
+  Future<Result<DataSet, Failure>> deleteDataSet(DataSet input);
 }

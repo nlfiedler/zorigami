@@ -68,7 +68,7 @@ String encodeKind(StoreKind kind) {
 
 Map<String, dynamic> decodeOptions(String options) {
   if (options.isEmpty) {
-    return Map<String, dynamic>();
+    return <String, dynamic>{};
   }
   return json.decode(utf8.decode(base64Url.decode(options)));
 }

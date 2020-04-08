@@ -16,16 +16,15 @@ class UpdatePackStore implements UseCase<PackStore, Params> {
 
   @override
   Future<Result<PackStore, Failure>> call(Params params) async {
-    return await repository.updatePackStore(params.key, params.options);
+    return await repository.updatePackStore(params.store);
   }
 }
 
 class Params extends Equatable {
-  final String key;
-  final Map<String, dynamic> options;
+  final PackStore store;
 
-  Params({@required this.key, @required this.options});
+  Params({@required this.store});
 
   @override
-  List<Object> get props => [key, options];
+  List<Object> get props => [store];
 }

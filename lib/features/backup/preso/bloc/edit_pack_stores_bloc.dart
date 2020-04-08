@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
+import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/update_pack_store.dart' as ups;
 
 //
@@ -17,10 +18,9 @@ abstract class EditPackStoresEvent extends Equatable {
 }
 
 class UpdatePackStore extends EditPackStoresEvent {
-  final String key;
-  final Map<String, dynamic> options;
+  final PackStore store;
 
-  UpdatePackStore({@required this.key, @required this.options});
+  UpdatePackStore({@required this.store});
 }
 
 //
@@ -76,8 +76,7 @@ class EditPackStoresBloc
     if (event is UpdatePackStore) {
       yield Submitting();
       final result = await updatePackStore(ups.Params(
-        key: event.key,
-        options: event.options,
+        store: event.store,
       ));
       yield result.mapOrElse(
         (store) => Submitted(),

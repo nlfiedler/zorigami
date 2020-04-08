@@ -135,7 +135,7 @@ void main() {
         when(mockRemoteDataSource.deleteDataSet(any))
             .thenAnswer((_) async => tDataSetModel);
         // act
-        final result = await repository.deleteDataSet('key');
+        final result = await repository.deleteDataSet(tDataSet);
         // assert
         verify(mockRemoteDataSource.deleteDataSet(any));
         expect(result.unwrap(), equals(tDataSet));
@@ -149,7 +149,7 @@ void main() {
         when(mockRemoteDataSource.deleteDataSet(any))
             .thenThrow(ServerException());
         // act
-        final result = await repository.deleteDataSet('key');
+        final result = await repository.deleteDataSet(tDataSet);
         // assert
         verify(mockRemoteDataSource.deleteDataSet(any));
         expect(result.err().unwrap(), isA<ServerFailure>());

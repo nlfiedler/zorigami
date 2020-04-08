@@ -47,9 +47,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   }
 
   @override
-  Future<Result<DataSet, Failure>> deleteDataSet(String key) async {
+  Future<Result<DataSet, Failure>> deleteDataSet(DataSet input) async {
     try {
-      final DataSet = await remoteDataSource.deleteDataSet(key);
+      final DataSet = await remoteDataSource.deleteDataSet(input);
       return Ok(DataSet);
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));

@@ -17,15 +17,15 @@ class DeletePackStore implements UseCase<PackStore, Params> {
 
   @override
   Future<Result<PackStore, Failure>> call(Params params) async {
-    return await repository.deletePackStore(params.key);
+    return await repository.deletePackStore(params.store);
   }
 }
 
 class Params extends Equatable {
-  final String key;
+  final PackStore store;
 
-  Params({@required this.key});
+  Params({@required this.store});
 
   @override
-  List<Object> get props => [key];
+  List<Object> get props => [store];
 }

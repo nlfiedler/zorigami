@@ -16,16 +16,15 @@ class DefinePackStore implements UseCase<PackStore, Params> {
 
   @override
   Future<Result<PackStore, Failure>> call(Params params) async {
-    return await repository.definePackStore(params.kind, params.options);
+    return await repository.definePackStore(params.store);
   }
 }
 
 class Params extends Equatable {
-  final String kind;
-  final Map<String, dynamic> options;
+  final PackStore store;
 
-  Params({@required this.kind, @required this.options});
+  Params({@required this.store});
 
   @override
-  List<Object> get props => [kind, options];
+  List<Object> get props => [store];
 }

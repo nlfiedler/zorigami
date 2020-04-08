@@ -14,6 +14,6 @@ abstract class PackStoreForm extends StatelessWidget {
   /// Prepare the initial form values using the given store.
   Map<String, dynamic> initialValuesFrom(PackStore store);
 
-  /// Convert the form state into pack store options.
-  Map<String, dynamic> optionsFromState(FormBuilderState state);
+  /// Convert the form state into a pack store.
+  PackStore storeFromState(FormBuilderState state);
 }

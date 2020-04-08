@@ -34,7 +34,7 @@ void main() {
       when(mockPackStoreRepository.deletePackStore(any))
           .thenAnswer((_) async => Ok(tPackStore));
       // act
-      final result = await usecase(Params(key: key));
+      final result = await usecase(Params(store: tPackStore));
       // assert
       expect(result, Ok(tPackStore));
       verify(mockPackStoreRepository.deletePackStore(any));

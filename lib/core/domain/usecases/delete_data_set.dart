@@ -17,15 +17,15 @@ class DeleteDataSet implements UseCase<DataSet, Params> {
 
   @override
   Future<Result<DataSet, Failure>> call(Params params) async {
-    return await repository.deleteDataSet(params.key);
+    return await repository.deleteDataSet(params.dataset);
   }
 }
 
 class Params extends Equatable {
-  final String key;
+  final DataSet dataset;
 
-  Params({@required this.key});
+  Params({@required this.dataset});
 
   @override
-  List<Object> get props => [key];
+  List<Object> get props => [dataset];
 }

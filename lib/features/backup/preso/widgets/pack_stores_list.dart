@@ -90,14 +90,11 @@ class PackStoreListDetails extends StatelessWidget {
 
   void savePack(BuildContext context, PackStoreForm storeForm) {
     if (formKey.currentState.saveAndValidate()) {
-      final options = storeForm.optionsFromState(
+      final store = storeForm.storeFromState(
         formKey.currentState,
       );
       BlocProvider.of<EditPackStoresBloc>(context).add(
-        UpdatePackStore(
-          key: formKey.currentState.value['key'],
-          options: options,
-        ),
+        UpdatePackStore(store: store),
       );
     }
   }

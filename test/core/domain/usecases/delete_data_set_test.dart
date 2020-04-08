@@ -37,7 +37,7 @@ void main() {
       when(mockDataSetRepository.deleteDataSet(any))
           .thenAnswer((_) async => Ok(tDataSet));
       // act
-      final result = await usecase(Params(key: key));
+      final result = await usecase(Params(dataset: tDataSet));
       // assert
       expect(result, Ok(tDataSet));
       verify(mockDataSetRepository.deleteDataSet(any));

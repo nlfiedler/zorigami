@@ -4,16 +4,15 @@
 import 'package:meta/meta.dart';
 import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
+import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class PackStoreRemoteDataSource {
   Future<List<PackStoreModel>> getAllPackStores();
   Future<PackStoreModel> getPackStore(String key);
-  Future<PackStoreModel> deletePackStore(String key);
-  Future<PackStoreModel> definePackStore(
-      String kind, Map<String, dynamic> options);
-  Future<PackStoreModel> updatePackStore(
-      String key, Map<String, dynamic> options);
+  Future<PackStoreModel> deletePackStore(PackStore input);
+  Future<PackStoreModel> definePackStore(PackStore input);
+  Future<PackStoreModel> updatePackStore(PackStore input);
 }
 
 class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
@@ -79,7 +78,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   }
 
   @override
-  Future<PackStoreModel> deletePackStore(String key) async {
+  Future<PackStoreModel> deletePackStore(PackStore input) async {
     final getStore = r'''
       mutation DeleteStore($key: String!) {
         deleteStore(key: $key) {
@@ -93,7 +92,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     final mutationOptions = MutationOptions(
       documentNode: gql(getStore),
       variables: <String, dynamic>{
-        'identifier': key,
+        'identifier': input.key,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);
@@ -105,8 +104,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   }
 
   @override
-  Future<PackStoreModel> definePackStore(
-      String kind, Map<String, dynamic> options) async {
+  Future<PackStoreModel> definePackStore(PackStore input) async {
     final defineStore = r'''
       mutation DefineStore($typeName: String!, $options: String!) {
         defineStore(typeName: $typeName, options: $options) {
@@ -117,11 +115,11 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
         }
       }
     ''';
-    final encodedOptions = encodeOptions(options);
+    final encodedOptions = prepareOptions(input);
     final mutationOptions = MutationOptions(
       documentNode: gql(defineStore),
       variables: <String, dynamic>{
-        'typeName': kind,
+        'typeName': encodeKind(input.kind),
         'options': encodedOptions,
       },
     );
@@ -134,8 +132,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   }
 
   @override
-  Future<PackStoreModel> updatePackStore(
-      String key, Map<String, dynamic> options) async {
+  Future<PackStoreModel> updatePackStore(PackStore input) async {
     final updateStore = r'''
       mutation UpdateStore($key: String!, $options: String!) {
         updateStore(key: $key, options: $options) {
@@ -146,11 +143,11 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
         }
       }
     ''';
-    final encodedOptions = encodeOptions(options);
+    final encodedOptions = prepareOptions(input);
     final mutationOptions = MutationOptions(
       documentNode: gql(updateStore),
       variables: <String, dynamic>{
-        'key': key,
+        'key': input.key,
         'options': encodedOptions,
       },
     );
@@ -161,4 +158,12 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     final store = result.data['updateStore'] as Map<String, dynamic>;
     return PackStoreModel.fromJson(store);
   }
+}
+
+// Put the store label into a copy of the options, as expected by the GraphQL
+// server when passing the dataset as input.
+String prepareOptions(PackStore store) {
+  final Map<String, dynamic> options = Map.from(store.options);
+  options['label'] = store.label;
+  return encodeOptions(options);
 }
