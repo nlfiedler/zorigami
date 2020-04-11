@@ -80,8 +80,8 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   @override
   Future<PackStoreModel> deletePackStore(PackStore input) async {
     final getStore = r'''
-      mutation DeleteStore($key: String!) {
-        deleteStore(key: $key) {
+      mutation DeleteStore($identifier: String!) {
+        deleteStore(key: $identifier) {
           key
           label
           kind

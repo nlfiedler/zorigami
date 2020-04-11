@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/widgets/pack_store_creator.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_stores_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
@@ -27,13 +28,21 @@ class PackStoresScreen extends StatelessWidget {
             if (state is Error) {
               return Card(
                 child: ListTile(
-                  title: Text('Error loading pack store'),
+                  title: Text('Error loading pack stores'),
                   subtitle: Text(state.message),
                 ),
               );
             }
             if (state is Loaded) {
-              return PackStoresList(stores: state.stores);
+              return Column(
+                children: <Widget>[
+                  BlocProvider.value(
+                    value: BlocProvider.of<PackStoresBloc>(context),
+                    child: PackStoreHeader(),
+                  ),
+                  Expanded(child: PackStoresList(stores: state.stores)),
+                ],
+              );
             }
             return Text('Loading...');
           },

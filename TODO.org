@@ -67,26 +67,22 @@
 ****** can use =Window.open()= from =dart:html=, like =window.open(url);=
 ******* by default it opens a new window/tab for the link
 ***** DONE query for stores, show in a list
-***** TODO show details of a pack store
+***** DONE show details of a pack store
 ****** DONE write a factory that builds out details for each kind of store
 ****** DONE write impl for local pack store
-****** TODO write impl for minio pack store
-****** TODO write impl for sftp pack store
-***** TODO allow editing a pack store
+****** DONE write impl for minio pack store
+****** DONE write impl for sftp pack store
+***** DONE allow editing a pack store
 ****** use https://pub.dev/packages/flutter_form_builder for forms and validation
 ****** define new events in the pack stores bloc for edit and delete
 ****** show a "loading" thing while submitting the changes
 ****** ensure that the basic form can be reused for defining a new store
 ****** consider how to unit test the pack store forms
 ****** DONE write impl for local pack store
-****** TODO write impl for minio pack store
-****** TODO write impl for sftp pack store
-***** TODO support defining a new pack store
-****** use a FAB on the pack stores screen
-****** use a "popup" route (c.f. Navigator API docs)
-****** step 1 is to select the store kind, then move to the kind-specific form
-****** add a new edit pack store event for defining a new store
-***** TODO allow deleting a pack store
+****** DONE write impl for minio pack store
+****** DONE write impl for sftp pack store
+***** DONE support defining a new pack store
+***** DONE allow deleting a pack store
 ***** TODO show all datasets
 ***** TODO show details of a dataset
 ***** TODO support defining a new dataset

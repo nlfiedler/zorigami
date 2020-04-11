@@ -12,15 +12,6 @@ class LocalStoreForm extends PackStoreForm {
   LocalStoreForm({Key key, @required this.store}) : super(key: key);
 
   @override
-  Map<String, dynamic> initialValues() {
-    return {
-      'key': 'auto-generated',
-      'label': 'My Stuff',
-      'basepath': '/Users/charlie/Documents',
-    };
-  }
-
-  @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {
     return {
       'key': store.key,

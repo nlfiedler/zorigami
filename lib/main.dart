@@ -23,6 +23,11 @@ class MyApp extends StatelessWidget {
         '/sets': (context) => DataSetsScreen(),
         '/stores': (context) => PackStoresScreen(),
       },
+      theme: ThemeData(
+        bottomSheetTheme: BottomSheetThemeData(
+          backgroundColor: Colors.black.withOpacity(0),
+        ),
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
+import 'package:zorigami/core/domain/usecases/delete_pack_store.dart' as dps;
 import 'package:zorigami/core/domain/usecases/update_pack_store.dart' as ups;
 
 //
@@ -21,6 +22,12 @@ class UpdatePackStore extends EditPackStoresEvent {
   final PackStore store;
 
   UpdatePackStore({@required this.store});
+}
+
+class DeletePackStore extends EditPackStoresEvent {
+  final PackStore store;
+
+  DeletePackStore({@required this.store});
 }
 
 //
@@ -54,8 +61,12 @@ class Error extends EditPackStoresState {
 class EditPackStoresBloc
     extends Bloc<EditPackStoresEvent, EditPackStoresState> {
   final ups.UpdatePackStore updatePackStore;
+  final dps.DeletePackStore deletePackStore;
 
-  EditPackStoresBloc({this.updatePackStore});
+  EditPackStoresBloc({
+    this.updatePackStore,
+    this.deletePackStore,
+  });
 
   @override
   EditPackStoresState get initialState => Editing();
@@ -76,6 +87,15 @@ class EditPackStoresBloc
     if (event is UpdatePackStore) {
       yield Submitting();
       final result = await updatePackStore(ups.Params(
+        store: event.store,
+      ));
+      yield result.mapOrElse(
+        (store) => Submitted(),
+        (failure) => Error(message: failure.toString()),
+      );
+    } else if (event is DeletePackStore) {
+      yield Submitting();
+      final result = await deletePackStore(dps.Params(
         store: event.store,
       ));
       yield result.mapOrElse(

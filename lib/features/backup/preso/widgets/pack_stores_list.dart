@@ -6,7 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
-import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart'
+    as epsb;
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 
@@ -20,7 +21,6 @@ class PackStoresList extends StatefulWidget {
 }
 
 class _PackStoresListState extends State<PackStoresList> {
-  final formKey = GlobalKey<FormBuilderState>();
   List<ExpansionItem> items;
 
   @override
@@ -41,7 +41,7 @@ class _PackStoresListState extends State<PackStoresList> {
               vertical: 8.0,
               horizontal: 32.0,
             ),
-            child: PackStoreListDetails(formKey: formKey, store: e),
+            child: PackStoreListDetails(store: e),
           ),
         );
         return ExpansionItem(
@@ -56,22 +56,25 @@ class _PackStoresListState extends State<PackStoresList> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Container(
-        child: ExpansionPanelList(
-          expansionCallback: (int index, bool isExpanded) {
-            setState(() {
-              items[index].isExpanded = !isExpanded;
-            });
-          },
-          children: items.map<ExpansionPanel>((ExpansionItem item) {
-            return ExpansionPanel(
-              canTapOnHeader: true,
-              headerBuilder: (BuildContext context, bool isExpanded) {
-                return item.headerValue;
-              },
-              body: item.expandedValue,
-              isExpanded: item.isExpanded,
-            );
-          }).toList(),
+        child: BlocProvider<epsb.EditPackStoresBloc>(
+          create: (_) => getIt<epsb.EditPackStoresBloc>(),
+          child: ExpansionPanelList(
+            expansionCallback: (int index, bool isExpanded) {
+              setState(() {
+                items[index].isExpanded = !isExpanded;
+              });
+            },
+            children: items.map<ExpansionPanel>((ExpansionItem item) {
+              return ExpansionPanel(
+                canTapOnHeader: true,
+                headerBuilder: (BuildContext context, bool isExpanded) {
+                  return item.headerValue;
+                },
+                body: item.expandedValue,
+                isExpanded: item.isExpanded,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -79,13 +82,12 @@ class _PackStoresListState extends State<PackStoresList> {
 }
 
 class PackStoreListDetails extends StatelessWidget {
-  const PackStoreListDetails({
+  PackStoreListDetails({
     Key key,
-    @required this.formKey,
     @required this.store,
   }) : super(key: key);
 
-  final GlobalKey<FormBuilderState> formKey;
+  final formKey = GlobalKey<FormBuilderState>();
   final PackStore store;
 
   void savePack(BuildContext context, PackStoreForm storeForm) {
@@ -93,8 +95,8 @@ class PackStoreListDetails extends StatelessWidget {
       final store = storeForm.storeFromState(
         formKey.currentState,
       );
-      BlocProvider.of<EditPackStoresBloc>(context).add(
-        UpdatePackStore(store: store),
+      BlocProvider.of<epsb.EditPackStoresBloc>(context).add(
+        epsb.UpdatePackStore(store: store),
       );
     }
   }
@@ -102,44 +104,58 @@ class PackStoreListDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final storeForm = getIt<PackStoreForm>(param1: store);
-    return BlocProvider<EditPackStoresBloc>(
-      create: (_) => getIt<EditPackStoresBloc>(),
-      child: BlocBuilder<EditPackStoresBloc, EditPackStoresState>(
-        builder: (context, state) {
-          if (state is Submitted) {
-            // this will force everything to rebuild
-            BlocProvider.of<PackStoresBloc>(context).add(ReloadPackStores());
-          }
-          return Column(
-            children: <Widget>[
-              FormBuilder(
-                key: formKey,
-                initialValue: storeForm.initialValuesFrom(store),
-                autovalidate: true,
-                child: storeForm,
-                // not convinced this readOnly is effective
-                readOnly: (state is Submitting),
+    return BlocConsumer<epsb.EditPackStoresBloc, epsb.EditPackStoresState>(
+      listener: (context, state) {
+        if (state is epsb.Submitted) {
+          // this will force everything to rebuild
+          BlocProvider.of<PackStoresBloc>(context).add(ReloadPackStores());
+        } else if (state is epsb.Error) {
+          Scaffold.of(context).showSnackBar(
+            SnackBar(
+              content: ListTile(
+                title: Text('Error updating pack store'),
+                subtitle: Text(state.message),
               ),
-              ButtonBar(
-                children: <Widget>[
-                  FlatButton.icon(
-                    icon: Icon(Icons.save),
-                    label: const Text('SAVE'),
-                    onPressed: (state is Submitting)
-                        ? null
-                        : () => savePack(context, storeForm),
-                  ),
-                  FlatButton.icon(
-                    icon: Icon(Icons.delete),
-                    label: const Text('DELETE'),
-                    onPressed: (state is Submitting) ? null : () {/* TODO */},
-                  ),
-                ],
-              )
-            ],
+            ),
           );
-        },
-      ),
+        }
+      },
+      builder: (context, state) {
+        return Column(
+          children: <Widget>[
+            FormBuilder(
+              key: formKey,
+              initialValue: storeForm.initialValuesFrom(store),
+              autovalidate: true,
+              child: storeForm,
+              // not convinced this readOnly is effective
+              readOnly: (state is epsb.Submitting),
+            ),
+            ButtonBar(
+              children: <Widget>[
+                RaisedButton.icon(
+                  icon: Icon(Icons.save),
+                  label: const Text('SAVE'),
+                  onPressed: (state is epsb.Submitting)
+                      ? null
+                      : () => savePack(context, storeForm),
+                ),
+                FlatButton.icon(
+                  icon: Icon(Icons.delete),
+                  label: const Text('DELETE'),
+                  onPressed: (state is epsb.Submitting)
+                      ? null
+                      : () {
+                          BlocProvider.of<epsb.EditPackStoresBloc>(context).add(
+                            epsb.DeletePackStore(store: store),
+                          );
+                        },
+                ),
+              ],
+            )
+          ],
+        );
+      },
     );
   }
 }

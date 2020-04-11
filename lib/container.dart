@@ -6,8 +6,10 @@ import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/repositories/container.dart';
 import 'package:zorigami/core/data/sources/container.dart';
+import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/container.dart';
 import 'package:zorigami/core/util/input_converter.dart';
+import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
@@ -33,7 +35,13 @@ void init() {
     () => PackStoresBloc(usecase: getIt()),
   );
   getIt.registerFactory(
-    () => EditPackStoresBloc(updatePackStore: getIt()),
+    () => CreatePackStoresBloc(usecase: getIt()),
+  );
+  getIt.registerFactory(
+    () => EditPackStoresBloc(
+      updatePackStore: getIt(),
+      deletePackStore: getIt(),
+    ),
   );
   getIt.registerFactory(
     () => SnapshotBloc(usecase: getIt()),
@@ -60,6 +68,9 @@ void init() {
 
   // core
   getIt.registerLazySingleton(() => InputConverter());
+  getIt.registerFactoryParam<PackStore, String, void>(
+    (param1, param2) => defaultPackStore(param1, param2),
+  );
 
   // external
   getIt.registerLazySingleton(() {

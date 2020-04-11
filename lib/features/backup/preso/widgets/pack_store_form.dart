@@ -8,9 +8,6 @@ import 'package:zorigami/core/domain/entities/pack_store.dart';
 abstract class PackStoreForm extends StatelessWidget {
   PackStoreForm({Key key}) : super(key: key);
 
-  /// Return default values for form inputs.
-  Map<String, dynamic> initialValues();
-
   /// Prepare the initial form values using the given store.
   Map<String, dynamic> initialValuesFrom(PackStore store);
 

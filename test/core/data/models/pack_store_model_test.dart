@@ -58,10 +58,10 @@ void main() {
         final result = tPackStoreModel.toJson();
         // assert
         final expectedMap = {
-          "key": "123",
-          "label": "Label",
-          "kind": "local",
-          "options": "eyJsYWJlbCI6IkxhYmVsIiwiYmFzZXBhdGgiOiIvaG9tZS91c2VycyJ9"
+          'key': '123',
+          'label': 'Label',
+          'kind': 'local',
+          'options': 'eyJsYWJlbCI6IkxhYmVsIiwiYmFzZXBhdGgiOiIvaG9tZS91c2VycyJ9'
         };
         expect(result, expectedMap);
       },
@@ -69,13 +69,33 @@ void main() {
   });
 
   group('toJson and then fromJson', () {
-    test('should convert to and from JSON', () {
+    test('should convert all non-null options', () {
       // arrange
       final model = PackStoreModel(
         key: 'abc123',
         label: 'MyLabel',
         kind: StoreKind.local,
         options: {'label': 'MyLabel', 'basepath': '/home/planet'},
+      );
+      // act
+      final result = PackStoreModel.fromJson(model.toJson());
+      // assert
+      expect(result, equals(model));
+    });
+
+    test('should convert some null options', () {
+      // arrange
+      final model = PackStoreModel(
+        key: 'sftp321',
+        label: 'SecureFTP',
+        kind: StoreKind.sftp,
+        options: {
+          'label': 'SecureFTP',
+          'remote_addr': '192.168.1.1',
+          'username': 'charlie',
+          'password': null,
+          'basepath': null,
+        },
       );
       // act
       final result = PackStoreModel.fromJson(model.toJson());
