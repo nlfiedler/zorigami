@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_bloc.dart';
 
 class MockTreeRepository extends Mock implements TreeRepository {}
@@ -24,13 +25,13 @@ void main() {
   );
   final tTree = Tree(entries: [tTreeEntry]);
 
-  setUp(() {
-    mockTreeRepository = MockTreeRepository();
-    usecase = GetTree(mockTreeRepository);
-    when(mockTreeRepository.getTree(any)).thenAnswer((_) async => Ok(tTree));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockTreeRepository = MockTreeRepository();
+      usecase = GetTree(mockTreeRepository);
+      when(mockTreeRepository.getTree(any)).thenAnswer((_) async => Ok(tTree));
+    });
 
-  group('TreeBloc', () {
     blocTest(
       'emits [] when nothing is added',
       build: () async => TreeBloc(usecase: usecase),
@@ -38,10 +39,26 @@ void main() {
     );
 
     blocTest(
-      'emits [Loading, Loaded] when LoadAllDataSets is added',
+      'emits [Loading, Loaded] when LoadTree is added',
       build: () async => TreeBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadTree(digest: 'cafebabe')),
       expect: [Loading(), Loaded(tree: tTree)],
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockTreeRepository = MockTreeRepository();
+      usecase = GetTree(mockTreeRepository);
+      when(mockTreeRepository.getTree(any))
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadTree is added',
+      build: () async => TreeBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadTree(digest: 'cafebabe')),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

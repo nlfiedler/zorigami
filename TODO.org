@@ -89,7 +89,9 @@
 ***** DONE allow deleting a dataset
 ***** DONE allow editing a dataset
 ***** DONE show status of the datasets on the home page
-**** TODO add missing bloc unit tests
+**** DONE add missing bloc unit tests
+**** DONE add error cases to the bloc tests
+**** TODO user performance tools to see why some screens transition slowly
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications

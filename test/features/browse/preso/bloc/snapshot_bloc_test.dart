@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_bloc.dart';
 
 class MockSnapshotRepository extends Mock implements SnapshotRepository {}
@@ -25,14 +26,14 @@ void main() {
     tree: 'deadbeef',
   );
 
-  setUp(() {
-    mockSnapshotRepository = MockSnapshotRepository();
-    usecase = GetSnapshot(mockSnapshotRepository);
-    when(mockSnapshotRepository.getSnapshot(any))
-        .thenAnswer((_) async => Ok(tSnapshot));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetSnapshot(mockSnapshotRepository);
+      when(mockSnapshotRepository.getSnapshot(any))
+          .thenAnswer((_) async => Ok(tSnapshot));
+    });
 
-  group('SnapshotBloc', () {
     blocTest(
       'emits [] when nothing is added',
       build: () async => SnapshotBloc(usecase: usecase),
@@ -44,6 +45,22 @@ void main() {
       build: () async => SnapshotBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
       expect: [Loading(), Loaded(snapshot: tSnapshot)],
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetSnapshot(mockSnapshotRepository);
+      when(mockSnapshotRepository.getSnapshot(any))
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadAllDataSets is added',
+      build: () async => SnapshotBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

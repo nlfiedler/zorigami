@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/repositories/configuration_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 
 class MockConfigurationRepository extends Mock
@@ -23,14 +24,14 @@ void main() {
     computerId: '1642ceb7-02eb-4ada-94f9-27c14320b908',
   );
 
-  setUp(() {
-    mockConfigurationRepository = MockConfigurationRepository();
-    usecase = GetConfiguration(mockConfigurationRepository);
-    when(mockConfigurationRepository.getConfiguration())
-        .thenAnswer((_) async => Ok(tConfiguration));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockConfigurationRepository = MockConfigurationRepository();
+      usecase = GetConfiguration(mockConfigurationRepository);
+      when(mockConfigurationRepository.getConfiguration())
+          .thenAnswer((_) async => Ok(tConfiguration));
+    });
 
-  group('ConfigurationBloc', () {
     blocTest(
       'emits [] when nothing is added',
       build: () async => ConfigurationBloc(usecase: usecase),
@@ -42,6 +43,22 @@ void main() {
       build: () async => ConfigurationBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadConfiguration()),
       expect: [Loading(), Loaded(config: tConfiguration)],
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockConfigurationRepository = MockConfigurationRepository();
+      usecase = GetConfiguration(mockConfigurationRepository);
+      when(mockConfigurationRepository.getConfiguration())
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadConfiguration is added',
+      build: () async => ConfigurationBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadConfiguration()),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

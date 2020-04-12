@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 
 class MockDataSetRepository extends Mock implements DataSetRepository {}
@@ -26,14 +27,14 @@ void main() {
     snapshot: None(),
   );
 
-  setUp(() {
-    mockDataSetRepository = MockDataSetRepository();
-    usecase = GetDataSets(mockDataSetRepository);
-    when(mockDataSetRepository.getAllDataSets())
-        .thenAnswer((_) async => Ok([tDataSet]));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockDataSetRepository = MockDataSetRepository();
+      usecase = GetDataSets(mockDataSetRepository);
+      when(mockDataSetRepository.getAllDataSets())
+          .thenAnswer((_) async => Ok([tDataSet]));
+    });
 
-  group('DatasetsBloc', () {
     blocTest(
       'emits [] when nothing is added',
       build: () async => DataSetsBloc(usecase: usecase),
@@ -48,6 +49,37 @@ void main() {
         Loading(),
         Loaded(sets: [tDataSet])
       ],
+    );
+
+    blocTest(
+      'emits [Loading, Loaded, Empty] when ReloadDataSets is added',
+      build: () async => DataSetsBloc(usecase: usecase),
+      act: (bloc) {
+        bloc.add(LoadAllDataSets());
+        bloc.add(ReloadDataSets());
+        return;
+      },
+      expect: [
+        Loading(),
+        Loaded(sets: [tDataSet]),
+        Empty()
+      ],
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockDataSetRepository = MockDataSetRepository();
+      usecase = GetDataSets(mockDataSetRepository);
+      when(mockDataSetRepository.getAllDataSets())
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadAllDataSets is added',
+      build: () async => DataSetsBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadAllDataSets()),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

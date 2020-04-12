@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 class MockSnapshotRepository extends Mock implements TreeRepository {}
@@ -79,18 +80,18 @@ void main() {
     ],
   );
 
-  setUp(() {
-    mockSnapshotRepository = MockSnapshotRepository();
-    usecase = GetTree(mockSnapshotRepository);
-    when(mockSnapshotRepository.getTree('sha1-cafebabe'))
-        .thenAnswer((_) async => Ok(tTree1));
-    when(mockSnapshotRepository.getTree('sha1-cafed00d'))
-        .thenAnswer((_) async => Ok(tTree2));
-    when(mockSnapshotRepository.getTree('sha1-deadbeef'))
-        .thenAnswer((_) async => Ok(tTree3));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetTree(mockSnapshotRepository);
+      when(mockSnapshotRepository.getTree('sha1-cafebabe'))
+          .thenAnswer((_) async => Ok(tTree1));
+      when(mockSnapshotRepository.getTree('sha1-cafed00d'))
+          .thenAnswer((_) async => Ok(tTree2));
+      when(mockSnapshotRepository.getTree('sha1-deadbeef'))
+          .thenAnswer((_) async => Ok(tTree3));
+    });
 
-  group('TreeBrowserBloc', () {
     blocTest(
       'emits [] when nothing is added',
       build: () async => TreeBrowserBloc(usecase: usecase),
@@ -245,6 +246,22 @@ void main() {
         expect(bloc.path.length, equals(0));
         expect(bloc.history.length, equals(1));
       },
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetTree(mockSnapshotRepository);
+      when(mockSnapshotRepository.getTree(any))
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadTree is added',
+      build: () async => TreeBrowserBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

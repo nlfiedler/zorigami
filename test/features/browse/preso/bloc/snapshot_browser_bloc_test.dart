@@ -8,6 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
+import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 
 class MockSnapshotRepository extends Mock implements SnapshotRepository {}
@@ -34,16 +35,16 @@ void main() {
     tree: 'beefdead',
   );
 
-  setUp(() {
-    mockSnapshotRepository = MockSnapshotRepository();
-    usecase = GetSnapshot(mockSnapshotRepository);
-    when(mockSnapshotRepository.getSnapshot('cafebabe'))
-        .thenAnswer((_) async => Ok(tSubsequent));
-    when(mockSnapshotRepository.getSnapshot('cafed00d'))
-        .thenAnswer((_) async => Ok(tParent));
-  });
+  group('normal cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetSnapshot(mockSnapshotRepository);
+      when(mockSnapshotRepository.getSnapshot('cafebabe'))
+          .thenAnswer((_) async => Ok(tSubsequent));
+      when(mockSnapshotRepository.getSnapshot('cafed00d'))
+          .thenAnswer((_) async => Ok(tParent));
+    });
 
-  group('SnapshotBrowserBloc', () {
     test('ensure Loaded implements Equatable', () {
       expect(
         Loaded(snapshot: tSubsequent),
@@ -94,6 +95,22 @@ void main() {
       verify: (bloc) async {
         expect(bloc.history.length, equals(0));
       },
+    );
+  });
+
+  group('error cases', () {
+    setUp(() {
+      mockSnapshotRepository = MockSnapshotRepository();
+      usecase = GetSnapshot(mockSnapshotRepository);
+      when(mockSnapshotRepository.getSnapshot(any))
+          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+    });
+
+    blocTest(
+      'emits [Loading, Error] when LoadSnapshot is added',
+      build: () async => SnapshotBrowserBloc(usecase: usecase),
+      act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
+      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }
