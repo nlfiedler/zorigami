@@ -14,14 +14,6 @@ target
 tmp
 .tmp
 
-# ReasonML/BuckleScript
-.graphql_ppx_cache
-.merlin
-lib/bs
-lib/js
-node_modules
-public/javascripts/main.js
-
 # Flutter/Dart/Pub related
 **/doc/api/
 .dart_tool/

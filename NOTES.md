@@ -52,8 +52,8 @@ They change the SSH config to run the backup command with "append only" flag.
 ## Design
 
 * Backend written in Rust, uses Juniper GraphQL server
-* Front-end written in ReasonML, uses Apollo GraphQL client
-* Desktop application written in ReasonML, uses Electron
+* Front-end written in Flutter, uses Angel GraphQL client
+* Desktop application written in Flutter
 * Key/Value store is RocksDB
 * Storage implementations support local, SFTP, Google, Amazon, etc
 
