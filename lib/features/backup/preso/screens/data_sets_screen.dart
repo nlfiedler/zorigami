@@ -2,19 +2,63 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:zorigami/container.dart';
+import 'package:zorigami/features/backup/preso/screens/new_data_set_screen.dart';
+import 'package:zorigami/features/backup/preso/widgets/data_sets_list.dart';
+import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DataSetsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('DATA SETS'),
+    return BlocProvider<DataSetsBloc>(
+      create: (_) => getIt<DataSetsBloc>(),
+      child: BlocBuilder<DataSetsBloc, DataSetsState>(
+        builder: (context, state) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text('DATA SETS'),
+            ),
+            body: buildBody(context, state),
+            floatingActionButton: FloatingActionButton(
+              child: Icon(Icons.add),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NewDataSetScreen(),
+                  ),
+                );
+                if (result != null) {
+                  BlocProvider.of<DataSetsBloc>(context).add(ReloadDataSets());
+                }
+              },
+            ),
+            drawer: NavigationDrawer(),
+          );
+        },
       ),
-      body: Center(
-        child: Text('Data Sets'),
-      ),
-      drawer: NavigationDrawer(),
     );
+  }
+
+  Widget buildBody(BuildContext context, DataSetsState state) {
+    if (state is Empty) {
+      // kick off the initial remote request
+      BlocProvider.of<DataSetsBloc>(context).add(LoadAllDataSets());
+      return Text('Starting...');
+    }
+    if (state is Error) {
+      return Card(
+        child: ListTile(
+          title: Text('Error loading data sets'),
+          subtitle: Text(state.message),
+        ),
+      );
+    }
+    if (state is Loaded) {
+      return DataSetsList(sets: state.sets);
+    }
+    return Text('Loading data sets...');
   }
 }

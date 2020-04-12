@@ -7,19 +7,19 @@ import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
-import 'package:zorigami/features/browse/preso/bloc/datasets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/screens/snapshot_screen.dart';
 
 class DataSetsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<DatasetsBloc>(
-      create: (_) => getIt<DatasetsBloc>(),
-      child: BlocBuilder<DatasetsBloc, DatasetsState>(
+    return BlocProvider<DataSetsBloc>(
+      create: (_) => getIt<DataSetsBloc>(),
+      child: BlocBuilder<DataSetsBloc, DataSetsState>(
         builder: (context, state) {
           if (state is Empty) {
             // kick off the initial remote request
-            BlocProvider.of<DatasetsBloc>(context).add(LoadAllDataSets());
+            BlocProvider.of<DataSetsBloc>(context).add(LoadAllDataSets());
             return Text('Starting...');
           }
           if (state is Error) {

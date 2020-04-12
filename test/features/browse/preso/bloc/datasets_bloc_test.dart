@@ -8,7 +8,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
-import 'package:zorigami/features/browse/preso/bloc/datasets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 
 class MockDataSetRepository extends Mock implements DataSetRepository {}
 
@@ -36,13 +36,13 @@ void main() {
   group('DatasetsBloc', () {
     blocTest(
       'emits [] when nothing is added',
-      build: () async => DatasetsBloc(getDataSets: usecase),
+      build: () async => DataSetsBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllDataSets is added',
-      build: () async => DatasetsBloc(getDataSets: usecase),
+      build: () async => DataSetsBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadAllDataSets()),
       expect: [
         Loading(),

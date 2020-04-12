@@ -46,7 +46,7 @@
 ****** DONE configuration
 ****** DONE tree
 ****** DONE snapshot
-**** TODO preso
+**** DONE preso
 ***** DONE set up the page routing
 ****** c.f. https://flutter.dev/docs/development/ui/navigation
 ****** every page or screen will be based on a =Scaffold=
@@ -83,12 +83,13 @@
 ****** DONE write impl for sftp pack store
 ***** DONE support defining a new pack store
 ***** DONE allow deleting a pack store
-***** TODO show all datasets
-***** TODO show details of a dataset
-***** TODO support defining a new dataset
-***** TODO allow deleting a dataset
-***** TODO allow editing a dataset
+***** DONE show all datasets
+***** DONE show details of a dataset
+***** DONE support defining a new dataset
+***** DONE allow deleting a dataset
+***** DONE allow editing a dataset
 ***** DONE show status of the datasets on the home page
+**** TODO add missing bloc unit tests
 *** TODO document decision to use clean architecture
 **** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 **** Clean Architecture is suitable for large and small applications
@@ -136,25 +137,27 @@ var url = window.location.href;
 **** update =.gitignore= and =.dockerignore=
 **** update =README.md= file regarding Node, Reason, etc
 **** update =NOTES.md= file regarding everything
+** Advanced Scheduling
+*** TODO frontend
+**** TODO Support multiple schedules in interface
+**** TODO Support day-of-week in schedule
+**** TODO Support day-of-month in schedule
+**** TODO Support week-of-month in schedule
+**** TODO Support time-range in schedule
+*** TODO backend
+**** Supervisor needs to consider start time in the time range (if any)
+**** =BackupMaster= needs to calculate the stop time in =new()=
+**** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
+**** supervisor to report the =OutOfTimeError= a little better than normal errors
 ** Online Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
 **** merge with the defaults in =engine.rs=
-*** TODO consider if it would be easier to use Amazon initially
-**** already have rusoto and using it successfully
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO add form for defining a Google Cloud Storage store
-*** TODO support scheduling upload times, like akashita does
-**** TODO support a schedule with start and stop (e.g. time range)
-***** add time range support to the web interface
-***** check the start time in =supervisor= to determine if it is ready to start
-***** check the end time in =BackupMaster.new()= and set a stop time
-***** check the current time vs end time in =BackupMaster.handle_file()=
-***** =handle_file()= returns an =OutOfTimeError= when out of time
-***** supervisor reports the =OutOfTimeError= a little better than normal errors
 *** TODO use this to replace =akashita= for online backups
 **** old akashita configuration file:
 #+BEGIN_SRC erlang
@@ -259,6 +262,11 @@ var url = window.location.href;
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
 *** TODO dataset status says "running" even though it had an error
 **** need to expose the error status via GraphQL
+*** TODO improve the data sets form
+**** TODO use the =validate()= function on =DataSet= to ensure validity
+**** TODO should decode the computer ID to improve readability
+**** TODO would be better to have frequency options in a row
+***** need to use =FormBuilderCustomField= and return a =Row= of widgets
 *** TODO should sort the datasets so they are always in the same order
 **** maybe sort them by date, with most recent first
 *** TODO tree entries of =ERROR= type should be displayed as such
@@ -269,8 +277,6 @@ var url = window.location.href;
 **** consider presenting in a style similar to Time Machine
 *** TODO improve the page for defining datasets
 **** TODO store selection should be easier for the user
-**** TODO schedule input should be easier to use
-***** user should not have to type ~@daily~ literally
 **** TODO disable Save button until form is valid
 **** TODO store input validator should check stores actually exist
 **** TODO pack size should have minimum and maximum values

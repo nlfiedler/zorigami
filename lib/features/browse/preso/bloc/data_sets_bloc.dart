@@ -13,27 +13,29 @@ import 'package:zorigami/core/usecases/usecase.dart';
 // events
 //
 
-abstract class DatasetsEvent extends Equatable {
+abstract class DataSetsEvent extends Equatable {
   @override
   List<Object> get props => [];
 }
 
-class LoadAllDataSets extends DatasetsEvent {}
+class LoadAllDataSets extends DataSetsEvent {}
+
+class ReloadDataSets extends DataSetsEvent {}
 
 //
 // states
 //
 
-abstract class DatasetsState extends Equatable {
+abstract class DataSetsState extends Equatable {
   @override
   List<Object> get props => [];
 }
 
-class Empty extends DatasetsState {}
+class Empty extends DataSetsState {}
 
-class Loading extends DatasetsState {}
+class Loading extends DataSetsState {}
 
-class Loaded extends DatasetsState {
+class Loaded extends DataSetsState {
   final List<DataSet> sets;
 
   Loaded({@required this.sets});
@@ -42,7 +44,7 @@ class Loaded extends DatasetsState {
   List<Object> get props => [sets];
 }
 
-class Error extends DatasetsState {
+class Error extends DataSetsState {
   final String message;
 
   Error({@required this.message});
@@ -55,25 +57,37 @@ class Error extends DatasetsState {
 // bloc
 //
 
-class DatasetsBloc extends Bloc<DatasetsEvent, DatasetsState> {
-  final GetDataSets getDataSets;
+class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
+  final GetDataSets usecase;
 
-  DatasetsBloc({this.getDataSets});
-
-  @override
-  DatasetsState get initialState => Empty();
+  DataSetsBloc({this.usecase});
 
   @override
-  Stream<DatasetsState> mapEventToState(
-    DatasetsEvent event,
+  DataSetsState get initialState => Empty();
+
+  // very helpful for debugging
+  // @override
+  // void onTransition(
+  //   Transition<DataSetsEvent, DataSetsState> transition,
+  // ) {
+  //   super.onTransition(transition);
+  //   print(transition);
+  // }
+
+  @override
+  Stream<DataSetsState> mapEventToState(
+    DataSetsEvent event,
   ) async* {
     if (event is LoadAllDataSets) {
       yield Loading();
-      final result = await getDataSets(NoParams());
+      final result = await usecase(NoParams());
       yield result.mapOrElse(
         (sets) => Loaded(sets: sets),
         (failure) => Error(message: failure.toString()),
       );
+    } else if (event is ReloadDataSets) {
+      // force an update as something changed elsewhere
+      yield initialState;
     }
   }
 }

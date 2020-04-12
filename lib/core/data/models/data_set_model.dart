@@ -151,18 +151,21 @@ class DataSetModel extends DataSet {
     );
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool input = false}) {
     final List<Map<String, dynamic>> schedules = List.from(
       this.schedules.map((s) => ScheduleModel.from(s).toJson()),
     );
-    return {
+    final result = {
       'key': key,
-      'computerId': computerId,
       'basepath': basepath,
       'schedules': schedules,
       'packSize': packSize.toString(),
       'stores': stores,
     };
+    if (!input) {
+      result['computerId'] = computerId;
+    }
+    return result;
   }
 }
 

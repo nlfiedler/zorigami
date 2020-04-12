@@ -100,8 +100,8 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
   @override
   Future<DataSetModel> deleteDataSet(DataSet input) async {
     final deleteDataSet = '''
-      mutation DeleteDataset(\$key: String!) {
-        deleteDataset(key: \$key) {
+      mutation DeleteDataset(\$identifier: String!) {
+        deleteDataset(key: \$identifier) {
           ${dataSetFields}
         }
       }
@@ -129,7 +129,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         }
       }
     ''';
-    final encoded = DataSetModel.from(input).toJson();
+    final encoded = DataSetModel.from(input).toJson(input: true);
     final mutationOptions = MutationOptions(
       documentNode: gql(defineStore),
       variables: <String, dynamic>{
@@ -153,7 +153,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         }
       }
     ''';
-    final encoded = DataSetModel.from(input).toJson();
+    final encoded = DataSetModel.from(input).toJson(input: true);
     final mutationOptions = MutationOptions(
       documentNode: gql(updateStore),
       variables: <String, dynamic>{

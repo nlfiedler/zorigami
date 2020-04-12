@@ -9,13 +9,15 @@ import 'package:zorigami/core/data/sources/container.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/container.dart';
 import 'package:zorigami/core/util/input_converter.dart';
+import 'package:zorigami/features/backup/preso/bloc/create_data_sets_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/bloc/edit_data_sets_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/store_form_factory.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
-import 'package:zorigami/features/browse/preso/bloc/datasets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_bloc.dart';
@@ -29,13 +31,22 @@ void init() {
     () => ConfigurationBloc(usecase: getIt()),
   );
   getIt.registerFactory(
-    () => DatasetsBloc(getDataSets: getIt()),
+    () => DataSetsBloc(usecase: getIt()),
   );
   getIt.registerFactory(
     () => PackStoresBloc(usecase: getIt()),
   );
   getIt.registerFactory(
     () => CreatePackStoresBloc(usecase: getIt()),
+  );
+  getIt.registerFactory(
+    () => CreateDataSetsBloc(usecase: getIt()),
+  );
+  getIt.registerFactory(
+    () => EditDataSetsBloc(
+      updateDataSet: getIt(),
+      deleteDataSet: getIt(),
+    ),
   );
   getIt.registerFactory(
     () => EditPackStoresBloc(
