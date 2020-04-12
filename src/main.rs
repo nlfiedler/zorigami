@@ -99,7 +99,7 @@ fn log_state_changes(state: &state::State) {
 // page, where the client-side code will handle the routing and "page not found"
 // error condition.
 async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
-    let file = NamedFile::open("./public/index.html")?;
+    let file = NamedFile::open("./web/index.html")?;
     Ok(file.use_last_modified(true))
 }
 
@@ -114,7 +114,7 @@ async fn main() -> io::Result<()> {
     let schema = std::sync::Arc::new(schema::create_schema());
     info!("listening on http://{}/...", addr);
     HttpServer::new(move || {
-        let static_path = env::var("STATIC_FILES").unwrap_or_else(|_| "./public/".to_owned());
+        let static_path = env::var("STATIC_FILES").unwrap_or_else(|_| "./web/".to_owned());
         App::new()
             .data(schema.clone())
             .wrap(middleware::Logger::default())
