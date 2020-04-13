@@ -11,11 +11,14 @@ services:
       - "8080:8080"
     volumes:
       - type: bind
-        source: ./tmp/packs
+        source: ./tmp/docker/packs
         target: /packstore
       - type: bind
-        source: ./tmp/database
+        source: ./tmp/docker/database
         target: /database
+      - type: bind
+        source: ./tmp/docker/database.backup
+        target: /database.backup
       - type: bind
         source: "."
         target: /datasets
