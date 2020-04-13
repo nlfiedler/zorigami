@@ -33,6 +33,17 @@ lazy_static! {
         let path = env::var("DB_PATH").unwrap_or_else(|_| "tmp/database".to_owned());
         PathBuf::from(path)
     };
+    // Path to the static web files.
+    static ref STATIC_PATH: PathBuf = {
+        let path = env::var("STATIC_FILES").unwrap_or_else(|_| "./web/".to_owned());
+        PathBuf::from(path)
+    };
+    // Path of the fallback page for web requests.
+    static ref DEFAULT_INDEX: PathBuf = {
+        let mut path = STATIC_PATH.clone();
+        path.push("index.html");
+        path
+    };
 }
 
 fn graphiql() -> HttpResponse {
@@ -99,7 +110,7 @@ fn log_state_changes(state: &state::State) {
 // page, where the client-side code will handle the routing and "page not found"
 // error condition.
 async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
-    let file = NamedFile::open("./web/index.html")?;
+    let file = NamedFile::open(DEFAULT_INDEX.as_path())?;
     Ok(file.use_last_modified(true))
 }
 
@@ -114,7 +125,6 @@ async fn main() -> io::Result<()> {
     let schema = std::sync::Arc::new(schema::create_schema());
     info!("listening on http://{}/...", addr);
     HttpServer::new(move || {
-        let static_path = env::var("STATIC_FILES").unwrap_or_else(|_| "./web/".to_owned());
         App::new()
             .data(schema.clone())
             .wrap(middleware::Logger::default())
@@ -134,7 +144,7 @@ async fn main() -> io::Result<()> {
                 web::resource("/restore/{dataset}/{checksum}/{filename}")
                     .route(web::get().to(restore)),
             )
-            .service(Files::new("/", static_path).index_file("index.html"))
+            .service(Files::new("/", STATIC_PATH.clone()).index_file("index.html"))
             .default_service(web::get().to(default_index))
     })
     .bind(addr)?
