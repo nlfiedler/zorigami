@@ -20,29 +20,7 @@ COPY healthcheck/src src/
 RUN cargo build --release
 
 #
-# build the web code
-#
-# * using BuckleScript requires gcc/make to compile OCaml
-# * must install our npm dev dependencies in order to build
-#
-FROM node:12 AS webster
-ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get -q update && \
-    apt-get -q -y install build-essential
-RUN npm install -q -g gulp-cli
-WORKDIR /webs
-COPY bsconfig.json .
-COPY graphql_schema.json .
-COPY gulpfile.js .
-COPY package.json .
-COPY src src/
-RUN npm install
-ENV NODE_ENV production
-RUN gulp build
-
-#
 # build the flutter app
-# (to eventually replace webster)
 #
 # Not really sure what the point of the "beta-web" tag is because it is
 # neither set to the beta channel nor is the web enabled, so we end up
@@ -71,10 +49,7 @@ USER zorigami
 WORKDIR /zorigami
 COPY --from=builder /build/target/release/zorigami .
 COPY --from=healthy /health/target/release/healthcheck .
-# use this for flutter instead of the next two lines
-# COPY --from=flutter build/web public/
-COPY public public/
-COPY --from=webster /webs/public/javascripts/main.js ./public/javascripts/
+COPY --from=flutter /flutter/build/web web/
 VOLUME /database
 VOLUME /datasets
 VOLUME /packstore

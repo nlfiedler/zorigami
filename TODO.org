@@ -5,111 +5,12 @@
 *** remove the =futures= and =futures-fs= crates
 *** look at the rusoto_s3 API documentation to figure out how to use it now
 ** Flutter Action Plan
-*** cookbooks reference: https://flutter.dev/docs/cookbook
-*** TODO implement interface using clean architecture
-**** DONE prep work
-***** DONE copy https://github.com/LiewLi/result and make it better, more Rust-like
-***** DONE make an =Option= type like Rust
-***** DONE define the features for organizing the code
-1) backup: defining entities
-2) browse: viewing snapshots
-3) restore: restoring entries
-**** DONE domain
-***** DONE define the entities
-***** DONE define the repository contract
-***** DONE define the use cases
-***** DONE use TDD and mock objects to test everything
-***** DONE get all pack stores
-***** DONE define a pack store
-***** DONE update a pack store
-***** DONE delete a pack store
-***** DONE do all that for data sets
-***** DONE do all that for snapshots
-***** DONE do all that for trees
-***** DONE do all that for configuration info
-**** DONE data
-***** DONE define the models
-****** DONE pack store
-****** DONE data set
-****** DONE configuration
-****** DONE tree
-****** DONE snapshot
-***** DONE implement the repositories
-****** DONE pack store
-****** DONE data set
-****** DONE configuration
-****** DONE tree
-****** DONE snapshot
-***** DONE develop the (GraphQL) data source
-****** DONE pack store
-****** DONE data set
-****** DONE configuration
-****** DONE tree
-****** DONE snapshot
-**** DONE preso
-***** DONE set up the page routing
-****** c.f. https://flutter.dev/docs/development/ui/navigation
-****** every page or screen will be based on a =Scaffold=
-****** each page will incorporate a navigation rail or a back button
-****** define the home page to hold the configuration and snapshot browser
-****** title in appbar should be the page title
-***** DONE make a navbar or navigation rail
-****** c.f. https://www.material.io/components/navigation-rail/
-***** DONE allow browsing the dataset snapshots
-***** DONE allow browsing the snapshot tree
-***** DONE add a button for restoring the first selected file
-****** currently using an =href= to the URL that returns the file
-******* =/restore/{dataset.key}/{checksum}/{entry.name}=
-****** use https://pub.dev/packages/url_launcher, it supports web
-******* https://levelup.gitconnected.com/flutter-hyperlinks-d2eee3fd24f
-******* uses =url_launcher= and =universal_html= to support web and mobile
-******* note that safari requies a JS hack, but only if using the =openLink= functions?
-****** can use =Window.open()= from =dart:html=, like =window.open(url);=
-******* by default it opens a new window/tab for the link
-***** DONE query for stores, show in a list
-***** DONE show details of a pack store
-****** DONE write a factory that builds out details for each kind of store
-****** DONE write impl for local pack store
-****** DONE write impl for minio pack store
-****** DONE write impl for sftp pack store
-***** DONE allow editing a pack store
-****** use https://pub.dev/packages/flutter_form_builder for forms and validation
-****** define new events in the pack stores bloc for edit and delete
-****** show a "loading" thing while submitting the changes
-****** ensure that the basic form can be reused for defining a new store
-****** consider how to unit test the pack store forms
-****** DONE write impl for local pack store
-****** DONE write impl for minio pack store
-****** DONE write impl for sftp pack store
-***** DONE support defining a new pack store
-***** DONE allow deleting a pack store
-***** DONE show all datasets
-***** DONE show details of a dataset
-***** DONE support defining a new dataset
-***** DONE allow deleting a dataset
-***** DONE allow editing a dataset
-***** DONE show status of the datasets on the home page
-**** DONE add missing bloc unit tests
-**** DONE add error cases to the bloc tests
-**** TODO user performance tools to see why some screens transition slowly
-*** TODO document decision to use clean architecture
-**** c.f. https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
-**** Clean Architecture is suitable for large and small applications
-**** Based on [[https://en.wikipedia.org/wiki/SOLID][SOLID]] principles
-**** Clean Architecture notes
-***** 3 layers
-****** preso (presentation: i.e. widgets)
-****** domain (business logic: entities, use cases, repo interface)
-****** data (repo impl, data models, data sources)
-***** tdd-clean-architecture tutorial
-****** the "presentation logic holders" is where BLoC sits
-***** widgets use presentation logic holder (BLoC), do not interact with domain/data layers
-***** c.f. https://www.didierboelens.com/2018/08/reactive-programming---streams---bloc/
-***** c.f. https://bloclibrary.dev/
-***** VS Code bloc extension: =FelixAngelov.bloc=
-***** c.f. https://resocoder.com/category/tutorials/flutter/tdd-clean-architecture/
-***** c.f. https://github.com/ResoCoder/flutter-tdd-clean-architecture-course
-***** c.f. https://resocoder.com/2019/10/26/flutter-bloc-library-tutorial-1-0-0-stable-reactive-state-management/
+*** TODO debug failing index page load for production build
+**** run =flutter build web= and start the server, then try to open the page
+**** (cannot just open the =index.html=, CORS rejects the schema)
+**** fails with syntax error (shown in the browser console)
+**** stack trace includes reference to =font_collection.dart=
+**** may be a font loading issue (i.e. the roboto font)
 *** TODO figure out how to manage the GraphQL endpoint
 **** using a relative endpoint is not supported by the package
 **** currently hard-coded to =127.0.0.1:8080= in the code
@@ -120,25 +21,6 @@ import 'dart:html';
 var url = window.location.href;
 #+END_SRC
 **** the compile-time dependency injection in [[https://pub.dev/packages/injectable][injectable]] may be helpful here
-*** TODO update =Dockerfile= to build flutter web ui
-*** TODO document how to test, build, run, etc
-**** =flutter build web= for release build
-**** =flutter run -d chrome= for development
-**** =flutter test= for testing
-*** DONE remove all of the old webui files
-**** =bsconfig.json=
-**** =graphql_schema.json=
-**** =gulpfile.js=
-**** =node_modules=
-**** =package.json=
-**** =package-lock.json=
-**** =public=
-**** =src/*.re=
-**** =lib/js=
-**** =lib/bs=
-**** update =.gitignore= and =.dockerignore=
-**** update =README.md= file regarding Node, Reason, etc
-**** update =NOTES.md= file regarding everything
 ** Advanced Scheduling
 *** TODO frontend
 **** TODO Support multiple schedules in interface
@@ -513,6 +395,10 @@ var url = window.location.href;
 **** Latin: ~atticae~
 * Technical Information
 ** JS Build Artifacts
+*** Flutter => main.dart.js
+| State      |    Size |
+|------------+---------|
+| production | 1742125 |
 *** ReasonML + Webpack => main.js
 | State       |    Size |
 |-------------+---------|

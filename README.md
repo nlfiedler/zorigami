@@ -41,18 +41,30 @@ $ cargo build
 $ cargo test
 ```
 
-### Running the Server
-
-These commands will build backend and front-end, and then start the server.
+To run the frontend tests, uses `flutter`:
 
 ```shell
-$ gulp build
+$ flutter test
+```
+
+### Running the Server
+
+The `cargo run` command will build backend and start the server.
+
+```shell
 $ RUST_LOG=info cargo run
 ```
 
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
 For extremely verbose logging, use `RUST_LOG=trace` which will dump large
 volumes of output.
+
+To start the Flutter application in development mode, open another console
+window and run the `flutter run` command:
+
+```shell
+$ flutter run -d chrome
+```
 
 ### Docker
 
@@ -201,16 +213,16 @@ this application, accept maybe for the association with time.
 
 ### July 2014
 
-Started as a project named "akashita", with a basic
+Started as a project named *akashita*, with a basic
 [Python](https://www.python.org) implementation that uploaded tarballs to
 Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and
-`split` to produce "pack" files of a reasonable size.
+`split` to produce "pack" files of a manageable size.
 
 ### February 2016
 
 Started the [Erlang](http://www.erlang.org) implementation with all of the
 Python code converted to [Go](https://golang.org) and the Erlang application
-invoking the Go piece to upload the individual files.
+invoking the Go component to upload the individual files.
 
 ### August 2016
 
