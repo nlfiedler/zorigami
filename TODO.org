@@ -4,23 +4,6 @@
 *** with 0.43 they use std future now instead of futures
 *** remove the =futures= and =futures-fs= crates
 *** look at the rusoto_s3 API documentation to figure out how to use it now
-** Flutter Action Plan
-*** TODO debug failing index page load for production build
-**** run =flutter build web= and start the server, then try to open the page
-**** (cannot just open the =index.html=, CORS rejects the schema)
-**** fails with syntax error (shown in the browser console)
-**** stack trace includes reference to =font_collection.dart=
-**** may be a font loading issue (i.e. the roboto font)
-*** TODO figure out how to manage the GraphQL endpoint
-**** using a relative endpoint is not supported by the package
-**** currently hard-coded to =127.0.0.1:8080= in the code
-**** the following code will likely work in production mode
-***** in development mode, it prints the flutter/chrome webdev address
-#+BEGIN_SRC dart
-import 'dart:html';
-var url = window.location.href;
-#+END_SRC
-**** the compile-time dependency injection in [[https://pub.dev/packages/injectable][injectable]] may be helpful here
 ** Advanced Scheduling
 *** TODO frontend
 **** TODO Support multiple schedules in interface
@@ -137,6 +120,7 @@ var url = window.location.href;
 **** currently selected option should be highlighted, not actionable
 *** TODO improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
+*** TODO show a message when there are no datasets, packs, snapshots
 *** TODO improve snapshot tree browser
 **** for larger number of entries, should use PaginatedDataTable
 **** nice to have: sticky table header
@@ -184,6 +168,9 @@ var url = window.location.href;
 **** add hints to improve the presentation of information
 ***** configuration panel
 ***** snapshot browser
+*** TODO font assets seem to go in the wrong directory
+**** ends up in =build/web/assets/assets/fonts= instead of =build/web/assets/fonts=
+**** but it works anyway because =FontManifest.json= has the correct paths
 ** Multi-file Restore
 *** backend
 **** receive requests of tree/file digests to be restored
@@ -270,6 +257,17 @@ var url = window.location.href;
 **** Look at ways to secure the server, to allay fears of exploits
 **** A web conferencing tool was exploited via its hidden HTTP server
 ** Desktop application
+*** design a configuration system for desktop
+**** define the whole clean architecture setup
+***** entities, use cases, repositories
+**** data source for web will have values defined by environment_config only
+**** data source for desktop will use shared preferences (?) for persistence
+**** data layer repository chooses between data sources based on environment
+***** how to detect if application was compiled for web
+#+BEGIN_SRC dart
+import 'package:flutter/foundation.dart' show kIsWeb;
+if (kIsWeb) { /* web stuff */ } else { /* not web */ }
+#+END_SRC
 *** clipboard support
 **** look for clipboard plugin for flutter (for macOS)
 **** c.f. https://flutter.dev/docs/development/packages-and-plugins/developing-packages

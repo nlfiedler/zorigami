@@ -7,8 +7,9 @@ ssh_config
 Cargo.lock
 target
 
-# dotenv environment variables file
+# environment configuration
 .env
+lib/environment_config.dart
 
 # temporary data
 tmp

@@ -9,6 +9,7 @@ import 'package:zorigami/core/data/sources/container.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/container.dart';
 import 'package:zorigami/core/util/input_converter.dart';
+import 'package:zorigami/environment_config.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_data_sets_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_data_sets_bloc.dart';
@@ -85,8 +86,10 @@ void init() {
 
   // external
   getIt.registerLazySingleton(() {
+    // seems a relative URL is not supported by the client package
+    final uri = '${EnvironmentConfig.base_url}/graphql';
     return GraphQLClient(
-      link: HttpLink(uri: 'http://127.0.0.1:8080/graphql'),
+      link: HttpLink(uri: uri),
       cache: InMemoryCache(),
     );
   });

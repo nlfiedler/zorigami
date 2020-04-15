@@ -10,6 +10,7 @@ where it should go.
 
 * [Rust](https://www.rust-lang.org) stable (2018 edition)
 * [Flutter](https://flutter.dev) beta channel
+    - Enable the **web** configuration
 
 #### Windows
 
@@ -31,38 +32,24 @@ The `openssl` Rust crate must _not_ be "vendored" otherwise it will attempt to
 build OpenSSL from source, which requires Perl in addition to the tools listed
 above, _and_ it will likely fail to compile on 32-bit Windows.
 
-### Running Automated Tests
-
-These commands will build the backend and run the tests.
+### Building, Testing, Starting the Backend
 
 ```shell
 $ cargo update
 $ cargo build
 $ cargo test
-```
-
-To run the frontend tests, uses `flutter`:
-
-```shell
-$ flutter test
-```
-
-### Running the Server
-
-The `cargo run` command will build backend and start the server.
-
-```shell
 $ RUST_LOG=info cargo run
 ```
-
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
 For extremely verbose logging, use `RUST_LOG=trace` which will dump large
 volumes of output.
 
-To start the Flutter application in development mode, open another console
-window and run the `flutter run` command:
+### Building, Testing, Starting the Frontend
 
 ```shell
+$ flutter pub get
+$ flutter pub run environment_config:generate
+$ flutter test
 $ flutter run -d chrome
 ```
 
@@ -76,9 +63,18 @@ services.
 
 ### dotenv
 
-This application uses [dotenv](https://github.com/dotenv-rs/dotenv) to configure
-the tests. For instance, the tests related to SFTP are enabled by the presence
-of certain environment variables, which is easily accomplished using dotenv.
+The backend uses [dotenv](https://github.com/dotenv-rs/dotenv) to configure the
+tests. For instance, the tests related to SFTP are enabled by the presence of
+certain environment variables, which is easily accomplished using dotenv.
+
+### environment_config
+
+The frontend has some configuration that is set up at build time using the
+[environment_config](https://pub.dev/packages/environment_config) package. The
+generated file (`lib/environment_config.dart`) is not version controlled, and
+the values can be set at build-time using either command-line arguments or
+environment variables. See the `pubspec.yaml` for the names and the
+`environment_config` README for instructions.
 
 ## Deploying
 
@@ -90,7 +86,7 @@ the application in stages and produce a relatively small final image.
 On the build host:
 
 ```shell
-$ docker-compose build --pull
+$ docker-compose build --pull --build-arg BASE_URL=http://192.168.1.1:8080
 $ docker image rm 192.168.1.1:5000/zorigami_app
 $ docker image tag zorigami_app 192.168.1.1:5000/zorigami_app
 $ docker push 192.168.1.1:5000/zorigami_app

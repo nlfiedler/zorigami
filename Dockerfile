@@ -27,10 +27,12 @@ RUN cargo build --release
 # setting everything ourselves anyway.
 #
 FROM cirrusci/flutter:beta-web AS flutter
+ARG BASE_URL
 RUN flutter channel beta
 RUN flutter upgrade
 RUN flutter config --enable-web
 WORKDIR /flutter
+COPY assets assets/
 COPY lib lib/
 COPY pubspec.yaml .
 COPY web web/
@@ -38,6 +40,8 @@ COPY web web/
 # c.f. https://github.com/cirruslabs/docker-images-flutter/issues/12
 RUN sudo chown -R cirrus:cirrus /flutter
 RUN flutter pub get
+ENV BASE_URL ${BASE_URL}
+RUN flutter pub run environment_config:generate
 RUN flutter build web
 
 #

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
+import 'package:zorigami/environment_config.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 class TreeViewer extends StatelessWidget {
@@ -51,14 +52,13 @@ class TreePath extends StatelessWidget {
   TreePath({@required this.state});
 
   void restoreFile(DataSet dataset, TreeEntry entry) async {
-    // Just hard-code the base URL for now, eventually the usecase will have
-    // this configured via dependency injection and this function will simply
-    // initiate the request via the usecase and then display the progress (not
-    // to mention it will process multiple trees/files, not just one).
-    final baseUrl = 'http://127.0.0.1:8080';
+    // Just construct URL here for now, eventually there will be a usecase that
+    // will have this configured via dependency injection and this function will
+    // simply initiate the request via the usecase and then display the progress
+    // (not to mention it will process multiple trees/files, not just one).
+    final baseUrl = EnvironmentConfig.base_url;
     final digest = entry.reference.value;
     final url = '${baseUrl}/restore/${dataset.key}/${digest}/${entry.name}';
-    print('launching ${url}');
     if (await launcher.canLaunch(url)) {
       await launcher.launch(url);
     } else {
