@@ -289,6 +289,7 @@ If the latest snapshot is missing an end time, there is pending work to finish.
     - Retrieve pack files, remove stale entries, repack, upload
     - Remove the old pack files from the remote side
     - Update file records affected by repacking
+* Start fresh and purge the old backups after successful completion
 
 #### Deleting Old Backups
 

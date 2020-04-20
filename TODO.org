@@ -16,7 +16,7 @@
 **** =BackupMaster= needs to calculate the stop time in =new()=
 **** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
 **** supervisor to report the =OutOfTimeError= a little better than normal errors
-** Online Backup
+** Cloud Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
@@ -82,6 +82,73 @@
     ]}
 ]}.
 #+END_SRC
+** Clean Architecture
+*** Consider how to change the implementation to model Clean Architecture
+*** Use dependency injection to connect parts together
+**** https://crates.io/crates/shaku (compile-time IoC)
+**** https://crates.io/crates/coi (compile-time IoC)
+**** consider if writing one from scratch (a la =get_it=) would be adequate
+*** Use a mocking library for isolating tests
+**** https://crates.io/crates/mockall
+*** Organize the code into domain/data/preso layers
+**** FIRST: Define the domain logic of the application
+***** entities
+****** checksum
+******* the =checksum= functions become static functions on =Checksum= type
+****** chunk
+****** dataset
+****** file
+****** pack
+****** schedule
+****** snapshot
+****** tree
+****** tree entry
+****** tree entry type
+****** tree reference
+***** use cases
+****** define data set
+****** define pack store
+****** delete data set
+****** delete pack store
+****** get data sets
+****** get pack stores
+****** get snapshot
+****** get tree
+****** update data set
+****** update pack store
+****** start backup
+****** stop backup
+****** restore file
+***** repositories
+****** record database (CRUD for the entities)
+****** pack store (CRUD for the pack files)
+**** SECOND: implement this design for ONE THING all the way down
+***** pick an entity and implement it
+***** define the repository interface
+***** define a =UseCase= trait with a =call()= function
+****** generic for =Type= that is returned from =call()=
+****** generic for =Params= that defines parameters for operation
+***** each use case has a constructor that takes dependencies
+****** e.g. repository implementation
+***** implement its use cases
+***** write unit tests (using mocks for data layer) for the domain layer
+***** implement the data model
+****** models wrap the domain entities to allow for use of =#[derive()]=
+****** implement serialization for entities via =serde=
+****** implement the =From= and =Into= for the entities
+***** implement the data repository
+***** implement the data source
+***** write unit tests (using mocks for the database) for data layer
+**** THIRD: migrate of the rest of the code
+**** Data
+***** pack stores become data sources for packs
+***** pack repository would provide logic for handling multiple stores
+****** =store_pack()=
+****** =retrieve_pack()=
+**** Presentation
+***** the =#[graphql]= on domain entities will need to be implemented manually in preso layer
+***** basically the graphql schema implementation
+***** probably do not need =dataset()= and =store()= queries
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -204,6 +271,29 @@
 **** the =StopBackup= action sets =stop_requested= in =BackupState=
 **** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
 **** =handle_file()= will return an error if =stop_requested= is true
+*** consider how one might "pause" a backup in progress
+** Snapshot Pruning
+*** Consider how to prune old snapshots, pack files, etc
+**** Time Machine and Attic both have retention policies
+**** Based on retention policy, delete stale snapshot records
+**** Remove all dangling tree records
+**** Remove all dangling file records
+**** Remove all dangling chunk records
+**** Mark all dangling pack records as ready for removal
+**** Find all marked pack records older than N days, delete pack files
+***** that is, many cloud providers charge extra for deleting archives too soon
+***** pack store can suggest a number of days since that is often already known
+****** i.e. Google and Amazon have infrequently changing, published policies
+***** user can specify their own value for each pack store if necessary
+*** Consider if the database schema needs to change for easier pruning
+**** How to scan for dangling trees and files without exploding memory?
+**** Mark and Sweep but with database records: will be rather slow
+***** maybe scan and update in large batches to avoid frequent access
+**** Read about the Garbage-First garbage collector in Java
+*** Implementation should follow Clean Architecture to improve testability
+**** entities and use case separated from data sources via repositories
+**** this allows for easily mocking up data to feed the pruning use case
+***** i.e. when the use case asks for trees and such, give it mock data structures
 ** More Functionality
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
@@ -273,6 +363,11 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** c.f. https://flutter.dev/docs/development/packages-and-plugins/developing-packages
 ** macOS support
 *** TODO Use =launchd= to manage the process, have it start automatically
+*** TODO optional Time Machine style backup and retention policy
+**** hourly backups for 24 hours
+**** daily backups for 30 days
+**** weekly backups for everything else
+**** prune backups to maintain a certain size
 *** TODO Use this to replace Time Machine (store on server using minio)
 ** Full Restore
 *** TODO Restore file attributes from tree entry
@@ -307,12 +402,10 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** an automated scan could be run on occasion
 *** TODO Automatically prune backups more then N days old
 **** For Google and Amazon, anything older than 90 days is free to remove
-**** This would be a configuration setting, with defaults and path-specific
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
 *** TODO Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
-*** TODO Ability to pause or cancel a backup
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 ***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
@@ -329,7 +422,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** At the start of backup, sync with the ~peer~ to get latest chunks/packs
 *** TODO Consider how to deal with partial uploads
 **** e.g. Minio/S3 has a means of handling these
-*** TODO Design garbage collection solution (see NOTES)
 *** TODO Pack store should recommend pack sizes
 **** e.g. Glacier recommends archives greater than 100mb
 **** can only really make a recommendation, the user has to choose the right size
