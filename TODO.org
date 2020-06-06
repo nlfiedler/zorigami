@@ -1,8 +1,87 @@
 * Tasks
-** latest =time= crate is incompatible with =chrono= for now
+** crate updates
+*** latest =time= crate is incompatible with =chrono= for now
+** Clean Architecture
+*** Use dependency injection to connect parts together
+**** https://crates.io/crates/shaku (compile-time IoC)
+**** https://crates.io/crates/coi (compile-time IoC)
+**** consider if writing one from scratch (a la =get_it=) would be adequate
+*** Use a mocking library for isolating tests
+**** https://crates.io/crates/mockall
+*** Organize the code into domain/data/preso layers
+**** FIRST: Define the domain logic of the application
+***** entities
+****** checksum
+******* the =checksum= functions become static functions on =Checksum= type
+****** chunk
+****** dataset
+****** file
+****** pack
+****** schedule
+****** snapshot
+****** tree
+****** tree entry
+****** tree entry type
+****** tree reference
+***** use cases
+****** define data set
+****** define pack store
+****** delete data set
+****** delete pack store
+****** get data sets
+****** get pack stores
+****** get snapshot
+****** get tree
+****** update data set
+****** update pack store
+****** start backup
+****** stop backup
+****** restore file
+***** repositories
+****** record database (CRUD for the entities)
+****** pack store (CRUD for the pack files)
+**** SECOND: implement this design for ONE THING all the way down
+***** start a new branch as this will be destructive and time-consuming
+***** pick an entity and implement it
+***** define the repository interface
+***** define a =UseCase= trait with a =call()= function
+****** generic for =Type= that is returned from =call()=
+****** generic for =Params= that defines parameters for operation
+***** each use case has a constructor that takes dependencies
+****** e.g. repository implementation
+***** implement its use cases
+***** write unit tests (using mocks for data layer) for the domain layer
+***** implement the data model
+****** models have a copy of every field of the corresponding entity
+****** models use =#[serde(remote = "Entity")]= trick to get serde for free
+***** implement the data repository
+***** implement the data source
+****** =database.rs= becomes a module under =data/sources=
+****** most everything is serialized in the data source and stores as bytes to the =database=
+***** write unit tests (using mocks for the data source) for data layer
+***** write integration tests for the data sources
+**** THIRD: implement the rest of the CRUD use cases
+**** move management code to =domain/managers=
+***** state.rs
+***** supervisor.rs (rename to =process.rs=)
+**** FOURTH: implement the other use cases
+***** start backup
+***** stop backup
+***** restore file
+**** Data
+***** pack stores become data sources for packs
+***** pack repository would provide logic for handling multiple sources
+****** =store_pack()=
+****** =retrieve_pack()=
+**** Presentation
+***** the =#[graphql]= on domain entities will need to be implemented manually in preso layer
+***** basically the graphql schema implementation
+***** probably do not need =dataset()= and =store()= queries
+*** Remove either the dead code or the =#[allow(dead_code)]= pragma
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
-*** remove the =futures= and =futures-fs= crates
+*** maybe can remove the =futures= and =futures-fs= crates
+**** actix may be using the futures crate, but likely can all be updated
 *** look at the rusoto_s3 API documentation to figure out how to use it now
 ** Advanced Scheduling
 *** TODO frontend
@@ -16,6 +95,11 @@
 **** =BackupMaster= needs to calculate the stop time in =new()=
 **** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
 **** supervisor to report the =OutOfTimeError= a little better than normal errors
+** Put Back feature
+*** TODO write usecase for ~put back~ that restores file to original path
+*** TODO add GraphQL mutation to invoke ~put back~ usecase
+*** TODO Rename the "restore" button to "download"
+*** TODO Add a "put back" button to invoke the GraphQL mutation
 ** Cloud Backup
 *** TODO retry a pack upload if it encounters a temporary error
 *** TODO support excluding certain file patterns from backup
@@ -82,73 +166,6 @@
     ]}
 ]}.
 #+END_SRC
-** Clean Architecture
-*** Consider how to change the implementation to model Clean Architecture
-*** Use dependency injection to connect parts together
-**** https://crates.io/crates/shaku (compile-time IoC)
-**** https://crates.io/crates/coi (compile-time IoC)
-**** consider if writing one from scratch (a la =get_it=) would be adequate
-*** Use a mocking library for isolating tests
-**** https://crates.io/crates/mockall
-*** Organize the code into domain/data/preso layers
-**** FIRST: Define the domain logic of the application
-***** entities
-****** checksum
-******* the =checksum= functions become static functions on =Checksum= type
-****** chunk
-****** dataset
-****** file
-****** pack
-****** schedule
-****** snapshot
-****** tree
-****** tree entry
-****** tree entry type
-****** tree reference
-***** use cases
-****** define data set
-****** define pack store
-****** delete data set
-****** delete pack store
-****** get data sets
-****** get pack stores
-****** get snapshot
-****** get tree
-****** update data set
-****** update pack store
-****** start backup
-****** stop backup
-****** restore file
-***** repositories
-****** record database (CRUD for the entities)
-****** pack store (CRUD for the pack files)
-**** SECOND: implement this design for ONE THING all the way down
-***** pick an entity and implement it
-***** define the repository interface
-***** define a =UseCase= trait with a =call()= function
-****** generic for =Type= that is returned from =call()=
-****** generic for =Params= that defines parameters for operation
-***** each use case has a constructor that takes dependencies
-****** e.g. repository implementation
-***** implement its use cases
-***** write unit tests (using mocks for data layer) for the domain layer
-***** implement the data model
-****** models wrap the domain entities to allow for use of =#[derive()]=
-****** implement serialization for entities via =serde=
-****** implement the =From= and =Into= for the entities
-***** implement the data repository
-***** implement the data source
-***** write unit tests (using mocks for the database) for data layer
-**** THIRD: migrate of the rest of the code
-**** Data
-***** pack stores become data sources for packs
-***** pack repository would provide logic for handling multiple stores
-****** =store_pack()=
-****** =retrieve_pack()=
-**** Presentation
-***** the =#[graphql]= on domain entities will need to be implemented manually in preso layer
-***** basically the graphql schema implementation
-***** probably do not need =dataset()= and =store()= queries
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -189,7 +206,7 @@
 **** when a temporary server error occurs, offer a "Retry" button
 *** TODO show a message when there are no datasets, packs, snapshots
 *** TODO improve snapshot tree browser
-**** for larger number of entries, should use PaginatedDataTable
+**** for larger number of entries, should use =PaginatedDataTable=
 **** nice to have: sticky table header
 **** nice to have: sort by file type
 *** TODO consider how to hide the minio secret key using a show/hide button
@@ -241,25 +258,23 @@
 ** Multi-file Restore
 *** backend
 **** receive requests of tree/file digests to be restored
+**** only works for "put back" feature, not the "download" to browser
 **** limit the number of digests that can be submitted in one request
 **** return a request ID to the client for querying later
 **** add the requests to a limited size queue to prevent abuse
 **** process the requests in series on another thread (via actix)
 **** need to ensure packs are downloaded only once
-***** gets tricky with overlapping trees of many files
+***** collect all of the file/chunk digests, then collect all of the pack digests
+***** cycle through the packs, downloading, extracting, discarding extra chunks
+***** assemble the files at the end (or as the chunks become available?)
 **** use application state to track progress of the requests
 **** client requests status of restore using request ID
-**** response includes the URL for retrieving the (zip) file
-**** after file is downloaded to the client, file is removed
 **** requests can be canceled
 **** restore procedure needs to check request status in case canceled
 *** frontend
 **** write a usecase for submitting the tree/file digests
 **** write a usecase for checking the progress of the request
 **** direct user to a "restore requests" page that shows progress
-**** when the request is ready, replace cancel button with download button
-*** desktop
-**** would not only download the zip file but also unzip the contents
 ** Manual Backup controls
 *** add a "backup now" button to datasets listing
 **** need a GraphQL mutation to signal backup to start
@@ -273,23 +288,34 @@
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
 ** Snapshot Pruning
+*** Should probably not run collection while a backup is in progress
 *** Consider how to prune old snapshots, pack files, etc
 **** Time Machine and Attic both have retention policies
 **** Based on retention policy, delete stale snapshot records
-**** Remove all dangling tree records
-**** Remove all dangling file records
-**** Remove all dangling chunk records
-**** Mark all dangling pack records as ready for removal
+***** set the child's parent reference to skip over stale snapshot
+**** Use some form of "mark and sweep" to find dangling records
+***** discover all of the unreachable records (see below)
+***** remove unreachable snapshot, tree, file, and chunk records
+***** mark all unreachable pack records as ready for removal
 **** Find all marked pack records older than N days, delete pack files
 ***** that is, many cloud providers charge extra for deleting archives too soon
 ***** pack store can suggest a number of days since that is often already known
 ****** i.e. Google and Amazon have infrequently changing, published policies
 ***** user can specify their own value for each pack store if necessary
-*** Consider if the database schema needs to change for easier pruning
-**** How to scan for dangling trees and files without exploding memory?
-**** Mark and Sweep but with database records: will be rather slow
-***** maybe scan and update in large batches to avoid frequent access
-**** Read about the Garbage-First garbage collector in Java
+*** Strategies for finding unreachable objects
+**** Mark and Sweep using a separate database instance
+***** use another database instance for tracking reachable objects
+***** scan production database for reachable objects
+****** datasets -> snapshots -> trees -> files -> chunks -> packs
+***** mark every reachable object by putting its key in the other database
+***** prune everything from the production database that was not marked
+***** once the garbage collection is done, delete the temporary database
+**** Build lists of reachable objects in memory
+***** could blow up if there are many database records
+***** avoids writing to the production database
+**** Mark and Sweep but with database records
+***** avoids blowing up memory for very large databases
+***** results in many database writes and level compaction
 *** Implementation should follow Clean Architecture to improve testability
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
@@ -308,9 +334,8 @@
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
 *** TODO consider how datasets can be modified after creation
-**** should their stores be allowed to change?
-**** should their basepath be allowed to change?
 **** cannot change stores assigned to dataset once there are snapshots
+**** basically would require starting over if changing stores, base path, etc
 *** TODO consider how to restore symbolic links
 **** i.e. no file chooser to download anything
 **** what if the same path is now a file/directory?
@@ -325,8 +350,8 @@
 **** show pack/chunk metrics for   all   files in a snapshot
 **** show pack/chunk metrics for changed files in a snapshot
 *** TODO Query to see histogram of file sizes, number of chunks, etc
-**** for a given snapshot...
-**** count number of files with N chunks for all values of N
+**** for a given snapshot
+***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
 **** would have to keep track in the database
 ** Architecture Review

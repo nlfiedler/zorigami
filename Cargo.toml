@@ -57,3 +57,6 @@ openssl = { version = "0.10" }
 [target.'cfg(unix)'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
 xattr = "0.2.2"
+
+[dev-dependencies]
+mockall = "0.7.1"
