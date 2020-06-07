@@ -56,13 +56,13 @@
 **** DONE implement ~new store~ usecase
 ***** define =Store= entity
 ***** define =StoreDef= model for serialization
-**** TODO copy enough =schema.rs= to preso layer to expose ~new store~ mutation
+**** DONE copy enough =schema.rs= to preso layer to expose ~new store~ mutation
 ***** change GraphQL representation of =Store= to match model
 ****** id: String!
 ****** type: String!
 ****** label: String!
-****** properties: [NamedValue!]! (where NamedValue is a name/value string pair)
-**** TODO enable enough =main.rs= to expose the GraphQL endpoint
+****** properties: [Property!]! (where Property is a name/value string pair)
+**** DONE enable enough =main.rs= to expose the GraphQL endpoint
 **** TODO implement ~get stores~ usecase (and graphql query)
 **** TODO implement ~update store~ usecase (and graphql mutation)
 **** TODO implement ~delete store~ usecase (and graphql mutation)
