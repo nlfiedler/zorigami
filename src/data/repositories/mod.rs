@@ -32,7 +32,11 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
         self.datasource.put_store(store)
-    }    
+    }
+
+    fn get_stores(&self) -> Result<Vec<Store>, Error> {
+        self.datasource.get_stores()
+    }
 }
 
 // pub struct BlobRepositoryImpl {
@@ -151,7 +155,7 @@ mod tests {
             id: "cafebabe".to_owned(),
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
-            properties
+            properties,
         };
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(move |_| Ok(()));
@@ -171,7 +175,7 @@ mod tests {
             id: "cafebabe".to_owned(),
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
-            properties
+            properties,
         };
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store()
@@ -183,100 +187,137 @@ mod tests {
         assert!(result.is_err());
     }
 
-//     #[test]
-//     fn test_delete_asset_ok() {
-//         // arrange
-//         let mut mock = MockEntityDataSource::new();
-//         mock.expect_delete_asset()
-//             .with(eq("abc123"))
-//             .returning(move |_| Ok(()));
-//         // act
-//         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-//         let result = repo.delete_asset("abc123");
-//         // assert
-//         assert!(result.is_ok());
-//     }
+    #[test]
+    fn test_get_stores_ok() {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let stores = vec![Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties,
+        }];
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_stores()
+            .returning(move || Ok(stores.clone()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_stores();
+        // assert
+        assert!(result.is_ok());
+        let actual = result.unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, "cafebabe");
+    }
 
-//     #[test]
-//     fn test_delete_asset_err() {
-//         // arrange
-//         let mut mock = MockEntityDataSource::new();
-//         mock.expect_delete_asset()
-//             .with(eq("abc123"))
-//             .returning(move |_| Err(err_msg("oh no")));
-//         // act
-//         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-//         let result = repo.delete_asset("abc123");
-//         // assert
-//         assert!(result.is_err());
-//     }
+    #[test]
+    fn test_get_stores_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_stores()
+            .returning(move || Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_stores();
+        // assert
+        assert!(result.is_err());
+    }
 
-//     #[test]
-//     fn test_store_blob_ok() {
-//         // arrange
-//         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
-//         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
-//         let id = base64::encode(id_path);
-//         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
-//         let asset1 = Asset {
-//             key: id,
-//             checksum: digest.to_owned(),
-//             filename: "fighting_kittens.jpg".to_owned(),
-//             byte_length: 39932,
-//             media_type: "image/jpeg".to_owned(),
-//             tags: vec!["kittens".to_owned()],
-//             caption: None,
-//             import_date,
-//             location: None,
-//             user_date: None,
-//             original_date: None,
-//             dimensions: None,
-//         };
-//         let tmpdir = tempdir().unwrap();
-//         let basepath = tmpdir.path().join("blobs");
-//         // copy test file to temporary path as it will be (re)moved
-//         let original = PathBuf::from("./tests/fixtures/fighting_kittens.jpg");
-//         let copy = tmpdir.path().join("fighting_kittens.jpg");
-//         std::fs::copy(original, &copy).unwrap();
-//         // act
-//         let repo = BlobRepositoryImpl::new(basepath.as_path());
-//         let result = repo.store_blob(copy.as_path(), &asset1);
-//         // assert
-//         assert!(result.is_ok());
-//         let mut dest_path = basepath.clone();
-//         dest_path.push(id_path);
-//         assert!(dest_path.exists());
-//         std::fs::remove_dir_all(basepath).unwrap();
-//     }
+    //     #[test]
+    //     fn test_delete_asset_ok() {
+    //         // arrange
+    //         let mut mock = MockEntityDataSource::new();
+    //         mock.expect_delete_asset()
+    //             .with(eq("abc123"))
+    //             .returning(move |_| Ok(()));
+    //         // act
+    //         let repo = RecordRepositoryImpl::new(Arc::new(mock));
+    //         let result = repo.delete_asset("abc123");
+    //         // assert
+    //         assert!(result.is_ok());
+    //     }
 
-//     #[test]
-//     fn test_blob_path_ok() {
-//         // arrange
-//         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
-//         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
-//         let id = base64::encode(id_path);
-//         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
-//         let asset1 = Asset {
-//             key: id,
-//             checksum: digest.to_owned(),
-//             filename: "fighting_kittens.jpg".to_owned(),
-//             byte_length: 39932,
-//             media_type: "image/jpeg".to_owned(),
-//             tags: vec!["kittens".to_owned()],
-//             caption: None,
-//             import_date,
-//             location: None,
-//             user_date: None,
-//             original_date: None,
-//             dimensions: None,
-//         };
-//         // act
-//         let repo = BlobRepositoryImpl::new(Path::new("foobar/blobs"));
-//         let result = repo.blob_path(&asset1.key);
-//         // assert
-//         assert!(result.is_ok());
-//         let mut blob_path = PathBuf::from("foobar/blobs");
-//         blob_path.push(id_path);
-//         assert_eq!(result.unwrap(), blob_path.as_path());
-//     }
+    //     #[test]
+    //     fn test_delete_asset_err() {
+    //         // arrange
+    //         let mut mock = MockEntityDataSource::new();
+    //         mock.expect_delete_asset()
+    //             .with(eq("abc123"))
+    //             .returning(move |_| Err(err_msg("oh no")));
+    //         // act
+    //         let repo = RecordRepositoryImpl::new(Arc::new(mock));
+    //         let result = repo.delete_asset("abc123");
+    //         // assert
+    //         assert!(result.is_err());
+    //     }
+
+    //     #[test]
+    //     fn test_store_blob_ok() {
+    //         // arrange
+    //         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
+    //         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
+    //         let id = base64::encode(id_path);
+    //         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
+    //         let asset1 = Asset {
+    //             key: id,
+    //             checksum: digest.to_owned(),
+    //             filename: "fighting_kittens.jpg".to_owned(),
+    //             byte_length: 39932,
+    //             media_type: "image/jpeg".to_owned(),
+    //             tags: vec!["kittens".to_owned()],
+    //             caption: None,
+    //             import_date,
+    //             location: None,
+    //             user_date: None,
+    //             original_date: None,
+    //             dimensions: None,
+    //         };
+    //         let tmpdir = tempdir().unwrap();
+    //         let basepath = tmpdir.path().join("blobs");
+    //         // copy test file to temporary path as it will be (re)moved
+    //         let original = PathBuf::from("./tests/fixtures/fighting_kittens.jpg");
+    //         let copy = tmpdir.path().join("fighting_kittens.jpg");
+    //         std::fs::copy(original, &copy).unwrap();
+    //         // act
+    //         let repo = BlobRepositoryImpl::new(basepath.as_path());
+    //         let result = repo.store_blob(copy.as_path(), &asset1);
+    //         // assert
+    //         assert!(result.is_ok());
+    //         let mut dest_path = basepath.clone();
+    //         dest_path.push(id_path);
+    //         assert!(dest_path.exists());
+    //         std::fs::remove_dir_all(basepath).unwrap();
+    //     }
+
+    //     #[test]
+    //     fn test_blob_path_ok() {
+    //         // arrange
+    //         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
+    //         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
+    //         let id = base64::encode(id_path);
+    //         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
+    //         let asset1 = Asset {
+    //             key: id,
+    //             checksum: digest.to_owned(),
+    //             filename: "fighting_kittens.jpg".to_owned(),
+    //             byte_length: 39932,
+    //             media_type: "image/jpeg".to_owned(),
+    //             tags: vec!["kittens".to_owned()],
+    //             caption: None,
+    //             import_date,
+    //             location: None,
+    //             user_date: None,
+    //             original_date: None,
+    //             dimensions: None,
+    //         };
+    //         // act
+    //         let repo = BlobRepositoryImpl::new(Path::new("foobar/blobs"));
+    //         let result = repo.blob_path(&asset1.key);
+    //         // assert
+    //         assert!(result.is_ok());
+    //         let mut blob_path = PathBuf::from("foobar/blobs");
+    //         blob_path.push(id_path);
+    //         assert_eq!(result.unwrap(), blob_path.as_path());
+    //     }
 }

@@ -354,6 +354,8 @@ impl Database {
 //     ///
 //     /// Find all those keys that start with the given prefix.
 //     ///
+//     /// Returns the key without the prefix.
+//     ///
 //     pub fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
 //         let pre_bytes = prefix.as_bytes();
 //         // this only gets us started, we then have to check for the end of the range
@@ -364,49 +366,29 @@ impl Database {
 //             if pre != pre_bytes {
 //                 break;
 //             }
-//             let key_str = str::from_utf8(&key)?;
+//             let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
 //             results.push(key_str.to_owned());
 //         }
 //         Ok(results)
 //     }
 
-//     ///
-//     /// Fetch the key/value pairs for those keys that start with the given
-//     /// prefix.
-//     ///
-//     pub fn fetch_prefix(&self, prefix: &str) -> Result<HashMap<String, Box<[u8]>>, Error> {
-//         let pre_bytes = prefix.as_bytes();
-//         // this only gets us started, we then have to check for the end of the range
-//         let iter = self.db.prefix_iterator(pre_bytes);
-//         let mut results: HashMap<String, Box<[u8]>> = HashMap::new();
-//         for (key, value) in iter {
-//             let pre = &key[..pre_bytes.len()];
-//             if pre != pre_bytes {
-//                 break;
-//             }
-//             let key_str = str::from_utf8(&key)?;
-//             results.insert(key_str.to_owned(), value);
-//         }
-//         Ok(results)
-//     }
+    ///
+    /// Fetch the key/value pairs for those keys that start with the given
+    /// prefix. The prefix is stripped from the keys before being returned.
+    ///
+    pub fn fetch_prefix(&self, prefix: &str) -> Result<HashMap<String, Box<[u8]>>, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut results: HashMap<String, Box<[u8]>> = HashMap::new();
+        for (key, value) in iter {
+            let pre = &key[..pre_bytes.len()];
+            if pre != pre_bytes {
+                break;
+            }
+            let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
+            results.insert(key_str.to_owned(), value);
+        }
+        Ok(results)
+    }
 }
-
-// maybe useful some time...
-// let files = dbase.find_prefix("file/")?;
-// for key in files {
-//     let sum = Checksum::SHA256(key[12..].to_string());
-//     let result = dbase.get_file(&sum)?.unwrap();
-//     println!("file: {:?}", result);
-// }
-// let chunks = dbase.find_prefix("chunk/")?;
-// for key in chunks {
-//     let sum = Checksum::SHA256(key[13..].to_string());
-//     let result = dbase.get_chunk(&sum)?.unwrap();
-//     println!("chunk: {:?}", result);
-// }
-// let packs = dbase.find_prefix("pack/")?;
-// for key in packs {
-//     let sum = Checksum::SHA256(key[12..].to_string());
-//     let result = dbase.get_pack(&sum)?.unwrap();
-//     println!("pack: {:?}", result);
-// }

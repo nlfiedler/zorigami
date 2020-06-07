@@ -25,6 +25,9 @@ pub trait EntityDataSource {
 
     /// Save the given store to the data source.
     fn put_store(&self, store: &Store) -> Result<(), Error>;
+
+    /// Retrieve all registered pack store configurations.
+    fn get_stores(&self) -> Result<Vec<Store>, Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -69,5 +72,17 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         StoreDef::serialize(store, &mut ser)?;
         self.database.put_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_stores(&self) -> Result<Vec<Store>, Error> {
+        let stores = self.database.fetch_prefix("store/")?;
+        let mut results: Vec<Store> = Vec::new();
+        for (key, value) in stores {
+            let mut de = serde_cbor::Deserializer::from_slice(&value);
+            let mut result = StoreDef::deserialize(&mut de)?;
+            result.id = key;
+            results.push(result);
+        }
+        Ok(results)
     }
 }

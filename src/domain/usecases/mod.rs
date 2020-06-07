@@ -5,6 +5,7 @@ use failure::{Error};
 use std::cmp;
 use std::fmt;
 
+pub mod get_stores;
 pub mod new_store;
 
 /// `UseCase` is the interface by which all use cases are invoked.

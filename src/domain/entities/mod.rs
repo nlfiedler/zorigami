@@ -147,7 +147,7 @@ impl Chunk {
 }
 
 /// StoreType identifies a kind of store.
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum StoreType {
     LOCAL,
     MINIO,
@@ -178,6 +178,7 @@ impl FromStr for StoreType {
 }
 
 /// Store defines a location where packs will be saved.
+#[derive(Clone, Debug)]
 pub struct Store {
     /// Unique identifier for this store.
     pub id: String,
