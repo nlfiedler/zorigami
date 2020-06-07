@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::data::sources::EntityDataSource;
-use crate::domain::entities::{Checksum, Chunk};
+use crate::domain::entities::{Checksum, Chunk, Store};
 use crate::domain::repositories::RecordRepository;
 use failure::Error;
 use std::sync::Arc;
@@ -29,6 +29,10 @@ impl RecordRepository for RecordRepositoryImpl {
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error> {
         self.datasource.get_chunk(digest)
     }
+
+    fn put_store(&self, store: &Store) -> Result<(), Error> {
+        self.datasource.put_store(store)
+    }    
 }
 
 // pub struct BlobRepositoryImpl {
@@ -90,8 +94,10 @@ impl RecordRepository for RecordRepositoryImpl {
 mod tests {
     use super::*;
     use crate::data::sources::MockEntityDataSource;
+    use crate::domain::entities::StoreType;
     use failure::err_msg;
     use mockall::predicate::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_get_chunk_ok() {
@@ -136,58 +142,46 @@ mod tests {
         assert!(result.is_err());
     }
 
-//     #[test]
-//     fn test_put_asset_ok() {
-//         // arrange
-//         let asset1 = Asset {
-//             key: "abc123".to_owned(),
-//             checksum: "cafebabe".to_owned(),
-//             filename: "img_1234.jpg".to_owned(),
-//             byte_length: 1024,
-//             media_type: "image/jpeg".to_owned(),
-//             tags: vec!["cat".to_owned(), "dog".to_owned()],
-//             import_date: Utc::now(),
-//             caption: None,
-//             location: None,
-//             user_date: None,
-//             original_date: None,
-//             dimensions: None,
-//         };
-//         let mut mock = MockEntityDataSource::new();
-//         mock.expect_put_asset().returning(move |_| Ok(()));
-//         // act
-//         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-//         let result = repo.put_asset(&asset1);
-//         // assert
-//         assert!(result.is_ok());
-//     }
+    #[test]
+    fn test_put_store_ok() {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties
+        };
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_store().returning(move |_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_store(&store);
+        // assert
+        assert!(result.is_ok());
+    }
 
-//     #[test]
-//     fn test_put_asset_err() {
-//         // arrange
-//         let asset1 = Asset {
-//             key: "abc123".to_owned(),
-//             checksum: "cafebabe".to_owned(),
-//             filename: "img_1234.jpg".to_owned(),
-//             byte_length: 1024,
-//             media_type: "image/jpeg".to_owned(),
-//             tags: vec!["cat".to_owned(), "dog".to_owned()],
-//             import_date: Utc::now(),
-//             caption: None,
-//             location: None,
-//             user_date: None,
-//             original_date: None,
-//             dimensions: None,
-//         };
-//         let mut mock = MockEntityDataSource::new();
-//         mock.expect_put_asset()
-//             .returning(move |_| Err(err_msg("oh no")));
-//         // act
-//         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-//         let result = repo.put_asset(&asset1);
-//         // assert
-//         assert!(result.is_err());
-//     }
+    #[test]
+    fn test_put_store_err() {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties
+        };
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_store()
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_store(&store);
+        // assert
+        assert!(result.is_err());
+    }
 
 //     #[test]
 //     fn test_delete_asset_ok() {

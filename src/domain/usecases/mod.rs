@@ -5,6 +5,8 @@ use failure::{Error};
 use std::cmp;
 use std::fmt;
 
+pub mod new_store;
+
 /// `UseCase` is the interface by which all use cases are invoked.
 pub trait UseCase<Type, Params> {
     fn call(&self, params: Params) -> Result<Type, Error>;

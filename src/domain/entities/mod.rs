@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use failure::{err_msg, Error};
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io;
@@ -145,6 +146,49 @@ impl Chunk {
     }
 }
 
+/// StoreType identifies a kind of store.
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub enum StoreType {
+    LOCAL,
+    MINIO,
+    SFTP,
+}
+
+impl ToString for StoreType {
+    fn to_string(&self) -> String {
+        match self {
+            StoreType::LOCAL => String::from("local"),
+            StoreType::MINIO => String::from("minio"),
+            StoreType::SFTP => String::from("sftp"),
+        }
+    }
+}
+
+impl FromStr for StoreType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "local" => Ok(StoreType::LOCAL),
+            "minio" => Ok(StoreType::MINIO),
+            "sftp" => Ok(StoreType::SFTP),
+            _ => Err(err_msg(format!("not a recognized store type: {}", s))),
+        }
+    }
+}
+
+/// Store defines a location where packs will be saved.
+pub struct Store {
+    /// Unique identifier for this store.
+    pub id: String,
+    /// Type of this store.
+    pub store_type: StoreType,
+    /// User-defined label for this store.
+    pub label: String,
+    /// Name/value pairs that make up this store configuration.
+    pub properties: HashMap<String, String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +263,26 @@ mod tests {
             "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_storetype_fromstr() {
+        let result = StoreType::from_str("local");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::LOCAL);
+        assert_eq!(stype.to_string(), "local");
+        let result = StoreType::from_str("minio");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::MINIO);
+        assert_eq!(stype.to_string(), "minio");
+        let result = StoreType::from_str("sftp");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::SFTP);
+        assert_eq!(stype.to_string(), "sftp");
+        let result = StoreType::from_str("foobar");
+        assert!(result.is_err());
     }
 }

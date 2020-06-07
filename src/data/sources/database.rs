@@ -91,7 +91,6 @@ impl Database {
     ///
     /// Insert the value if the database does not already contain the given key.
     ///
-    #[allow(dead_code)]
     pub fn insert_document(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         let existing = self.db.get(key)?;
         if existing.is_none() {
@@ -112,7 +111,6 @@ impl Database {
     ///
     /// Put the key/value pair into the database.
     ///
-    #[allow(dead_code)]
     pub fn put_document(&self, key: &[u8], value: &[u8]) -> Result<(), Error> {
         self.db.put(key, value)?;
         Ok(())

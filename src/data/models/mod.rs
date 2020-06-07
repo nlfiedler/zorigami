@@ -1,12 +1,13 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::{Checksum, Chunk};
+use crate::domain::entities::{Checksum, Chunk, Store, StoreType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 // Derive for a remote type has trouble when nested in an Option, as in the
-// Chunk packfile field.
+// packfile field of the Chunk struct.
 impl Serialize for Checksum {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -141,7 +142,6 @@ impl<'de> Deserialize<'de> for Checksum {
     }
 }
 
-// Serde definition of the Chunk entity.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Chunk")]
 pub struct ChunkDef {
@@ -157,6 +157,27 @@ pub struct ChunkDef {
     pub filepath: Option<PathBuf>,
     #[serde(rename = "pf")]
     pub packfile: Option<Checksum>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "StoreType")]
+pub enum StoreTypeDef {
+    LOCAL,
+    MINIO,
+    SFTP,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Store")]
+pub struct StoreDef {
+    #[serde(skip)]
+    pub id: String,
+    #[serde(rename = "st", with = "StoreTypeDef")]
+    pub store_type: StoreType,
+    #[serde(rename = "la")]
+    pub label: String,
+    #[serde(rename = "pp")]
+    pub properties: HashMap<String, String>,
 }
 
 #[cfg(test)]
@@ -199,6 +220,33 @@ mod tests {
         assert_eq!(actual.digest, null_digest);
         assert_eq!(actual.length, chunk.length);
         assert_eq!(actual.packfile, chunk.packfile);
+        Ok(())
+    }
+
+    #[test]
+    fn test_store_serde() -> Result<(), Error> {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties,
+        };
+        // act
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut ser = serde_json::Serializer::new(&mut buffer);
+        StoreDef::serialize(&store, &mut ser)?;
+        let as_text = String::from_utf8(buffer)?;
+        let mut de = serde_json::Deserializer::from_str(&as_text);
+        let actual = StoreDef::deserialize(&mut de)?;
+        // assert
+        // id is not serialized in the record itself
+        assert_eq!(actual.id, "");
+        assert_eq!(actual.store_type, store.store_type);
+        assert_eq!(actual.label, store.label);
+        assert_eq!(actual.properties, store.properties);
         Ok(())
     }
 }

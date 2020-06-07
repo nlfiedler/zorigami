@@ -6,13 +6,10 @@
 **** https://crates.io/crates/shaku (compile-time IoC)
 **** https://crates.io/crates/coi (compile-time IoC)
 **** consider if writing one from scratch (a la =get_it=) would be adequate
-*** Use a mocking library for isolating tests
-**** https://crates.io/crates/mockall
 *** Organize the code into domain/data/preso layers
-**** FIRST: Define the domain logic of the application
+**** Domain
 ***** entities
 ****** checksum
-******* the =checksum= functions become static functions on =Checksum= type
 ****** chunk
 ****** dataset
 ****** file
@@ -23,6 +20,13 @@
 ****** tree entry
 ****** tree entry type
 ****** tree reference
+***** managers
+****** =state.rs= to manage state
+****** =backup.rs= (nee =engine.rs=) to perform backup/restore operations
+****** =process.rs= (nee =supervisor.rs=) to manage scheduled backups
+***** repositories
+****** record database (CRUD for the entities)
+****** pack store (CRUD for the pack files)
 ***** use cases
 ****** define data set
 ****** define pack store
@@ -37,47 +41,48 @@
 ****** start backup
 ****** stop backup
 ****** restore file
-***** repositories
-****** record database (CRUD for the entities)
-****** pack store (CRUD for the pack files)
-**** SECOND: implement this design for ONE THING all the way down
-***** start a new branch as this will be destructive and time-consuming
-***** pick an entity and implement it
-***** define the repository interface
-***** define a =UseCase= trait with a =call()= function
-****** generic for =Type= that is returned from =call()=
-****** generic for =Params= that defines parameters for operation
-***** each use case has a constructor that takes dependencies
-****** e.g. repository implementation
-***** implement its use cases
-***** write unit tests (using mocks for data layer) for the domain layer
-***** implement the data model
-****** models have a copy of every field of the corresponding entity
-****** models use =#[serde(remote = "Entity")]= trick to get serde for free
-***** implement the data repository
-***** implement the data source
-****** =database.rs= becomes a module under =data/sources=
-****** most everything is serialized in the data source and stores as bytes to the =database=
-***** write unit tests (using mocks for the data source) for data layer
-***** write integration tests for the data sources
-**** THIRD: implement the rest of the CRUD use cases
-**** move management code to =domain/managers=
-***** state.rs
-***** supervisor.rs (rename to =process.rs=)
-**** FOURTH: implement the other use cases
-***** start backup
-***** stop backup
-***** restore file
 **** Data
-***** pack stores become data sources for packs
+***** pack store implementations become data sources for packs
 ***** pack repository would provide logic for handling multiple sources
+****** uses store type to select data source implementation
 ****** =store_pack()=
 ****** =retrieve_pack()=
 **** Presentation
 ***** the =#[graphql]= on domain entities will need to be implemented manually in preso layer
 ***** basically the graphql schema implementation
 ***** probably do not need =dataset()= and =store()= queries
-*** Remove either the dead code or the =#[allow(dead_code)]= pragma
+***** can remove the =dataset()= and =store()= queries from Dart code, they are unused
+*** TODO Action Plan
+**** DONE implement ~new store~ usecase
+***** define =Store= entity
+***** define =StoreDef= model for serialization
+**** TODO copy enough =schema.rs= to preso layer to expose ~new store~ mutation
+***** change GraphQL representation of =Store= to match model
+****** id: String!
+****** type: String!
+****** label: String!
+****** properties: [NamedValue!]! (where NamedValue is a name/value string pair)
+**** TODO enable enough =main.rs= to expose the GraphQL endpoint
+**** TODO implement ~get stores~ usecase (and graphql query)
+**** TODO implement ~update store~ usecase (and graphql mutation)
+**** TODO implement ~delete store~ usecase (and graphql mutation)
+**** TODO implement ~new data set~ usecase (and graphql mutation)
+***** change =DataSet= stores to be just the store identifier (not the "name")
+**** TODO implement ~get data sets~ usecase (and graphql query)
+**** TODO implement ~update data set~ usecase (and graphql mutation)
+**** TODO implement ~delete data set~ usecase (and graphql mutation)
+**** TODO implement ~start backup~ usecase (and graphql mutation)
+***** management code (state, engine, supervisor)
+***** entities for trees, snapshots, files, packs, etc
+**** TODO implement ~put back~ usecase (and graphql query)
+***** this is the new ~put back~ feature, not the download file feature
+**** TODO implement ~get snapshot~ usecase (and graphql query)
+**** TODO implement ~get tree~ usecase (and graphql query)
+**** TODO write a store validator to validate input to use cases
+***** constructs the =Store= entity, passes to blob repo for validation
+***** blob repo consults with the appropriate blob data source
+***** each blob data source implementation then validates the store definition
+*** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates
@@ -110,6 +115,8 @@
 **** https://cloud.google.com/storage/docs/best-practices
 *** TODO add form for defining a Google Cloud Storage store
 *** TODO use this to replace =akashita= for online backups
+**** define a new google cloud project named ~zorigami~
+**** eventually remove the old ~akashita~ project and files
 **** old akashita configuration file:
 #+BEGIN_SRC erlang
 {gcs_region, "us-west1"}.

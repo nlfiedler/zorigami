@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Chunk};
+use crate::domain::entities::Store;
 use failure::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -11,16 +12,15 @@ use mockall::{automock, predicate::*};
 ///
 #[cfg_attr(test, automock)]
 pub trait RecordRepository {
-    ///
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
-    ///
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error>;
 
-    ///
     /// Retrieve the chunk by the given digest, returning `None` if not found.
-    ///
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
+
+    /// Save the given store to the data source.
+    fn put_store(&self, store: &Store) -> Result<(), Error>;
 }
 
 // ///

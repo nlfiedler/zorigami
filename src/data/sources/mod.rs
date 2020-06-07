@@ -4,8 +4,8 @@
 
 //! Performs serde on entities and stores them in a database.
 
-use crate::data::models::ChunkDef;
-use crate::domain::entities::{Checksum, Chunk};
+use crate::data::models::{ChunkDef, StoreDef};
+use crate::domain::entities::{Checksum, Chunk, Store};
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
@@ -22,6 +22,9 @@ pub trait EntityDataSource {
 
     /// Retrieve the chunk by the given digest, returning `None` if not found.
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
+
+    /// Save the given store to the data source.
+    fn put_store(&self, store: &Store) -> Result<(), Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -58,5 +61,13 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+
+    fn put_store(&self, store: &Store) -> Result<(), Error> {
+        let key = format!("store/{}", store.id);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        StoreDef::serialize(store, &mut ser)?;
+        self.database.put_document(key.as_bytes(), &encoded)
     }
 }
