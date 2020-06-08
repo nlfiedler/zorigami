@@ -8,7 +8,7 @@ use crate::data::repositories::RecordRepositoryImpl;
 use crate::data::sources::EntityDataSource;
 use crate::domain::entities;
 use juniper::{
-    graphql_scalar, FieldResult, GraphQLInputObject, GraphQLObject, ParseScalarResult,
+    graphql_scalar, FieldError, FieldResult, GraphQLInputObject, GraphQLObject, ParseScalarResult,
     ParseScalarValue, RootNode, Value,
 };
 use std::collections::HashMap;
@@ -687,6 +687,8 @@ struct PropertyInput {
 /// Store defines a location where packs will be saved.
 #[derive(GraphQLInputObject)]
 struct StoreInput {
+    /// Store identifier, only used when updating a store.
+    store_id: Option<String>,
     /// Name of the type of this store (e.g. "local").
     store_type: String,
     /// User-defined label for this store.
@@ -705,32 +707,54 @@ impl Into<crate::domain::usecases::new_store::Params> for StoreInput {
     }
 }
 
+impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
+    fn into(self) -> crate::domain::usecases::update_store::Params {
+        let mut properties: HashMap<String, String> = HashMap::new();
+        for prop in self.properties.iter() {
+            properties.insert(prop.name.to_owned(), prop.value.to_owned());
+        }
+        crate::domain::usecases::update_store::Params::new(
+            self.store_id.unwrap_or(String::from("default")),
+            self.store_type,
+            self.label,
+            properties,
+        )
+    }
+}
+
 pub struct MutationRoot;
 
 #[juniper::object(Context = GraphContext)]
 impl MutationRoot {
     /// Define a new store with the given configuration.
-    fn defineStore(executor: &Executor, store: StoreInput) -> FieldResult<Store> {
+    fn defineStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
         use crate::domain::usecases::new_store::{NewStore, Params};
         use crate::domain::usecases::UseCase;
         let ctx = executor.context().clone();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = NewStore::new(Box::new(repo));
-        let params: Params = store.into();
+        let params: Params = input.into();
         let result: crate::domain::entities::Store = usecase.call(params)?;
         Ok(result.into())
     }
 
-    // /// Update the saved store configuration.
-    // fn updateStore(executor: &Executor, key: String, options: String) -> FieldResult<Store> {
-    //     let database = executor.context();
-    //     let decoded = base64::decode(&options)?;
-    //     let json = std::str::from_utf8(&decoded)?;
-    //     let mut stor = store::load_store(database, &key)?;
-    //     stor.get_config_mut().from_json(&json)?;
-    //     store::save_store(&database, stor.as_ref())?;
-    //     Ok(Store::from(stor))
-    // }
+    /// Update the saved store configuration.
+    fn updateStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
+        if input.store_id.is_none() {
+            return Err(FieldError::new(
+                "Cannot update store without identifier",
+                Value::null(),
+            ));
+        }
+        use crate::domain::usecases::update_store::{Params, UpdateStore};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = UpdateStore::new(Box::new(repo));
+        let params: Params = input.into();
+        let result: crate::domain::entities::Store = usecase.call(params)?;
+        Ok(result.into())
+    }
 
     // /// Delete the named store, returning its current configuration.
     // fn deleteStore(executor: &Executor, key: String) -> FieldResult<Store> {
@@ -892,14 +916,15 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
+            store_id: None,
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
         };
-        vars.insert("store".to_owned(), input.to_input_value());
+        vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute(
-            r#"mutation Define($store: StoreInput!) {
-                defineStore(store: $store) {
+            r#"mutation Define($input: StoreInput!) {
+                defineStore(input: $input) {
                     id storeType label properties { name value }
                 }
             }"#,
@@ -948,16 +973,139 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
+            store_id: None,
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
         };
-        vars.insert("store".to_owned(), input.to_input_value());
+        vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute(
-            r#"mutation Define($store: StoreInput!) {
-                defineStore(store: $store) {
+            r#"mutation Define($input: StoreInput!) {
+                defineStore(input: $input) {
                     id storeType label properties { name value }
                 }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_mutation_update_store_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let properties = vec![PropertyInput {
+            name: "basepath".to_owned(),
+            value: "/home/planet".to_owned(),
+        }];
+        let input = StoreInput {
+            store_id: Some("cafebabe".to_owned()),
+            store_type: "local".to_owned(),
+            label: "my local".to_owned(),
+            properties,
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Update($input: StoreInput!) {
+                updateStore(input: $input) {
+                    id storeType label
+                }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("updateStore").unwrap();
+        let object = res.as_object_value().unwrap();
+        let field = object.get_field_value("storeType").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "local");
+        let field = object.get_field_value("label").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "my local");
+    }
+
+    #[test]
+    fn test_mutation_update_store_id() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let properties = vec![];
+        let input = StoreInput {
+            store_id: None,
+            store_type: "local".to_owned(),
+            label: "my local".to_owned(),
+            properties,
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Update($input: StoreInput!) {
+                updateStore(input: $input) { id }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0]
+            .error()
+            .message()
+            .contains("store without identifier"));
+    }
+
+    #[test]
+    fn test_mutation_update_store_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_store()
+            .with(always())
+            .returning(|_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let properties = vec![PropertyInput {
+            name: "basepath".to_owned(),
+            value: "/home/planet".to_owned(),
+        }];
+        let input = StoreInput {
+            store_id: Some("cafebabe".to_owned()),
+            store_type: "local".to_owned(),
+            label: "my local".to_owned(),
+            properties,
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Define($input: StoreInput!) {
+                defineStore(input: $input) { id }
             }"#,
             None,
             &schema,

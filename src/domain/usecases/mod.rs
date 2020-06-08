@@ -7,6 +7,7 @@ use std::fmt;
 
 pub mod get_stores;
 pub mod new_store;
+pub mod update_store;
 
 /// `UseCase` is the interface by which all use cases are invoked.
 pub trait UseCase<Type, Params> {
