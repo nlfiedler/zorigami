@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::{Checksum, Chunk};
 use crate::domain::entities::Store;
+use crate::domain::entities::{Checksum, Chunk};
 use failure::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -24,6 +24,9 @@ pub trait RecordRepository {
 
     /// Retrieve all registered pack store configurations.
     fn get_stores(&self) -> Result<Vec<Store>, Error>;
+
+    /// Remove the store by the given identifier.
+    fn delete_store(&self, id: &str) -> Result<(), Error>;
 }
 
 // ///

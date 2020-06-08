@@ -119,7 +119,6 @@ impl Database {
     ///
     /// Delete the database record associated with the given key.
     ///
-    #[allow(dead_code)]
     pub fn delete_document(&self, key: &[u8]) -> Result<(), Error> {
         self.db.delete(key)?;
         Ok(())

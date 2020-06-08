@@ -756,13 +756,17 @@ impl MutationRoot {
         Ok(result.into())
     }
 
-    // /// Delete the named store, returning its current configuration.
-    // fn deleteStore(executor: &Executor, key: String) -> FieldResult<Store> {
-    //     let database = executor.context();
-    //     let stor = store::load_store(database, &key)?;
-    //     store::delete_store(&database, &key)?;
-    //     Ok(Store::from(stor))
-    // }
+    /// Delete the named store, returning the identifier.
+    fn deleteStore(executor: &Executor, id: String) -> FieldResult<String> {
+        use crate::domain::usecases::delete_store::{DeleteStore, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = DeleteStore::new(Box::new(repo));
+        let params: Params = Params::new(id.clone());
+        usecase.call(params)?;
+        Ok(id)
+    }
 
     // /// Define a new dataset with the given configuration.
     // fn defineDataset(executor: &Executor, dataset: InputDataset) -> FieldResult<Dataset> {
@@ -830,7 +834,7 @@ mod tests {
     use super::*;
     use crate::data::sources::MockEntityDataSource;
     use failure::err_msg;
-    use juniper::{ToInputValue, Variables};
+    use juniper::{InputValue, ToInputValue, Variables};
     use mockall::predicate::*;
 
     #[test]
@@ -1106,6 +1110,64 @@ mod tests {
         let (res, errors) = juniper::execute(
             r#"mutation Define($input: StoreInput!) {
                 defineStore(input: $input) { id }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_mutation_delete_store_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_store().with(always()).returning(|_| Ok(()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("input".to_owned(), InputValue::scalar("abc123"));
+        let (res, errors) = juniper::execute(
+            r#"mutation Delete($input: String!) {
+                deleteStore(id: $input)
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let field = res.get_field_value("deleteStore").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "abc123");
+    }
+
+    #[test]
+    fn test_mutation_delete_store_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_store()
+            .with(always())
+            .returning(|_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("input".to_owned(), InputValue::scalar("abc123"));
+        let (res, errors) = juniper::execute(
+            r#"mutation Delete($input: String!) {
+                deleteStore(id: $input)
             }"#,
             None,
             &schema,

@@ -79,8 +79,8 @@ fn test_insert_get_chunk() {
 }
 
 #[test]
-fn test_put_get_store() {
-    let db_path = DBPath::new("_test_put_get_store");
+fn test_put_get_delete_store() {
+    let db_path = DBPath::new("_test_put_get_delete_store");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // populate the data source with stores
@@ -108,4 +108,10 @@ fn test_put_get_store() {
     assert_eq!(stores.len(), 2);
     assert!(stores.iter().any(|s| s.id == "cafebabe"));
     assert!(stores.iter().any(|s| s.id == "deadbeef"));
+
+    // delete one of the stores
+    datasource.delete_store("deadbeef").unwrap();
+    let stores = datasource.get_stores().unwrap();
+    assert_eq!(stores.len(), 1);
+    assert_eq!(stores[0].id, "cafebabe");
 }

@@ -37,6 +37,10 @@ impl RecordRepository for RecordRepositoryImpl {
     fn get_stores(&self) -> Result<Vec<Store>, Error> {
         self.datasource.get_stores()
     }
+
+    fn delete_store(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_store(id)
+    }
 }
 
 // pub struct BlobRepositoryImpl {
@@ -224,33 +228,33 @@ mod tests {
         assert!(result.is_err());
     }
 
-    //     #[test]
-    //     fn test_delete_asset_ok() {
-    //         // arrange
-    //         let mut mock = MockEntityDataSource::new();
-    //         mock.expect_delete_asset()
-    //             .with(eq("abc123"))
-    //             .returning(move |_| Ok(()));
-    //         // act
-    //         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-    //         let result = repo.delete_asset("abc123");
-    //         // assert
-    //         assert!(result.is_ok());
-    //     }
+    #[test]
+    fn test_delete_store_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_store()
+            .with(eq("abc123"))
+            .returning(move |_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_store("abc123");
+        // assert
+        assert!(result.is_ok());
+    }
 
-    //     #[test]
-    //     fn test_delete_asset_err() {
-    //         // arrange
-    //         let mut mock = MockEntityDataSource::new();
-    //         mock.expect_delete_asset()
-    //             .with(eq("abc123"))
-    //             .returning(move |_| Err(err_msg("oh no")));
-    //         // act
-    //         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-    //         let result = repo.delete_asset("abc123");
-    //         // assert
-    //         assert!(result.is_err());
-    //     }
+    #[test]
+    fn test_delete_store_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_store()
+            .with(eq("abc123"))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_store("abc123");
+        // assert
+        assert!(result.is_err());
+    }
 
     //     #[test]
     //     fn test_store_blob_ok() {

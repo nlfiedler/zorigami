@@ -65,7 +65,7 @@
 **** DONE enable enough =main.rs= to expose the GraphQL endpoint
 **** DONE implement ~get stores~ usecase (and graphql query)
 **** DONE implement ~update store~ usecase (and graphql mutation)
-**** TODO implement ~delete store~ usecase (and graphql mutation)
+**** DONE implement ~delete store~ usecase (and graphql mutation)
 **** TODO implement ~new data set~ usecase (and graphql mutation)
 ***** change =DataSet= stores to be just the store identifier (not the "name")
 **** TODO implement ~get data sets~ usecase (and graphql query)

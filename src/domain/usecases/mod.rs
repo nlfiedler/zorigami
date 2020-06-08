@@ -5,6 +5,7 @@ use failure::{Error};
 use std::cmp;
 use std::fmt;
 
+pub mod delete_store;
 pub mod get_stores;
 pub mod new_store;
 pub mod update_store;

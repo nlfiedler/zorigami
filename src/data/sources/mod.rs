@@ -28,6 +28,9 @@ pub trait EntityDataSource {
 
     /// Retrieve all registered pack store configurations.
     fn get_stores(&self) -> Result<Vec<Store>, Error>;
+
+    /// Remove the store by the given identifier.
+    fn delete_store(&self, id: &str) -> Result<(), Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -84,5 +87,10 @@ impl EntityDataSource for EntityDataSourceImpl {
             results.push(result);
         }
         Ok(results)
+    }
+
+    fn delete_store(&self, id: &str) -> Result<(), Error> {
+        let key = format!("store/{}", id);
+        self.database.delete_document(key.as_bytes())
     }
 }
