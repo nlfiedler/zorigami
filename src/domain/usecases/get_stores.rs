@@ -57,7 +57,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_store_err() {
+    fn test_get_stores_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_get_stores().returning(|| Err(err_msg("oh no")));

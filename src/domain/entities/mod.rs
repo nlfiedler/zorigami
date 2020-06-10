@@ -197,7 +197,7 @@ pub struct Store {
 
 /// Represents a directory tree that will be backed up according to a schedule,
 /// with pack files saved to a particular local or remote store.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Dataset {
     /// Unique identifier of this dataset for persisting to database.
     pub key: String,

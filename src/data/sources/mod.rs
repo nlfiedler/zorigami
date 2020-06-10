@@ -4,8 +4,8 @@
 
 //! Performs serde on entities and stores them in a database.
 
-use crate::data::models::{ChunkDef, ConfigurationDef, DatasetDef, StoreDef};
-use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Store};
+use crate::data::models::{ChunkDef, ConfigurationDef, DatasetDef, SnapshotDef, StoreDef};
+use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Snapshot, Store};
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
@@ -43,6 +43,12 @@ pub trait EntityDataSource {
 
     /// Save the given dataset to the data source.
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
+
+    /// Retrieve all defined dataset configurations.
+    fn get_datasets(&self) -> Result<Vec<Dataset>, Error>;
+
+    /// Retrieve a snapshot by its digest, returning `None` if not found.
+    fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -147,5 +153,31 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         DatasetDef::serialize(dataset, &mut ser)?;
         self.database.put_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
+        let datasets = self.database.fetch_prefix("dataset/")?;
+        let mut results: Vec<Dataset> = Vec::new();
+        for (key, value) in datasets {
+            let mut de = serde_cbor::Deserializer::from_slice(&value);
+            let mut result = DatasetDef::deserialize(&mut de)?;
+            result.key = key;
+            results.push(result);
+        }
+        Ok(results)
+    }
+
+    fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
+        let key = format!("snapshot/{}", digest);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = SnapshotDef::deserialize(&mut de)?;
+                result.digest = digest.clone();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
     }
 }

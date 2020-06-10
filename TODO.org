@@ -67,9 +67,7 @@
 **** DONE implement ~update store~ usecase (and graphql mutation)
 **** DONE implement ~delete store~ usecase (and graphql mutation)
 **** DONE implement ~new data set~ usecase (and graphql mutation)
-**** TODO implement ~get data sets~ usecase (and graphql query)
-***** implement =get_snapshot()= in data source for GraphQL resolver
-***** implement the GraphQL =latest_snapshot()= on =Dataset=
+**** DONE implement ~get data sets~ usecase (and graphql query)
 **** TODO implement ~update data set~ usecase (and graphql mutation)
 **** TODO implement ~delete data set~ usecase (and graphql mutation)
 ***** write data source tests for dataset put/get/delete

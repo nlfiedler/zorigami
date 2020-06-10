@@ -33,6 +33,9 @@ pub trait RecordRepository {
 
     /// Save the given dataset to the data source.
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
+
+    /// Retrieve all defined dataset configurations.
+    fn get_datasets(&self) -> Result<Vec<Dataset>, Error>;
 }
 
 // ///

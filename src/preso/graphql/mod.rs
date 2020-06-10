@@ -201,13 +201,13 @@ impl entities::Dataset {
 
     /// Most recent snapshot for this dataset, if any.
     fn latest_snapshot(&self, executor: &Executor) -> Option<entities::Snapshot> {
-        // change to use data source
-        // if let Some(digest) = self.latest_snapshot.as_ref() {
-        //     let dbase = executor.context();
-        //     if let Ok(result) = dbase.get_snapshot(&digest) {
-        //         return result;
-        //     }
-        // }
+        if let Some(digest) = self.latest_snapshot.as_ref() {
+            let ctx = executor.context().clone();
+            let datasource = ctx.datasource.clone();
+            if let Ok(result) = datasource.get_snapshot(&digest) {
+                return result;
+            }
+        }
         None
     }
 
@@ -698,11 +698,17 @@ impl QueryRoot {
         Ok(repo.get_configuration()?)
     }
 
-    // /// Find all dataset configurations.
-    // fn datasets(executor: &Executor) -> FieldResult<Vec<Dataset>> {
-    //     let database = executor.context();
-    //     Ok(database.get_all_datasets()?)
-    // }
+    /// Find all dataset configurations.
+    fn datasets(executor: &Executor) -> FieldResult<Vec<entities::Dataset>> {
+        use crate::domain::usecases::get_datasets::GetDatasets;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetDatasets::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let datasets = usecase.call(params)?;
+        Ok(datasets)
+    }
 
     /// Find all named store configurations.
     fn stores(executor: &Executor) -> FieldResult<Vec<Store>> {
@@ -975,6 +981,71 @@ mod tests {
         let (res, errors) = juniper::execute(
             r#"query {
                 stores { storeType label }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_query_datasets_ok() {
+        // arrange
+        let datasets = vec![entities::Dataset::new(
+            "oldpaint",
+            Path::new("/home/planet"),
+        )];
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                datasets { computerId basepath }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("datasets").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 1);
+        let object = list[0].as_object_value().unwrap();
+        let field = object.get_field_value("computerId").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "oldpaint");
+        let field = object.get_field_value("basepath").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "/home/planet");
+    }
+
+    #[test]
+    fn test_query_datasets_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_datasets()
+            .returning(move || Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                datasets { computerId }
             }"#,
             None,
             &schema,

@@ -5,6 +5,7 @@ mod common;
 
 use common::DBPath;
 use std::collections::HashMap;
+use std::path::Path;
 use zorigami::data::sources::EntityDataSource;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum};
@@ -121,6 +122,24 @@ fn test_put_get_delete_store() {
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 1);
     assert_eq!(stores[0].id, "cafebabe");
+}
+
+#[test]
+fn test_put_get_datasets() {
+    let db_path = DBPath::new("_test_put_get_datasets");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    // populate the data source with datasets
+    let dataset = entities::Dataset::new("oldpaint", Path::new("/home/planet"));
+    datasource.put_dataset(&dataset).unwrap();
+    let dataset = entities::Dataset::new("oldyeller", Path::new("/home/town"));
+    datasource.put_dataset(&dataset).unwrap();
+
+    // retrieve all known datasets
+    let datasets = datasource.get_datasets().unwrap();
+    assert_eq!(datasets.len(), 2);
+    assert!(datasets.iter().any(|s| s.computer_id == "oldpaint"));
+    assert!(datasets.iter().any(|s| s.computer_id == "oldyeller"));
 }
 
 #[test]

@@ -54,6 +54,10 @@ impl RecordRepository for RecordRepositoryImpl {
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
         self.datasource.put_dataset(dataset)
     }
+
+    fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
+        self.datasource.get_datasets()
+    }
 }
 
 // pub struct BlobRepositoryImpl {

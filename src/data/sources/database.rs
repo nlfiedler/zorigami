@@ -230,22 +230,6 @@ impl Database {
 //     }
 
 //     ///
-//     /// Retrieve the snapshot by the given digest, returning None if not found.
-//     ///
-//     pub fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
-//         let key = format!("snapshot/{}", digest);
-//         let encoded = self.get_document(key.as_bytes())?;
-//         match encoded {
-//             Some(dbv) => {
-//                 let mut serde_result: Snapshot = serde_cbor::from_slice(&dbv)?;
-//                 serde_result.digest = digest.clone();
-//                 Ok(Some(serde_result))
-//             }
-//             None => Ok(None),
-//         }
-//     }
-
-//     ///
 //     /// Insert the file into the database, using the given digest as part of the
 //     /// key (plus a fixed prefix for namespacing). Files with the same digest are
 //     /// assumed to be identical.
