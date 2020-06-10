@@ -222,69 +222,6 @@ impl entities::Dataset {
     }
 }
 
-#[derive(GraphQLInputObject)]
-pub struct DatasetInput {
-    /// Identifier of dataset to update, null if creating.
-    pub key: Option<String>,
-    /// Path that is being backed up.
-    pub basepath: String,
-    /// List of schedules to apply to this dataset.
-    pub schedules: Vec<InputSchedule>,
-    // Path to temporary workspace for backup process.
-    // pub workspace: String,
-    /// Desired byte length of pack files.
-    pub pack_size: BigInt,
-    /// Identifiers of stores used for saving packs.
-    pub stores: Vec<String>,
-}
-
-impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
-    fn into(self) -> crate::domain::usecases::new_dataset::Params {
-        crate::domain::usecases::new_dataset::Params::new(
-            PathBuf::from(self.basepath),
-            self.schedules.into_iter().map(|s| s.into()).collect(),
-            self.pack_size.into(),
-            self.stores,
-        )
-    }
-}
-
-impl DatasetInput {
-    /// Perform basic validation on the input dataset.
-    fn validate(&self, datasource: Arc<dyn EntityDataSource>) -> FieldResult<()> {
-        // not convinced this is necessary
-        // if self.stores.is_empty() {
-        //     return Err(FieldError::new(
-        //         "Require at least one store in dataset",
-        //         Value::null(),
-        //     ));
-        // }
-        // verify the stores exist in the database
-        for store in self.stores.iter() {
-            let opt = datasource.get_store(store)?;
-            if opt.is_none() {
-                return Err(FieldError::new(
-                    format!("Named store does not exist: {}", &store),
-                    Value::null(),
-                ));
-            }
-        }
-        // ensure the basepath actually exists
-        let bpath = Path::new(&self.basepath);
-        if !bpath.exists() {
-            return Err(FieldError::new(
-                format!("Base path does not exist: {}", &self.basepath),
-                Value::null(),
-            ));
-        }
-        // ensure the schedules, if any, make sense
-        for schedule in self.schedules.iter() {
-            schedule.validate()?;
-        }
-        Ok(())
-    }
-}
-
 #[juniper::object(description = "Range of time in which to run backup.")]
 impl entities::schedule::TimeRange {
     /// Seconds from midnight at which to start.
@@ -496,143 +433,6 @@ impl entities::schedule::Schedule {
     }
 }
 
-/// New schedule for the dataset. Combine elements to get backups to run on a
-/// certain day of the week, month, and/or within a given time range.
-#[derive(GraphQLInputObject)]
-pub struct InputSchedule {
-    /// How often to run the backup.
-    pub frequency: Frequency,
-    /// Range of time during the day in which to run backup.
-    pub time_range: Option<InputTimeRange>,
-    /// Which week within the month to run the backup.
-    pub week_of_month: Option<WeekOfMonth>,
-    /// Which day of the week to run the backup.
-    pub day_of_week: Option<DayOfWeek>,
-    /// The day of the month to run the backup.
-    pub day_of_month: Option<i32>,
-}
-
-impl InputSchedule {
-    /// Construct a "hourly" schedule, for testing purposes.
-    pub fn hourly() -> Self {
-        Self {
-            frequency: Frequency::Hourly,
-            time_range: None,
-            week_of_month: None,
-            day_of_week: None,
-            day_of_month: None,
-        }
-    }
-
-    /// Construct a "daily" schedule, for testing purposes.
-    pub fn daily() -> Self {
-        Self {
-            frequency: Frequency::Daily,
-            time_range: None,
-            week_of_month: None,
-            day_of_week: None,
-            day_of_month: None,
-        }
-    }
-
-    fn validate(&self) -> FieldResult<()> {
-        match &self.frequency {
-            Frequency::Hourly => {
-                if self.week_of_month.is_some()
-                    || self.day_of_week.is_some()
-                    || self.day_of_month.is_some()
-                    || self.time_range.is_some()
-                {
-                    return Err(FieldError::new(
-                        "Hourly cannot take any range or days",
-                        Value::null(),
-                    ));
-                }
-            }
-            Frequency::Daily => {
-                if self.week_of_month.is_some()
-                    || self.day_of_week.is_some()
-                    || self.day_of_month.is_some()
-                {
-                    return Err(FieldError::new(
-                        "Daily can only take a time_range",
-                        Value::null(),
-                    ));
-                }
-                if let Some(ref range) = self.time_range {
-                    range.validate()?
-                }
-            }
-            Frequency::Weekly => {
-                if self.week_of_month.is_some() || self.day_of_month.is_some() {
-                    return Err(FieldError::new(
-                        "Weekly can only take a time_range and day_of_week",
-                        Value::null(),
-                    ));
-                }
-                if let Some(ref range) = self.time_range {
-                    range.validate()?
-                }
-            }
-            Frequency::Monthly => {
-                if self.day_of_month.is_some() && self.day_of_week.is_some() {
-                    return Err(FieldError::new(
-                        "Monthly can only take day_of_month *or* day_of_week and week_of_month",
-                        Value::null(),
-                    ));
-                }
-                if self.day_of_week.is_some() && self.week_of_month.is_none() {
-                    return Err(FieldError::new(
-                        "Monthly requires week_of_month when using day_of_week",
-                        Value::null(),
-                    ));
-                }
-                if let Some(ref range) = self.time_range {
-                    range.validate()?
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Into<entities::schedule::Schedule> for InputSchedule {
-    fn into(self) -> entities::schedule::Schedule {
-        match &self.frequency {
-            Frequency::Hourly => entities::schedule::Schedule::Hourly,
-            Frequency::Daily => {
-                entities::schedule::Schedule::Daily(self.time_range.map(|s| s.into()))
-            }
-            Frequency::Weekly => {
-                let dow = if let Some(dow) = self.day_of_week {
-                    Some((dow.into(), self.time_range.map(|s| s.into())))
-                } else {
-                    None
-                };
-                entities::schedule::Schedule::Weekly(dow)
-            }
-            Frequency::Monthly => {
-                let dom: Option<(
-                    entities::schedule::DayOfMonth,
-                    Option<entities::schedule::TimeRange>,
-                )> = if let Some(day) = self.day_of_month {
-                    Some((
-                        entities::schedule::DayOfMonth::from(day as u32),
-                        self.time_range.map(|s| s.into()),
-                    ))
-                } else if let Some(wn) = self.week_of_month {
-                    let dow = self.day_of_week.unwrap();
-                    let dom = wn.into_dom(dow);
-                    Some((dom, self.time_range.map(|s| s.into())))
-                } else {
-                    None
-                };
-                entities::schedule::Schedule::Monthly(dom)
-            }
-        }
-    }
-}
-
 /// Property defines a name/value pair.
 #[derive(GraphQLObject)]
 struct Property {
@@ -781,6 +581,218 @@ impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
     }
 }
 
+#[derive(GraphQLInputObject)]
+pub struct DatasetInput {
+    /// Identifier of dataset to update, null if creating.
+    pub key: Option<String>,
+    /// Path that is being backed up.
+    pub basepath: String,
+    /// List of schedules to apply to this dataset.
+    pub schedules: Vec<ScheduleInput>,
+    // Path to temporary workspace for backup process.
+    // pub workspace: String,
+    /// Desired byte length of pack files.
+    pub pack_size: BigInt,
+    /// Identifiers of stores used for saving packs.
+    pub stores: Vec<String>,
+}
+
+impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
+    fn into(self) -> crate::domain::usecases::new_dataset::Params {
+        crate::domain::usecases::new_dataset::Params::new(
+            PathBuf::from(self.basepath),
+            self.schedules.into_iter().map(|s| s.into()).collect(),
+            self.pack_size.into(),
+            self.stores,
+        )
+    }
+}
+
+impl Into<crate::domain::usecases::update_dataset::Params> for DatasetInput {
+    fn into(self) -> crate::domain::usecases::update_dataset::Params {
+        crate::domain::usecases::update_dataset::Params::new(
+            self.key.unwrap_or(String::from("default")),
+            PathBuf::from(self.basepath),
+            self.schedules.into_iter().map(|s| s.into()).collect(),
+            self.pack_size.into(),
+            self.stores,
+        )
+    }
+}
+
+impl DatasetInput {
+    /// Perform basic validation on the input dataset.
+    fn validate(&self, datasource: Arc<dyn EntityDataSource>) -> FieldResult<()> {
+        // not convinced this is necessary
+        // if self.stores.is_empty() {
+        //     return Err(FieldError::new(
+        //         "Require at least one store in dataset",
+        //         Value::null(),
+        //     ));
+        // }
+        // verify the stores exist in the database
+        for store in self.stores.iter() {
+            let opt = datasource.get_store(store)?;
+            if opt.is_none() {
+                return Err(FieldError::new(
+                    format!("Named store does not exist: {}", &store),
+                    Value::null(),
+                ));
+            }
+        }
+        // ensure the basepath actually exists
+        let bpath = Path::new(&self.basepath);
+        if !bpath.exists() {
+            return Err(FieldError::new(
+                format!("Base path does not exist: {}", &self.basepath),
+                Value::null(),
+            ));
+        }
+        // ensure the schedules, if any, make sense
+        for schedule in self.schedules.iter() {
+            schedule.validate()?;
+        }
+        Ok(())
+    }
+}
+
+/// New schedule for the dataset. Combine elements to get backups to run on a
+/// certain day of the week, month, and/or within a given time range.
+#[derive(GraphQLInputObject)]
+pub struct ScheduleInput {
+    /// How often to run the backup.
+    pub frequency: Frequency,
+    /// Range of time during the day in which to run backup.
+    pub time_range: Option<InputTimeRange>,
+    /// Which week within the month to run the backup.
+    pub week_of_month: Option<WeekOfMonth>,
+    /// Which day of the week to run the backup.
+    pub day_of_week: Option<DayOfWeek>,
+    /// The day of the month to run the backup.
+    pub day_of_month: Option<i32>,
+}
+
+impl ScheduleInput {
+    /// Construct a "hourly" schedule, for testing purposes.
+    pub fn hourly() -> Self {
+        Self {
+            frequency: Frequency::Hourly,
+            time_range: None,
+            week_of_month: None,
+            day_of_week: None,
+            day_of_month: None,
+        }
+    }
+
+    /// Construct a "daily" schedule, for testing purposes.
+    pub fn daily() -> Self {
+        Self {
+            frequency: Frequency::Daily,
+            time_range: None,
+            week_of_month: None,
+            day_of_week: None,
+            day_of_month: None,
+        }
+    }
+
+    fn validate(&self) -> FieldResult<()> {
+        match &self.frequency {
+            Frequency::Hourly => {
+                if self.week_of_month.is_some()
+                    || self.day_of_week.is_some()
+                    || self.day_of_month.is_some()
+                    || self.time_range.is_some()
+                {
+                    return Err(FieldError::new(
+                        "Hourly cannot take any range or days",
+                        Value::null(),
+                    ));
+                }
+            }
+            Frequency::Daily => {
+                if self.week_of_month.is_some()
+                    || self.day_of_week.is_some()
+                    || self.day_of_month.is_some()
+                {
+                    return Err(FieldError::new(
+                        "Daily can only take a time_range",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+            Frequency::Weekly => {
+                if self.week_of_month.is_some() || self.day_of_month.is_some() {
+                    return Err(FieldError::new(
+                        "Weekly can only take a time_range and day_of_week",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+            Frequency::Monthly => {
+                if self.day_of_month.is_some() && self.day_of_week.is_some() {
+                    return Err(FieldError::new(
+                        "Monthly can only take day_of_month *or* day_of_week and week_of_month",
+                        Value::null(),
+                    ));
+                }
+                if self.day_of_week.is_some() && self.week_of_month.is_none() {
+                    return Err(FieldError::new(
+                        "Monthly requires week_of_month when using day_of_week",
+                        Value::null(),
+                    ));
+                }
+                if let Some(ref range) = self.time_range {
+                    range.validate()?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Into<entities::schedule::Schedule> for ScheduleInput {
+    fn into(self) -> entities::schedule::Schedule {
+        match &self.frequency {
+            Frequency::Hourly => entities::schedule::Schedule::Hourly,
+            Frequency::Daily => {
+                entities::schedule::Schedule::Daily(self.time_range.map(|s| s.into()))
+            }
+            Frequency::Weekly => {
+                let dow = if let Some(dow) = self.day_of_week {
+                    Some((dow.into(), self.time_range.map(|s| s.into())))
+                } else {
+                    None
+                };
+                entities::schedule::Schedule::Weekly(dow)
+            }
+            Frequency::Monthly => {
+                let dom: Option<(
+                    entities::schedule::DayOfMonth,
+                    Option<entities::schedule::TimeRange>,
+                )> = if let Some(day) = self.day_of_month {
+                    Some((
+                        entities::schedule::DayOfMonth::from(day as u32),
+                        self.time_range.map(|s| s.into()),
+                    ))
+                } else if let Some(wn) = self.week_of_month {
+                    let dow = self.day_of_week.unwrap();
+                    let dom = wn.into_dom(dow);
+                    Some((dom, self.time_range.map(|s| s.into())))
+                } else {
+                    None
+                };
+                entities::schedule::Schedule::Monthly(dom)
+            }
+        }
+    }
+}
+
 pub struct MutationRoot;
 
 #[juniper::object(Context = GraphContext)]
@@ -842,25 +854,23 @@ impl MutationRoot {
     }
 
     // /// Update an existing dataset with the given configuration.
-    // fn updateDataset(executor: &Executor, dataset: DatasetInput) -> FieldResult<Dataset> {
-    //     match dataset.key {
-    //         None => Err(FieldError::new("Dataset must specify a key", Value::null())),
-    //         Some(ref set_key) => {
-    //             let database = executor.context();
-    //             dataset.validate(&database)?;
-    //             match database.get_dataset(set_key)? {
-    //                 None => Err(FieldError::new(
-    //                     format!("Dataset does not exist: {}", set_key),
-    //                     Value::null(),
-    //                 )),
-    //                 Some(mut updated) => {
-    //                     dataset.copy_input(&mut updated);
-    //                     database.put_dataset(&updated)?;
-    //                     Ok(updated)
-    //                 }
-    //             }
-    //         }
+    // fn updateDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
+    //     if input.key.is_none() {
+    //         return Err(FieldError::new(
+    //             "Cannot update dataset without key",
+    //             Value::null(),
+    //         ));
     //     }
+    //     use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
+    //     use crate::domain::usecases::UseCase;
+    //     let ctx = executor.context().clone();
+    //     let datasource = ctx.datasource.clone();
+    //     input.validate(datasource.clone())?;
+    //     let repo = RecordRepositoryImpl::new(datasource);
+    //     let usecase = UpdateDataset::new(Box::new(repo));
+    //     let params: Params = input.into();
+    //     let result = usecase.call(params)?;
+    //     Ok(result)
     // }
 
     // /// Delete the named dataset, returning its current configuration.
