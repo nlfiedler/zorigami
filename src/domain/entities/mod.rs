@@ -1,13 +1,18 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use chrono::prelude::*;
 use failure::{err_msg, Error};
+use rusty_ulid::generate_ulid_string;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use uuid::Uuid;
+
+pub mod schedule;
 
 ///
 /// The `Checksum` represents a hash digest for an object, such as a tree,
@@ -188,6 +193,203 @@ pub struct Store {
     pub label: String,
     /// Name/value pairs that make up this store configuration.
     pub properties: HashMap<String, String>,
+}
+
+/// Represents a directory tree that will be backed up according to a schedule,
+/// with pack files saved to a particular local or remote store.
+#[derive(Debug)]
+pub struct Dataset {
+    /// Unique identifier of this dataset for persisting to database.
+    pub key: String,
+    /// Computer UUID for generating bucket names.
+    pub computer_id: String,
+    /// Local base path of dataset to be saved.
+    pub basepath: PathBuf,
+    /// Set of schedules for when to run the backup.
+    pub schedules: Vec<schedule::Schedule>,
+    /// Latest snapshot reference, if any.
+    pub latest_snapshot: Option<Checksum>,
+    /// Path for temporary pack building.
+    pub workspace: PathBuf,
+    /// Target size in bytes for pack files.
+    pub pack_size: u64,
+    /// Identifiers of the stores to contain pack files.
+    pub stores: Vec<String>,
+}
+
+// Default pack size is 64mb just because. With a typical ADSL home broadband
+// connection a 64mb pack file should take about 5 minutes to upload.
+const DEFAULT_PACK_SIZE: u64 = 67_108_864;
+
+impl Dataset {
+    /// Construct a Dataset with the given unique (computer) identifier, and
+    /// base path of the directory structure to be saved.
+    pub fn new(computer_id: &str, basepath: &Path) -> Dataset {
+        let key = generate_ulid_string().to_lowercase();
+        let mut workspace = basepath.to_owned();
+        workspace.push(".tmp");
+        Self {
+            key,
+            computer_id: computer_id.to_owned(),
+            basepath: basepath.to_owned(),
+            schedules: vec![],
+            latest_snapshot: None,
+            workspace,
+            pack_size: DEFAULT_PACK_SIZE,
+            stores: vec![],
+        }
+    }
+
+    /// Add the given store identifier to the dataset.
+    pub fn add_store(mut self, store: &str) -> Self {
+        self.stores.push(store.to_owned());
+        self
+    }
+
+    /// Add the given schedule to the dataset.
+    pub fn add_schedule(mut self, schedule: schedule::Schedule) -> Self {
+        self.schedules.push(schedule);
+        self
+    }
+
+    /// Set the pack size for the dataset.
+    pub fn pack_size(mut self, pack_size: u64) -> Self {
+        self.pack_size = pack_size;
+        self
+    }
+}
+
+impl Default for Dataset {
+    fn default() -> Self {
+        Self {
+            key: String::new(),
+            computer_id: String::new(),
+            basepath: PathBuf::new(),
+            schedules: vec![],
+            latest_snapshot: None,
+            workspace: PathBuf::new(),
+            pack_size: 0,
+            stores: vec![],
+        }
+    }
+}
+
+impl fmt::Display for Dataset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "dataset-{}", self.key)
+    }
+}
+
+///
+/// A `Snapshot` represents a single backup, either in progress or completed.
+/// It references a possible parent snapshot, and a tree representing the files
+/// contained in the snapshot.
+///
+#[derive(Debug)]
+pub struct Snapshot {
+    /// Unique identifier of this snapshot for persisting to database.
+    pub digest: Checksum,
+    /// Digest of the parent snapshot, if any.
+    pub parent: Option<Checksum>,
+    /// Time when the snapshot was first created.
+    pub start_time: DateTime<Utc>,
+    /// Time when the snapshot completed its upload. Will be `None` until
+    /// the backup has completed.
+    pub end_time: Option<DateTime<Utc>>,
+    /// Total number of files contained in this snapshot.
+    pub file_count: u32,
+    /// Digest of the root tree for this snapshot.
+    pub tree: Checksum,
+}
+
+impl Snapshot {
+    ///
+    /// Construct a new `Snapshot` for the given tree, and optional parent.
+    ///
+    pub fn new(parent: Option<Checksum>, tree: Checksum, file_count: u32) -> Self {
+        let start_time = Utc::now();
+        let mut snapshot = Self {
+            digest: Checksum::SHA1(String::from("sha1-cafebabe")),
+            parent,
+            start_time,
+            end_time: None,
+            file_count,
+            tree,
+        };
+        // Need to compute a checksum and save that as the "key" for this
+        // snapshot, cannot compute the checksum later because the object is
+        // mutable (e.g. end time).
+        let formed = snapshot.to_string();
+        snapshot.digest = Checksum::sha1_from_bytes(formed.as_bytes());
+        snapshot
+    }
+
+    /// Add the end_time property.
+    pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+}
+
+/// A SHA1 of all zeroes.
+pub static NULL_SHA1: &str = "sha1-0000000000000000000000000000000000000000";
+
+impl fmt::Display for Snapshot {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let start_time = self.start_time.timestamp();
+        // Format in a manner similar to git commit entries; this forms part of
+        // the digest value for the snapshot, so it should remain relatively
+        // stable over time.
+        let parent = match self.parent {
+            None => NULL_SHA1.to_string(),
+            Some(ref value) => value.to_string(),
+        };
+        write!(
+            f,
+            "tree {}\nparent {}\nnumFiles {}\nstartTime {}",
+            self.tree, parent, self.file_count, start_time
+        )
+    }
+}
+
+/// Contains the configuration of the application, pertaining to all datasets.
+#[derive(Clone, Debug)]
+pub struct Configuration {
+    /// Name of the computer on which this application is running.
+    pub hostname: String,
+    /// Name of the user running this application.
+    pub username: String,
+    /// Computer UUID for generating bucket names.
+    pub computer_id: String,
+}
+
+impl Configuration {
+    /// Generate a type 5 UUID based on the given values.
+    ///
+    /// Returns a shortened version of the UUID to minimize storage and reduce
+    /// the display width on screen. It can be converted back to a UUID using
+    /// `blob_uuid::to_uuid()` if necessary.
+    pub fn generate_unique_id(username: &str, hostname: &str) -> String {
+        let mut name = String::from(username);
+        name.push(':');
+        name.push_str(hostname);
+        let bytes = name.into_bytes();
+        let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, &bytes);
+        blob_uuid::to_blob(&uuid)
+    }
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        let username = whoami::username();
+        let hostname = whoami::hostname();
+        let computer_id = Configuration::generate_unique_id(&username, &hostname);
+        Self {
+            hostname,
+            username,
+            computer_id,
+        }
+    }
 }
 
 #[cfg(test)]

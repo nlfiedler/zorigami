@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::Store;
-use crate::domain::entities::{Checksum, Chunk};
+use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset};
 use failure::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -12,6 +12,9 @@ use mockall::{automock, predicate::*};
 ///
 #[cfg_attr(test, automock)]
 pub trait RecordRepository {
+    /// Retrieve the configuration, or build a new one using default values.
+    fn get_configuration(&self) -> Result<Configuration, Error>;
+
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error>;
@@ -27,6 +30,9 @@ pub trait RecordRepository {
 
     /// Remove the store by the given identifier.
     fn delete_store(&self, id: &str) -> Result<(), Error>;
+
+    /// Save the given dataset to the data source.
+    fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
 }
 
 // ///

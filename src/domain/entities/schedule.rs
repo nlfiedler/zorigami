@@ -1,12 +1,10 @@
 //
-// Copyright (c) 2019 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use chrono::prelude::*;
-use juniper::GraphQLEnum;
-use serde::{Deserialize, Serialize};
 
 /// The day of the week, for weekly and monthly schedules.
-#[derive(Clone, Copy, Serialize, Deserialize, Debug, GraphQLEnum)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum DayOfWeek {
     Sun,
     Mon,
@@ -57,7 +55,7 @@ impl From<u32> for DayOfWeek {
 /// time is represented in 24-hour format, without a timezone (i.e. "naive").
 /// The start and stop times can be reversed so as to span the midnight hour.
 ///
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TimeRange {
     /// Seconds from midnight at which to start.
     pub start: u32,
@@ -109,7 +107,7 @@ impl TimeRange {
 }
 
 /// The day of the month, for monthly schedules.
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum DayOfMonth {
     First(DayOfWeek),
     Second(DayOfWeek),
@@ -141,7 +139,7 @@ impl From<u32> for DayOfMonth {
 }
 
 /// A schedule for when to run the backup.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Schedule {
     Hourly,
     Daily(Option<TimeRange>),

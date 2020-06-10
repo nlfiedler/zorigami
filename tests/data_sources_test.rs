@@ -109,9 +109,31 @@ fn test_put_get_delete_store() {
     assert!(stores.iter().any(|s| s.id == "cafebabe"));
     assert!(stores.iter().any(|s| s.id == "deadbeef"));
 
+    let result = datasource.get_store("cafebabe");
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_some());
+    let result = datasource.get_store("cafed00d");
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_none());
+
     // delete one of the stores
     datasource.delete_store("deadbeef").unwrap();
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 1);
     assert_eq!(stores[0].id, "cafebabe");
+}
+
+#[test]
+fn test_put_get_configuration() {
+    let db_path = DBPath::new("_test_put_get_configuration");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let expected: entities::Configuration = Default::default();
+    datasource.put_configuration(&expected).unwrap();
+    let option = datasource.get_configuration().unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.username, expected.username);
+    assert_eq!(actual.hostname, expected.hostname);
+    assert_eq!(actual.computer_id, expected.computer_id);
 }

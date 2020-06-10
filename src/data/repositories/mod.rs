@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::data::sources::EntityDataSource;
-use crate::domain::entities::{Checksum, Chunk, Store};
+use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Store};
 use crate::domain::repositories::RecordRepository;
 use failure::Error;
 use std::sync::Arc;
@@ -22,6 +22,15 @@ impl RecordRepositoryImpl {
 }
 
 impl RecordRepository for RecordRepositoryImpl {
+    fn get_configuration(&self) -> Result<Configuration, Error> {
+        if let Some(conf) = self.datasource.get_configuration()? {
+            return Ok(conf);
+        }
+        let config: Configuration = Default::default();
+        self.datasource.put_configuration(&config)?;
+        Ok(config)
+    }
+
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
         self.datasource.insert_chunk(chunk)
     }
@@ -40,6 +49,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn delete_store(&self, id: &str) -> Result<(), Error> {
         self.datasource.delete_store(id)
+    }
+
+    fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
+        self.datasource.put_dataset(dataset)
     }
 }
 
@@ -106,6 +119,77 @@ mod tests {
     use failure::err_msg;
     use mockall::predicate::*;
     use std::collections::HashMap;
+    use std::path::Path;
+
+    #[test]
+    fn test_get_configuration() {
+        // arrange
+        let config: Configuration = Default::default();
+        let mut mock = MockEntityDataSource::new();
+        let mut call_count = 0;
+        mock.expect_get_configuration().times(2).returning(move || {
+            call_count += 1;
+            if call_count > 1 {
+                Ok(Some(config.clone()))
+            } else {
+                Ok(None)
+            }
+        });
+        mock.expect_put_configuration()
+            .times(1)
+            .with(always())
+            .returning(|_| Ok(()));
+        // act & assert
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_configuration();
+        assert!(result.is_ok());
+        let result = repo.get_configuration();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_chunk_ok() {
+        // arrange
+        let digest1 = Checksum::SHA1(String::from("cafebabe"));
+        let chunk1 = Chunk {
+            digest: digest1.clone(),
+            offset: 0,
+            length: 65536,
+            filepath: None,
+            packfile: Some(Checksum::SHA1(String::from("deadbeef"))),
+        };
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_chunk()
+            .withf(move |chunk| chunk.digest == digest1)
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_chunk(&chunk1);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_chunk_err() {
+        // arrange
+        let digest1 = Checksum::SHA1(String::from("cafebabe"));
+        let chunk1 = Chunk {
+            digest: digest1.clone(),
+            offset: 0,
+            length: 65536,
+            filepath: None,
+            packfile: Some(Checksum::SHA1(String::from("deadbeef"))),
+        };
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_chunk()
+            .withf(move |chunk| chunk.digest == digest1)
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_chunk(&chunk1);
+        // assert
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_get_chunk_ok() {
@@ -252,6 +336,36 @@ mod tests {
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.delete_store("abc123");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_put_dataset_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_dataset()
+            .withf(|d| d.basepath.to_string_lossy() == "/home/planet")
+            .returning(move |_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let dataset = Dataset::new("charliehorse", Path::new("/home/planet"));
+        let result = repo.put_dataset(&dataset);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_put_dataset_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_dataset()
+            .withf(|d| d.basepath.to_string_lossy() == "/home/planet")
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let dataset = Dataset::new("charliehorse", Path::new("/home/planet"));
+        let result = repo.put_dataset(&dataset);
         // assert
         assert!(result.is_err());
     }

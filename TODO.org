@@ -66,11 +66,13 @@
 **** DONE implement ~get stores~ usecase (and graphql query)
 **** DONE implement ~update store~ usecase (and graphql mutation)
 **** DONE implement ~delete store~ usecase (and graphql mutation)
-**** TODO implement ~new data set~ usecase (and graphql mutation)
-***** change =DataSet= stores to be just the store identifier (not the "name")
+**** DONE implement ~new data set~ usecase (and graphql mutation)
 **** TODO implement ~get data sets~ usecase (and graphql query)
+***** implement =get_snapshot()= in data source for GraphQL resolver
+***** implement the GraphQL =latest_snapshot()= on =Dataset=
 **** TODO implement ~update data set~ usecase (and graphql mutation)
 **** TODO implement ~delete data set~ usecase (and graphql mutation)
+***** write data source tests for dataset put/get/delete
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** management code (state, engine, supervisor)
 ***** entities for trees, snapshots, files, packs, etc
@@ -82,6 +84,8 @@
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source
 ***** each blob data source implementation then validates the store definition
+**** backup manager code
+***** handle datasets that have no stores (skip them)
 *** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures

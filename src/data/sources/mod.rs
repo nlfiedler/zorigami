@@ -4,8 +4,8 @@
 
 //! Performs serde on entities and stores them in a database.
 
-use crate::data::models::{ChunkDef, StoreDef};
-use crate::domain::entities::{Checksum, Chunk, Store};
+use crate::data::models::{ChunkDef, ConfigurationDef, DatasetDef, StoreDef};
+use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Store};
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
@@ -16,6 +16,12 @@ mod database;
 /// Data source for entity objects.
 #[cfg_attr(test, automock)]
 pub trait EntityDataSource {
+    /// Retrieve the configuration from the datasource.
+    fn get_configuration(&self) -> Result<Option<Configuration>, Error>;
+
+    /// Store the configuration record in the datasource.
+    fn put_configuration(&self, config: &Configuration) -> Result<(), Error>;
+
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error>;
@@ -29,8 +35,14 @@ pub trait EntityDataSource {
     /// Retrieve all registered pack store configurations.
     fn get_stores(&self) -> Result<Vec<Store>, Error>;
 
+    /// Retrieve the store by identifier, returning `None` if not found.
+    fn get_store(&self, id: &str) -> Result<Option<Store>, Error>;
+
     /// Remove the store by the given identifier.
     fn delete_store(&self, id: &str) -> Result<(), Error>;
+
+    /// Save the given dataset to the data source.
+    fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -47,6 +59,27 @@ impl EntityDataSourceImpl {
 }
 
 impl EntityDataSource for EntityDataSourceImpl {
+    fn get_configuration(&self) -> Result<Option<Configuration>, Error> {
+        let key = "configuration";
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let result = ConfigurationDef::deserialize(&mut de)?;
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn put_configuration(&self, config: &Configuration) -> Result<(), Error> {
+        let key = "configuration";
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        ConfigurationDef::serialize(config, &mut ser)?;
+        self.database.put_document(key.as_bytes(), &encoded)
+    }
+
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
         let key = format!("chunk/{}", chunk.digest);
         let mut encoded: Vec<u8> = Vec::new();
@@ -89,8 +122,30 @@ impl EntityDataSource for EntityDataSourceImpl {
         Ok(results)
     }
 
+    fn get_store(&self, id: &str) -> Result<Option<Store>, Error> {
+        let key = format!("store/{}", id);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = StoreDef::deserialize(&mut de)?;
+                result.id = key;
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
     fn delete_store(&self, id: &str) -> Result<(), Error> {
         let key = format!("store/{}", id);
         self.database.delete_document(key.as_bytes())
+    }
+
+    fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
+        let key = format!("dataset/{}", dataset.key);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        DatasetDef::serialize(dataset, &mut ser)?;
+        self.database.put_document(key.as_bytes(), &encoded)
     }
 }

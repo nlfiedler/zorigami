@@ -5,6 +5,7 @@ use failure::{Error};
 use std::cmp;
 use std::fmt;
 
+pub mod new_dataset;
 pub mod delete_store;
 pub mod get_stores;
 pub mod new_store;

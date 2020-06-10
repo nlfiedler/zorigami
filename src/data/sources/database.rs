@@ -125,15 +125,6 @@ impl Database {
     }
 
 //     ///
-//     /// Put the given dataset into the database.
-//     ///
-//     pub fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
-//         let key = format!("dataset/{}", dataset.key);
-//         let encoded: Vec<u8> = serde_cbor::to_vec(&dataset)?;
-//         self.put_document(key.as_bytes(), &encoded)
-//     }
-
-//     ///
 //     /// Retrieve the dataset by the given key, returning None if not found.
 //     ///
 //     pub fn get_dataset(&self, key: &str) -> Result<Option<Dataset>, Error> {
@@ -170,30 +161,6 @@ impl Database {
 //     pub fn delete_dataset(&self, key: &str) -> Result<(), Error> {
 //         let key = format!("dataset/{}", key);
 //         self.delete_document(key.as_bytes())
-//     }
-
-//     ///
-//     /// Put the configuration record into the database.
-//     ///
-//     pub fn put_config(&self, conf: Configuration) -> Result<(), Error> {
-//         let key = "configuration";
-//         let encoded: Vec<u8> = serde_cbor::to_vec(&conf)?;
-//         self.put_document(key.as_bytes(), &encoded)
-//     }
-
-//     ///
-//     /// Retrieve the configuration record, returning None if not found.
-//     ///
-//     pub fn get_config(&self) -> Result<Option<Configuration>, Error> {
-//         let key = "configuration";
-//         let encoded = self.get_document(key.as_bytes())?;
-//         match encoded {
-//             Some(dbv) => {
-//                 let serde_result: Configuration = serde_cbor::from_slice(&dbv)?;
-//                 Ok(Some(serde_result))
-//             }
-//             None => Ok(None),
-//         }
 //     }
 
 //     ///
