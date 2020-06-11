@@ -880,20 +880,17 @@ impl MutationRoot {
         Ok(result)
     }
 
-    // /// Delete the named dataset, returning its current configuration.
-    // fn deleteDataset(executor: &Executor, key: String) -> FieldResult<Dataset> {
-    //     let database = executor.context();
-    //     let opt = database.get_dataset(&key)?;
-    //     if let Some(set) = opt {
-    //         database.delete_dataset(&key)?;
-    //         Ok(set)
-    //     } else {
-    //         Err(FieldError::new(
-    //             format!("Dataset does not exist: {}", &key),
-    //             Value::null(),
-    //         ))
-    //     }
-    // }
+    /// Delete the dataset with the given identifier, returning the identifier.
+    fn deleteDataset(executor: &Executor, id: String) -> FieldResult<String> {
+        use crate::domain::usecases::delete_dataset::{DeleteDataset, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = DeleteDataset::new(Box::new(repo));
+        let params: Params = Params::new(id.clone());
+        usecase.call(params)?;
+        Ok(id)
+    }
 }
 
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;
@@ -1598,6 +1595,72 @@ mod tests {
         let (res, errors) = juniper::execute(
             r#"mutation Update($input: DatasetInput!) {
                 updateDataset(input: $input) { key }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_mutation_delete_dataset_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_dataset()
+            .with(always())
+            .returning(|_| Ok(()));
+        mock.expect_delete_computer_id()
+            .with(always())
+            .returning(|_| Ok(()));
+        mock.expect_delete_latest_snapshot()
+            .with(always())
+            .returning(|_| Ok(()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("input".to_owned(), InputValue::scalar("abc123"));
+        let (res, errors) = juniper::execute(
+            r#"mutation Delete($input: String!) {
+                deleteDataset(id: $input)
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let field = res.get_field_value("deleteDataset").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "abc123");
+    }
+
+    #[test]
+    fn test_mutation_delete_dataset_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_dataset()
+            .with(always())
+            .returning(|_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("input".to_owned(), InputValue::scalar("abc123"));
+        let (res, errors) = juniper::execute(
+            r#"mutation Delete($input: String!) {
+                deleteDataset(id: $input)
             }"#,
             None,
             &schema,

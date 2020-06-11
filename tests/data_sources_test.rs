@@ -125,8 +125,8 @@ fn test_put_get_delete_store() {
 }
 
 #[test]
-fn test_put_get_datasets() {
-    let db_path = DBPath::new("_test_put_get_datasets");
+fn test_put_get_delete_datasets() {
+    let db_path = DBPath::new("_test_put_get_delete_datasets");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // populate the data source with datasets
@@ -144,6 +144,11 @@ fn test_put_get_datasets() {
     assert!(datasets
         .iter()
         .any(|s| s.basepath.to_string_lossy() == "/home/town"));
+
+    // delete one of the datasets
+    datasource.delete_dataset(&datasets[0].key).unwrap();
+    let datasets = datasource.get_datasets().unwrap();
+    assert_eq!(datasets.len(), 1);
 }
 
 #[test]
@@ -174,6 +179,9 @@ fn test_put_get_computer_id() {
     let opt = datasource.get_computer_id("cafebabe").unwrap();
     assert!(opt.is_some());
     assert_eq!(opt.unwrap(), "charlietuna");
+    datasource.delete_computer_id("cafebabe").unwrap();
+    let opt = datasource.get_computer_id("cafebabe").unwrap();
+    assert!(opt.is_none());
 }
 
 #[test]
@@ -188,4 +196,7 @@ fn test_put_get_latest_snapshot() {
     let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
     assert!(opt.is_some());
     assert_eq!(opt.unwrap(), digest);
+    datasource.delete_latest_snapshot("cafebabe").unwrap();
+    let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
+    assert!(opt.is_none());
 }

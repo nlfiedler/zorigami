@@ -39,12 +39,20 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_computer_id(dataset)
     }
 
+    fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
+        self.datasource.delete_computer_id(dataset)
+    }
+
     fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
         self.datasource.put_latest_snapshot(dataset, latest)
     }
 
     fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
         self.datasource.get_latest_snapshot(dataset)
+    }
+
+    fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
+        self.datasource.delete_latest_snapshot(dataset)
     }
 
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
@@ -73,6 +81,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
         self.datasource.get_datasets()
+    }
+
+    fn delete_dataset(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_dataset(id)
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
@@ -248,6 +260,34 @@ mod tests {
     }
 
     #[test]
+    fn test_delete_computer_id_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_computer_id()
+            .with(eq("cafebabe"))
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_computer_id("cafebabe");
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_computer_id_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_computer_id()
+            .with(eq("cafebabe"))
+            .returning(|_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_computer_id("cafebabe");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_put_latest_snapshot_ok() {
         // arrange
         let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
@@ -325,6 +365,34 @@ mod tests {
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.get_latest_snapshot("cafebabe");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_latest_snapshot_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_latest_snapshot()
+            .with(eq("cafebabe"))
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_latest_snapshot("cafebabe");
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_latest_snapshot_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_latest_snapshot()
+            .with(eq("cafebabe"))
+            .returning(|_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_latest_snapshot("cafebabe");
         // assert
         assert!(result.is_err());
     }
@@ -548,6 +616,34 @@ mod tests {
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let dataset = Dataset::new(Path::new("/home/planet"));
         let result = repo.put_dataset(&dataset);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_dataset_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_dataset()
+            .with(eq("abc123"))
+            .returning(move |_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_dataset("abc123");
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_dataset_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_delete_dataset()
+            .with(eq("abc123"))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.delete_dataset("abc123");
         // assert
         assert!(result.is_err());
     }

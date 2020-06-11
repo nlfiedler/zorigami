@@ -102,7 +102,6 @@ impl Database {
     ///
     /// Retrieve the value with the given key.
     ///
-    #[allow(dead_code)]
     pub fn get_document(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Error> {
         let result = self.db.get(key)?;
         Ok(result)
@@ -123,45 +122,6 @@ impl Database {
         self.db.delete(key)?;
         Ok(())
     }
-
-//     ///
-//     /// Retrieve the dataset by the given key, returning None if not found.
-//     ///
-//     pub fn get_dataset(&self, key: &str) -> Result<Option<Dataset>, Error> {
-//         let db_key = format!("dataset/{}", key);
-//         let encoded = self.get_document(db_key.as_bytes())?;
-//         match encoded {
-//             Some(dbv) => {
-//                 let mut serde_result: Dataset = serde_cbor::from_slice(&dbv)?;
-//                 serde_result.key = key.to_owned();
-//                 Ok(Some(serde_result))
-//             }
-//             None => Ok(None),
-//         }
-//     }
-
-//     ///
-//     /// Retrieve all of the datasets in the database.
-//     ///
-//     pub fn get_all_datasets(&self) -> Result<Vec<Dataset>, Error> {
-//         let datasets = self.fetch_prefix("dataset/")?;
-//         let mut results: Vec<Dataset> = Vec::new();
-//         for (key, value) in datasets {
-//             let mut serde_result: Dataset = serde_cbor::from_slice(&value)?;
-//             // strip the "dataset/" prefix from the key
-//             serde_result.key = key[8..].to_string();
-//             results.push(serde_result);
-//         }
-//         Ok(results)
-//     }
-
-//     ///
-//     /// Delete the given dataset from the database.
-//     ///
-//     pub fn delete_dataset(&self, key: &str) -> Result<(), Error> {
-//         let key = format!("dataset/{}", key);
-//         self.delete_document(key.as_bytes())
-//     }
 
 //     ///
 //     /// Insert the extended file attributes value into the database. Values with

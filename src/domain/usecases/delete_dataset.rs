@@ -6,42 +6,47 @@ use failure::Error;
 use std::cmp;
 use std::fmt;
 
-pub struct DeleteStore {
+pub struct DeleteDataset {
     repo: Box<dyn RecordRepository>,
 }
 
-impl DeleteStore {
+impl DeleteDataset {
     pub fn new(repo: Box<dyn RecordRepository>) -> Self {
         Self { repo }
     }
 }
 
-impl super::UseCase<(), Params> for DeleteStore {
+impl super::UseCase<(), Params> for DeleteDataset {
     fn call(&self, params: Params) -> Result<(), Error> {
-        self.repo.delete_store(&params.store_id)
+        self.repo.delete_dataset(&params.dataset_id)?;
+        // ignore any errors when deleting records that may or may not be
+        // present in the data source
+        let _ = self.repo.delete_computer_id(&params.dataset_id);
+        let _ = self.repo.delete_latest_snapshot(&params.dataset_id);
+        Ok(())
     }
 }
 
 pub struct Params {
-    /// Unique identifier of the store.
-    store_id: String,
+    /// Unique identifier of the dataset.
+    dataset_id: String,
 }
 
 impl Params {
-    pub fn new(store_id: String) -> Self {
-        Self { store_id }
+    pub fn new(dataset_id: String) -> Self {
+        Self { dataset_id }
     }
 }
 
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Params({})", self.store_id)
+        write!(f, "Params({})", self.dataset_id)
     }
 }
 
 impl cmp::PartialEq for Params {
     fn eq(&self, other: &Self) -> bool {
-        self.store_id == other.store_id
+        self.dataset_id == other.dataset_id
     }
 }
 
@@ -56,16 +61,22 @@ mod tests {
     use mockall::predicate::*;
 
     #[test]
-    fn test_delete_store_ok() {
+    fn test_delete_dataset_ok() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_delete_store()
+        mock.expect_delete_dataset()
+            .with(always())
+            .returning(|_| Ok(()));
+        mock.expect_delete_computer_id()
+            .with(always())
+            .returning(|_| Ok(()));
+        mock.expect_delete_latest_snapshot()
             .with(always())
             .returning(|_| Ok(()));
         // act
-        let usecase = DeleteStore::new(Box::new(mock));
+        let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {
-            store_id: "cafebabe".to_owned(),
+            dataset_id: "cafebabe".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -73,16 +84,16 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_store_err() {
+    fn test_delete_dataset_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_delete_store()
+        mock.expect_delete_dataset()
             .with(always())
             .returning(|_| Err(err_msg("oh no")));
         // act
-        let usecase = DeleteStore::new(Box::new(mock));
+        let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {
-            store_id: "cafebabe".to_owned(),
+            dataset_id: "cafebabe".to_owned(),
         };
         let result = usecase.call(params);
         // assert

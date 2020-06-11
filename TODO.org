@@ -78,9 +78,8 @@
 ***** DONE expose =workspace= in =Dataset= via GraphQL so it can be user-defined
 ***** DONE test data source put/get computer id
 ***** DONE test data source put/get latest snapshot
-**** TODO implement ~delete data set~ usecase (and graphql mutation)
-***** remove the =latest/= and =computer/= data records
-***** write data source tests for dataset put/get/delete
+**** DONE implement ~delete data set~ usecase (and graphql mutation)
+**** TODO migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** management code (state, engine, supervisor)
 ***** entities for trees, snapshots, files, packs, etc
