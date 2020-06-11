@@ -68,8 +68,18 @@
 **** DONE implement ~delete store~ usecase (and graphql mutation)
 **** DONE implement ~new data set~ usecase (and graphql mutation)
 **** DONE implement ~get data sets~ usecase (and graphql query)
-**** TODO implement ~update data set~ usecase (and graphql mutation)
+**** DONE implement ~update data set~ usecase (and graphql mutation)
+***** DONE remove =computer_id= from =Dataset=, store as a separate record
+***** DONE remove =latest_snapshot= from =Dataset=, store as a separate record
+***** DONE add repo functions to put/get computer id for a dataset
+***** DONE add repo functions to put/get latest snapshot for a dataset
+***** DONE store computer_id as =computer/<dataset.key>= with raw string value
+***** DONE store latest snapshot as =latest/<dataset.key>= with raw string value of checksum
+***** DONE expose =workspace= in =Dataset= via GraphQL so it can be user-defined
+***** DONE test data source put/get computer id
+***** DONE test data source put/get latest snapshot
 **** TODO implement ~delete data set~ usecase (and graphql mutation)
+***** remove the =latest/= and =computer/= data records
 ***** write data source tests for dataset put/get/delete
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** management code (state, engine, supervisor)
@@ -84,6 +94,7 @@
 ***** each blob data source implementation then validates the store definition
 **** backup manager code
 ***** handle datasets that have no stores (skip them)
+*** TODO GraphQL resolvers should be using repo, not data source
 *** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures

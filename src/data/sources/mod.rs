@@ -10,6 +10,7 @@ use failure::Error;
 #[cfg(test)]
 use mockall::automock;
 use std::path::Path;
+use std::str::FromStr;
 
 mod database;
 
@@ -21,6 +22,18 @@ pub trait EntityDataSource {
 
     /// Store the configuration record in the datasource.
     fn put_configuration(&self, config: &Configuration) -> Result<(), Error>;
+
+    /// Store the computer identifier for the dataset with the given key.
+    fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error>;
+
+    /// Retrieve the computer identifier for the dataset with the given key.
+    fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error>;
+
+    /// Store the digest of the latest snapshot for the dataset with the given key.
+    fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error>;
+
+    /// Retrieve the digest of the latest snapshot for the dataset with the given key.
+    fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error>;
 
     /// Insert the given chunk into the database, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
@@ -84,6 +97,45 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         ConfigurationDef::serialize(config, &mut ser)?;
         self.database.put_document(key.as_bytes(), &encoded)
+    }
+
+    fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
+        let key = format!("computer/{}", dataset);
+        self.database
+            .put_document(key.as_bytes(), computer_id.as_bytes())
+    }
+
+    fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
+        let key = format!("computer/{}", dataset);
+        let option = self.database.get_document(key.as_bytes())?;
+        match option {
+            Some(value) => {
+                let result = String::from_utf8(value)?;
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
+        let key = format!("latest/{}", dataset);
+        // use simple approach as serde can be tricky to compile
+        let as_string = latest.to_string();
+        self.database
+            .put_document(key.as_bytes(), as_string.as_bytes())
+    }
+
+    fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
+        let key = format!("latest/{}", dataset);
+        let option = self.database.get_document(key.as_bytes())?;
+        match option {
+            Some(value) => {
+                let as_string = String::from_utf8(value)?;
+                let result: Result<Checksum, Error> = FromStr::from_str(&as_string);
+                result.map(|v| Some(v))
+            }
+            None => Ok(None),
+        }
     }
 
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {

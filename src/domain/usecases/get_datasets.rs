@@ -33,7 +33,7 @@ mod tests {
     #[test]
     fn test_get_datasets_ok() {
         // arrange
-        let datasets = vec![Dataset::new("oldpaint", Path::new("/home/planet"))];
+        let datasets = vec![Dataset::new(Path::new("/home/planet"))];
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
@@ -45,7 +45,7 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].computer_id, "oldpaint");
+        assert_eq!(actual[0].basepath.to_string_lossy(), "/home/planet");
     }
 
     #[test]

@@ -63,14 +63,10 @@ pub struct StoreDef {
 pub struct DatasetDef {
     #[serde(skip)]
     pub key: String,
-    #[serde(rename = "id")]
-    pub computer_id: String,
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
     #[serde(rename = "sc")]
     pub schedules: Vec<Schedule>,
-    #[serde(rename = "ls")]
-    pub latest_snapshot: Option<Checksum>,
     #[serde(rename = "ws")]
     pub workspace: PathBuf,
     #[serde(rename = "ps")]
@@ -83,10 +79,8 @@ impl Default for DatasetDef {
     fn default() -> Self {
         Self {
             key: String::new(),
-            computer_id: String::new(),
             basepath: PathBuf::new(),
             schedules: vec![],
-            latest_snapshot: None,
             workspace: PathBuf::new(),
             pack_size: 0,
             stores: vec![],
@@ -198,7 +192,7 @@ mod tests {
     #[test]
     fn test_dataset_serde() -> Result<(), Error> {
         // arrange
-        let mut dataset = Dataset::new("oldpaint", Path::new("/home/planet"));
+        let mut dataset = Dataset::new(Path::new("/home/planet"));
         let range = TimeRange::new(12, 0, 18, 0);
         let schedule = Schedule::Daily(Some(range));
         dataset.schedules.push(schedule.clone());
@@ -210,7 +204,6 @@ mod tests {
         let mut de = serde_json::Deserializer::from_str(&as_text);
         let actual = DatasetDef::deserialize(&mut de)?;
         // assert
-        assert_eq!(actual.computer_id, dataset.computer_id);
         assert_eq!(actual.basepath, dataset.basepath);
         assert_eq!(actual.pack_size, dataset.pack_size);
         assert_eq!(actual.schedules.len(), 1);

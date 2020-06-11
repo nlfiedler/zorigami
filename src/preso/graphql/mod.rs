@@ -182,8 +182,14 @@ impl entities::Dataset {
     }
 
     /// Unique computer identifier.
-    fn computer_id(&self) -> String {
-        self.computer_id.clone()
+    fn computer_id(&self, executor: &Executor) -> Option<String> {
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        if let Ok(value) = repo.get_computer_id(&self.key) {
+            value
+        } else {
+            None
+        }
     }
 
     /// Path that is being backed up.
@@ -201,10 +207,10 @@ impl entities::Dataset {
 
     /// Most recent snapshot for this dataset, if any.
     fn latest_snapshot(&self, executor: &Executor) -> Option<entities::Snapshot> {
-        if let Some(digest) = self.latest_snapshot.as_ref() {
-            let ctx = executor.context().clone();
-            let datasource = ctx.datasource.clone();
-            if let Ok(result) = datasource.get_snapshot(&digest) {
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        if let Ok(Some(digest)) = repo.get_latest_snapshot(&self.key) {
+            if let Ok(result) = repo.get_snapshot(&digest) {
                 return result;
             }
         }
@@ -590,7 +596,7 @@ pub struct DatasetInput {
     /// List of schedules to apply to this dataset.
     pub schedules: Vec<ScheduleInput>,
     // Path to temporary workspace for backup process.
-    // pub workspace: String,
+    pub workspace: Option<String>,
     /// Desired byte length of pack files.
     pub pack_size: BigInt,
     /// Identifiers of stores used for saving packs.
@@ -614,6 +620,7 @@ impl Into<crate::domain::usecases::update_dataset::Params> for DatasetInput {
             self.key.unwrap_or(String::from("default")),
             PathBuf::from(self.basepath),
             self.schedules.into_iter().map(|s| s.into()).collect(),
+            self.workspace.map(|s| PathBuf::from(s)),
             self.pack_size.into(),
             self.stores,
         )
@@ -853,25 +860,25 @@ impl MutationRoot {
         Ok(dataset)
     }
 
-    // /// Update an existing dataset with the given configuration.
-    // fn updateDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
-    //     if input.key.is_none() {
-    //         return Err(FieldError::new(
-    //             "Cannot update dataset without key",
-    //             Value::null(),
-    //         ));
-    //     }
-    //     use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
-    //     use crate::domain::usecases::UseCase;
-    //     let ctx = executor.context().clone();
-    //     let datasource = ctx.datasource.clone();
-    //     input.validate(datasource.clone())?;
-    //     let repo = RecordRepositoryImpl::new(datasource);
-    //     let usecase = UpdateDataset::new(Box::new(repo));
-    //     let params: Params = input.into();
-    //     let result = usecase.call(params)?;
-    //     Ok(result)
-    // }
+    /// Update an existing dataset with the given configuration.
+    fn updateDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
+        if input.key.is_none() {
+            return Err(FieldError::new(
+                "Cannot update dataset without key",
+                Value::null(),
+            ));
+        }
+        use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let datasource = ctx.datasource.clone();
+        input.validate(datasource.clone())?;
+        let repo = RecordRepositoryImpl::new(datasource);
+        let usecase = UpdateDataset::new(Box::new(repo));
+        let params: Params = input.into();
+        let result = usecase.call(params)?;
+        Ok(result)
+    }
 
     // /// Delete the named dataset, returning its current configuration.
     // fn deleteDataset(executor: &Executor, key: String) -> FieldResult<Dataset> {
@@ -1007,10 +1014,7 @@ mod tests {
     #[test]
     fn test_query_datasets_ok() {
         // arrange
-        let datasets = vec![entities::Dataset::new(
-            "oldpaint",
-            Path::new("/home/planet"),
-        )];
+        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
         let mut mock = MockEntityDataSource::new();
         mock.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
@@ -1020,7 +1024,7 @@ mod tests {
         let schema = create_schema();
         let (res, errors) = juniper::execute(
             r#"query {
-                datasets { computerId basepath }
+                datasets { basepath }
             }"#,
             None,
             &schema,
@@ -1035,9 +1039,6 @@ mod tests {
         let list = res.as_list_value().unwrap();
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("computerId").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
-        assert_eq!(value, "oldpaint");
         let field = object.get_field_value("basepath").unwrap();
         let value = field.as_scalar_value::<String>().unwrap();
         assert_eq!(value, "/home/planet");
@@ -1357,6 +1358,9 @@ mod tests {
         mock.expect_put_dataset()
             .with(always())
             .returning(|_| Ok(()));
+        mock.expect_put_computer_id()
+            .with(always(), always())
+            .returning(|_, _| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let ctx = Arc::new(GraphContext::new(datasource));
         // act
@@ -1367,6 +1371,7 @@ mod tests {
             key: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
+            workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
         };
@@ -1417,6 +1422,7 @@ mod tests {
             key: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
+            workspace: None,
             pack_size: BigInt(1048576),
             stores: vec!["cafebabe".to_owned()],
         };
@@ -1460,6 +1466,7 @@ mod tests {
             key: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
+            workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
         };
@@ -1467,6 +1474,130 @@ mod tests {
         let (res, errors) = juniper::execute(
             r#"mutation Define($input: DatasetInput!) {
                 defineDataset(input: $input) { key }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_mutation_update_dataset_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_dataset()
+            .with(always())
+            .returning(|_| Ok(()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let cwd = std::env::current_dir().unwrap();
+        let input = DatasetInput {
+            key: Some("cafebabe".to_owned()),
+            basepath: cwd.to_str().unwrap().to_owned(),
+            schedules: vec![],
+            workspace: None,
+            pack_size: BigInt(1048576),
+            stores: vec![],
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Update($input: DatasetInput!) {
+                updateDataset(input: $input) {
+                    basepath packSize
+                }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("updateDataset").unwrap();
+        let object = res.as_object_value().unwrap();
+        let field = object.get_field_value("basepath").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, cwd.to_str().unwrap());
+        let field = object.get_field_value("packSize").unwrap();
+        // packSize is a bigint that comes over the wire as a string
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "1048576");
+    }
+
+    #[test]
+    fn test_mutation_update_dataset_store() {
+        // arrange
+        let mock = MockEntityDataSource::new();
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let cwd = std::env::current_dir().unwrap();
+        let input = DatasetInput {
+            key: None,
+            basepath: cwd.to_str().unwrap().to_owned(),
+            schedules: vec![],
+            workspace: None,
+            pack_size: BigInt(1048576),
+            stores: vec![],
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Update($input: DatasetInput!) {
+                updateDataset(input: $input) {
+                    basepath packSize
+                }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        println!("errors: {:?}", errors);
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("dataset without key"));
+    }
+
+    #[test]
+    fn test_mutation_update_dataset_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_dataset()
+            .with(always())
+            .returning(|_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        let cwd = std::env::current_dir().unwrap();
+        let input = DatasetInput {
+            key: Some("cafebabe".to_owned()),
+            basepath: cwd.to_str().unwrap().to_owned(),
+            schedules: vec![],
+            workspace: None,
+            pack_size: BigInt(1048576),
+            stores: vec![],
+        };
+        vars.insert("input".to_owned(), input.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"mutation Update($input: DatasetInput!) {
+                updateDataset(input: $input) { key }
             }"#,
             None,
             &schema,

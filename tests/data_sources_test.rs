@@ -130,16 +130,20 @@ fn test_put_get_datasets() {
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // populate the data source with datasets
-    let dataset = entities::Dataset::new("oldpaint", Path::new("/home/planet"));
+    let dataset = entities::Dataset::new(Path::new("/home/planet"));
     datasource.put_dataset(&dataset).unwrap();
-    let dataset = entities::Dataset::new("oldyeller", Path::new("/home/town"));
+    let dataset = entities::Dataset::new(Path::new("/home/town"));
     datasource.put_dataset(&dataset).unwrap();
 
     // retrieve all known datasets
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);
-    assert!(datasets.iter().any(|s| s.computer_id == "oldpaint"));
-    assert!(datasets.iter().any(|s| s.computer_id == "oldyeller"));
+    assert!(datasets
+        .iter()
+        .any(|s| s.basepath.to_string_lossy() == "/home/planet"));
+    assert!(datasets
+        .iter()
+        .any(|s| s.basepath.to_string_lossy() == "/home/town"));
 }
 
 #[test]
@@ -155,4 +159,33 @@ fn test_put_get_configuration() {
     assert_eq!(actual.username, expected.username);
     assert_eq!(actual.hostname, expected.hostname);
     assert_eq!(actual.computer_id, expected.computer_id);
+}
+
+#[test]
+fn test_put_get_computer_id() {
+    let db_path = DBPath::new("_test_put_get_computer_id");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    datasource
+        .put_computer_id("cafebabe", "charlietuna")
+        .unwrap();
+    let opt = datasource.get_computer_id("deadbeef").unwrap();
+    assert!(opt.is_none());
+    let opt = datasource.get_computer_id("cafebabe").unwrap();
+    assert!(opt.is_some());
+    assert_eq!(opt.unwrap(), "charlietuna");
+}
+
+#[test]
+fn test_put_get_latest_snapshot() {
+    let db_path = DBPath::new("_test_put_get_latest_snapshot");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+    datasource.put_latest_snapshot("cafebabe", &digest).unwrap();
+    let opt = datasource.get_latest_snapshot("deadbeef").unwrap();
+    assert!(opt.is_none());
+    let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
+    assert!(opt.is_some());
+    assert_eq!(opt.unwrap(), digest);
 }

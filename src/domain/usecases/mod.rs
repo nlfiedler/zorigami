@@ -10,6 +10,7 @@ pub mod get_datasets;
 pub mod get_stores;
 pub mod new_dataset;
 pub mod new_store;
+pub mod update_dataset;
 pub mod update_store;
 
 /// `UseCase` is the interface by which all use cases are invoked.

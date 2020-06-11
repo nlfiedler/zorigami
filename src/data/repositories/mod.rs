@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::data::sources::EntityDataSource;
-use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Store};
+use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Snapshot, Store};
 use crate::domain::repositories::RecordRepository;
 use failure::Error;
 use std::sync::Arc;
@@ -31,6 +31,22 @@ impl RecordRepository for RecordRepositoryImpl {
         Ok(config)
     }
 
+    fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
+        self.datasource.put_computer_id(dataset, computer_id)
+    }
+
+    fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
+        self.datasource.get_computer_id(dataset)
+    }
+
+    fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
+        self.datasource.put_latest_snapshot(dataset, latest)
+    }
+
+    fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
+        self.datasource.get_latest_snapshot(dataset)
+    }
+
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
         self.datasource.insert_chunk(chunk)
     }
@@ -57,6 +73,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
         self.datasource.get_datasets()
+    }
+
+    fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
+        self.datasource.get_snapshot(digest)
     }
 }
 
@@ -149,6 +169,164 @@ mod tests {
         assert!(result.is_ok());
         let result = repo.get_configuration();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_put_computer_id_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_computer_id()
+            .with(eq("cafebabe"), eq("charlietuna"))
+            .returning(|_, _| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_computer_id("cafebabe", "charlietuna");
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_put_computer_id_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_computer_id()
+            .with(eq("cafebabe"), eq("charlietuna"))
+            .returning(|_, _| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_computer_id("cafebabe", "charlietuna");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_computer_id_some() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_computer_id()
+            .with(eq("cafebabe"))
+            .returning(|_| Ok(Some(String::from("charlietuna"))));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_computer_id("cafebabe");
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let value = option.unwrap();
+        assert_eq!(value, "charlietuna");
+    }
+
+    #[test]
+    fn test_get_computer_id_none() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_computer_id()
+            .with(eq("cafebabe"))
+            .returning(|_| Ok(None));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_computer_id("cafebabe");
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_none());
+    }
+
+    #[test]
+    fn test_get_computer_id_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_computer_id()
+            .with(eq("cafebabe"))
+            .returning(|_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_computer_id("cafebabe");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_put_latest_snapshot_ok() {
+        // arrange
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_latest_snapshot()
+            .with(eq("cafebabe"), eq(digest.clone()))
+            .returning(|_, _| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_latest_snapshot("cafebabe", &digest);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_put_latest_snapshot_err() {
+        // arrange
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_latest_snapshot()
+            .with(eq("cafebabe"), eq(digest.clone()))
+            .returning(|_, _| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_latest_snapshot("cafebabe", &digest);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_latest_snapshot_some() {
+        // arrange
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_latest_snapshot()
+            .with(eq("cafebabe"))
+            .returning(move |_| Ok(Some(digest.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_latest_snapshot("cafebabe");
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let value = option.unwrap();
+        assert_eq!(
+            value.to_string(),
+            "sha1-e1c3cc593da3c696ddc3200ad137ef79681c8052"
+        );
+    }
+
+    #[test]
+    fn test_get_latest_snapshot_none() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_latest_snapshot()
+            .with(eq("cafebabe"))
+            .returning(|_| Ok(None));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_latest_snapshot("cafebabe");
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_none());
+    }
+
+    #[test]
+    fn test_get_latest_snapshot_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_latest_snapshot()
+            .with(eq("cafebabe"))
+            .returning(|_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_latest_snapshot("cafebabe");
+        // assert
+        assert!(result.is_err());
     }
 
     #[test]
@@ -353,7 +531,7 @@ mod tests {
             .returning(move |_| Ok(()));
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-        let dataset = Dataset::new("charliehorse", Path::new("/home/planet"));
+        let dataset = Dataset::new(Path::new("/home/planet"));
         let result = repo.put_dataset(&dataset);
         // assert
         assert!(result.is_ok());
@@ -368,8 +546,59 @@ mod tests {
             .returning(move |_| Err(err_msg("oh no")));
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-        let dataset = Dataset::new("charliehorse", Path::new("/home/planet"));
+        let dataset = Dataset::new(Path::new("/home/planet"));
         let result = repo.put_dataset(&dataset);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_snapshot_some() {
+        // arrange
+        let tree = Checksum::SHA1("0e944139579d8af563786cceabc4524f97c69ba8".to_owned());
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let snapshot = Snapshot::new(None, tree, 1024);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .with(eq(digest.clone()))
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_snapshot(&digest);
+        // assert
+        assert!(result.is_ok());
+        let opt = result.unwrap();
+        assert!(opt.is_some());
+        assert_eq!(opt.unwrap().file_count, 1024);
+    }
+
+    #[test]
+    fn test_get_snapshot_none() {
+        // arrange
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .with(eq(digest.clone()))
+            .returning(|_| Ok(None));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_snapshot(&digest);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_get_snapshot_err() {
+        // arrange
+        let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .with(eq(digest.clone()))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_snapshot(&digest);
         // assert
         assert!(result.is_err());
     }

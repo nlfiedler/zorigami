@@ -199,16 +199,12 @@ pub struct Store {
 /// with pack files saved to a particular local or remote store.
 #[derive(Clone, Debug)]
 pub struct Dataset {
-    /// Unique identifier of this dataset for persisting to database.
+    /// Unique identifier of this dataset.
     pub key: String,
-    /// Computer UUID for generating bucket names.
-    pub computer_id: String,
     /// Local base path of dataset to be saved.
     pub basepath: PathBuf,
     /// Set of schedules for when to run the backup.
     pub schedules: Vec<schedule::Schedule>,
-    /// Latest snapshot reference, if any.
-    pub latest_snapshot: Option<Checksum>,
     /// Path for temporary pack building.
     pub workspace: PathBuf,
     /// Target size in bytes for pack files.
@@ -224,16 +220,14 @@ const DEFAULT_PACK_SIZE: u64 = 67_108_864;
 impl Dataset {
     /// Construct a Dataset with the given unique (computer) identifier, and
     /// base path of the directory structure to be saved.
-    pub fn new(computer_id: &str, basepath: &Path) -> Dataset {
+    pub fn new(basepath: &Path) -> Dataset {
         let key = generate_ulid_string().to_lowercase();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {
             key,
-            computer_id: computer_id.to_owned(),
             basepath: basepath.to_owned(),
             schedules: vec![],
-            latest_snapshot: None,
             workspace,
             pack_size: DEFAULT_PACK_SIZE,
             stores: vec![],
@@ -263,10 +257,8 @@ impl Default for Dataset {
     fn default() -> Self {
         Self {
             key: String::new(),
-            computer_id: String::new(),
             basepath: PathBuf::new(),
             schedules: vec![],
-            latest_snapshot: None,
             workspace: PathBuf::new(),
             pack_size: 0,
             stores: vec![],
@@ -285,9 +277,9 @@ impl fmt::Display for Dataset {
 /// It references a possible parent snapshot, and a tree representing the files
 /// contained in the snapshot.
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Snapshot {
-    /// Unique identifier of this snapshot for persisting to database.
+    /// Unique identifier of this snapshot.
     pub digest: Checksum,
     /// Digest of the parent snapshot, if any.
     pub parent: Option<Checksum>,
