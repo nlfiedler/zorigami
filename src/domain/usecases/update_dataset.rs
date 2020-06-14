@@ -24,7 +24,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         // use the constructor to leverage some of the default behavior in case
         // not everything has been defined in the params
         let mut dataset = Dataset::new(&params.basepath);
-        dataset.key = params.key;
+        dataset.id = params.id;
         for schedule in params.schedules {
             dataset = dataset.add_schedule(schedule);
         }
@@ -42,7 +42,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
 
 pub struct Params {
     /// Unique identifier of this dataset.
-    key: String,
+    id: String,
     /// Local base path of dataset to be saved.
     basepath: PathBuf,
     /// Set of schedules for when to run the backup.
@@ -57,7 +57,7 @@ pub struct Params {
 
 impl Params {
     pub fn new(
-        key: String,
+        id: String,
         basepath: PathBuf,
         schedules: Vec<Schedule>,
         workspace: Option<PathBuf>,
@@ -65,7 +65,7 @@ impl Params {
         stores: Vec<String>,
     ) -> Self {
         Self {
-            key,
+            id,
             basepath,
             schedules,
             workspace,
@@ -77,13 +77,13 @@ impl Params {
 
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Params({})", self.key)
+        write!(f, "Params({})", self.id)
     }
 }
 
 impl cmp::PartialEq for Params {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key
+        self.id == other.id
     }
 }
 
@@ -107,7 +107,7 @@ mod tests {
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
-            key: "cafebabe".to_owned(),
+            id: "cafebabe".to_owned(),
             basepath: PathBuf::from("/home/planet"),
             schedules: vec![],
             workspace: None,
@@ -131,7 +131,7 @@ mod tests {
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
-            key: "cafebabe".to_owned(),
+            id: "cafebabe".to_owned(),
             basepath: PathBuf::from("/home/planet"),
             schedules: vec![],
             workspace: None,

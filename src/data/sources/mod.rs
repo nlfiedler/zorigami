@@ -224,7 +224,7 @@ impl EntityDataSource for EntityDataSourceImpl {
     }
 
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
-        let key = format!("dataset/{}", dataset.key);
+        let key = format!("dataset/{}", dataset.id);
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         DatasetDef::serialize(dataset, &mut ser)?;
@@ -237,7 +237,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         for (key, value) in datasets {
             let mut de = serde_cbor::Deserializer::from_slice(&value);
             let mut result = DatasetDef::deserialize(&mut de)?;
-            result.key = key;
+            result.id = key;
             results.push(result);
         }
         Ok(results)

@@ -177,15 +177,15 @@ impl entities::Snapshot {
 ]
 impl entities::Dataset {
     /// Identifier for this dataset.
-    fn key(&self) -> String {
-        self.key.clone()
+    fn id(&self) -> String {
+        self.id.clone()
     }
 
     /// Unique computer identifier.
     fn computer_id(&self, executor: &Executor) -> Option<String> {
         let ctx = executor.context().clone();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        if let Ok(value) = repo.get_computer_id(&self.key) {
+        if let Ok(value) = repo.get_computer_id(&self.id) {
             value
         } else {
             None
@@ -209,7 +209,7 @@ impl entities::Dataset {
     fn latest_snapshot(&self, executor: &Executor) -> Option<entities::Snapshot> {
         let ctx = executor.context().clone();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        if let Ok(Some(digest)) = repo.get_latest_snapshot(&self.key) {
+        if let Ok(Some(digest)) = repo.get_latest_snapshot(&self.id) {
             if let Ok(result) = repo.get_snapshot(&digest) {
                 return result;
             }
@@ -553,7 +553,7 @@ struct PropertyInput {
 #[derive(GraphQLInputObject)]
 struct StoreInput {
     /// Store identifier, only used when updating a store.
-    store_id: Option<String>,
+    id: Option<String>,
     /// Name of the type of this store (e.g. "local").
     store_type: String,
     /// User-defined label for this store.
@@ -579,7 +579,7 @@ impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
             properties.insert(prop.name.to_owned(), prop.value.to_owned());
         }
         crate::domain::usecases::update_store::Params::new(
-            self.store_id.unwrap_or(String::from("default")),
+            self.id.unwrap_or(String::from("default")),
             self.store_type,
             self.label,
             properties,
@@ -590,7 +590,7 @@ impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
 #[derive(GraphQLInputObject)]
 pub struct DatasetInput {
     /// Identifier of dataset to update, null if creating.
-    pub key: Option<String>,
+    pub id: Option<String>,
     /// Path that is being backed up.
     pub basepath: String,
     /// List of schedules to apply to this dataset.
@@ -617,7 +617,7 @@ impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
 impl Into<crate::domain::usecases::update_dataset::Params> for DatasetInput {
     fn into(self) -> crate::domain::usecases::update_dataset::Params {
         crate::domain::usecases::update_dataset::Params::new(
-            self.key.unwrap_or(String::from("default")),
+            self.id.unwrap_or(String::from("default")),
             PathBuf::from(self.basepath),
             self.schedules.into_iter().map(|s| s.into()).collect(),
             self.workspace.map(|s| PathBuf::from(s)),
@@ -818,9 +818,9 @@ impl MutationRoot {
 
     /// Update the saved store configuration.
     fn updateStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
-        if input.store_id.is_none() {
+        if input.id.is_none() {
             return Err(FieldError::new(
-                "Cannot update store without identifier",
+                "Cannot update store without id field",
                 Value::null(),
             ));
         }
@@ -862,9 +862,9 @@ impl MutationRoot {
 
     /// Update an existing dataset with the given configuration.
     fn updateDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
-        if input.key.is_none() {
+        if input.id.is_none() {
             return Err(FieldError::new(
-                "Cannot update dataset without key",
+                "Cannot update dataset without id field",
                 Value::null(),
             ));
         }
@@ -1082,7 +1082,7 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
-            store_id: None,
+            id: None,
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
@@ -1139,7 +1139,7 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
-            store_id: None,
+            id: None,
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
@@ -1178,7 +1178,7 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
-            store_id: Some("cafebabe".to_owned()),
+            id: Some("cafebabe".to_owned()),
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
@@ -1221,7 +1221,7 @@ mod tests {
         let mut vars = Variables::new();
         let properties = vec![];
         let input = StoreInput {
-            store_id: None,
+            id: None,
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
@@ -1243,7 +1243,7 @@ mod tests {
         assert!(errors[0]
             .error()
             .message()
-            .contains("store without identifier"));
+            .contains("store without id field"));
     }
 
     #[test]
@@ -1263,7 +1263,7 @@ mod tests {
             value: "/home/planet".to_owned(),
         }];
         let input = StoreInput {
-            store_id: Some("cafebabe".to_owned()),
+            id: Some("cafebabe".to_owned()),
             store_type: "local".to_owned(),
             label: "my local".to_owned(),
             properties,
@@ -1365,7 +1365,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: None,
+            id: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1416,7 +1416,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: None,
+            id: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1460,7 +1460,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: None,
+            id: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1470,7 +1470,7 @@ mod tests {
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute(
             r#"mutation Define($input: DatasetInput!) {
-                defineDataset(input: $input) { key }
+                defineDataset(input: $input) { id }
             }"#,
             None,
             &schema,
@@ -1498,7 +1498,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: Some("cafebabe".to_owned()),
+            id: Some("cafebabe".to_owned()),
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1543,7 +1543,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: None,
+            id: None,
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1567,7 +1567,7 @@ mod tests {
         println!("errors: {:?}", errors);
         assert!(res.is_null());
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("dataset without key"));
+        assert!(errors[0].error().message().contains("dataset without id"));
     }
 
     #[test]
@@ -1584,7 +1584,7 @@ mod tests {
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
         let input = DatasetInput {
-            key: Some("cafebabe".to_owned()),
+            id: Some("cafebabe".to_owned()),
             basepath: cwd.to_str().unwrap().to_owned(),
             schedules: vec![],
             workspace: None,
@@ -1594,7 +1594,7 @@ mod tests {
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute(
             r#"mutation Update($input: DatasetInput!) {
-                updateDataset(input: $input) { key }
+                updateDataset(input: $input) { id }
             }"#,
             None,
             &schema,

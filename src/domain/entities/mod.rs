@@ -207,7 +207,7 @@ impl std::hash::Hash for Store {
 #[derive(Clone, Debug)]
 pub struct Dataset {
     /// Unique identifier of this dataset.
-    pub key: String,
+    pub id: String,
     /// Local base path of dataset to be saved.
     pub basepath: PathBuf,
     /// Set of schedules for when to run the backup.
@@ -228,11 +228,11 @@ impl Dataset {
     /// Construct a Dataset with the given unique (computer) identifier, and
     /// base path of the directory structure to be saved.
     pub fn new(basepath: &Path) -> Dataset {
-        let key = generate_ulid_string().to_lowercase();
+        let id = generate_ulid_string().to_lowercase();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {
-            key,
+            id,
             basepath: basepath.to_owned(),
             schedules: vec![],
             workspace,
@@ -263,7 +263,7 @@ impl Dataset {
 impl Default for Dataset {
     fn default() -> Self {
         Self {
-            key: String::new(),
+            id: String::new(),
             basepath: PathBuf::new(),
             schedules: vec![],
             workspace: PathBuf::new(),
@@ -275,7 +275,7 @@ impl Default for Dataset {
 
 impl fmt::Display for Dataset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "dataset-{}", self.key)
+        write!(f, "dataset-{}", self.id)
     }
 }
 

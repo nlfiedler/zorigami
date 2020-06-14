@@ -95,7 +95,6 @@
 ***** handle datasets that have no stores (skip them)
 *** TODO GraphQL resolvers should be using repo, not data source
 *** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
-*** TODO Rename =Dataset= property =key= to =id= to be consistent with =Store=
 *** TODO Delete or update the design document(s)
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures

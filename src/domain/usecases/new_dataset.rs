@@ -35,7 +35,7 @@ impl super::UseCase<Dataset, Params> for NewDataset {
         // for new datasets we need to save the computer id
         let config = self.repo.get_configuration()?;
         self.repo
-            .put_computer_id(&dataset.key, &config.computer_id)?;
+            .put_computer_id(&dataset.id, &config.computer_id)?;
         Ok(dataset)
     }
 }

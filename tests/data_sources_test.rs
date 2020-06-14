@@ -142,7 +142,7 @@ fn test_put_get_delete_datasets() {
     // retrieve all known datasets
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);
-    assert!(!datasets[0].key.starts_with("dataset/"));
+    assert!(!datasets[0].id.starts_with("dataset/"));
     assert!(datasets
         .iter()
         .any(|s| s.basepath.to_string_lossy() == "/home/planet"));
@@ -151,7 +151,7 @@ fn test_put_get_delete_datasets() {
         .any(|s| s.basepath.to_string_lossy() == "/home/town"));
 
     // delete one of the datasets
-    datasource.delete_dataset(&datasets[0].key).unwrap();
+    datasource.delete_dataset(&datasets[0].id).unwrap();
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 1);
 }

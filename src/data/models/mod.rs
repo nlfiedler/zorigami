@@ -65,7 +65,7 @@ pub struct StoreDef {
 #[serde(remote = "Dataset")]
 pub struct DatasetDef {
     #[serde(skip)]
-    pub key: String,
+    pub id: String,
     #[serde(rename = "bp")]
     pub basepath: PathBuf,
     #[serde(rename = "sc")]
@@ -81,7 +81,7 @@ pub struct DatasetDef {
 impl Default for DatasetDef {
     fn default() -> Self {
         Self {
-            key: String::new(),
+            id: String::new(),
             basepath: PathBuf::new(),
             schedules: vec![],
             workspace: PathBuf::new(),
