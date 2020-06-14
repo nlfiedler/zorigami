@@ -1,10 +1,14 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::data::sources::EntityDataSource;
-use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Snapshot, Store};
-use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use crate::data::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
+use crate::domain::entities::{
+    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store,
+};
+use crate::domain::repositories::{PackRepository, RecordRepository};
+use failure::{err_msg, Error};
+use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
@@ -92,70 +96,80 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 }
 
-// pub struct BlobRepositoryImpl {
-//     basepath: PathBuf,
-// }
+pub struct PackRepositoryImpl {
+    sources: HashMap<Store, Box<dyn PackDataSource>>,
+}
 
-// impl BlobRepositoryImpl {
-//     pub fn new(basepath: &Path) -> Self {
-//         Self {
-//             basepath: basepath.to_path_buf(),
-//         }
-//     }
-// }
+impl PackRepositoryImpl {
+    /// Construct a pack repository that will delegate to the given stores.
+    ///
+    /// Defers to the provided builder to construct the pack sources.
+    pub fn new(stores: Vec<Store>, builder: Box<dyn PackSourceBuilder>) -> Result<Self, Error> {
+        let mut sources: HashMap<Store, Box<dyn PackDataSource>> = HashMap::new();
+        for store in stores {
+            let source = builder.build_source(&store)?;
+            sources.insert(store, source);
+        }
+        Ok(Self { sources })
+    }
+}
 
-// impl BlobRepository for BlobRepositoryImpl {
-//     fn store_blob(&self, filepath: &Path, asset: &Asset) -> Result<(), Error> {
-//         let dest_path = self.blob_path(&asset.key)?;
-//         // do not overwrite existing asset blobs
-//         if !dest_path.exists() {
-//             let parent = dest_path
-//                 .parent()
-//                 .ok_or_else(|| err_msg(format!("no parent for {:?}", dest_path)))?;
-//             std::fs::create_dir_all(parent)?;
-//             // Use file copy to handle crossing file systems, then remove the
-//             // original afterward.
-//             //
-//             // N.B. Store the asset as-is, do not make any modifications. Any
-//             // changes that are needed will be made later, and likely not
-//             // committed back to disk unless requested by the user.
-//             std::fs::copy(filepath, dest_path)?;
-//         }
-//         std::fs::remove_file(filepath)?;
-//         Ok(())
-//     }
+impl PackRepository for PackRepositoryImpl {
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Vec<PackLocation>, Error> {
+        let mut results: Vec<PackLocation> = Vec::new();
+        for source in self.sources.values() {
+            let loc = source.store_pack(packfile, bucket, object)?;
+            results.push(loc);
+        }
+        Ok(results)
+    }
 
-//     fn blob_path(&self, asset_id: &str) -> Result<PathBuf, Error> {
-//         let decoded = base64::decode(asset_id)?;
-//         let as_string = str::from_utf8(&decoded)?;
-//         let rel_path = Path::new(&as_string);
-//         let mut full_path = self.basepath.clone();
-//         full_path.push(rel_path);
-//         Ok(full_path)
-//     }
+    fn retrieve_pack(&self, locations: &[PackLocation], outfile: &Path) -> Result<(), Error> {
+        // find a local store, if available
+        for loc in locations.iter() {
+            for (store, source) in self.sources.iter() {
+                if loc.store == store.id && source.is_local() {
+                    return source.retrieve_pack(loc, outfile);
+                }
+            }
+        }
 
-//     fn rename_blob(&self, old_id: &str, new_id: &str) -> Result<(), Error> {
-//         let old_path = self.blob_path(old_id)?;
-//         let new_path = self.blob_path(new_id)?;
-//         std::fs::rename(old_path, new_path)?;
-//         Ok(())
-//     }
+        // find a store that is not slow, if available
+        for loc in locations.iter() {
+            for (store, source) in self.sources.iter() {
+                if loc.store == store.id && !source.is_slow() {
+                    return source.retrieve_pack(loc, outfile);
+                }
+            }
+        }
 
-//     fn thumbnail(&self, width: u32, height: u32, asset_id: &str) -> Result<Vec<u8>, Error> {
-//         let filepath = self.blob_path(asset_id)?;
-//         create_thumbnail(&filepath, width, height)
-//     }
-// }
+        // find any matching store
+        for loc in locations.iter() {
+            for (store, source) in self.sources.iter() {
+                if loc.store == store.id {
+                    return source.retrieve_pack(loc, outfile);
+                }
+            }
+        }
+
+        Err(err_msg("cannot find any store for pack"))
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::sources::MockEntityDataSource;
+    use crate::data::sources::{MockEntityDataSource, MockPackDataSource, MockPackSourceBuilder};
     use crate::domain::entities::StoreType;
     use failure::err_msg;
     use mockall::predicate::*;
     use std::collections::HashMap;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_get_configuration() {
@@ -699,72 +713,270 @@ mod tests {
         assert!(result.is_err());
     }
 
-    //     #[test]
-    //     fn test_store_blob_ok() {
-    //         // arrange
-    //         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
-    //         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
-    //         let id = base64::encode(id_path);
-    //         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
-    //         let asset1 = Asset {
-    //             key: id,
-    //             checksum: digest.to_owned(),
-    //             filename: "fighting_kittens.jpg".to_owned(),
-    //             byte_length: 39932,
-    //             media_type: "image/jpeg".to_owned(),
-    //             tags: vec!["kittens".to_owned()],
-    //             caption: None,
-    //             import_date,
-    //             location: None,
-    //             user_date: None,
-    //             original_date: None,
-    //             dimensions: None,
-    //         };
-    //         let tmpdir = tempdir().unwrap();
-    //         let basepath = tmpdir.path().join("blobs");
-    //         // copy test file to temporary path as it will be (re)moved
-    //         let original = PathBuf::from("./tests/fixtures/fighting_kittens.jpg");
-    //         let copy = tmpdir.path().join("fighting_kittens.jpg");
-    //         std::fs::copy(original, &copy).unwrap();
-    //         // act
-    //         let repo = BlobRepositoryImpl::new(basepath.as_path());
-    //         let result = repo.store_blob(copy.as_path(), &asset1);
-    //         // assert
-    //         assert!(result.is_ok());
-    //         let mut dest_path = basepath.clone();
-    //         dest_path.push(id_path);
-    //         assert!(dest_path.exists());
-    //         std::fs::remove_dir_all(basepath).unwrap();
-    //     }
+    #[test]
+    fn test_store_pack_single_source() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source
+                .expect_store_pack()
+                .with(always(), eq("bucket1"), eq("object1"))
+                .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.store_pack(&input_file, "bucket1", "object1");
+        // assert
+        assert!(result.is_ok());
+        let locations = result.unwrap();
+        assert_eq!(locations.len(), 1);
+    }
 
-    //     #[test]
-    //     fn test_blob_path_ok() {
-    //         // arrange
-    //         let import_date = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
-    //         let id_path = "2018/05/31/2100/01bx5zzkbkactav9wevgemmvrz.jpg";
-    //         let id = base64::encode(id_path);
-    //         let digest = "sha256-82084759e4c766e94bb91d8cf9ed9edc1d4480025205f5109ec39a806509ee09";
-    //         let asset1 = Asset {
-    //             key: id,
-    //             checksum: digest.to_owned(),
-    //             filename: "fighting_kittens.jpg".to_owned(),
-    //             byte_length: 39932,
-    //             media_type: "image/jpeg".to_owned(),
-    //             tags: vec!["kittens".to_owned()],
-    //             caption: None,
-    //             import_date,
-    //             location: None,
-    //             user_date: None,
-    //             original_date: None,
-    //             dimensions: None,
-    //         };
-    //         // act
-    //         let repo = BlobRepositoryImpl::new(Path::new("foobar/blobs"));
-    //         let result = repo.blob_path(&asset1.key);
-    //         // assert
-    //         assert!(result.is_ok());
-    //         let mut blob_path = PathBuf::from("foobar/blobs");
-    //         blob_path.push(id_path);
-    //         assert_eq!(result.unwrap(), blob_path.as_path());
-    //     }
+    #[test]
+    fn test_store_pack_multiple_sources() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source
+                .expect_store_pack()
+                .with(always(), eq("bucket1"), eq("object1"))
+                .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
+            Ok(Box::new(source))
+        });
+        let stores = vec![
+            Store {
+                id: "localtmp".to_owned(),
+                store_type: StoreType::LOCAL,
+                label: "temporary".to_owned(),
+                properties: HashMap::new(),
+            },
+            Store {
+                id: "minio".to_owned(),
+                store_type: StoreType::MINIO,
+                label: "server".to_owned(),
+                properties: HashMap::new(),
+            },
+            Store {
+                id: "secureftp".to_owned(),
+                store_type: StoreType::SFTP,
+                label: "other_server".to_owned(),
+                properties: HashMap::new(),
+            },
+        ];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.store_pack(&input_file, "bucket1", "object1");
+        // assert
+        assert!(result.is_ok());
+        let locations = result.unwrap();
+        assert_eq!(locations.len(), 3);
+    }
+
+    #[test]
+    fn test_retrieve_pack_multiple_local() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .with(always())
+            .times(3)
+            .returning(|store| {
+                if store.store_type == StoreType::LOCAL {
+                    let mut source = MockPackDataSource::new();
+                    source.expect_is_local().returning(|| true);
+                    source
+                        .expect_retrieve_pack()
+                        .withf(|location, _| location.store == "local123")
+                        .returning(|_, _| Ok(()));
+                    Ok(Box::new(source))
+                } else if store.store_type == StoreType::MINIO {
+                    let mut source = MockPackDataSource::new();
+                    source.expect_is_local().times(0..2).returning(|| false);
+                    source.expect_is_slow().times(0..2).returning(|| false);
+                    Ok(Box::new(source))
+                } else {
+                    // lump all other store types into this clause
+                    let mut source = MockPackDataSource::new();
+                    source.expect_is_local().times(0..2).returning(|| false);
+                    source.expect_is_slow().times(0..2).returning(|| true);
+                    Ok(Box::new(source))
+                }
+            });
+        let stores = vec![
+            Store {
+                id: "local123".to_owned(),
+                store_type: StoreType::LOCAL,
+                label: "temporary".to_owned(),
+                properties: HashMap::new(),
+            },
+            Store {
+                id: "minio123".to_owned(),
+                store_type: StoreType::MINIO,
+                label: "server".to_owned(),
+                properties: HashMap::new(),
+            },
+            Store {
+                id: "sftp123".to_owned(),
+                store_type: StoreType::SFTP,
+                label: "other_server".to_owned(),
+                properties: HashMap::new(),
+            },
+        ];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let locations = vec![
+            PackLocation::new("local123", "bucket1", "object1"),
+            PackLocation::new("minio123", "bucket1", "object1"),
+            PackLocation::new("sftp123", "bucket1", "object1"),
+        ];
+        let output_file = PathBuf::from("/home/planet/restored.txt");
+        let result = repo.retrieve_pack(&locations, &output_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_retrieve_pack_multiple_fast() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .with(always())
+            .times(2)
+            .returning(|store| {
+                if store.store_type == StoreType::MINIO {
+                    let mut source = MockPackDataSource::new();
+                    source.expect_is_local().times(0..2).returning(|| false);
+                    source.expect_is_slow().times(0..2).returning(|| false);
+                    source
+                        .expect_retrieve_pack()
+                        .withf(|location, _| location.store == "minio123")
+                        .returning(|_, _| Ok(()));
+                    Ok(Box::new(source))
+                } else {
+                    // lump all other store types into this clause
+                    let mut source = MockPackDataSource::new();
+                    source.expect_is_local().times(0..2).returning(|| false);
+                    source.expect_is_slow().times(0..2).returning(|| true);
+                    Ok(Box::new(source))
+                }
+            });
+        let stores = vec![
+            Store {
+                id: "minio123".to_owned(),
+                store_type: StoreType::MINIO,
+                label: "server".to_owned(),
+                properties: HashMap::new(),
+            },
+            Store {
+                id: "sftp123".to_owned(),
+                store_type: StoreType::SFTP,
+                label: "other_server".to_owned(),
+                properties: HashMap::new(),
+            },
+        ];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        // pass more locations than defined stores just because
+        let locations = vec![
+            PackLocation::new("local123", "bucket1", "object1"),
+            PackLocation::new("minio123", "bucket1", "object1"),
+            PackLocation::new("sftp123", "bucket1", "object1"),
+        ];
+        let output_file = PathBuf::from("/home/planet/restored.txt");
+        let result = repo.retrieve_pack(&locations, &output_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_retrieve_pack_multiple_any() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .with(always())
+            .times(1)
+            .returning(|_| {
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().times(1).returning(|| false);
+                source.expect_is_slow().times(1).returning(|| true);
+                source
+                    .expect_retrieve_pack()
+                    .withf(|location, _| location.store == "sftp123")
+                    .returning(|_, _| Ok(()));
+                Ok(Box::new(source))
+            });
+        let stores = vec![Store {
+            id: "sftp123".to_owned(),
+            store_type: StoreType::SFTP,
+            label: "other_server".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        // pass more locations than defined stores just because
+        let locations = vec![
+            PackLocation::new("local123", "bucket1", "object1"),
+            PackLocation::new("minio123", "bucket1", "object1"),
+            PackLocation::new("sftp123", "bucket1", "object1"),
+        ];
+        let output_file = PathBuf::from("/home/planet/restored.txt");
+        let result = repo.retrieve_pack(&locations, &output_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_retrieve_pack_multiple_err() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .with(always())
+            .times(1)
+            .returning(|_| Ok(Box::new(MockPackDataSource::new())));
+        let stores = vec![Store {
+            id: "sftp123".to_owned(),
+            store_type: StoreType::SFTP,
+            label: "other_server".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        // none of the locations match any of the defined stores
+        let locations = vec![
+            PackLocation::new("local123", "bucket1", "object1"),
+            PackLocation::new("minio123", "bucket1", "object1"),
+        ];
+        let output_file = PathBuf::from("/home/planet/restored.txt");
+        let result = repo.retrieve_pack(&locations, &output_file);
+        // assert
+        assert!(result.is_err());
+        let err_string = result.unwrap_err().to_string();
+        assert!(err_string.contains("cannot find any store for pack"));
+    }
 }

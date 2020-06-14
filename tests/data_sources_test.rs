@@ -107,12 +107,16 @@ fn test_put_get_delete_store() {
     // retrieve all known pack stores
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 2);
+    assert!(!stores[0].id.starts_with("store/"));
     assert!(stores.iter().any(|s| s.id == "cafebabe"));
     assert!(stores.iter().any(|s| s.id == "deadbeef"));
 
     let result = datasource.get_store("cafebabe");
     assert!(result.is_ok());
-    assert!(result.unwrap().is_some());
+    let option = result.unwrap();
+    assert!(option.is_some());
+    let store = option.unwrap();
+    assert!(!store.id.starts_with("store/"));
     let result = datasource.get_store("cafed00d");
     assert!(result.is_ok());
     assert!(result.unwrap().is_none());
@@ -138,6 +142,7 @@ fn test_put_get_delete_datasets() {
     // retrieve all known datasets
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);
+    assert!(!datasets[0].key.starts_with("dataset/"));
     assert!(datasets
         .iter()
         .any(|s| s.basepath.to_string_lossy() == "/home/planet"));

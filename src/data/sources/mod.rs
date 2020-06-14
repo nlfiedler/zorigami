@@ -5,7 +5,9 @@
 //! Performs serde on entities and stores them in a database.
 
 use crate::data::models::{ChunkDef, ConfigurationDef, DatasetDef, SnapshotDef, StoreDef};
-use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Snapshot, Store};
+use crate::domain::entities::{
+    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store, StoreType,
+};
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
@@ -13,6 +15,9 @@ use std::path::Path;
 use std::str::FromStr;
 
 mod database;
+mod local;
+mod minio;
+mod sftp;
 
 /// Data source for entity objects.
 #[cfg_attr(test, automock)]
@@ -206,7 +211,7 @@ impl EntityDataSource for EntityDataSourceImpl {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
                 let mut result = StoreDef::deserialize(&mut de)?;
-                result.id = key;
+                result.id = id.to_owned();
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -255,5 +260,145 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+}
+
+///
+/// Return the last part of the path, converting to a String.
+///
+/// This is useful in cases where we want a sensible value for the final
+/// component of the path, but if that is not possible, then just give up and
+/// ignore this path. For listings of local or SFTP directories, this is
+/// probably okay, since if the file name cannot be converted to UTF-8
+/// correctly, then we did not create it and we don't care about it.
+///
+pub fn get_file_name(path: &Path) -> Option<String> {
+    // ignore any paths that end in '..'
+    if let Some(p) = path.file_name() {
+        // ignore any paths that failed UTF-8 translation
+        if let Some(pp) = p.to_str() {
+            return Some(pp.to_owned());
+        }
+    }
+    // This is like core::get_file_name(), but we would likely have errors later
+    // on if we tried to use lossy values for CRUD operations.
+    None
+}
+
+/// Data source for pack files.
+#[cfg_attr(test, automock)]
+pub trait PackDataSource {
+    /// Return `true` if this store is local to the system.
+    fn is_local(&self) -> bool;
+
+    /// Return `true` if this store is remarkably slow compared to usual.
+    fn is_slow(&self) -> bool;
+
+    /// Store the pack file under the named bucket and referenced by the object
+    /// name. Returns the remote location of the pack, in case it was assigned
+    /// new values by the backing store.
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error>;
+
+    /// Retrieve a pack from the given location, writing the contents to the
+    /// given path.
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error>;
+
+    /// List the known buckets in the repository.
+    fn list_buckets(&self) -> Result<Vec<String>, Error>;
+
+    /// List of all objects in the named bucket.
+    fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error>;
+
+    /// Delete the named object from the given bucket.
+    fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error>;
+
+    /// Delete the named bucket. It almost certainly needs to be empty first, so
+    /// use `list_objects()` and `delete_object()` to remove the objects.
+    fn delete_bucket(&self, bucket: &str) -> Result<(), Error>;
+}
+
+/// Builder for pack data sources.
+#[cfg_attr(test, automock)]
+pub trait PackSourceBuilder {
+    /// Construct pack data source for the given store.
+    fn build_source(&self, store: &Store) -> Result<Box<dyn PackDataSource>, Error>;
+}
+
+pub struct PackSourceBuilderImpl {}
+
+impl PackSourceBuilder for PackSourceBuilderImpl {
+    fn build_source(&self, store: &Store) -> Result<Box<dyn PackDataSource>, Error> {
+        // If it helps any, could cache the pack source by the store id to avoid
+        // repeatedly constructing the same thing. The lru crate would be perfect
+        // for managing the cache.
+        let source: Box<dyn PackDataSource> = match store.store_type {
+            StoreType::LOCAL => Box::new(local::LocalStore::new(&store)?),
+            StoreType::MINIO => Box::new(minio::MinioStore::new(&store)?),
+            StoreType::SFTP => Box::new(sftp::SftpStore::new(&store)?),
+        };
+        Ok(source)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_build_source_local() {
+        let builder = PackSourceBuilderImpl {};
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp".to_owned());
+        let store = Store {
+            id: "local123".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties,
+        };
+        let source = builder.build_source(&store).unwrap();
+        assert!(source.is_local());
+        assert!(!source.is_slow());
+    }
+
+    #[test]
+    fn test_build_source_minio() {
+        let builder = PackSourceBuilderImpl {};
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), "us-west2".to_owned());
+        properties.insert("endpoint".to_owned(), "localhost:9000".to_owned());
+        properties.insert("access_key".to_owned(), "minio".to_owned());
+        properties.insert("secret_key".to_owned(), "shminio".to_owned());
+        let store = Store {
+            id: "minio123".to_owned(),
+            store_type: StoreType::MINIO,
+            label: "s3clone".to_owned(),
+            properties,
+        };
+        let source = builder.build_source(&store).unwrap();
+        assert!(!source.is_local());
+        assert!(!source.is_slow());
+    }
+
+    #[test]
+    fn test_build_source_sftp() {
+        let builder = PackSourceBuilderImpl {};
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("remote_addr".to_owned(), "localhost:22".to_owned());
+        properties.insert("username".to_owned(), "charlie".to_owned());
+        let store = Store {
+            id: "sftp123".to_owned(),
+            store_type: StoreType::SFTP,
+            label: "other_server".to_owned(),
+            properties,
+        };
+        let source = builder.build_source(&store).unwrap();
+        assert!(!source.is_local());
+        assert!(!source.is_slow());
     }
 }

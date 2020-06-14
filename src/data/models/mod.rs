@@ -3,20 +3,23 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, Snapshot, Store, StoreType,
+    Checksum, Chunk, Configuration, Dataset, Pack, PackLocation, Snapshot, Store, StoreType,
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 //
 // serde_derive has trouble with the combination of remote derivations and
-// structs with optional properties that are themselves remote and using derived
-// serialization. As a result, put the generated code in separate files because
-// there is a lot of code, and writing it by hand would be very difficult.
+// structs with optional or nested (e.g. vec) properties that are themselves
+// remote and using derived serialization. As a result, put the generated code
+// in separate files because there is a lot of code, and writing it by hand
+// would be very difficult.
 //
 mod checksum;
+mod pack_location;
 mod schedule;
 
 #[derive(Serialize, Deserialize)]
@@ -105,7 +108,19 @@ pub struct SnapshotDef {
     pub tree: Checksum,
 }
 
-/// Contains the configuration of the application, pertaining to all datasets.
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Pack")]
+pub struct PackDef {
+    #[serde(skip)]
+    pub digest: Checksum,
+    #[serde(rename = "l")]
+    pub locations: Vec<PackLocation>,
+    #[serde(rename = "t")]
+    pub upload_time: DateTime<Utc>,
+    #[serde(rename = "s")]
+    pub crypto_salt: Option<Salt>,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Configuration")]
 pub struct ConfigurationDef {
@@ -122,6 +137,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::schedule::TimeRange;
     use failure::Error;
+    use sodiumoxide::crypto::pwhash;
     use std::path::Path;
 
     #[test]
@@ -233,6 +249,30 @@ mod tests {
         assert_eq!(actual.end_time, snapshot.end_time);
         assert_eq!(actual.file_count, snapshot.file_count);
         assert_eq!(actual.tree, snapshot.tree);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_serde() -> Result<(), Error> {
+        // arrange
+        let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let coords = vec![PackLocation::new("store1", "bucket1", "object1")];
+        let mut pack = Pack::new(digest, coords);
+        // (normally should init sodiumoxide but for the tests it is okay)
+        pack.crypto_salt = Some(pwhash::gen_salt());
+        // act
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut ser = serde_json::Serializer::new(&mut buffer);
+        PackDef::serialize(&pack, &mut ser)?;
+        let as_text = String::from_utf8(buffer)?;
+        let mut de = serde_json::Deserializer::from_str(&as_text);
+        let actual = PackDef::deserialize(&mut de)?;
+        // assert
+        assert_eq!(actual.locations.len(), pack.locations.len());
+        assert_eq!(actual.locations.len(), 1);
+        assert_eq!(actual.locations[0], pack.locations[0]);
+        assert_eq!(actual.upload_time, pack.upload_time);
+        assert_eq!(actual.crypto_salt, pack.crypto_salt);
         Ok(())
     }
 

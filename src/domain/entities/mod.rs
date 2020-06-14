@@ -4,6 +4,7 @@
 use chrono::prelude::*;
 use failure::{err_msg, Error};
 use rusty_ulid::generate_ulid_string;
+use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
@@ -183,7 +184,7 @@ impl FromStr for StoreType {
 }
 
 /// Store defines a location where packs will be saved.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Store {
     /// Unique identifier for this store.
     pub id: String,
@@ -193,6 +194,12 @@ pub struct Store {
     pub label: String,
     /// Name/value pairs that make up this store configuration.
     pub properties: HashMap<String, String>,
+}
+
+impl std::hash::Hash for Store {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 /// Represents a directory tree that will be backed up according to a schedule,
@@ -341,6 +348,57 @@ impl fmt::Display for Snapshot {
             "tree {}\nparent {}\nnumFiles {}\nstartTime {}",
             self.tree, parent, self.file_count, start_time
         )
+    }
+}
+
+///
+/// Remote coordinates for a pack file, naming the store, bucket, and object by
+/// which the pack file can be retrieved.
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackLocation {
+    /// ULID of the pack store.
+    pub store: String,
+    /// Remote bucket name.
+    pub bucket: String,
+    /// Remote object name.
+    pub object: String,
+}
+
+impl PackLocation {
+    /// Create a new PackLocation record using the given information.
+    pub fn new(store: &str, bucket: &str, object: &str) -> Self {
+        Self {
+            store: store.to_owned(),
+            bucket: bucket.to_owned(),
+            object: object.to_owned(),
+        }
+    }
+}
+
+/// Type for database record of saved packs.
+#[derive(Clone, Debug)]
+pub struct Pack {
+    /// Digest of pack file.
+    pub digest: Checksum,
+    /// List of remote pack coordinates.
+    pub locations: Vec<PackLocation>,
+    /// Date/time of successful upload, for conflict resolution.
+    pub upload_time: DateTime<Utc>,
+    /// Salt used to encrypt this pack.
+    pub crypto_salt: Option<Salt>,
+}
+
+impl Pack {
+    /// Create a new Pack record using the given information. Assumes the
+    /// upload time is the current time.
+    pub fn new(digest: Checksum, coords: Vec<PackLocation>) -> Self {
+        Self {
+            digest,
+            locations: coords,
+            upload_time: Utc::now(),
+            crypto_salt: None,
+        }
     }
 }
 

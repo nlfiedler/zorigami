@@ -719,64 +719,6 @@ impl SavedFile {
     }
 }
 
-///
-/// Remote coordinates for a pack file, naming the store, bucket, and object by
-/// which the pack file can be retrieved.
-///
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PackLocation {
-    /// ULID of the pack store.
-    #[serde(rename = "st")]
-    pub store: String,
-    /// Remote bucket name.
-    #[serde(rename = "bu")]
-    pub bucket: String,
-    /// Remote object name.
-    #[serde(rename = "ob")]
-    pub object: String,
-}
-
-impl PackLocation {
-    /// Create a new PackLocation record using the given information.
-    pub fn new(store: &str, bucket: &str, object: &str) -> Self {
-        Self {
-            store: store.to_owned(),
-            bucket: bucket.to_owned(),
-            object: object.to_owned(),
-        }
-    }
-}
-
-/// Type for database record of saved packs.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SavedPack {
-    /// Digest of pack file.
-    #[serde(skip)]
-    pub digest: Checksum,
-    /// List of remote pack coordinates.
-    #[serde(rename = "pc")]
-    pub locations: Vec<PackLocation>,
-    /// Date/time of successful upload, for conflict resolution.
-    #[serde(rename = "tm")]
-    pub upload_time: DateTime<Utc>,
-    /// Salt used to encrypt this pack.
-    #[serde(rename = "sa")]
-    pub crypto_salt: Option<Salt>,
-}
-
-impl SavedPack {
-    /// Create a new SavedPack record using the given information. Assumes the
-    /// upload time is the current time.
-    pub fn new(digest: Checksum, coords: Vec<PackLocation>) -> Self {
-        Self {
-            digest,
-            locations: coords,
-            upload_time: Utc::now(),
-            crypto_salt: None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

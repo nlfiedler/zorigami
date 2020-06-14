@@ -79,7 +79,7 @@
 ***** DONE test data source put/get computer id
 ***** DONE test data source put/get latest snapshot
 **** DONE implement ~delete data set~ usecase (and graphql mutation)
-**** TODO migrate store implementations to be blob data sources
+**** DONE migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** management code (state, engine, supervisor)
 ***** entities for trees, snapshots, files, packs, etc
@@ -95,6 +95,8 @@
 ***** handle datasets that have no stores (skip them)
 *** TODO GraphQL resolvers should be using repo, not data source
 *** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
+*** TODO Rename =Dataset= property =key= to =id= to be consistent with =Store=
+*** TODO Delete or update the design document(s)
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates
@@ -119,6 +121,7 @@
 *** TODO Add a "put back" button to invoke the GraphQL mutation
 ** Cloud Backup
 *** TODO retry a pack upload if it encounters a temporary error
+**** e.g. minio gets an md5 mismatch when storing an object
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
 **** merge with the defaults in =engine.rs=

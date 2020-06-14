@@ -1,11 +1,13 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::Store;
-use crate::domain::entities::{Checksum, Chunk, Configuration, Dataset, Snapshot};
+use crate::domain::entities::{
+    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store,
+};
 use failure::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
+use std::path::Path;
 
 ///
 /// Repository for entity records.
@@ -62,22 +64,23 @@ pub trait RecordRepository {
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 }
 
-// ///
-// /// Repository for asset blobs.
-// ///
-// #[cfg_attr(test, automock)]
-// pub trait BlobRepository {
-//     /// Move the given file into the blob store.
-//     ///
-//     /// Existing blobs will not be overwritten.
-//     fn store_blob(&self, filepath: &Path, asset: &Asset) -> Result<(), Error>;
+///
+/// Repository for pack files.
+///
+#[cfg_attr(test, automock)]
+pub trait PackRepository {
+    /// Save the given pack to stores provided in the constructor. Returns the
+    /// list of all pack locations, which can be used to retrieve the pack at a
+    /// later time.
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Vec<PackLocation>, Error>;
 
-//     /// Return the full path to the asset in blob storage.
-//     fn blob_path(&self, asset_id: &str) -> Result<PathBuf, Error>;
-
-//     /// Change the identity of the asset in blob storage.
-//     fn rename_blob(&self, old_id: &str, new_id: &str) -> Result<(), Error>;
-
-//     /// Produce a thumbnail of the desired size for the asset.
-//     fn thumbnail(&self, width: u32, height: u32, asset_id: &str) -> Result<Vec<u8>, Error>;
-// }
+    /// Retrieve the pack from one of the stores provided in the constructor.
+    /// The most suitable store will be utilized, preferring a local store over
+    /// a remote one, and fast one over a slow one.
+    fn retrieve_pack(&self, locations: &[PackLocation], outfile: &Path) -> Result<(), Error>;
+}
