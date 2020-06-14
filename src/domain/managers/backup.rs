@@ -6,10 +6,11 @@
 //! storing new entries in the database, finding the differences from the
 //! previous snapshot, building pack files, and sending them to the store.
 
-use super::core;
-use super::database::Database;
-use super::state::{self, Action};
-use super::store;
+// use super::core;
+// use super::database::Database;
+use crate::domain::entities;
+use crate::domain::managers::state::{self, Action};
+// use super::store;
 use base64::encode;
 use chrono::Utc;
 use failure::{err_msg, Error};
@@ -30,10 +31,10 @@ use tempfile;
 /// snapshot checksum, or None if there were no changes.
 ///
 pub fn perform_backup(
-    dataset: &mut core::Dataset,
+    dataset: &mut entities::Dataset,
     dbase: &Database,
     passphrase: &str,
-) -> Result<Option<core::Checksum>, Error> {
+) -> Result<Option<entities::Checksum>, Error> {
     debug!("performing backup for {}", dataset);
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
@@ -88,12 +89,12 @@ pub fn perform_backup(
 /// parent snapshot, if any.
 ///
 fn continue_backup(
-    dataset: &mut core::Dataset,
+    dataset: &mut entities::Dataset,
     dbase: &Database,
     passphrase: &str,
-    parent_sha1: Option<core::Checksum>,
-    current_sha1: core::Checksum,
-) -> Result<Option<core::Checksum>, Error> {
+    parent_sha1: Option<entities::Checksum>,
+    current_sha1: entities::Checksum,
+) -> Result<Option<entities::Checksum>, Error> {
     let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
@@ -145,7 +146,7 @@ impl fmt::Display for OutOfTimeError {
 /// Holds the state of the backup process to keep the code slim.
 ///
 struct BackupMaster<'a> {
-    dataset: &'a core::Dataset,
+    dataset: &'a entities::Dataset,
     dbase: &'a Database,
     builder: PackBuilder<'a>,
     passphrase: String,
@@ -156,7 +157,7 @@ struct BackupMaster<'a> {
 impl<'a> BackupMaster<'a> {
     /// Build a BackupMaster.
     fn new(
-        dataset: &'a core::Dataset,
+        dataset: &'a entities::Dataset,
         dbase: &'a Database,
         passphrase: &str,
     ) -> Result<Self, Error> {
@@ -239,7 +240,7 @@ impl<'a> BackupMaster<'a> {
     }
 
     /// Update the current snapshot with the end time set to the current time.
-    fn update_snapshot(&self, snap_sha1: &core::Checksum) -> Result<(), Error> {
+    fn update_snapshot(&self, snap_sha1: &entities::Checksum) -> Result<(), Error> {
         let mut snapshot = self
             .dbase
             .get_snapshot(snap_sha1)?
@@ -276,10 +277,10 @@ impl<'a> BackupMaster<'a> {
 ///
 pub fn take_snapshot(
     basepath: &Path,
-    parent: Option<core::Checksum>,
+    parent: Option<entities::Checksum>,
     dbase: &Database,
     excludes: Vec<&Path>,
-) -> Result<Option<core::Checksum>, Error> {
+) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase, &excludes)?;
     let tree_sha1 = tree.checksum();
@@ -333,101 +334,6 @@ pub fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> Str
 }
 
 ///
-/// Restore a single file identified by the given checksum.
-///
-pub fn restore_file(
-    dbase: &Database,
-    dataset: &core::Dataset,
-    passphrase: &str,
-    checksum: core::Checksum,
-    outfile: &Path,
-) -> Result<(), Error> {
-    let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
-    // look up the file record to get chunks
-    let saved_file = dbase
-        .get_file(&checksum)?
-        .ok_or_else(|| err_msg(format!("missing file: {:?}", checksum)))?;
-    // create an index of all the chunks we want to collect (using strings
-    // because the extracted chunks consist of a list of file names)
-    let mut desired_chunks: HashSet<String> = HashSet::new();
-    for (_offset, chunk) in &saved_file.chunks {
-        desired_chunks.insert(chunk.to_string());
-    }
-    // track pack files that have already been processed
-    let mut finished_packs: HashSet<core::Checksum> = HashSet::new();
-    // look up chunk records to get pack record(s)
-    for (_offset, chunk) in &saved_file.chunks {
-        let chunk_rec = dbase
-            .get_chunk(&chunk)?
-            .ok_or_else(|| err_msg(format!("missing chunk: {:?}", chunk)))?;
-        let pack_digest = chunk_rec.packfile.as_ref().unwrap();
-        if !finished_packs.contains(pack_digest) {
-            let saved_pack = dbase
-                .get_pack(pack_digest)?
-                .ok_or_else(|| err_msg(format!("missing pack record: {:?}", pack_digest)))?;
-            // check the salt before downloading the pack, otherwise we waste
-            // time fetching it when we would not be able to decrypt it
-            let salt = saved_pack
-                .crypto_salt
-                .ok_or_else(|| err_msg(format!("missing pack salt: {:?}", pack_digest)))?;
-            // retrieve the pack file
-            let encrypted = tempfile::Builder::new()
-                .prefix("pack")
-                .suffix(".bin")
-                .tempfile_in(&dataset.workspace)?;
-            store::retrieve_pack(&stores_boxed, &saved_pack.locations, encrypted.path())?;
-            // decrypt and then decompress before unpacking the contents
-            let mut zipped = outfile.to_path_buf();
-            zipped.set_extension("gz");
-            core::decrypt_file(passphrase, &salt, encrypted.path(), &zipped)?;
-            fs::remove_file(encrypted)?;
-            core::decompress_file(&zipped, outfile)?;
-            fs::remove_file(zipped)?;
-            verify_pack_digest(pack_digest, outfile)?;
-            let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
-            fs::remove_file(outfile)?;
-            // remove unrelated chunks to conserve space
-            for cname in chunk_names {
-                if !desired_chunks.contains(&cname) {
-                    let mut chunk_path = PathBuf::from(&dataset.workspace);
-                    chunk_path.push(cname);
-                    fs::remove_file(&chunk_path)?;
-                }
-            }
-            // remember this pack as being completed
-            finished_packs.insert(pack_digest.to_owned());
-        }
-    }
-    // sort the chunks by offset to produce the ordered file list
-    let mut chunks = saved_file.chunks;
-    chunks.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-    let chunk_bufs: Vec<PathBuf> = chunks
-        .iter()
-        .map(|c| {
-            let mut cpath = PathBuf::from(&dataset.workspace);
-            cpath.push(c.1.to_string());
-            cpath
-        })
-        .collect();
-    let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
-    core::assemble_chunks(&chunk_paths, outfile)?;
-    Ok(())
-}
-
-/// Verify the retrieved pack file digest matches the database record.
-fn verify_pack_digest(digest: &core::Checksum, path: &Path) -> Result<(), Error> {
-    let actual = core::checksum_file(path)?;
-    if &actual != digest {
-        Err(err_msg(format!(
-            "pack digest does not match: {} != {}",
-            &actual, digest
-        )))
-    } else {
-        Ok(())
-    }
-}
-
-///
 /// `ChangedFile` represents a new or modified file.
 ///
 #[derive(Debug)]
@@ -435,11 +341,11 @@ pub struct ChangedFile {
     /// File path of the changed file relative to the base path.
     pub path: PathBuf,
     /// Hash digest of the changed file.
-    pub digest: core::Checksum,
+    pub digest: entities::Checksum,
 }
 
 impl ChangedFile {
-    fn new(path: &Path, digest: core::Checksum) -> Self {
+    fn new(path: &Path, digest: entities::Checksum) -> Self {
         Self {
             path: PathBuf::from(path),
             digest,
@@ -457,7 +363,7 @@ pub struct ChangedFilesIter<'a> {
     /// Queue of pending paths to visit, where the path is relative, the first
     /// checksum is the left tree (earlier in time), and the second is the right
     /// tree (later in time).
-    queue: VecDeque<(PathBuf, core::Checksum, core::Checksum)>,
+    queue: VecDeque<(PathBuf, entities::Checksum, entities::Checksum)>,
     /// Nested iterator for visiting an entire new subdirectory.
     walker: Option<TreeWalker<'a>>,
     /// Current path being visited.
@@ -476,8 +382,8 @@ impl<'a> ChangedFilesIter<'a> {
     fn new(
         dbase: &'a Database,
         basepath: PathBuf,
-        left_tree: core::Checksum,
-        right_tree: core::Checksum,
+        left_tree: entities::Checksum,
+        right_tree: entities::Checksum,
     ) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((basepath, left_tree, right_tree));
@@ -654,8 +560,8 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
 pub fn find_changed_files(
     dbase: &Database,
     basepath: PathBuf,
-    snapshot1: core::Checksum,
-    snapshot2: core::Checksum,
+    snapshot1: entities::Checksum,
+    snapshot2: entities::Checksum,
 ) -> Result<ChangedFilesIter, Error> {
     let snap1doc = dbase
         .get_snapshot(&snapshot1)?
@@ -676,7 +582,7 @@ pub struct TreeWalker<'a> {
     dbase: &'a Database,
     /// Queue of pending paths to visit, where the path is relative, the
     /// checksum is the tree to be visited.
-    queue: VecDeque<(PathBuf, core::Checksum)>,
+    queue: VecDeque<(PathBuf, entities::Checksum)>,
     /// Current path being visited.
     path: Option<PathBuf>,
     /// Tree currently being visited.
@@ -686,7 +592,7 @@ pub struct TreeWalker<'a> {
 }
 
 impl<'a> TreeWalker<'a> {
-    pub fn new(dbase: &'a Database, basepath: &Path, tree: core::Checksum) -> Self {
+    pub fn new(dbase: &'a Database, basepath: &Path, tree: entities::Checksum) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((basepath.to_owned(), tree));
         Self {
@@ -803,7 +709,7 @@ fn scan_tree(basepath: &Path, dbase: &Database, excludes: &[&Path]) -> Result<co
                                     let ent = process_path(&path, tref, dbase);
                                     entries.push(ent);
                                 } else if file_type.is_file() {
-                                    match core::checksum_file(&path) {
+                                    match entities::Checksum_file(&path) {
                                         Ok(digest) => {
                                             let tref = core::TreeReference::FILE(digest);
                                             let ent = process_path(&path, tref, dbase);
@@ -869,7 +775,7 @@ fn process_path(
                         .map(|v| v.to_owned())
                         .unwrap_or_else(|| name.to_string_lossy().into_owned());
                     if let Ok(Some(value)) = xattr::get(fullpath, &name) {
-                        let digest = core::checksum_data_sha1(value.as_ref());
+                        let digest = entities::Checksum_data_sha1(value.as_ref());
                         if dbase.insert_xattr(&digest, value.as_ref()).is_ok() {
                             entry.xattrs.insert(nm, digest);
                         }
@@ -896,11 +802,11 @@ pub struct PackBuilder<'a> {
     chunk_size: u64,
     /// Map of file checksum to the chunks it contains that have not yet been
     /// uploaded in a pack file.
-    file_chunks: BTreeMap<core::Checksum, Vec<core::Chunk>>,
+    file_chunks: BTreeMap<entities::Checksum, Vec<core::Chunk>>,
     /// Those chunks that have been packed using this builder.
-    packed_chunks: HashSet<core::Checksum>,
+    packed_chunks: HashSet<entities::Checksum>,
     /// Those chunks that have been uploaded previously.
-    done_chunks: HashSet<core::Checksum>,
+    done_chunks: HashSet<entities::Checksum>,
 }
 
 impl<'a> PackBuilder<'a> {
@@ -946,7 +852,7 @@ impl<'a> PackBuilder<'a> {
 
     /// Add the given file to this builder, splitting into chunks as necessary,
     /// and using the database to find duplicate chunks.
-    pub fn add_file(&mut self, path: &Path, file_digest: core::Checksum) -> Result<(), Error> {
+    pub fn add_file(&mut self, path: &Path, file_digest: entities::Checksum) -> Result<(), Error> {
         if self.file_chunks.contains_key(&file_digest) {
             // do not bother processing a file we have already seen; once the
             // files have been completely uploaded, we rely on the database to
@@ -1055,9 +961,9 @@ impl<'a> PackBuilder<'a> {
 /// the results to the database.
 pub struct Pack {
     /// Checksum of this pack file once it has been written.
-    digest: Option<core::Checksum>,
+    digest: Option<entities::Checksum>,
     /// Those files that have been completed with this pack.
-    files: HashMap<core::Checksum, Vec<core::Chunk>>,
+    files: HashMap<entities::Checksum, Vec<core::Chunk>>,
     /// Those chunks that are contained in this pack.
     chunks: Vec<core::Chunk>,
     /// Salt used to hash the password for this pack.
@@ -1066,7 +972,7 @@ pub struct Pack {
 
 impl Pack {
     /// Add a completed file to this pack.
-    pub fn add_file(&mut self, digest: core::Checksum, chunks: Vec<core::Chunk>) {
+    pub fn add_file(&mut self, digest: entities::Checksum, chunks: Vec<core::Chunk>) {
         self.files.insert(digest, chunks);
     }
 
@@ -1076,7 +982,7 @@ impl Pack {
     }
 
     /// Return a reference to this pack's hash digest.
-    pub fn get_digest(&self) -> Option<&core::Checksum> {
+    pub fn get_digest(&self) -> Option<&entities::Checksum> {
         self.digest.as_ref()
     }
 
@@ -1130,7 +1036,7 @@ impl Pack {
         // that have been completely uploaded
         for (filesum, parts) in &self.files {
             let mut length: u64 = 0;
-            let mut chunks: Vec<(u64, core::Checksum)> = Vec::new();
+            let mut chunks: Vec<(u64, entities::Checksum)> = Vec::new();
             for chunk in parts {
                 length += chunk.length as u64;
                 chunks.push((chunk.offset as u64, chunk.digest.clone()));

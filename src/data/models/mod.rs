@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, Pack, PackLocation, Snapshot, Store, StoreType,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, StoreType,
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,7 @@ use std::path::PathBuf;
 mod checksum;
 mod pack_location;
 mod schedule;
+mod tree;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Chunk")]
@@ -92,6 +93,17 @@ impl Default for DatasetDef {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(remote = "File")]
+pub struct FileDef {
+    #[serde(skip)]
+    pub digest: Checksum,
+    #[serde(rename = "l")]
+    pub length: u64,
+    #[serde(rename = "c")]
+    pub chunks: Vec<(u64, Checksum)>,
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(remote = "Snapshot")]
 pub struct SnapshotDef {
     #[serde(skip)]
@@ -136,6 +148,7 @@ pub struct ConfigurationDef {
 mod tests {
     use super::*;
     use crate::domain::entities::schedule::TimeRange;
+    use crate::domain::entities::{Tree, TreeEntry, TreeReference};
     use failure::Error;
     use sodiumoxide::crypto::pwhash;
     use std::path::Path;
@@ -291,6 +304,52 @@ mod tests {
         assert_eq!(actual.hostname, config.hostname);
         assert_eq!(actual.username, config.username);
         assert_eq!(actual.computer_id, config.computer_id);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tree_serde() -> Result<(), Error> {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let reference = TreeReference::FILE(file_digest);
+        let filepath = Path::new("./tests/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(filepath, reference);
+        let tree = Tree::new(vec![entry], 1);
+        // act
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut ser = serde_json::Serializer::new(&mut buffer);
+        Tree::serialize(&tree, &mut ser)?;
+        let as_text = String::from_utf8(buffer)?;
+        let mut de = serde_json::Deserializer::from_str(&as_text);
+        let actual = Tree::deserialize(&mut de)?;
+        // assert
+        assert_eq!(actual.entries.len(), 1);
+        assert_eq!(actual.entries[0].name, "lorem-ipsum.txt");
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_serde() -> Result<(), Error> {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let chunks = vec![(0, file_digest.clone())];
+        let file = File::new(file_digest.clone(), 3129, chunks);
+        // act
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut ser = serde_json::Serializer::new(&mut buffer);
+        FileDef::serialize(&file, &mut ser)?;
+        let as_text = String::from_utf8(buffer)?;
+        let mut de = serde_json::Deserializer::from_str(&as_text);
+        let actual = FileDef::deserialize(&mut de)?;
+        // assert
+        let null_digest = Checksum::SHA1(String::from("0000000000000000000000000000000000000000"));
+        assert_eq!(actual.digest, null_digest);
+        assert_eq!(actual.length, file.length);
+        assert_eq!(actual.chunks.len(), 1);
+        assert_eq!(actual.chunks[0].0, 0);
+        assert_eq!(actual.chunks[0].1, file_digest);
         Ok(())
     }
 }

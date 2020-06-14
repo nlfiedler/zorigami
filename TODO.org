@@ -22,7 +22,8 @@
 ****** tree reference
 ***** managers
 ****** =state.rs= to manage state
-****** =backup.rs= (nee =engine.rs=) to perform backup/restore operations
+****** =backup.rs= (nee =engine.rs=) to perform backup operation
+****** =restore.rs= (nee =engine.rs=) to perform restore operation
 ****** =process.rs= (nee =supervisor.rs=) to manage scheduled backups
 ***** repositories
 ****** record database (CRUD for the entities)
@@ -81,8 +82,8 @@
 **** DONE implement ~delete data set~ usecase (and graphql mutation)
 **** DONE migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
-***** management code (state, engine, supervisor)
-***** entities for trees, snapshots, files, packs, etc
+***** management code (state, backup, restore, process)
+***** backup manager: skip datasets that have no stores
 **** TODO implement ~put back~ usecase (and graphql query)
 ***** this is the new ~put back~ feature, not the download file feature
 **** TODO implement ~get snapshot~ usecase (and graphql query)
@@ -91,10 +92,8 @@
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source
 ***** each blob data source implementation then validates the store definition
-**** backup manager code
-***** handle datasets that have no stores (skip them)
-*** TODO GraphQL resolvers should be using repo, not data source
-*** TODO Remove either the dead code or the =#[allow(dead_code)]= pragma
+**** TODO crate a reference for the entities/models serde field renaming
+***** difficult to work backward from the extremely verbose generated code
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates
