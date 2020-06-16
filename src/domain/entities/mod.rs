@@ -330,7 +330,7 @@ impl From<FileType> for EntryType {
 /// symbolic link value should be base64 encoded for the purpose of character
 /// encoding safety.
 ///
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TreeReference {
     LINK(String),
     TREE(Checksum),
@@ -415,7 +415,7 @@ fn get_file_name(path: &Path) -> String {
 }
 
 /// A file, directory, or symbolic link within a tree.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TreeEntry {
     /// Name of the file, directory, or symbolic link.
     pub name: String,
@@ -438,7 +438,7 @@ pub struct TreeEntry {
     /// Reference to the entry itself.
     pub reference: TreeReference,
     /// Set of extended file attributes, if any. The key is the name of the
-    /// extended attribute, and the value is the checksum for the value
+    /// extended attribute, and the value is the SHA1 digest for the value
     /// already recorded. Each unique value is meant to be stored once.
     pub xattrs: HashMap<String, Checksum>,
 }
@@ -593,9 +593,13 @@ impl fmt::Display for TreeEntry {
     }
 }
 
+///
 /// A set of file system entries, such as files, directories, symbolic links.
-#[derive(Debug)]
+///
+#[derive(Clone, Debug)]
 pub struct Tree {
+    /// Digest of tree at time of snapshot.
+    pub digest: Checksum,
     /// Set of entries making up this tree.
     pub entries: Vec<TreeEntry>,
     /// The number of files contained within this tree and its subtrees.
@@ -603,24 +607,19 @@ pub struct Tree {
 }
 
 impl Tree {
-    ///
     /// Create an instance of Tree that takes ownership of the given entries.
-    /// The entries will be sorted by name, hence must be mutable.
     ///
+    /// The entries will be sorted by name, hence must be mutable.
     pub fn new(mut entries: Vec<TreeEntry>, file_count: u32) -> Self {
         entries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-        Self {
+        let mut tree = Self {
+            digest: Checksum::SHA1(FORTY_ZEROS.to_owned()),
             entries,
             file_count,
-        }
-    }
-
-    ///
-    /// Calculate the SHA1 digest for the tree.
-    ///
-    pub fn checksum(&self) -> Checksum {
-        let formed = self.to_string();
-        Checksum::sha1_from_bytes(formed.as_bytes())
+        };
+        let as_text = tree.to_string();
+        tree.digest = Checksum::sha1_from_bytes(as_text.as_bytes());
+        tree
     }
 }
 
@@ -636,7 +635,7 @@ impl fmt::Display for Tree {
 ///
 /// `File` records the chunks associated with a saved file.
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct File {
     /// Digest of file at time of snapshot.
     pub digest: Checksum,
@@ -688,7 +687,7 @@ impl Snapshot {
     pub fn new(parent: Option<Checksum>, tree: Checksum, file_count: u32) -> Self {
         let start_time = Utc::now();
         let mut snapshot = Self {
-            digest: Checksum::SHA1(String::from("sha1-cafebabe")),
+            digest: Checksum::SHA1(FORTY_ZEROS.to_owned()),
             parent,
             start_time,
             end_time: None,
@@ -955,13 +954,72 @@ mod tests {
         let tref = TreeReference::FILE(sha1);
         let entry2 = TreeEntry::new(&path, tref);
         let tree = Tree::new(vec![entry1, entry2], 2);
-        let sha1 = tree.checksum();
         // with file timestamps, the digest always changes
-        assert!(sha1.is_sha1());
+        assert!(tree.digest.is_sha1());
         let mut entries = tree.entries.iter();
         assert_eq!(entries.next().unwrap().name, "SekienAkashita.jpg");
         assert_eq!(entries.next().unwrap().name, "lorem-ipsum.txt");
         assert!(entries.next().is_none());
         assert_eq!(tree.file_count, 2);
+    }
+
+    #[test]
+    fn test_checksum_tree() {
+        let tref1 = TreeReference::FILE(Checksum::SHA1("cafebabe".to_owned()));
+        let entry1 = TreeEntry {
+            name: String::from("madoka.kaname"),
+            fstype: EntryType::FILE,
+            mode: Some(0o644),
+            uid: Some(100),
+            gid: Some(100),
+            user: Some(String::from("user")),
+            group: Some(String::from("group")),
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
+            reference: tref1,
+            xattrs: HashMap::new(),
+        };
+        let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
+        let entry2 = TreeEntry {
+            name: String::from("homura.akemi"),
+            fstype: EntryType::FILE,
+            mode: Some(0o644),
+            uid: Some(100),
+            gid: Some(100),
+            user: Some(String::from("user")),
+            group: Some(String::from("group")),
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
+            reference: tref2,
+            xattrs: HashMap::new(),
+        };
+        let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
+        let entry3 = TreeEntry {
+            name: String::from("sayaka.miki"),
+            fstype: EntryType::FILE,
+            mode: Some(0o644),
+            uid: Some(100),
+            gid: Some(100),
+            user: Some(String::from("user")),
+            group: Some(String::from("group")),
+            ctime: Utc.timestamp(0, 0),
+            mtime: Utc.timestamp(0, 0),
+            reference: tref3,
+            xattrs: HashMap::new(),
+        };
+        let tree = Tree::new(vec![entry1, entry2, entry3], 2);
+        // would look something like this, if we used "now" instead of unix epoch
+        // 644 100:100 1552877320 1552877320 sha1-babecafe homura.akemi
+        // 644 100:100 1552877320 1552877320 sha1-cafebabe madoka.kaname
+        // 644 100:100 1552877320 1552877320 sha1-babebabe sayaka.miki
+        let result = tree.to_string();
+        // results should be sorted lexicographically by filename
+        assert!(result.find("homura").unwrap() < result.find("madoka").unwrap());
+        assert!(result.find("madoka").unwrap() < result.find("sayaka").unwrap());
+        // because the timestamps are always 0, sha1 is always the same
+        assert_eq!(
+            tree.digest.to_string(),
+            "sha1-086f6c6ba3e51882c4fd55fc9733316c4ee1b15d"
+        );
     }
 }

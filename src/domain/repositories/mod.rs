@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
 use failure::Error;
 #[cfg(test)]
@@ -35,14 +35,47 @@ pub trait RecordRepository {
     /// Remvoe the digest of the latest snapshot for the dataset with the given key.
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error>;
 
-    /// Insert the given chunk into the database, if one with the same digest does
+    /// Insert the given chunk into the repository, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error>;
 
     /// Retrieve the chunk by the given digest, returning `None` if not found.
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
 
-    /// Save the given store to the data source.
+    /// Insert the given pack into the repository, if one with the same digest
+    /// does not already exist. Packs with the same digest are assumed to be
+    /// identical.
+    fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Retrieve the pack by the given digest, returning `None` if not found.
+    fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Insert the extended file attributes value into the repository, if one
+    /// with the same digest does not already exist. Values with the same digest
+    /// are assumed to be identical.
+    fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error>;
+
+    /// Retrieve the extended attributes by the given digest, returning `None`
+    /// if not found.
+    fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error>;
+
+    /// Insert the given file into the repository, if one with the same digest
+    /// does not already exist. Files with the same digest are assumed to be
+    /// identical.
+    fn insert_file(&self, file: &File) -> Result<(), Error>;
+
+    /// Retrieve the file by the given digest, returning `None` if not found.
+    fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error>;
+
+    /// Insert the given tree into the repository, if one with the same digest
+    /// does not already exist. Trees with the same digest are assumed to be
+    /// identical.
+    fn insert_tree(&self, tree: &Tree) -> Result<(), Error>;
+
+    /// Retrieve the tree by the given digest, returning `None` if not found.
+    fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error>;
+
+    /// Save the given store to the repository.
     fn put_store(&self, store: &Store) -> Result<(), Error>;
 
     /// Retrieve all registered pack store configurations.
@@ -51,7 +84,7 @@ pub trait RecordRepository {
     /// Remove the store by the given identifier.
     fn delete_store(&self, id: &str) -> Result<(), Error>;
 
-    /// Save the given dataset to the data source.
+    /// Save the given dataset to the repository.
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
 
     /// Retrieve all defined dataset configurations.
@@ -59,6 +92,9 @@ pub trait RecordRepository {
 
     /// Remove the dataset by the given identifier.
     fn delete_dataset(&self, id: &str) -> Result<(), Error>;
+
+    /// Save the given snapshot to the repository.
+    fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error>;
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;

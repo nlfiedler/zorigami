@@ -1099,67 +1099,6 @@ mod tests {
     }
 
     #[test]
-    fn test_checksum_tree() {
-        let tref1 = TreeReference::FILE(Checksum::SHA1("cafebabe".to_owned()));
-        let entry1 = core::TreeEntry {
-            name: String::from("madoka.kaname"),
-            fstype: core::EntryType::FILE,
-            mode: Some(0o644),
-            uid: Some(100),
-            gid: Some(100),
-            user: Some(String::from("user")),
-            group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
-            reference: tref1,
-            xattrs: HashMap::new(),
-        };
-        let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
-        let entry2 = core::TreeEntry {
-            name: String::from("homura.akemi"),
-            fstype: core::EntryType::FILE,
-            mode: Some(0o644),
-            uid: Some(100),
-            gid: Some(100),
-            user: Some(String::from("user")),
-            group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
-            reference: tref2,
-            xattrs: HashMap::new(),
-        };
-        let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
-        let entry3 = core::TreeEntry {
-            name: String::from("sayaka.miki"),
-            fstype: core::EntryType::FILE,
-            mode: Some(0o644),
-            uid: Some(100),
-            gid: Some(100),
-            user: Some(String::from("user")),
-            group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
-            reference: tref3,
-            xattrs: HashMap::new(),
-        };
-        let tree = core::Tree::new(vec![entry1, entry2, entry3], 2);
-        // would look something like this, if we used "now" instead of unix epoch
-        // 644 100:100 1552877320 1552877320 sha1-babecafe homura.akemi
-        // 644 100:100 1552877320 1552877320 sha1-cafebabe madoka.kaname
-        // 644 100:100 1552877320 1552877320 sha1-babebabe sayaka.miki
-        let result = tree.to_string();
-        // results should be sorted lexicographically by filename
-        assert!(result.find("homura").unwrap() < result.find("madoka").unwrap());
-        assert!(result.find("madoka").unwrap() < result.find("sayaka").unwrap());
-        let sum = tree.checksum();
-        // because the timestamps are always 0, sha1 is always the same
-        assert_eq!(
-            sum.to_string(),
-            "sha1-086f6c6ba3e51882c4fd55fc9733316c4ee1b15d"
-        );
-    }
-
-    #[test]
     fn test_pretty_print_duration() {
         let input = Duration::from_secs(0);
         let result = pretty_print_duration(Ok(input));

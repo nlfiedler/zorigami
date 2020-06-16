@@ -4,9 +4,12 @@
 
 //! Performs serde on entities and stores them in a database.
 
-use crate::data::models::{ChunkDef, ConfigurationDef, DatasetDef, SnapshotDef, StoreDef};
+use crate::data::models::{
+    ChunkDef, ConfigurationDef, DatasetDef, FileDef, PackDef, SnapshotDef, StoreDef,
+};
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store, StoreType,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, StoreType,
+    Tree,
 };
 use failure::Error;
 #[cfg(test)]
@@ -22,13 +25,13 @@ mod sftp;
 /// Data source for entity objects.
 #[cfg_attr(test, automock)]
 pub trait EntityDataSource {
-    /// Retrieve the configuration from the datasource.
-    fn get_configuration(&self) -> Result<Option<Configuration>, Error>;
-
-    /// Store the configuration record in the datasource.
+    /// Save the configuration record to the data source.
     fn put_configuration(&self, config: &Configuration) -> Result<(), Error>;
 
-    /// Store the computer identifier for the dataset with the given key.
+    /// Retrieve the configuration from the data source.
+    fn get_configuration(&self) -> Result<Option<Configuration>, Error>;
+
+    /// Save the computer identifier for the dataset with the given key.
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error>;
 
     /// Retrieve the computer identifier for the dataset with the given key.
@@ -37,7 +40,7 @@ pub trait EntityDataSource {
     /// Remove the computer identifier for the dataset with the given key.
     fn delete_computer_id(&self, dataset: &str) -> Result<(), Error>;
 
-    /// Store the digest of the latest snapshot for the dataset with the given key.
+    /// Save the digest of the latest snapshot for the dataset with the given key.
     fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error>;
 
     /// Retrieve the digest of the latest snapshot for the dataset with the given key.
@@ -46,12 +49,45 @@ pub trait EntityDataSource {
     /// Remvoe the digest of the latest snapshot for the dataset with the given key.
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error>;
 
-    /// Insert the given chunk into the database, if one with the same digest does
+    /// Insert the given chunk into the data source, if one with the same digest does
     /// not already exist. Chunks with the same digest are assumed to be identical.
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error>;
 
     /// Retrieve the chunk by the given digest, returning `None` if not found.
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
+
+    /// Insert the given pack into the data source, if one with the same digest
+    /// does not already exist. Packs with the same digest are assumed to be
+    /// identical.
+    fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Retrieve the pack by the given digest, returning `None` if not found.
+    fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Insert the extended file attributes value into the data source, if one
+    /// with the same digest does not already exist. Values with the same digest
+    /// are assumed to be identical.
+    fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error>;
+
+    /// Retrieve the extended attributes by the given digest, returning `None`
+    /// if not found.
+    fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error>;
+
+    /// Insert the given file into the data source, if one with the same digest
+    /// does not already exist. Files with the same digest are assumed to be
+    /// identical.
+    fn insert_file(&self, file: &File) -> Result<(), Error>;
+
+    /// Retrieve the file by the given digest, returning `None` if not found.
+    fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error>;
+
+    /// Insert the given tree into the data source, if one with the same digest
+    /// does not already exist. Trees with the same digest are assumed to be
+    /// identical.
+    fn insert_tree(&self, tree: &Tree) -> Result<(), Error>;
+
+    /// Retrieve the tree by the given digest, returning `None` if not found.
+    fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error>;
 
     /// Save the given store to the data source.
     fn put_store(&self, store: &Store) -> Result<(), Error>;
@@ -73,6 +109,9 @@ pub trait EntityDataSource {
 
     /// Remove the dataset by the given identifier.
     fn delete_dataset(&self, id: &str) -> Result<(), Error>;
+
+    /// Save the given snapshot to the data source.
+    fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error>;
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
@@ -184,6 +223,80 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
+    fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
+        let key = format!("pack/{}", pack.digest);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        PackDef::serialize(pack, &mut ser)?;
+        self.database.insert_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
+        let key = format!("pack/{}", digest);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = PackDef::deserialize(&mut de)?;
+                result.digest = digest.clone();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
+        let key = format!("xattr/{}", digest);
+        self.database.insert_document(key.as_bytes(), xattr)
+    }
+
+    fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
+        let key = format!("xattr/{}", digest);
+        let result = self.database.get_document(key.as_bytes())?;
+        Ok(result.map(|v| v.to_vec()))
+    }
+
+    fn insert_file(&self, file: &File) -> Result<(), Error> {
+        let key = format!("file/{}", file.digest);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        FileDef::serialize(file, &mut ser)?;
+        self.database.insert_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error> {
+        let key = format!("file/{}", digest);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = FileDef::deserialize(&mut de)?;
+                result.digest = digest.clone();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
+        let key = format!("tree/{}", tree.digest);
+        let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
+        self.database.insert_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
+        let key = format!("tree/{}", digest);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut result: Tree = serde_cbor::from_slice(&value)?;
+                result.digest = digest.clone();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
     fn put_store(&self, store: &Store) -> Result<(), Error> {
         let key = format!("store/{}", store.id);
         let mut encoded: Vec<u8> = Vec::new();
@@ -246,6 +359,14 @@ impl EntityDataSource for EntityDataSourceImpl {
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
         let key = format!("dataset/{}", id);
         self.database.delete_document(key.as_bytes())
+    }
+
+    fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error> {
+        let key = format!("snapshot/{}", snapshot.digest);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        SnapshotDef::serialize(snapshot, &mut ser)?;
+        self.database.put_document(key.as_bytes(), &encoded)
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {

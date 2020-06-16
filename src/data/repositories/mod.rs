@@ -3,7 +3,7 @@
 //
 use crate::data::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, PackLocation, Snapshot, Store,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error};
@@ -67,6 +67,38 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_chunk(digest)
     }
 
+    fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
+        self.datasource.insert_pack(pack)
+    }
+
+    fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
+        self.datasource.get_pack(digest)
+    }
+
+    fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
+        self.datasource.insert_xattr(digest, xattr)
+    }
+
+    fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
+        self.datasource.get_xattr(digest)
+    }
+
+    fn insert_file(&self, file: &File) -> Result<(), Error> {
+        self.datasource.insert_file(file)
+    }
+
+    fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error> {
+        self.datasource.get_file(digest)
+    }
+
+    fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
+        self.datasource.insert_tree(tree)
+    }
+
+    fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
+        self.datasource.get_tree(digest)
+    }
+
     fn put_store(&self, store: &Store) -> Result<(), Error> {
         self.datasource.put_store(store)
     }
@@ -89,6 +121,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
         self.datasource.delete_dataset(id)
+    }
+
+    fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error> {
+        self.datasource.put_snapshot(snapshot)
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
@@ -165,7 +201,7 @@ impl PackRepository for PackRepositoryImpl {
 mod tests {
     use super::*;
     use crate::data::sources::{MockEntityDataSource, MockPackDataSource, MockPackSourceBuilder};
-    use crate::domain::entities::StoreType;
+    use crate::domain::entities::{StoreType, TreeEntry, TreeReference};
     use failure::err_msg;
     use mockall::predicate::*;
     use std::collections::HashMap;
@@ -499,6 +535,328 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_pack_ok() {
+        // arrange
+        let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let digest_clone = digest.clone();
+        let coords = vec![PackLocation::new("store1", "bucket1", "object1")];
+        let pack = Pack::new(digest, coords);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_pack()
+            .withf(move |pack| pack.digest == digest_clone)
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_pack(&pack);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_pack_err() {
+        // arrange
+        let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let digest_clone = digest.clone();
+        let coords = vec![PackLocation::new("store1", "bucket1", "object1")];
+        let pack = Pack::new(digest, coords);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_pack()
+            .withf(move |pack| pack.digest == digest_clone)
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_pack(&pack);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_pack_ok() {
+        // arrange
+        let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let digest_clone2 = digest.clone();
+        let digest_clone3 = digest.clone();
+        let coords = vec![PackLocation::new("store1", "bucket1", "object1")];
+        let pack = Pack::new(digest, coords);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_pack()
+            .with(eq(digest_clone3))
+            .returning(move |_| Ok(Some(pack.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_pack(&digest_clone2);
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert_eq!(actual.locations.len(), 1);
+    }
+
+    #[test]
+    fn test_get_pack_err() {
+        // arrange
+        let digest1 = Checksum::SHA1(String::from("cafebabe"));
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_pack()
+            .with(eq(digest1))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let digest1 = Checksum::SHA1(String::from("cafebabe"));
+        let result = repo.get_pack(&digest1);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_insert_xattr_ok() {
+        // arrange
+        let raw_xattr: Vec<u8> = vec![
+            0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0xA0, 0x08, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+        ];
+        let sha1sum = Checksum::sha1_from_bytes(&raw_xattr);
+        let sha1copy = sha1sum.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_xattr()
+            .with(eq(sha1copy), always())
+            .returning(|_, _| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_xattr(&sha1sum, &raw_xattr);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_xattr_err() {
+        // arrange
+        let raw_xattr: Vec<u8> = vec![
+            0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0xA0, 0x08, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+        ];
+        let sha1sum = Checksum::sha1_from_bytes(&raw_xattr);
+        let sha1copy = sha1sum.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_xattr()
+            .with(eq(sha1copy), always())
+            .returning(|_, _| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_xattr(&sha1sum, &raw_xattr);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_xattr_ok() {
+        // arrange
+        let raw_xattr: Vec<u8> = vec![
+            0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0xA0, 0x08, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+        ];
+        let sha1sum = Checksum::sha1_from_bytes(&raw_xattr);
+        let sha1copy = sha1sum.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_xattr()
+            .with(eq(sha1copy))
+            .returning(move |_| Ok(Some(raw_xattr.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_xattr(&sha1sum);
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        let new1sum = Checksum::sha1_from_bytes(&actual);
+        assert_eq!(new1sum, sha1sum);
+    }
+
+    #[test]
+    fn test_get_xattr_err() {
+        // arrange
+        let sha1sum = "136792f4174fe829652ee94803d6db13a0ad1698";
+        let digest = Checksum::SHA1(String::from(sha1sum));
+        let digest_clone = digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_xattr()
+            .with(eq(digest_clone))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_xattr(&digest);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_insert_file_ok() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let chunks = vec![(0, file_digest.clone())];
+        let file = File::new(file_digest.clone(), 3129, chunks);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_file()
+            .withf(move |file| file.digest == file_digest)
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_file(&file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_file_err() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let chunks = vec![(0, file_digest.clone())];
+        let file = File::new(file_digest.clone(), 3129, chunks);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_file()
+            .withf(move |file| file.digest == file_digest)
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_file(&file);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_file_ok() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let digest_clone = file_digest.clone();
+        let chunks = vec![(0, file_digest.clone())];
+        let file = File::new(file_digest.clone(), 3129, chunks);
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_file()
+            .with(eq(file_digest))
+            .returning(move |_| Ok(Some(file.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_file(&digest_clone);
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert_eq!(actual.length, 3129);
+    }
+
+    #[test]
+    fn test_get_file_err() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let digest_clone = file_digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_file()
+            .with(eq(digest_clone))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_file(&file_digest);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_insert_tree_ok() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let reference = TreeReference::FILE(file_digest);
+        let filepath = Path::new("./tests/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(filepath, reference);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_tree()
+            .withf(move |tree| tree.digest == tree_digest)
+            .returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_tree(&tree);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_insert_tree_err() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let reference = TreeReference::FILE(file_digest);
+        let filepath = Path::new("./tests/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(filepath, reference);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_insert_tree()
+            .withf(move |tree| tree.digest == tree_digest)
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.insert_tree(&tree);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_tree_ok() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let reference = TreeReference::FILE(file_digest);
+        let filepath = Path::new("./tests/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(filepath, reference);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let digest_clone = tree_digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_tree()
+            .with(eq(digest_clone))
+            .returning(move |_| Ok(Some(tree.clone())));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_tree(&tree_digest);
+        // assert
+        assert!(result.is_ok());
+        let option = result.unwrap();
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert_eq!(actual.entries.len(), 1);
+        assert_eq!(actual.entries[0].name, "lorem-ipsum.txt");
+    }
+
+    #[test]
+    fn test_get_tree_err() {
+        // arrange
+        let sha1sum = "33078530a30953d3705095e63b159c5abf588de7";
+        let tree_digest = Checksum::SHA1(String::from(sha1sum));
+        let digest_clone = tree_digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_tree()
+            .with(eq(digest_clone))
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.get_tree(&tree_digest);
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_put_store_ok() {
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
@@ -658,6 +1016,42 @@ mod tests {
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.delete_dataset("abc123");
+        // assert
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_put_snapshot_ok() {
+        // arrange
+        let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
+        let snapshot = Snapshot::new(Some(parent), tree, 1024);
+        let digest = snapshot.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_snapshot()
+            .withf(move |s| s.digest == digest)
+            .returning(move |_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_snapshot(&snapshot);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_put_snapshot_err() {
+        // arrange
+        let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+        let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
+        let snapshot = Snapshot::new(Some(parent), tree, 1024);
+        let digest = snapshot.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_put_snapshot()
+            .withf(move |s| s.digest == digest)
+            .returning(move |_| Err(err_msg("oh no")));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.put_snapshot(&snapshot);
         // assert
         assert!(result.is_err());
     }

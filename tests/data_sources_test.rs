@@ -4,6 +4,7 @@
 mod common;
 
 use common::DBPath;
+use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
 use std::path::Path;
 use zorigami::data::sources::EntityDataSource;
@@ -77,6 +78,30 @@ fn test_insert_get_chunk() {
         actual.packfile.unwrap().to_string(),
         "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
     );
+}
+
+#[test]
+fn test_insert_get_pack() {
+    let db_path = DBPath::new("_test_insert_get_pack");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+    let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
+    let mut pack = entities::Pack::new(digest, coords);
+    // (normally should init sodiumoxide but for the tests it is okay)
+    pack.crypto_salt = Some(pwhash::gen_salt());
+    datasource.insert_pack(&pack).unwrap();
+    datasource.insert_pack(&pack).unwrap();
+    datasource.insert_pack(&pack).unwrap();
+    let option = datasource.get_pack(&pack.digest).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.digest, pack.digest);
+    assert_eq!(actual.locations.len(), pack.locations.len());
+    assert_eq!(actual.locations.len(), 1);
+    assert_eq!(actual.locations[0], pack.locations[0]);
+    assert_eq!(actual.upload_time, pack.upload_time);
+    assert_eq!(actual.crypto_salt, pack.crypto_salt);
 }
 
 #[test]
@@ -204,4 +229,89 @@ fn test_put_get_latest_snapshot() {
     datasource.delete_latest_snapshot("cafebabe").unwrap();
     let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
     assert!(opt.is_none());
+}
+
+#[test]
+fn test_insert_get_file() {
+    let db_path = DBPath::new("_test_insert_get_file");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let chunks = vec![(0, file_digest.clone())];
+    let file = entities::File::new(file_digest.clone(), 3129, chunks);
+    datasource.insert_file(&file).unwrap();
+    datasource.insert_file(&file).unwrap();
+    datasource.insert_file(&file).unwrap();
+    let option = datasource.get_file(&file_digest).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.digest, file_digest);
+    assert_eq!(actual.length, file.length);
+    assert_eq!(actual.chunks.len(), 1);
+    assert_eq!(actual.chunks[0].0, 0);
+    assert_eq!(actual.chunks[0].1, file_digest);
+}
+
+#[test]
+fn test_put_get_tree() {
+    let db_path = DBPath::new("_test_put_get_tree");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let reference = entities::TreeReference::FILE(file_digest);
+    let filepath = Path::new("./tests/fixtures/lorem-ipsum.txt");
+    let entry = entities::TreeEntry::new(filepath, reference);
+    let tree = entities::Tree::new(vec![entry], 1);
+    datasource.insert_tree(&tree).unwrap();
+    datasource.insert_tree(&tree).unwrap();
+    datasource.insert_tree(&tree).unwrap();
+    let option = datasource.get_tree(&tree.digest).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.digest, tree.digest);
+    assert_eq!(actual.entries.len(), 1);
+    assert_eq!(actual.entries[0].name, "lorem-ipsum.txt");
+}
+
+#[test]
+fn test_put_get_xattr() {
+    let db_path = DBPath::new("_test_put_get_xattr");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let raw_xattr: Vec<u8> = vec![
+        0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0xA0, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+    ];
+    let sha1sum = Checksum::sha1_from_bytes(&raw_xattr);
+    datasource.insert_xattr(&sha1sum, &raw_xattr).unwrap();
+    datasource.insert_xattr(&sha1sum, &raw_xattr).unwrap();
+    datasource.insert_xattr(&sha1sum, &raw_xattr).unwrap();
+    let option = datasource.get_xattr(&sha1sum).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    let new1sum = Checksum::sha1_from_bytes(&actual);
+    assert_eq!(new1sum, sha1sum);
+}
+
+#[test]
+fn test_put_get_snapshot() {
+    let db_path = DBPath::new("_test_put_get_snapshot");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+    let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
+    let snapshot = entities::Snapshot::new(Some(parent), tree, 1024);
+    datasource.put_snapshot(&snapshot).unwrap();
+    let option = datasource.get_snapshot(&snapshot.digest).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.digest, snapshot.digest);
+    assert_eq!(actual.parent, snapshot.parent);
+    assert_eq!(actual.start_time, snapshot.start_time);
+    assert_eq!(actual.end_time, snapshot.end_time);
+    assert_eq!(actual.file_count, snapshot.file_count);
+    assert_eq!(actual.tree, snapshot.tree);
 }

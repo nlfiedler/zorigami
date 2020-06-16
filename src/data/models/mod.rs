@@ -18,10 +18,108 @@ use std::path::PathBuf;
 // in separate files because there is a lot of code, and writing it by hand
 // would be very difficult.
 //
+// What the struct _would_ have looked like using the derive macro is shown
+// below each section.
+//
 mod checksum;
+// #[derive(Serialize, Deserialize)]
+// pub enum Checksum {
+//     SHA1(String),
+//     SHA256(String),
+// }
+
 mod pack_location;
+// #[derive(Serialize, Deserialize)]
+// pub struct PackLocation {
+//     #[serde_rename = "s"]
+//     pub store: String,
+//     #[serde_rename = "b"]
+//     pub bucket: String,
+//     #[serde_rename = "o"]
+//     pub object: String,
+// }
+
 mod schedule;
+// #[derive(Serialize, Deserialize)]
+// pub enum DayOfWeek {
+//     Sun,
+//     Mon,
+//     Tue,
+//     Wed,
+//     Thu,
+//     Fri,
+//     Sat,
+// }
+// #[derive(Serialize, Deserialize)]
+// pub struct TimeRange {
+//     pub start: u32,
+//     pub stop: u32,
+// }
+// #[derive(Serialize, Deserialize)]
+// pub enum DayOfMonth {
+//     First(DayOfWeek),
+//     Second(DayOfWeek),
+//     Third(DayOfWeek),
+//     Fourth(DayOfWeek),
+//     Fifth(DayOfWeek),
+//     Day(u8),
+// }
+// #[derive(Serialize, Deserialize)]
+// pub enum Schedule {
+//     Hourly,
+//     Daily(Option<TimeRange>),
+//     Weekly(Option<(DayOfWeek, Option<TimeRange>)>),
+//     Monthly(Option<(DayOfMonth, Option<TimeRange>)>),
+// }
+
 mod tree;
+// #[derive(Serialize, Deserialize)]
+// pub enum EntryType {
+//     FILE,
+//     DIR,
+//     LINK,
+//     ERROR,
+// }
+// #[derive(Serialize, Deserialize)]
+// pub enum TreeReference {
+//     LINK(String),
+//     TREE(Checksum),
+//     FILE(Checksum),
+// }
+// #[derive(Serialize, Deserialize)]
+// pub struct TreeEntry {
+//     #[serde(rename = "nm")]
+//     pub name: String,
+//     #[serde(rename = "ty")]
+//     pub fstype: EntryType,
+//     #[serde(rename = "mo")]
+//     pub mode: Option<u32>,
+//     #[serde(rename = "ui")]
+//     pub uid: Option<u32>,
+//     #[serde(rename = "us")]
+//     pub user: Option<String>,
+//     #[serde(rename = "gi")]
+//     pub gid: Option<u32>,
+//     #[serde(rename = "gr")]
+//     pub group: Option<String>,
+//     #[serde(rename = "ct")]
+//     pub ctime: DateTime<Utc>,
+//     #[serde(rename = "mt")]
+//     pub mtime: DateTime<Utc>,
+//     #[serde(rename = "tr")]
+//     pub reference: TreeReference,
+//     #[serde(rename = "xa")]
+//     pub xattrs: HashMap<String, Checksum>,
+// }
+// #[derive(Serialize, Deserialize)]
+// pub struct Tree {
+//     #[serde(skip)]
+//     pub digest: Checksum,
+//     #[serde(rename = "en")]
+//     pub entries: Vec<TreeEntry>,
+//     #[serde(skip)]
+//     pub file_count: u32,
+// }
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Chunk")]

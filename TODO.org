@@ -82,6 +82,17 @@
 **** DONE implement ~delete data set~ usecase (and graphql mutation)
 **** DONE migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
+***** DONE add =insert_file()= to repo
+***** DONE add =get_file()= to repo
+***** DONE add =insert_tree()= to repo
+***** DONE add =get_tree()= to repo
+***** DONE add =insert_xattr()= to repo
+***** DONE add =get_xattr()= to repo
+***** DONE add =insert_pack()= to repo
+***** DONE add =get_pack()= to repo
+***** DONE add =put_snapshot()= to repo
+***** TODO expose the database path for default exclusions
+***** TODO expose the backup/restore database functions via repo
 ***** management code (state, backup, restore, process)
 ***** backup manager: skip datasets that have no stores
 **** TODO implement ~put back~ usecase (and graphql query)
@@ -92,8 +103,6 @@
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source
 ***** each blob data source implementation then validates the store definition
-**** TODO crate a reference for the entities/models serde field renaming
-***** difficult to work backward from the extremely verbose generated code
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates

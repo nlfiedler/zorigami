@@ -9,8 +9,8 @@
 // 5. cargo expand
 // 6. Copy the results here, stripping away the compiler directives
 //
-use crate::domain::entities::{Checksum, EntryType, Tree, TreeEntry, TreeReference};
 use chrono::prelude::*;
+use crate::domain::entities::{Checksum, EntryType, Tree, TreeEntry, TreeReference};
 use std::collections::HashMap;
 
 impl serde::Serialize for EntryType {
@@ -353,8 +353,7 @@ impl serde::Serialize for TreeEntry {
                 return serde::export::Err(__err);
             }
         };
-        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "ty", &self.fstype)
-        {
+        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "ty", &self.fstype) {
             serde::export::Ok(__val) => __val,
             serde::export::Err(__err) => {
                 return serde::export::Err(__err);
@@ -402,18 +401,14 @@ impl serde::Serialize for TreeEntry {
                 return serde::export::Err(__err);
             }
         };
-        match serde::ser::SerializeStruct::serialize_field(
-            &mut _serde_state,
-            "tr",
-            &self.reference,
-        ) {
+        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "tr", &self.reference)
+        {
             serde::export::Ok(__val) => __val,
             serde::export::Err(__err) => {
                 return serde::export::Err(__err);
             }
         };
-        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "xa", &self.xattrs)
-        {
+        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "xa", &self.xattrs) {
             serde::export::Ok(__val) => __val,
             serde::export::Err(__err) => {
                 return serde::export::Err(__err);
@@ -819,9 +814,8 @@ impl<'de> serde::Deserialize<'de> for TreeEntry {
                                 );
                             }
                             __field4 = serde::export::Some(
-                                match serde::de::MapAccess::next_value::<Option<String>>(
-                                    &mut __map,
-                                ) {
+                                match serde::de::MapAccess::next_value::<Option<String>>(&mut __map)
+                                {
                                     serde::export::Ok(__val) => __val,
                                     serde::export::Err(__err) => {
                                         return serde::export::Err(__err);
@@ -851,9 +845,8 @@ impl<'de> serde::Deserialize<'de> for TreeEntry {
                                 );
                             }
                             __field6 = serde::export::Some(
-                                match serde::de::MapAccess::next_value::<Option<String>>(
-                                    &mut __map,
-                                ) {
+                                match serde::de::MapAccess::next_value::<Option<String>>(&mut __map)
+                                {
                                     serde::export::Ok(__val) => __val,
                                     serde::export::Err(__err) => {
                                         return serde::export::Err(__err);
@@ -1079,8 +1072,7 @@ impl serde::Serialize for Tree {
                     return serde::export::Err(__err);
                 }
             };
-        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "en", &self.entries)
-        {
+        match serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "en", &self.entries) {
             serde::export::Ok(__val) => __val,
             serde::export::Err(__err) => {
                 return serde::export::Err(__err);
@@ -1097,7 +1089,7 @@ impl<'de> serde::Deserialize<'de> for Tree {
     {
         #[allow(non_camel_case_types)]
         enum __Field {
-            __field0,
+            __field1,
             __ignore,
         }
         struct __FieldVisitor;
@@ -1114,7 +1106,7 @@ impl<'de> serde::Deserialize<'de> for Tree {
                 __E: serde::de::Error,
             {
                 match __value {
-                    0u64 => serde::export::Ok(__Field::__field0),
+                    0u64 => serde::export::Ok(__Field::__field1),
                     _ => serde::export::Err(serde::de::Error::invalid_value(
                         serde::de::Unexpected::Unsigned(__value),
                         &"field index 0 <= i < 1",
@@ -1126,7 +1118,7 @@ impl<'de> serde::Deserialize<'de> for Tree {
                 __E: serde::de::Error,
             {
                 match __value {
-                    "en" => serde::export::Ok(__Field::__field0),
+                    "en" => serde::export::Ok(__Field::__field1),
                     _ => serde::export::Ok(__Field::__ignore),
                 }
             }
@@ -1135,7 +1127,7 @@ impl<'de> serde::Deserialize<'de> for Tree {
                 __E: serde::de::Error,
             {
                 match __value {
-                    b"en" => serde::export::Ok(__Field::__field0),
+                    b"en" => serde::export::Ok(__Field::__field1),
                     _ => serde::export::Ok(__Field::__ignore),
                 }
             }
@@ -1169,7 +1161,8 @@ impl<'de> serde::Deserialize<'de> for Tree {
             where
                 __A: serde::de::SeqAccess<'de>,
             {
-                let __field0 =
+                let __field0 = serde::export::Default::default();
+                let __field1 =
                     match match serde::de::SeqAccess::next_element::<Vec<TreeEntry>>(&mut __seq) {
                         serde::export::Ok(__val) => __val,
                         serde::export::Err(__err) => {
@@ -1184,10 +1177,11 @@ impl<'de> serde::Deserialize<'de> for Tree {
                             ));
                         }
                     };
-                let __field1 = serde::export::Default::default();
+                let __field2 = serde::export::Default::default();
                 serde::export::Ok(Tree {
-                    entries: __field0,
-                    file_count: __field1,
+                    digest: __field0,
+                    entries: __field1,
+                    file_count: __field2,
                 })
             }
             #[inline]
@@ -1198,7 +1192,7 @@ impl<'de> serde::Deserialize<'de> for Tree {
             where
                 __A: serde::de::MapAccess<'de>,
             {
-                let mut __field0: serde::export::Option<Vec<TreeEntry>> = serde::export::None;
+                let mut __field1: serde::export::Option<Vec<TreeEntry>> = serde::export::None;
                 while let serde::export::Some(__key) =
                     match serde::de::MapAccess::next_key::<__Field>(&mut __map) {
                         serde::export::Ok(__val) => __val,
@@ -1208,16 +1202,15 @@ impl<'de> serde::Deserialize<'de> for Tree {
                     }
                 {
                     match __key {
-                        __Field::__field0 => {
-                            if serde::export::Option::is_some(&__field0) {
+                        __Field::__field1 => {
+                            if serde::export::Option::is_some(&__field1) {
                                 return serde::export::Err(
                                     <__A::Error as serde::de::Error>::duplicate_field("en"),
                                 );
                             }
-                            __field0 = serde::export::Some(
-                                match serde::de::MapAccess::next_value::<Vec<TreeEntry>>(
-                                    &mut __map,
-                                ) {
+                            __field1 = serde::export::Some(
+                                match serde::de::MapAccess::next_value::<Vec<TreeEntry>>(&mut __map)
+                                {
                                     serde::export::Ok(__val) => __val,
                                     serde::export::Err(__err) => {
                                         return serde::export::Err(__err);
@@ -1237,8 +1230,8 @@ impl<'de> serde::Deserialize<'de> for Tree {
                         }
                     }
                 }
-                let __field0 = match __field0 {
-                    serde::export::Some(__field0) => __field0,
+                let __field1 = match __field1 {
+                    serde::export::Some(__field1) => __field1,
                     serde::export::None => match serde::private::de::missing_field("en") {
                         serde::export::Ok(__val) => __val,
                         serde::export::Err(__err) => {
@@ -1247,7 +1240,8 @@ impl<'de> serde::Deserialize<'de> for Tree {
                     },
                 };
                 serde::export::Ok(Tree {
-                    entries: __field0,
+                    digest: serde::export::Default::default(),
+                    entries: __field1,
                     file_count: serde::export::Default::default(),
                 })
             }
