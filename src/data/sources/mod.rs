@@ -115,6 +115,17 @@ pub trait EntityDataSource {
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
+
+    /// Retrieve the path to the database files.
+    fn get_db_path(&self) -> &Path;
+
+    /// Create a backup of the database at the given path.
+    fn create_backup(&self, path: &Path) -> Result<(), Error>;
+}
+
+/// Restore the database from the backup path to the given path.
+pub fn restore_database(backup_path: &Path, db_path: &Path) -> Result<(), Error> {
+    database::Database::restore_from_backup(backup_path, db_path)
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -381,6 +392,14 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+
+    fn get_db_path(&self) -> &Path {
+        self.database.get_path()
+    }
+
+    fn create_backup(&self, path: &Path) -> Result<(), Error> {
+        self.database.create_backup(path)
     }
 }
 

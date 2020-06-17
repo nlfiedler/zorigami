@@ -8,7 +8,7 @@ use crate::domain::entities::{
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
@@ -33,6 +33,11 @@ impl RecordRepository for RecordRepositoryImpl {
         let config: Configuration = Default::default();
         self.datasource.put_configuration(&config)?;
         Ok(config)
+    }
+
+    fn get_excludes(&self) -> Vec<PathBuf> {
+        let path = self.datasource.get_db_path();
+        vec![path.to_path_buf()]
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
@@ -129,6 +134,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
         self.datasource.get_snapshot(digest)
+    }
+
+    fn create_backup(&self, path: &Path) -> Result<(), Error> {
+        self.datasource.create_backup(path)
     }
 }
 

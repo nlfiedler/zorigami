@@ -7,7 +7,7 @@ use crate::domain::entities::{
 use failure::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 ///
 /// Repository for entity records.
@@ -16,6 +16,9 @@ use std::path::Path;
 pub trait RecordRepository {
     /// Retrieve the configuration, or build a new one using default values.
     fn get_configuration(&self) -> Result<Configuration, Error>;
+
+    /// Provide the set of paths that should be excluded from backup, if any.
+    fn get_excludes(&self) -> Vec<PathBuf>;
 
     /// Store the computer identifier for the dataset with the given key.
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error>;
@@ -98,6 +101,9 @@ pub trait RecordRepository {
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
+
+    /// Create a backup of the database at the given path.
+    fn create_backup(&self, path: &Path) -> Result<(), Error>;
 }
 
 ///

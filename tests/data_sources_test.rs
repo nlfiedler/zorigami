@@ -7,8 +7,7 @@ use common::DBPath;
 use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
 use std::path::Path;
-use zorigami::data::sources::EntityDataSource;
-use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::data::sources::{self, EntityDataSource, EntityDataSourceImpl};
 use zorigami::domain::entities::{self, Checksum};
 
 #[test]
@@ -314,4 +313,28 @@ fn test_put_get_snapshot() {
     assert_eq!(actual.end_time, snapshot.end_time);
     assert_eq!(actual.file_count, snapshot.file_count);
     assert_eq!(actual.tree, snapshot.tree);
+}
+
+#[test]
+fn test_backup_restore() {
+    let db_path = DBPath::new("_test_backup_restore");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    assert!(datasource.put_computer_id("charlie", "localhost").is_ok());
+
+    // backup the database
+    let backup_path = DBPath::new("_test_backup_restore_bup");
+    datasource.create_backup(backup_path.as_ref()).unwrap();
+
+    // restore from backup (to a new path)
+    let new_path = DBPath::new("_test_backup_restore_new");
+    sources::restore_database(backup_path.as_ref(), new_path.as_ref()).unwrap();
+
+    // open that new database and verify contents
+    let new_base = EntityDataSourceImpl::new(&new_path).unwrap();
+    match new_base.get_computer_id("charlie") {
+        Ok(Some(value)) => assert_eq!(value, "localhost"),
+        Ok(None) => panic!("missing computer id record"),
+        Err(e) => panic!("error: {}", e),
+    };
+    let _ = std::fs::remove_dir_all(backup_path);
 }

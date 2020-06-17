@@ -91,8 +91,8 @@
 ***** DONE add =insert_pack()= to repo
 ***** DONE add =get_pack()= to repo
 ***** DONE add =put_snapshot()= to repo
-***** TODO expose the database path for default exclusions
-***** TODO expose the backup/restore database functions via repo
+***** DONE expose the database path for default exclusions
+***** DONE expose the backup/restore database functions via repo
 ***** management code (state, backup, restore, process)
 ***** backup manager: skip datasets that have no stores
 **** TODO implement ~put back~ usecase (and graphql query)
@@ -448,6 +448,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** TODO document how the user might change the passphrase over time
 **** user must remember their old passwords in order to decrypt old pack files
 **** the application will never store the actual password anywhere
+**** will need to prompt the user when a different passphrase is needed
 *** TODO support database integrity checks
 **** ensure all referenced records actually exist
 **** like git fsck, start at the top and traverse everything
