@@ -83,7 +83,7 @@
 **** DONE migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** DONE migrate integ tests for backup manager
-***** TODO migrate file restore code and tests
+***** DONE migrate file restore code and tests
 ***** TODO migrate process management code and tests
 ***** TODO design and implement the usecase to start a backup
 ***** TODO backup manager: skip datasets that have no stores

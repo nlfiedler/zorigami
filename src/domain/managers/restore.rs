@@ -1,18 +1,24 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use crate::domain::entities;
+use crate::domain::repositories::{PackRepository, RecordRepository};
+use failure::{err_msg, Error};
+use std::collections::{HashSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 ///
 /// Restore a single file identified by the given checksum.
 ///
 pub fn restore_file(
-    dbase: &Database,
+    dbase: &Box<dyn RecordRepository>,
+    stores: &Box<dyn PackRepository>,
     dataset: &entities::Dataset,
     passphrase: &str,
     checksum: entities::Checksum,
     outfile: &Path,
 ) -> Result<(), Error> {
-    let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
     // look up the file record to get chunks
     let saved_file = dbase
         .get_file(&checksum)?
@@ -45,16 +51,16 @@ pub fn restore_file(
                 .prefix("pack")
                 .suffix(".bin")
                 .tempfile_in(&dataset.workspace)?;
-            store::retrieve_pack(&stores_boxed, &saved_pack.locations, encrypted.path())?;
+            stores.retrieve_pack(&saved_pack.locations, encrypted.path())?;
             // decrypt and then decompress before unpacking the contents
             let mut zipped = outfile.to_path_buf();
             zipped.set_extension("gz");
-            core::decrypt_file(passphrase, &salt, encrypted.path(), &zipped)?;
+            super::decrypt_file(passphrase, &salt, encrypted.path(), &zipped)?;
             fs::remove_file(encrypted)?;
-            core::decompress_file(&zipped, outfile)?;
+            super::decompress_file(&zipped, outfile)?;
             fs::remove_file(zipped)?;
             verify_pack_digest(pack_digest, outfile)?;
-            let chunk_names = core::unpack_chunks(outfile, &dataset.workspace)?;
+            let chunk_names = super::unpack_chunks(outfile, &dataset.workspace)?;
             fs::remove_file(outfile)?;
             // remove unrelated chunks to conserve space
             for cname in chunk_names {
@@ -80,13 +86,13 @@ pub fn restore_file(
         })
         .collect();
     let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
-    core::assemble_chunks(&chunk_paths, outfile)?;
+    super::assemble_chunks(&chunk_paths, outfile)?;
     Ok(())
 }
 
 /// Verify the retrieved pack file digest matches the database record.
 fn verify_pack_digest(digest: &entities::Checksum, path: &Path) -> Result<(), Error> {
-    let actual = entities::Checksum_file(path)?;
+    let actual = entities::Checksum::sha256_from_file(path)?;
     if &actual != digest {
         Err(err_msg(format!(
             "pack digest does not match: {} != {}",
