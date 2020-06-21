@@ -102,8 +102,8 @@ pub trait RecordRepository {
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 
-    /// Create a backup of the database at the given path.
-    fn create_backup(&self, path: &Path) -> Result<(), Error>;
+    /// Create a backup of the database, returning its path.
+    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error>;
 }
 
 ///

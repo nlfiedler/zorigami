@@ -82,19 +82,11 @@
 **** DONE implement ~delete data set~ usecase (and graphql mutation)
 **** DONE migrate store implementations to be blob data sources
 **** TODO implement ~start backup~ usecase (and graphql mutation)
-***** DONE add =insert_file()= to repo
-***** DONE add =get_file()= to repo
-***** DONE add =insert_tree()= to repo
-***** DONE add =get_tree()= to repo
-***** DONE add =insert_xattr()= to repo
-***** DONE add =get_xattr()= to repo
-***** DONE add =insert_pack()= to repo
-***** DONE add =get_pack()= to repo
-***** DONE add =put_snapshot()= to repo
-***** DONE expose the database path for default exclusions
-***** DONE expose the backup/restore database functions via repo
-***** management code (state, backup, restore, process)
-***** backup manager: skip datasets that have no stores
+***** DONE migrate integ tests for backup manager
+***** TODO migrate file restore code and tests
+***** TODO migrate process management code and tests
+***** TODO design and implement the usecase to start a backup
+***** TODO backup manager: skip datasets that have no stores
 **** TODO implement ~put back~ usecase (and graphql query)
 ***** this is the new ~put back~ feature, not the download file feature
 **** TODO implement ~get snapshot~ usecase (and graphql query)
@@ -315,6 +307,10 @@
 **** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
+** Initial Configuration
+*** Allow user to set user/host names for computer UUID
+**** They may need to avoid naming conflicts with other local users
+**** Imagine a computer lab all sharing a single cloud storage account
 ** Snapshot Pruning
 *** Should probably not run collection while a backup is in progress
 *** Consider how to prune old snapshots, pack files, etc
@@ -423,6 +419,24 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** prune backups to maintain a certain size
 *** TODO Use this to replace Time Machine (store on server using minio)
 ** Full Restore
+*** Procedure for full restore
+**** User installs and configures application
+**** User invokes "full restore" function
+**** User provides a temporary pack store configuration
+**** Query pack store to get candidate computer UUID values
+**** User chooses database to restore
+***** if current UUID matches one in the available set, select it by default
+**** Fetch the most recent database files
+***** Restore to a different directory, then copy over records
+***** Copy every record except for =configuration= (and maybe others?)
+***** Copy records for datasets, stores, snapshots, packs, etc
+**** User can now browse datasets and restore as usual
+**** Restoring an entire dataset is simply the "tree restore" case
+*** Walk the user through the process
+**** Configure the primary pack store for retrieval
+**** Inform user that this pack store configuration is only temporary
+**** Select database to retrieve based on computer UUID
+**** Instruct user to restore as usual from dataset(s)
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
@@ -437,8 +451,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Stale snapshots exist in the database but are not referenced elsewhere
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
-*** TODO Restore the backup database
-**** TODO Restore to a different directory, then copy over records
 ** Windows support
 *** TODO Support Windows file types
 **** ReadOnly
@@ -538,6 +550,8 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Hawaiian: ~kaukau~
 **** Latin: ~atticae~
 * Technical Information
+** Data Growth
+*** Database backup tgz seems to grow 8mb in 6 months
 ** JS Build Artifacts
 *** Flutter => main.dart.js
 | State      |    Size |

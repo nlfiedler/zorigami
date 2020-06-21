@@ -323,11 +323,13 @@ fn test_backup_restore() {
 
     // backup the database
     let backup_path = DBPath::new("_test_backup_restore_bup");
-    datasource.create_backup(backup_path.as_ref()).unwrap();
+    datasource
+        .create_backup(Some(backup_path.as_ref().to_path_buf()))
+        .unwrap();
 
     // restore from backup (to a new path)
     let new_path = DBPath::new("_test_backup_restore_new");
-    sources::restore_database(backup_path.as_ref(), new_path.as_ref()).unwrap();
+    sources::restore_database(Some(backup_path.as_ref().to_path_buf()), new_path.as_ref()).unwrap();
 
     // open that new database and verify contents
     let new_base = EntityDataSourceImpl::new(&new_path).unwrap();

@@ -73,11 +73,13 @@ They change the SSH config to run the backup command with "append only" flag.
 ### Full Restore
 
 * Retrieve the database from the pack store.
-* Walk the latest snapshot, restoring all files from packs.
+* Restore selected dataset(s)
+* Walk the latest snapshot, restoring all files.
+* May need to allow user to choose a different "computer UUID" in case it changed
 
 ### File Restore
 
-* Given a file digest, retrieve pack to get chunks, reassemble.
+* Given a file/tree digest, retrieve packs to get chunks, reassemble.
 
 ## Data Format
 
@@ -102,6 +104,10 @@ They change the SSH config to run the backup command with "append only" flag.
     * stored in the database using a shortened form (e.g. `dHJn1W5wVxGKmqQMJMFzDw`)
     * makes finding the backup records for a computer reproducible
 
+* May need to allow the user to customize the user/host names to avoid conflicts.
+* Computer UUID may change after (re)installation.
+* Computer UUID only needs to be reasonably unique to generate useful bucket names.
+
 ### Bucket Name
 
 * bucket name will be ULID + computer UUID (without dash separators)
@@ -115,6 +121,8 @@ They change the SSH config to run the backup command with "append only" flag.
         + https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 * ULID contains the time, so no need for a timestamp
 * UUID makes it easy to find buckets associated with this computer and user
+* UUID may change after (re)installation and this is okay
+    - Pack records contain the fully-qualified locations regardless of UUID
 
 ### Pack Files
 
@@ -146,49 +154,51 @@ what type of record it is, such as `chunk/` for chunk records, and so on.
     - user name
     - computer UUID
     - peers: list of peer installations for chunk deduplication
-    - default frequency with which to perform backups (hourly, daily, weekly, monthly)
-    - default time ranges in which to upload snapshots
-    - default preferred size of pack files (in MB)
-    - default ignore file patterns (applies to all datasets)
 * dataset records:
     - key: `dataset/` + ULID
-    - root local path
-    - latest snapshot
+    - base path
     - schedule/frequency
     - ignore patterns
     - pack size
-    - store identifier
+    - store identifiers
+* latest snapshot records:
+    - key: `latest/` + dataset-id
+    - checksum of latest snapshot
+* computer id records:
+    - key: `computer/` + dataset-id
+    - computer UUID
 * store records:
-    - key: `store/` + type + ULID (e.g. `store/local/01arz3ndektsv4rrffq69g5fav`)
-    - (the identifier is universally unique even without key prefix)
-    - value: opaque JSON blob of the store configuration
+    - key: `store/` + ULID
+    - store type
+    - user-defined label
+    - list of name/value pairs for configuration
 * snapshot records
-    - key: `snapshot/` + SHA1 of snapshot (with "sha1-" prefix) or `index` for pending
-    - parent: SHA1 of previous snapshot (`null` if first snapshot)
-    - start_time: when snapshot started
-    - end_time: when snapshot finished
-    - file_count: number of files in this snapshot
-    - tree: root tree reference
+    - key: `snapshot/` + SHA1 of snapshot
+    - SHA1 of previous snapshot
+    - time when snapshot started
+    - time when snapshot finished
+    - number of files in this snapshot
+    - base tree reference
 * tree records
-    - key: `tree/` + SHA1 of tree data (with "sha1-" prefix)
+    - key: `tree/` + SHA1 of tree data
     - entries: (sorted by name)
-        + mode (also indicates if tree or file, e.g. `drwxr-xr-x`)
+        + mode (indicates if tree or file)
         + user, group (strings)
         + uid, gid (numbers)
         + ctime, mtime
         + xattrs[]
           - name
-          - digest (SHA1 for xattr, with "sha1-" prefix)
+          - digest (SHA1 for xattr)
         + reference (SHA1 for tree, SHA256 for file, base64-encoded value for symlink)
         + entry name
 * file records
-    - key: `file/` + SHA256 at time of snapshot (with "sha256-" prefix)
+    - key: `file/` + SHA256 at time of snapshot
     - length: size of file in bytes
     - chunks:
         + offset: file position for this chunk
         + digest: chunk SHA256
 * extended attribute records
-    - key: `xattr/` + SHA1 of the attribute value (with "sha1-" prefix)
+    - key: `xattr/` + SHA1 of the attribute value
     - value: attribute data as a Buffer
 
 #### Chunk Database
@@ -197,8 +207,8 @@ Sync with peers for multi-host chunk deduplication.
 
 * chunk records
     - key: `chunk/` + SHA256 of chunk (with "sha256-" prefix)
-    - length: size of chunk in bytes
-    - pack: SHA256 of pack
+    - size of chunk in bytes
+    - SHA256 of pack
 * pack records
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
     - coordinates:

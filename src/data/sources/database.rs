@@ -58,18 +58,34 @@ impl Database {
         self.db.path()
     }
 
-    /// Create a backup of the database at the given path.
-    pub fn create_backup(&self, path: &Path) -> Result<(), Error> {
+    /// Create a backup of the database, returning its path.
+    ///
+    /// If `path` is `None`, the default behavior is to add the extension
+    /// `.backup` to the database path.
+    pub fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
         let backup_opts = BackupEngineOptions::default();
-        let mut backup_engine = BackupEngine::open(&backup_opts, path)?;
+        let backup_path = path.unwrap_or_else(|| {
+            let mut backup_path: PathBuf = PathBuf::from(self.db.path());
+            backup_path.set_extension("backup");
+            backup_path
+        });
+        let mut backup_engine = BackupEngine::open(&backup_opts, &backup_path)?;
         backup_engine.create_new_backup(&self.db)?;
         backup_engine.purge_old_backups(1)?;
-        Ok(())
+        Ok(backup_path)
     }
 
-    /// Restore the database from the backup path to the given db path.
-    pub fn restore_from_backup(backup_path: &Path, db_path: &Path) -> Result<(), Error> {
+    /// Restore the database from the backup path.
+    ///
+    /// If `path` is `None`, the default behavior is to add the extension
+    /// `.backup` to the database path.
+    pub fn restore_from_backup(path: Option<PathBuf>, db_path: &Path) -> Result<(), Error> {
         let backup_opts = BackupEngineOptions::default();
+        let backup_path = path.unwrap_or_else(|| {
+            let mut backup_path: PathBuf = PathBuf::from(db_path);
+            backup_path.set_extension("backup");
+            backup_path
+        });
         let mut backup_engine = BackupEngine::open(&backup_opts, backup_path).unwrap();
         let mut restore_option = rocksdb::backup::RestoreOptions::default();
         restore_option.set_keep_log_files(true);
@@ -104,40 +120,40 @@ impl Database {
         Ok(())
     }
 
-//     /// Count those keys that start with the given prefix.
-//     pub fn count_prefix(&self, prefix: &str) -> Result<usize, Error> {
-//         let pre_bytes = prefix.as_bytes();
-//         // this only gets us started, we then have to check for the end of the range
-//         let iter = self.db.prefix_iterator(pre_bytes);
-//         let mut count = 0;
-//         for (key, _value) in iter {
-//             let pre = &key[..pre_bytes.len()];
-//             if pre != pre_bytes {
-//                 break;
-//             }
-//             count += 1;
-//         }
-//         Ok(count)
-//     }
+    //     /// Count those keys that start with the given prefix.
+    //     pub fn count_prefix(&self, prefix: &str) -> Result<usize, Error> {
+    //         let pre_bytes = prefix.as_bytes();
+    //         // this only gets us started, we then have to check for the end of the range
+    //         let iter = self.db.prefix_iterator(pre_bytes);
+    //         let mut count = 0;
+    //         for (key, _value) in iter {
+    //             let pre = &key[..pre_bytes.len()];
+    //             if pre != pre_bytes {
+    //                 break;
+    //             }
+    //             count += 1;
+    //         }
+    //         Ok(count)
+    //     }
 
-//     /// Find all those keys that start with the given prefix.
-//     ///
-//     /// Returns the key without the prefix.
-//     pub fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
-//         let pre_bytes = prefix.as_bytes();
-//         // this only gets us started, we then have to check for the end of the range
-//         let iter = self.db.prefix_iterator(pre_bytes);
-//         let mut results: Vec<String> = Vec::new();
-//         for (key, _value) in iter {
-//             let pre = &key[..pre_bytes.len()];
-//             if pre != pre_bytes {
-//                 break;
-//             }
-//             let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
-//             results.push(key_str.to_owned());
-//         }
-//         Ok(results)
-//     }
+    //     /// Find all those keys that start with the given prefix.
+    //     ///
+    //     /// Returns the key without the prefix.
+    //     pub fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
+    //         let pre_bytes = prefix.as_bytes();
+    //         // this only gets us started, we then have to check for the end of the range
+    //         let iter = self.db.prefix_iterator(pre_bytes);
+    //         let mut results: Vec<String> = Vec::new();
+    //         for (key, _value) in iter {
+    //             let pre = &key[..pre_bytes.len()];
+    //             if pre != pre_bytes {
+    //                 break;
+    //             }
+    //             let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
+    //             results.push(key_str.to_owned());
+    //         }
+    //         Ok(results)
+    //     }
 
     /// Fetch the key/value pairs for those keys that start with the given
     /// prefix. The prefix is stripped from the keys before being returned.

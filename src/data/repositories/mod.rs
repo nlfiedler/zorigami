@@ -136,7 +136,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_snapshot(digest)
     }
 
-    fn create_backup(&self, path: &Path) -> Result<(), Error> {
+    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
         self.datasource.create_backup(path)
     }
 }

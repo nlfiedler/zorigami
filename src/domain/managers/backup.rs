@@ -2,51 +2,55 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 
-//! The `engine` module performs backups by taking a snapshot of a dataset,
+//! The manager for performing backups by taking a snapshot of a dataset,
 //! storing new entries in the database, finding the differences from the
 //! previous snapshot, building pack files, and sending them to the store.
 
-// use super::core;
-// use super::database::Database;
 use crate::domain::entities;
 use crate::domain::managers::state::{self, Action};
-// use super::store;
-use base64::encode;
+use crate::domain::repositories::{PackRepository, RecordRepository};
 use chrono::Utc;
 use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
 use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::fmt;
+// use std::fmt;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, SystemTimeError};
-use tempfile;
+use std::time::SystemTime;
 
-///
 /// Take a snapshot, collect the new/changed files, assemble them into pack
-/// files, upload them to the pack store, and record the results in the
-/// database. The snapshot and dataset are updated in the database. Returns the
-/// snapshot checksum, or None if there were no changes.
-///
+/// files, upload them to the pack repository, and record the results in the
+/// repository. The snapshot and dataset are also updated. Returns the snapshot
+/// checksum, or `None` if there were no changes.
 pub fn perform_backup(
     dataset: &mut entities::Dataset,
-    dbase: &Database,
+    repo: &Box<dyn RecordRepository>,
+    stores: &Box<dyn PackRepository>,
     passphrase: &str,
 ) -> Result<Option<entities::Checksum>, Error> {
     debug!("performing backup for {}", dataset);
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
     // that the previous backup did not complete successfully.
-    if let Some(latest) = dataset.latest_snapshot.as_ref() {
-        if let Some(snapshot) = dbase.get_snapshot(latest)? {
+    let latest_snapshot = repo.get_latest_snapshot(&dataset.id)?;
+    if let Some(latest) = latest_snapshot.as_ref() {
+        if let Some(snapshot) = repo.get_snapshot(latest)? {
             if snapshot.end_time.is_none() {
                 // continue from the previous incomplete backup
                 let parent_sha1 = snapshot.parent;
                 let current_sha1 = latest.to_owned();
                 debug!("continuing previous backup {}", &current_sha1);
-                return continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1);
+                return continue_backup(
+                    dataset,
+                    repo,
+                    stores,
+                    passphrase,
+                    parent_sha1,
+                    current_sha1,
+                );
             }
         }
     }
@@ -54,32 +58,33 @@ pub fn perform_backup(
     // taken. The snapshot can take a very long time to build, and another
     // thread may spawn in the mean time and start taking another snapshot, and
     // again, and again until the system runs out of resources.
-    state::dispatch(Action::StartBackup(dataset.key.clone()));
+    state::dispatch(Action::StartBackup(dataset.id.clone()));
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
     //
     // For now, build a set of excludes for files we do not want to have in the
     // backup set, such as the database and temporary files.
-    let excludes = vec![dbase.get_path(), dataset.workspace.as_ref()];
-    let snap_opt = take_snapshot(
-        &dataset.basepath,
-        dataset.latest_snapshot.clone(),
-        &dbase,
-        excludes,
-    )?;
+    let mut excludes = repo.get_excludes();
+    excludes.push(dataset.workspace.clone());
+    let snap_opt = take_snapshot(&dataset.basepath, latest_snapshot.clone(), &repo, excludes)?;
     match snap_opt {
         None => {
             // indicate that the backup has finished (doing nothing)
-            state::dispatch(Action::FinishBackup(dataset.key.clone()));
+            state::dispatch(Action::FinishBackup(dataset.id.clone()));
             Ok(None)
         }
         Some(current_sha1) => {
-            let parent_sha1 = dataset.latest_snapshot.take();
-            dataset.latest_snapshot = Some(current_sha1.clone());
-            dbase.put_dataset(&dataset)?;
+            repo.put_latest_snapshot(&dataset.id, &current_sha1)?;
             debug!("starting new backup {}", &current_sha1);
-            continue_backup(dataset, dbase, passphrase, parent_sha1, current_sha1)
+            continue_backup(
+                dataset,
+                repo,
+                stores,
+                passphrase,
+                latest_snapshot,
+                current_sha1,
+            )
         }
     }
 }
@@ -90,28 +95,29 @@ pub fn perform_backup(
 ///
 fn continue_backup(
     dataset: &mut entities::Dataset,
-    dbase: &Database,
+    repo: &Box<dyn RecordRepository>,
+    stores: &Box<dyn PackRepository>,
     passphrase: &str,
     parent_sha1: Option<entities::Checksum>,
     current_sha1: entities::Checksum,
 ) -> Result<Option<entities::Checksum>, Error> {
-    let mut bmaster = BackupMaster::new(dataset, dbase, passphrase)?;
+    let mut bmaster = BackupMaster::new(dataset, repo, stores, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
     match parent_sha1 {
         None => {
-            let snapshot = dbase
+            let snapshot = repo
                 .get_snapshot(&current_sha1)?
                 .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", current_sha1)))?;
             let tree = snapshot.tree;
-            let iter = TreeWalker::new(dbase, &dataset.basepath, tree);
+            let iter = TreeWalker::new(repo, &dataset.basepath, tree);
             for result in iter {
                 bmaster.handle_file(result)?;
             }
         }
         Some(ref parent) => {
             let iter = find_changed_files(
-                dbase,
+                repo,
                 dataset.basepath.clone(),
                 parent.clone(),
                 current_sha1.clone(),
@@ -129,48 +135,49 @@ fn continue_backup(
     Ok(Some(current_sha1))
 }
 
-///
-/// Raised when the backup has run out of time and must stop temporarily,
-/// resuming at a later time.
-///
-#[derive(Fail, Debug)]
-pub struct OutOfTimeError;
+// ///
+// /// Raised when the backup has run out of time and must stop temporarily,
+// /// resuming at a later time.
+// ///
+// #[derive(Fail, Debug)]
+// pub struct OutOfTimeError;
 
-impl fmt::Display for OutOfTimeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ran out of time")
-    }
-}
+// impl fmt::Display for OutOfTimeError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "ran out of time")
+//     }
+// }
 
 ///
 /// Holds the state of the backup process to keep the code slim.
 ///
 struct BackupMaster<'a> {
     dataset: &'a entities::Dataset,
-    dbase: &'a Database,
+    dbase: &'a Box<dyn RecordRepository>,
     builder: PackBuilder<'a>,
     passphrase: String,
     bucket_name: String,
-    stores: Vec<Box<dyn store::Store>>,
+    stores: &'a Box<dyn PackRepository>,
 }
 
 impl<'a> BackupMaster<'a> {
     /// Build a BackupMaster.
     fn new(
         dataset: &'a entities::Dataset,
-        dbase: &'a Database,
+        dbase: &'a Box<dyn RecordRepository>,
+        stores: &'a Box<dyn PackRepository>,
         passphrase: &str,
     ) -> Result<Self, Error> {
-        let bucket_name = core::generate_bucket_name(&dataset.computer_id);
+        let computer_id = dbase.get_computer_id(&dataset.id)?.unwrap();
+        let bucket_name = super::generate_bucket_name(&computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
-        let stores_boxed = store::load_stores(dbase, dataset.stores.as_slice())?;
         Ok(Self {
             dataset,
             dbase,
             builder,
             passphrase: passphrase.to_owned(),
             bucket_name,
-            stores: stores_boxed,
+            stores,
         })
     }
 
@@ -189,7 +196,7 @@ impl<'a> BackupMaster<'a> {
                 // having zero length; file restore will handle it
                 // without any problem
                 error!("file {:?} went missing during backup", entry.path);
-                let file = core::SavedFile::new(entry.digest, 0, vec![]);
+                let file = entities::File::new(entry.digest, 0, vec![]);
                 self.dbase.insert_file(&file)?;
             }
             // loop until pack builder is below desired size
@@ -216,17 +223,14 @@ impl<'a> BackupMaster<'a> {
             // capture and record the remote object name, in case it differs from
             // the name we generated ourselves; either value is expected to be
             // sufficiently unique for our purposes
-            let locations = store::store_pack(
-                outfile.path(),
-                &self.bucket_name,
-                &object_name,
-                &self.stores,
-            )?;
+            let locations =
+                self.stores
+                    .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
             pack.record_completed_pack(self.dbase, locations)?;
-            state::dispatch(Action::UploadPack(self.dataset.key.clone()));
+            state::dispatch(Action::UploadPack(self.dataset.id.clone()));
         }
         let count = pack.record_completed_files(self.dbase)? as u64;
-        state::dispatch(Action::UploadFiles(self.dataset.key.clone(), count));
+        state::dispatch(Action::UploadFiles(self.dataset.id.clone(), count));
         Ok(())
     }
 
@@ -246,25 +250,25 @@ impl<'a> BackupMaster<'a> {
             .get_snapshot(snap_sha1)?
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
         snapshot = snapshot.end_time(Utc::now());
-        self.dbase.put_snapshot(snap_sha1, &snapshot)?;
-        state::dispatch(Action::FinishBackup(self.dataset.key.clone()));
+        self.dbase.put_snapshot(&snapshot)?;
+        state::dispatch(Action::FinishBackup(self.dataset.id.clone()));
         Ok(())
     }
 
     /// Upload a compressed tarball of the database files to a special bucket.
     fn backup_database(&self) -> Result<(), Error> {
         // create a stable copy of the database
-        let mut backup_path: PathBuf = PathBuf::from(self.dbase.get_path());
-        backup_path.set_extension("backup");
-        self.dbase.create_backup(&backup_path)?;
+        let backup_path = self.dbase.create_backup(None)?;
         // use a ULID as the object name so they sort by time
         let object_name = generate_ulid_string();
         let mut tarball = self.dataset.workspace.clone();
         tarball.push(&object_name);
-        core::create_tar(&backup_path, &tarball)?;
+        super::create_tar(&backup_path, &tarball)?;
         // use a predictable bucket name so we can find it later
-        let bucket_name = core::computer_bucket_name(&self.dataset.computer_id);
-        store::store_pack(&tarball, &bucket_name, &object_name, &self.stores)?;
+        let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
+        let bucket_name = super::computer_bucket_name(&computer_id);
+        self.stores
+            .store_pack(&tarball, &bucket_name, &object_name)?;
         fs::remove_file(tarball)?;
         Ok(())
     }
@@ -278,59 +282,30 @@ impl<'a> BackupMaster<'a> {
 pub fn take_snapshot(
     basepath: &Path,
     parent: Option<entities::Checksum>,
-    dbase: &Database,
-    excludes: Vec<&Path>,
+    dbase: &Box<dyn RecordRepository>,
+    excludes: Vec<PathBuf>,
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
     let tree = scan_tree(basepath, dbase, &excludes)?;
-    let tree_sha1 = tree.checksum();
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", parent_sha1)))?;
-        if parent_doc.tree == tree_sha1 {
+        if parent_doc.tree == tree.digest {
             // nothing new at all with this snapshot
             return Ok(None);
         }
     }
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
-    let pretty_time = pretty_print_duration(time_diff);
-    let snap = core::Snapshot::new(parent, tree_sha1, tree.file_count);
+    let pretty_time = super::pretty_print_duration(time_diff);
+    let snap = entities::Snapshot::new(parent, tree.digest.clone(), tree.file_count);
     info!(
         "took snapshot {} with {} files after {}",
         snap.digest, tree.file_count, pretty_time
     );
-    dbase.insert_snapshot(&snap.digest, &snap)?;
+    dbase.put_snapshot(&snap)?;
     Ok(Some(snap.digest))
-}
-
-// Return a clear and accurate description of the duration.
-pub fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
-    let mut result = String::new();
-    match duration {
-        Ok(value) => {
-            let mut seconds = value.as_secs();
-            if seconds > 3600 {
-                let hours = seconds / 3600;
-                result.push_str(format!("{} hours ", hours).as_ref());
-                seconds -= hours * 3600;
-            }
-            if seconds > 60 {
-                let minutes = seconds / 60;
-                result.push_str(format!("{} minutes ", minutes).as_ref());
-                seconds -= minutes * 60;
-            }
-            if seconds > 0 {
-                result.push_str(format!("{} seconds", seconds).as_ref());
-            } else if result.is_empty() {
-                // special case of a zero duration
-                result.push_str("0 seconds");
-            }
-        }
-        Err(_) => result.push_str("(error)"),
-    }
-    result
 }
 
 ///
@@ -359,7 +334,7 @@ impl ChangedFile {
 ///
 pub struct ChangedFilesIter<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Database,
+    dbase: &'a Box<dyn RecordRepository>,
     /// Queue of pending paths to visit, where the path is relative, the first
     /// checksum is the left tree (earlier in time), and the second is the right
     /// tree (later in time).
@@ -369,18 +344,18 @@ pub struct ChangedFilesIter<'a> {
     /// Current path being visited.
     path: Option<PathBuf>,
     /// Left tree currently being visited.
-    left_tree: Option<core::Tree>,
+    left_tree: Option<entities::Tree>,
     /// Position within left tree currently being iterated.
     left_idx: usize,
     /// Right tree currently being visited.
-    right_tree: Option<core::Tree>,
+    right_tree: Option<entities::Tree>,
     /// Position within right tree currently being iterated.
     right_idx: usize,
 }
 
 impl<'a> ChangedFilesIter<'a> {
     fn new(
-        dbase: &'a Database,
+        dbase: &'a Box<dyn RecordRepository>,
         basepath: PathBuf,
         left_tree: entities::Checksum,
         right_tree: entities::Checksum,
@@ -558,7 +533,7 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
 /// entries in the database.
 ///
 pub fn find_changed_files(
-    dbase: &Database,
+    dbase: &Box<dyn RecordRepository>,
     basepath: PathBuf,
     snapshot1: entities::Checksum,
     snapshot2: entities::Checksum,
@@ -579,20 +554,24 @@ pub fn find_changed_files(
 
 pub struct TreeWalker<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Database,
+    dbase: &'a Box<dyn RecordRepository>,
     /// Queue of pending paths to visit, where the path is relative, the
     /// checksum is the tree to be visited.
     queue: VecDeque<(PathBuf, entities::Checksum)>,
     /// Current path being visited.
     path: Option<PathBuf>,
     /// Tree currently being visited.
-    tree: Option<core::Tree>,
+    tree: Option<entities::Tree>,
     /// Position within tree currently being iterated.
     entry_idx: usize,
 }
 
 impl<'a> TreeWalker<'a> {
-    pub fn new(dbase: &'a Database, basepath: &Path, tree: entities::Checksum) -> Self {
+    pub fn new(
+        dbase: &'a Box<dyn RecordRepository>,
+        basepath: &Path,
+        tree: entities::Checksum,
+    ) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((basepath.to_owned(), tree));
         Self {
@@ -662,10 +641,10 @@ impl<'a> Iterator for TreeWalker<'a> {
 fn read_link(path: &Path) -> String {
     if let Ok(value) = fs::read_link(path) {
         if let Some(vstr) = value.to_str() {
-            encode(vstr)
+            base64::encode(vstr)
         } else {
             let s: String = value.to_string_lossy().into_owned();
-            encode(&s)
+            base64::encode(&s)
         }
     } else {
         path.to_string_lossy().into_owned()
@@ -680,8 +659,12 @@ fn read_link(path: &Path) -> String {
 /// database. The result will be that everything new will have been added as new
 /// records.
 ///
-fn scan_tree(basepath: &Path, dbase: &Database, excludes: &[&Path]) -> Result<core::Tree, Error> {
-    let mut entries: Vec<core::TreeEntry> = Vec::new();
+fn scan_tree(
+    basepath: &Path,
+    dbase: &Box<dyn RecordRepository>,
+    excludes: &[PathBuf],
+) -> Result<entities::Tree, Error> {
+    let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
     match fs::read_dir(basepath) {
         Ok(readdir) => {
@@ -699,19 +682,19 @@ fn scan_tree(basepath: &Path, dbase: &Database, excludes: &[&Path]) -> Result<co
                                 if file_type.is_dir() {
                                     let scan = scan_tree(&path, dbase, excludes)?;
                                     file_count += scan.file_count;
-                                    let digest = scan.checksum();
-                                    let tref = core::TreeReference::TREE(digest);
+                                    let digest = scan.digest.clone();
+                                    let tref = entities::TreeReference::TREE(digest);
                                     let ent = process_path(&path, tref, dbase);
                                     entries.push(ent);
                                 } else if file_type.is_symlink() {
                                     let link = read_link(&path);
-                                    let tref = core::TreeReference::LINK(link);
+                                    let tref = entities::TreeReference::LINK(link);
                                     let ent = process_path(&path, tref, dbase);
                                     entries.push(ent);
                                 } else if file_type.is_file() {
-                                    match entities::Checksum_file(&path) {
+                                    match entities::Checksum::sha256_from_file(&path) {
                                         Ok(digest) => {
-                                            let tref = core::TreeReference::FILE(digest);
+                                            let tref = entities::TreeReference::FILE(digest);
                                             let ent = process_path(&path, tref, dbase);
                                             entries.push(ent);
                                             file_count += 1;
@@ -731,16 +714,15 @@ fn scan_tree(basepath: &Path, dbase: &Database, excludes: &[&Path]) -> Result<co
         }
         Err(err) => error!("read_dir error for {:?}: {}", basepath, err),
     }
-    let tree = core::Tree::new(entries, file_count);
-    let digest = tree.checksum();
-    dbase.insert_tree(&digest, &tree)?;
+    let tree = entities::Tree::new(entries, file_count);
+    dbase.insert_tree(&tree)?;
     Ok(tree)
 }
 
 ///
 /// Indicate if the given path is excluded or not.
 ///
-fn is_excluded(fullpath: &Path, excludes: &[&Path]) -> bool {
+fn is_excluded(fullpath: &Path, excludes: &[PathBuf]) -> bool {
     for exclusion in excludes {
         if fullpath.starts_with(exclusion) {
             return true;
@@ -756,10 +738,10 @@ fn is_excluded(fullpath: &Path, excludes: &[&Path]) -> bool {
 #[allow(unused_variables)]
 fn process_path(
     fullpath: &Path,
-    reference: core::TreeReference,
-    dbase: &Database,
-) -> core::TreeEntry {
-    let mut entry = core::TreeEntry::new(fullpath, reference);
+    reference: entities::TreeReference,
+    dbase: &Box<dyn RecordRepository>,
+) -> entities::TreeEntry {
+    let mut entry = entities::TreeEntry::new(fullpath, reference);
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
     trace!("processed path entry {:?}", fullpath);
@@ -775,7 +757,7 @@ fn process_path(
                         .map(|v| v.to_owned())
                         .unwrap_or_else(|| name.to_string_lossy().into_owned());
                     if let Ok(Some(value)) = xattr::get(fullpath, &name) {
-                        let digest = entities::Checksum_data_sha1(value.as_ref());
+                        let digest = entities::Checksum::sha1_from_bytes(value.as_ref());
                         if dbase.insert_xattr(&digest, value.as_ref()).is_ok() {
                             entry.xattrs.insert(nm, digest);
                         }
@@ -792,17 +774,28 @@ fn process_path(
 // of sizes due to large chunks.
 const DEFAULT_CHUNK_SIZE: u64 = 4_194_304;
 
+/// Compute the desired size for the chunks based on the pack size.
+fn calc_chunk_size(pack_size: u64) -> u64 {
+    // Use our default chunk size unless the desired pack size is so small that
+    // the chunks would be a significant portion of the pack file.
+    if pack_size < DEFAULT_CHUNK_SIZE * 4 {
+        pack_size / 4
+    } else {
+        DEFAULT_CHUNK_SIZE
+    }
+}
+
 /// Builds pack files by splitting incoming files into chunks.
 pub struct PackBuilder<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Database,
+    dbase: &'a Box<dyn RecordRepository>,
     /// Preferred size of pack files in bytes.
     pack_size: u64,
     /// Preferred size of chunks in bytes.
     chunk_size: u64,
     /// Map of file checksum to the chunks it contains that have not yet been
     /// uploaded in a pack file.
-    file_chunks: BTreeMap<entities::Checksum, Vec<core::Chunk>>,
+    file_chunks: BTreeMap<entities::Checksum, Vec<entities::Chunk>>,
     /// Those chunks that have been packed using this builder.
     packed_chunks: HashSet<entities::Checksum>,
     /// Those chunks that have been uploaded previously.
@@ -811,15 +804,8 @@ pub struct PackBuilder<'a> {
 
 impl<'a> PackBuilder<'a> {
     /// Create a new builder with the desired size.
-    pub fn new(dbase: &'a Database, pack_size: u64) -> Self {
-        // Use our default chunk size unless the desired pack size is so
-        // small that the chunks would be a significant portion of the pack
-        // file (this is mostly for testing purposes).
-        let chunk_size = if pack_size < DEFAULT_CHUNK_SIZE * 4 {
-            pack_size / 4
-        } else {
-            DEFAULT_CHUNK_SIZE
-        };
+    pub fn new(dbase: &'a Box<dyn RecordRepository>, pack_size: u64) -> Self {
+        let chunk_size = calc_chunk_size(pack_size);
         Self {
             dbase,
             pack_size,
@@ -863,9 +849,9 @@ impl<'a> PackBuilder<'a> {
         let file_size = attr.len();
         let chunks = if file_size > self.chunk_size {
             // split large files into chunks, add chunks to the list
-            core::find_file_chunks(path, self.chunk_size)?
+            find_file_chunks(path, self.chunk_size)?
         } else {
-            let mut chunk = core::Chunk::new(file_digest.clone(), 0, file_size as usize);
+            let mut chunk = entities::Chunk::new(file_digest.clone(), 0, file_size as usize);
             chunk = chunk.filepath(path);
             vec![chunk]
         };
@@ -957,27 +943,54 @@ impl<'a> PackBuilder<'a> {
     }
 }
 
+///
+/// Find the chunk boundaries within the given file, using the FastCDC
+/// algorithm. The given `size` is the desired average size in bytes for the
+/// chunks, but they may be between half and twice that size.
+///
+fn find_file_chunks(infile: &Path, size: u64) -> io::Result<Vec<entities::Chunk>> {
+    let file = fs::File::open(infile)?;
+    let mmap = unsafe {
+        memmap::MmapOptions::new()
+            .map(&file)
+            .expect("cannot create mmap?")
+    };
+    let avg_size = size as usize;
+    let min_size = avg_size / 2;
+    let max_size = avg_size * 2;
+    let chunker = fastcdc::FastCDC::new(&mmap[..], min_size, avg_size, max_size);
+    let mut results = Vec::new();
+    for entry in chunker {
+        let end = entry.offset + entry.length;
+        let chksum = entities::Checksum::sha256_from_bytes(&mmap[entry.offset..end]);
+        let mut chunk = entities::Chunk::new(chksum, entry.offset, entry.length);
+        chunk = chunk.filepath(infile);
+        results.push(chunk);
+    }
+    Ok(results)
+}
+
 /// Contains the results of building a pack, and provides functions for saving
 /// the results to the database.
 pub struct Pack {
     /// Checksum of this pack file once it has been written.
     digest: Option<entities::Checksum>,
     /// Those files that have been completed with this pack.
-    files: HashMap<entities::Checksum, Vec<core::Chunk>>,
+    files: HashMap<entities::Checksum, Vec<entities::Chunk>>,
     /// Those chunks that are contained in this pack.
-    chunks: Vec<core::Chunk>,
+    chunks: Vec<entities::Chunk>,
     /// Salt used to hash the password for this pack.
     salt: Option<Salt>,
 }
 
 impl Pack {
     /// Add a completed file to this pack.
-    pub fn add_file(&mut self, digest: entities::Checksum, chunks: Vec<core::Chunk>) {
+    pub fn add_file(&mut self, digest: entities::Checksum, chunks: Vec<entities::Chunk>) {
         self.files.insert(digest, chunks);
     }
 
     /// Add a chunk to this pack.
-    pub fn add_chunk(&mut self, chunk: core::Chunk) {
+    pub fn add_chunk(&mut self, chunk: entities::Chunk) {
         self.chunks.push(chunk);
     }
 
@@ -997,12 +1010,12 @@ impl Pack {
         // on Windows, for whatever reason, but this works.
         let mut packed = outfile.to_path_buf();
         packed.set_extension("pack");
-        self.digest = Some(core::pack_chunks(&self.chunks, &packed)?);
+        self.digest = Some(super::pack_chunks(&self.chunks, &packed)?);
         let mut zipped = outfile.to_path_buf();
         zipped.set_extension("gz");
-        core::compress_file(&packed, &zipped)?;
+        super::compress_file(&packed, &zipped)?;
         fs::remove_file(packed)?;
-        self.salt = Some(core::encrypt_file(passphrase, &zipped, outfile)?);
+        self.salt = Some(super::encrypt_file(passphrase, &zipped, outfile)?);
         fs::remove_file(zipped)?;
         Ok(())
     }
@@ -1011,8 +1024,8 @@ impl Pack {
     /// all of the chunks and the pack itself.
     pub fn record_completed_pack(
         &mut self,
-        dbase: &Database,
-        coords: Vec<core::PackLocation>,
+        dbase: &Box<dyn RecordRepository>,
+        coords: Vec<entities::PackLocation>,
     ) -> Result<(), Error> {
         let digest = self.digest.as_ref().unwrap();
         // record the uploaded chunks to the database
@@ -1023,7 +1036,7 @@ impl Pack {
         }
         self.chunks.clear();
         // record the pack in the database
-        let mut pack = core::SavedPack::new(digest.clone(), coords);
+        let mut pack = entities::Pack::new(digest.clone(), coords);
         pack.crypto_salt = self.salt;
         dbase.insert_pack(&pack)?;
         Ok(())
@@ -1031,7 +1044,10 @@ impl Pack {
 
     /// Record the set of files completed by uploading this pack file.
     /// Returns the number of completed files.
-    pub fn record_completed_files(&mut self, dbase: &Database) -> Result<usize, Error> {
+    pub fn record_completed_files(
+        &mut self,
+        dbase: &Box<dyn RecordRepository>,
+    ) -> Result<usize, Error> {
         // massage the file/chunk data into database records for those files
         // that have been completely uploaded
         for (filesum, parts) in &self.files {
@@ -1041,7 +1057,7 @@ impl Pack {
                 length += chunk.length as u64;
                 chunks.push((chunk.offset as u64, chunk.digest.clone()));
             }
-            let file = core::SavedFile::new(filesum.clone(), length, chunks);
+            let file = entities::File::new(filesum.clone(), length, chunks);
             dbase.insert_file(&file)?;
         }
         Ok(self.files.len())
@@ -1059,28 +1075,114 @@ impl Default for Pack {
     }
 }
 
-///
-/// Retrieve the configuration record from the database, or build a new one
-/// using default values.
-///
-pub fn get_configuration(dbase: &Database) -> Result<core::Configuration, Error> {
-    if let Some(conf) = dbase.get_config()? {
-        return Ok(conf);
-    }
-    Ok(Default::default())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::core::*;
     use super::*;
-    use chrono::TimeZone;
-    use std::collections::HashMap;
     #[cfg(target_family = "unix")]
     use std::os::unix::fs;
     #[cfg(target_family = "windows")]
     use std::os::windows::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn test_calc_chunk_size() {
+        assert_eq!(calc_chunk_size(65_536), 16_384);
+        assert_eq!(calc_chunk_size(131_072), 32_768);
+        assert_eq!(calc_chunk_size(262_144), 65_536);
+        assert_eq!(calc_chunk_size(16_777_216), 4_194_304);
+        assert_eq!(calc_chunk_size(33_554_432), 4_194_304);
+        assert_eq!(calc_chunk_size(134_217_728), 4_194_304);
+    }
+
+    #[test]
+    fn test_file_chunking_16k() -> io::Result<()> {
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(&infile, 16384)?;
+        assert_eq!(results.len(), 6);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 22366);
+        assert_eq!(
+            results[0].digest.to_string(),
+            "sha256-103159aa68bb1ea98f64248c647b8fe9a303365d80cb63974a73bba8bc3167d7"
+        );
+        assert_eq!(results[1].offset, 22366);
+        assert_eq!(results[1].length, 8282);
+        assert_eq!(
+            results[1].digest.to_string(),
+            "sha256-c95e0d6a53f61dc7b6039cfb8618f6e587fc6395780cf28169f4013463c89db3"
+        );
+        assert_eq!(results[2].offset, 30648);
+        assert_eq!(results[2].length, 16303);
+        assert_eq!(
+            results[2].digest.to_string(),
+            "sha256-e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82"
+        );
+        assert_eq!(results[3].offset, 46951);
+        assert_eq!(results[3].length, 18696);
+        assert_eq!(
+            results[3].digest.to_string(),
+            "sha256-bd1198535cdb87c5571378db08b6e886daf810873f5d77000a54795409464138"
+        );
+        assert_eq!(results[4].offset, 65647);
+        assert_eq!(results[4].length, 32768);
+        assert_eq!(
+            results[4].digest.to_string(),
+            "sha256-5c8251cce144b5291be3d4b161461f3e5ed441a7a24a1a65fdcc3d7b21bfc29d"
+        );
+        assert_eq!(results[5].offset, 98415);
+        assert_eq!(results[5].length, 11051);
+        assert_eq!(
+            results[5].digest.to_string(),
+            "sha256-a566243537738371133ecff524501290f0621f786f010b45d20a9d5cf82365f8"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_chunking_32k() -> io::Result<()> {
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(&infile, 32768)?;
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 32857);
+        assert_eq!(
+            results[0].digest.to_string(),
+            "sha256-5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d"
+        );
+        assert_eq!(results[1].offset, 32857);
+        assert_eq!(results[1].length, 16408);
+        assert_eq!(
+            results[1].digest.to_string(),
+            "sha256-13f6a4c6d42df2b76c138c13e86e1379c203445055c2b5f043a5f6c291fa520d"
+        );
+        assert_eq!(results[2].offset, 49265);
+        assert_eq!(results[2].length, 60201);
+        assert_eq!(
+            results[2].digest.to_string(),
+            "sha256-0fe7305ba21a5a5ca9f89962c5a6f3e29cd3e2b36f00e565858e0012e5f8df36"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_chunking_64k() -> io::Result<()> {
+        let infile = Path::new("./tests/fixtures/SekienAkashita.jpg");
+        let results = find_file_chunks(&infile, 65536)?;
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].offset, 0);
+        assert_eq!(results[0].length, 32857);
+        assert_eq!(
+            results[0].digest.to_string(),
+            "sha256-5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d"
+        );
+        assert_eq!(results[1].offset, 32857);
+        assert_eq!(results[1].length, 76609);
+        assert_eq!(
+            results[1].digest.to_string(),
+            "sha256-5420a3bcc7d57eaf5ca9bb0ab08a1bd3e4d89ae019b1ffcec39b1a5905641115"
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_read_link() -> Result<(), Error> {
@@ -1093,36 +1195,9 @@ mod tests {
         fs::symlink(&target, &link)?;
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &link)?;
-        // let actual = read_link(&link);
-        // assert_eq!(actual, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
+        let actual = read_link(&link);
+        assert_eq!(actual, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
         Ok(())
-    }
-
-    #[test]
-    fn test_pretty_print_duration() {
-        let input = Duration::from_secs(0);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "0 seconds");
-
-        let input = Duration::from_secs(5);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "5 seconds");
-
-        let input = Duration::from_secs(65);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "1 minutes 5 seconds");
-
-        let input = Duration::from_secs(4949);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "1 hours 22 minutes 29 seconds");
-
-        let input = Duration::from_secs(7300);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "2 hours 1 minutes 40 seconds");
-
-        let input = Duration::from_secs(10090);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "2 hours 48 minutes 10 seconds");
     }
 
     #[test]
@@ -1130,7 +1205,7 @@ mod tests {
         let path1 = PathBuf::from("/Users/susan/database");
         let path2 = PathBuf::from("/Users/susan/dataset/.tmp");
         let path3 = PathBuf::from("/Users/susan/private");
-        let excludes = vec![path1.as_path(), path2.as_path(), path3.as_path()];
+        let excludes = vec![path1, path2, path3];
         assert!(!is_excluded(Path::new("/not/excluded"), &excludes));
         assert!(!is_excluded(Path::new("/Users/susan/public"), &excludes));
         assert!(is_excluded(

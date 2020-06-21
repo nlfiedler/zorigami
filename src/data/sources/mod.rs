@@ -14,7 +14,7 @@ use crate::domain::entities::{
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 mod database;
@@ -119,13 +119,13 @@ pub trait EntityDataSource {
     /// Retrieve the path to the database files.
     fn get_db_path(&self) -> &Path;
 
-    /// Create a backup of the database at the given path.
-    fn create_backup(&self, path: &Path) -> Result<(), Error>;
+    /// Create a backup of the database, returning its path.
+    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error>;
 }
 
-/// Restore the database from the backup path to the given path.
-pub fn restore_database(backup_path: &Path, db_path: &Path) -> Result<(), Error> {
-    database::Database::restore_from_backup(backup_path, db_path)
+/// Restore the database at the given path.
+pub fn restore_database(path: Option<PathBuf>, db_path: &Path) -> Result<(), Error> {
+    database::Database::restore_from_backup(path, db_path)
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -398,7 +398,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         self.database.get_path()
     }
 
-    fn create_backup(&self, path: &Path) -> Result<(), Error> {
+    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
         self.database.create_backup(path)
     }
 }
