@@ -91,6 +91,10 @@
 ***** this is the new ~put back~ feature, not the download file feature
 **** TODO implement ~get snapshot~ usecase (and graphql query)
 **** TODO implement ~get tree~ usecase (and graphql query)
+**** TODO process manager either needs IoC or move outside of domain layer
+***** currently constructing repository implementations
+***** dependency injection may make sense for this
+***** need to construct the pack sources as needed because configuration will change
 **** TODO write a store validator to validate input to use cases
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source

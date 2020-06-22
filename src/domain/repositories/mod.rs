@@ -84,6 +84,9 @@ pub trait RecordRepository {
     /// Retrieve all registered pack store configurations.
     fn get_stores(&self) -> Result<Vec<Store>, Error>;
 
+    /// Retrieve the store by identifier, returning `None` if not found.
+    fn get_store(&self, id: &str) -> Result<Option<Store>, Error>;
+
     /// Remove the store by the given identifier.
     fn delete_store(&self, id: &str) -> Result<(), Error>;
 

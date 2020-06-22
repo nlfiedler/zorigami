@@ -20,7 +20,7 @@ use tar::{Archive, Builder, Header};
 
 pub mod backup;
 pub mod restore;
-// pub mod process;
+pub mod process;
 pub mod state;
 
 ///

@@ -112,6 +112,10 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_stores()
     }
 
+    fn get_store(&self, id: &str) -> Result<Option<Store>, Error> {
+        self.datasource.get_store(id)
+    }
+
     fn delete_store(&self, id: &str) -> Result<(), Error> {
         self.datasource.delete_store(id)
     }

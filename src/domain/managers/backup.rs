@@ -15,7 +15,7 @@ use log::{debug, error, info, trace};
 use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-// use std::fmt;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ use std::time::SystemTime;
 /// repository. The snapshot and dataset are also updated. Returns the snapshot
 /// checksum, or `None` if there were no changes.
 pub fn perform_backup(
-    dataset: &mut entities::Dataset,
+    dataset: &entities::Dataset,
     repo: &Box<dyn RecordRepository>,
     stores: &Box<dyn PackRepository>,
     passphrase: &str,
@@ -94,7 +94,7 @@ pub fn perform_backup(
 /// parent snapshot, if any.
 ///
 fn continue_backup(
-    dataset: &mut entities::Dataset,
+    dataset: &entities::Dataset,
     repo: &Box<dyn RecordRepository>,
     stores: &Box<dyn PackRepository>,
     passphrase: &str,
@@ -135,18 +135,18 @@ fn continue_backup(
     Ok(Some(current_sha1))
 }
 
-// ///
-// /// Raised when the backup has run out of time and must stop temporarily,
-// /// resuming at a later time.
-// ///
-// #[derive(Fail, Debug)]
-// pub struct OutOfTimeError;
+///
+/// Raised when the backup has run out of time and must stop temporarily,
+/// resuming at a later time.
+///
+#[derive(Fail, Debug)]
+pub struct OutOfTimeError;
 
-// impl fmt::Display for OutOfTimeError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "ran out of time")
-//     }
-// }
+impl fmt::Display for OutOfTimeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ran out of time")
+    }
+}
 
 ///
 /// Holds the state of the backup process to keep the code slim.
