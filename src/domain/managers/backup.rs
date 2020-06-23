@@ -19,6 +19,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 /// Take a snapshot, collect the new/changed files, assemble them into pack
@@ -27,8 +28,7 @@ use std::time::SystemTime;
 /// checksum, or `None` if there were no changes.
 pub fn perform_backup(
     dataset: &entities::Dataset,
-    repo: &Box<dyn RecordRepository>,
-    stores: &Box<dyn PackRepository>,
+    repo: &Arc<dyn RecordRepository>,
     passphrase: &str,
 ) -> Result<Option<entities::Checksum>, Error> {
     debug!("performing backup for {}", dataset);
@@ -46,7 +46,6 @@ pub fn perform_backup(
                 return continue_backup(
                     dataset,
                     repo,
-                    stores,
                     passphrase,
                     parent_sha1,
                     current_sha1,
@@ -80,7 +79,6 @@ pub fn perform_backup(
             continue_backup(
                 dataset,
                 repo,
-                stores,
                 passphrase,
                 latest_snapshot,
                 current_sha1,
@@ -95,13 +93,12 @@ pub fn perform_backup(
 ///
 fn continue_backup(
     dataset: &entities::Dataset,
-    repo: &Box<dyn RecordRepository>,
-    stores: &Box<dyn PackRepository>,
+    repo: &Arc<dyn RecordRepository>,
     passphrase: &str,
     parent_sha1: Option<entities::Checksum>,
     current_sha1: entities::Checksum,
 ) -> Result<Option<entities::Checksum>, Error> {
-    let mut bmaster = BackupMaster::new(dataset, repo, stores, passphrase)?;
+    let mut bmaster = BackupMaster::new(dataset, repo, passphrase)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
     match parent_sha1 {
@@ -153,22 +150,22 @@ impl fmt::Display for OutOfTimeError {
 ///
 struct BackupMaster<'a> {
     dataset: &'a entities::Dataset,
-    dbase: &'a Box<dyn RecordRepository>,
+    dbase: &'a Arc<dyn RecordRepository>,
     builder: PackBuilder<'a>,
     passphrase: String,
     bucket_name: String,
-    stores: &'a Box<dyn PackRepository>,
+    stores: Box<dyn PackRepository>,
 }
 
 impl<'a> BackupMaster<'a> {
     /// Build a BackupMaster.
     fn new(
         dataset: &'a entities::Dataset,
-        dbase: &'a Box<dyn RecordRepository>,
-        stores: &'a Box<dyn PackRepository>,
+        dbase: &'a Arc<dyn RecordRepository>,
         passphrase: &str,
     ) -> Result<Self, Error> {
         let computer_id = dbase.get_computer_id(&dataset.id)?.unwrap();
+        let stores = dbase.load_dataset_stores(&dataset)?;
         let bucket_name = super::generate_bucket_name(&computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
         Ok(Self {
@@ -282,7 +279,7 @@ impl<'a> BackupMaster<'a> {
 pub fn take_snapshot(
     basepath: &Path,
     parent: Option<entities::Checksum>,
-    dbase: &Box<dyn RecordRepository>,
+    dbase: &Arc<dyn RecordRepository>,
     excludes: Vec<PathBuf>,
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
@@ -334,7 +331,7 @@ impl ChangedFile {
 ///
 pub struct ChangedFilesIter<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Box<dyn RecordRepository>,
+    dbase: &'a Arc<dyn RecordRepository>,
     /// Queue of pending paths to visit, where the path is relative, the first
     /// checksum is the left tree (earlier in time), and the second is the right
     /// tree (later in time).
@@ -355,7 +352,7 @@ pub struct ChangedFilesIter<'a> {
 
 impl<'a> ChangedFilesIter<'a> {
     fn new(
-        dbase: &'a Box<dyn RecordRepository>,
+        dbase: &'a Arc<dyn RecordRepository>,
         basepath: PathBuf,
         left_tree: entities::Checksum,
         right_tree: entities::Checksum,
@@ -533,7 +530,7 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
 /// entries in the database.
 ///
 pub fn find_changed_files(
-    dbase: &Box<dyn RecordRepository>,
+    dbase: &Arc<dyn RecordRepository>,
     basepath: PathBuf,
     snapshot1: entities::Checksum,
     snapshot2: entities::Checksum,
@@ -554,7 +551,7 @@ pub fn find_changed_files(
 
 pub struct TreeWalker<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Box<dyn RecordRepository>,
+    dbase: &'a Arc<dyn RecordRepository>,
     /// Queue of pending paths to visit, where the path is relative, the
     /// checksum is the tree to be visited.
     queue: VecDeque<(PathBuf, entities::Checksum)>,
@@ -568,7 +565,7 @@ pub struct TreeWalker<'a> {
 
 impl<'a> TreeWalker<'a> {
     pub fn new(
-        dbase: &'a Box<dyn RecordRepository>,
+        dbase: &'a Arc<dyn RecordRepository>,
         basepath: &Path,
         tree: entities::Checksum,
     ) -> Self {
@@ -661,7 +658,7 @@ fn read_link(path: &Path) -> String {
 ///
 fn scan_tree(
     basepath: &Path,
-    dbase: &Box<dyn RecordRepository>,
+    dbase: &Arc<dyn RecordRepository>,
     excludes: &[PathBuf],
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
@@ -739,7 +736,7 @@ fn is_excluded(fullpath: &Path, excludes: &[PathBuf]) -> bool {
 fn process_path(
     fullpath: &Path,
     reference: entities::TreeReference,
-    dbase: &Box<dyn RecordRepository>,
+    dbase: &Arc<dyn RecordRepository>,
 ) -> entities::TreeEntry {
     let mut entry = entities::TreeEntry::new(fullpath, reference);
     entry = entry.mode(fullpath);
@@ -788,7 +785,7 @@ fn calc_chunk_size(pack_size: u64) -> u64 {
 /// Builds pack files by splitting incoming files into chunks.
 pub struct PackBuilder<'a> {
     /// Reference to Database for fetching records.
-    dbase: &'a Box<dyn RecordRepository>,
+    dbase: &'a Arc<dyn RecordRepository>,
     /// Preferred size of pack files in bytes.
     pack_size: u64,
     /// Preferred size of chunks in bytes.
@@ -804,7 +801,7 @@ pub struct PackBuilder<'a> {
 
 impl<'a> PackBuilder<'a> {
     /// Create a new builder with the desired size.
-    pub fn new(dbase: &'a Box<dyn RecordRepository>, pack_size: u64) -> Self {
+    pub fn new(dbase: &'a Arc<dyn RecordRepository>, pack_size: u64) -> Self {
         let chunk_size = calc_chunk_size(pack_size);
         Self {
             dbase,
@@ -1024,7 +1021,7 @@ impl Pack {
     /// all of the chunks and the pack itself.
     pub fn record_completed_pack(
         &mut self,
-        dbase: &Box<dyn RecordRepository>,
+        dbase: &Arc<dyn RecordRepository>,
         coords: Vec<entities::PackLocation>,
     ) -> Result<(), Error> {
         let digest = self.digest.as_ref().unwrap();
@@ -1046,7 +1043,7 @@ impl Pack {
     /// Returns the number of completed files.
     pub fn record_completed_files(
         &mut self,
-        dbase: &Box<dyn RecordRepository>,
+        dbase: &Arc<dyn RecordRepository>,
     ) -> Result<usize, Error> {
         // massage the file/chunk data into database records for those files
         // that have been completely uploaded

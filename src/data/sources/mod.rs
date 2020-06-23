@@ -24,7 +24,7 @@ mod sftp;
 
 /// Data source for entity objects.
 #[cfg_attr(test, automock)]
-pub trait EntityDataSource {
+pub trait EntityDataSource: Send + Sync {
     /// Save the configuration record to the data source.
     fn put_configuration(&self, config: &Configuration) -> Result<(), Error>;
 

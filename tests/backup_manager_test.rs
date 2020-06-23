@@ -10,18 +10,18 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use zorigami::data::repositories::{PackRepositoryImpl, RecordRepositoryImpl};
-use zorigami::data::sources::{EntityDataSourceImpl, PackSourceBuilderImpl};
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum};
 use zorigami::domain::managers::backup::*;
-use zorigami::domain::repositories::{PackRepository, RecordRepository};
+use zorigami::domain::repositories::RecordRepository;
 
 #[test]
 fn test_basic_snapshots() -> Result<(), Error> {
     let db_path = DBPath::new("_test_basic_snapshots");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let basepath: PathBuf = ["tmp", "test", "managers", "snapshots", "basics"]
         .iter()
@@ -78,7 +78,7 @@ fn test_snapshots_xattrs() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshots_xattrs");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let basepath: PathBuf = ["tmp", "test", "managers", "snapshots", "xattrs"]
         .iter()
@@ -125,7 +125,7 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshot_symlinks");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/symlinks/fixtures";
@@ -173,7 +173,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshot_ordering");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/ordering/fixtures";
@@ -242,7 +242,7 @@ fn test_snapshot_types() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshot_types");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/types/fixtures";
@@ -283,7 +283,7 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshot_ignore_links");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/ignore_links/fixtures";
@@ -337,7 +337,7 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshot_was_links");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/was_links/fixtures";
@@ -392,7 +392,7 @@ fn test_pack_builder() -> Result<(), Error> {
     let db_path = DBPath::new("_test_pack_builder");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let basepath = "tmp/test/engine/builder/fixtures";
@@ -481,7 +481,7 @@ fn test_pack_builder_empty() -> Result<(), Error> {
     let db_path = DBPath::new("_test_pack_builder_empty");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.has_chunks(), false);
@@ -499,7 +499,7 @@ fn test_pack_builder_dupes() -> Result<(), Error> {
     let db_path = DBPath::new("_test_pack_builder_dupes");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let mut builder = PackBuilder::new(&dbase, 65536);
     assert_eq!(builder.file_count(), 0);
@@ -528,7 +528,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let db_path = DBPath::new("_test_continue_backup");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/managers/backup/packs";
@@ -538,14 +538,13 @@ fn test_continue_backup() -> Result<(), Error> {
 
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert("basepath".to_owned(), pack_path.to_owned());
-    let stores = vec![entities::Store {
+    let store = entities::Store {
         id: "local123".to_owned(),
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
-    }];
-    let store_builder = Box::new(PackSourceBuilderImpl {});
-    let packs: Box<dyn PackRepository> = Box::new(PackRepositoryImpl::new(stores, store_builder)?);
+    };
+    dbase.put_store(&store)?;
 
     // create a dataset
     #[cfg(target_family = "unix")]
@@ -563,7 +562,7 @@ fn test_continue_backup() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
     let first_sha1 = backup_opt.unwrap();
 
@@ -573,7 +572,7 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_snapshot(&snapshot)?;
 
     // run the backup again to make sure it is finished
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();
     assert_eq!(first_sha1, second_sha1);

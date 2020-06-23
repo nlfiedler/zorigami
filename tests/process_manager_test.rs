@@ -21,7 +21,7 @@ fn test_dataset_no_schedule() -> Result<(), Error> {
     let db_path = DBPath::new("_test_dataset_no_schedule");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let basepath = Path::new("/some/path");
     let mut dataset = Dataset::new(basepath);
@@ -37,7 +37,7 @@ fn test_first_backup_due() -> Result<(), Error> {
     let db_path = DBPath::new("_test_first_backup_due");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // let unique_id = generate_unique_id("charlie", "localhost");
     let basepath = Path::new("/some/path");
@@ -56,7 +56,7 @@ fn test_first_backup_running() -> Result<(), Error> {
     let db_path = DBPath::new("_test_first_backup_running");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     let basepath = Path::new("/some/path");
     let mut dataset = Dataset::new(basepath);
@@ -76,7 +76,7 @@ fn test_backup_not_overdue() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_not_overdue");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -101,7 +101,7 @@ fn test_backup_overdue() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_overdue");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -127,7 +127,7 @@ fn test_old_snapshot_recent_backup() -> Result<(), Error> {
     let db_path = DBPath::new("_test_old_snapshot_recent_backup");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -158,7 +158,7 @@ fn test_backup_restarted() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_restarted");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that did not finish
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -187,7 +187,7 @@ fn test_backup_restarted_not_overdue() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_restarted_not_overdue");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that finished just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -218,7 +218,7 @@ fn test_overdue_backup_running() -> Result<(), Error> {
     let db_path = DBPath::new("_test_overdue_backup_running");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that finished a while ago
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
@@ -247,7 +247,7 @@ fn test_overdue_had_error() -> Result<(), Error> {
     let db_path = DBPath::new("_test_overdue_had_error");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     // build a "latest" snapshot that started just now
     let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());

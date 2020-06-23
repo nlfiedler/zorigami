@@ -1,7 +1,9 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::data::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
+use crate::data::sources::{
+    EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
+};
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
@@ -118,6 +120,26 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn delete_store(&self, id: &str) -> Result<(), Error> {
         self.datasource.delete_store(id)
+    }
+
+    fn load_dataset_stores(&self, dataset: &Dataset) -> Result<Box<dyn PackRepository>, Error> {
+        let stores: Vec<Store> = dataset
+            .stores
+            .iter()
+            .map(|store_id| self.get_store(store_id))
+            .filter_map(|s| s.ok())
+            .filter_map(|s| s)
+            .collect();
+        if stores.is_empty() {
+            return Err(err_msg(format!(
+                "no stores found for dataset {}",
+                dataset.id
+            )));
+        }
+        let store_builder = Box::new(PackSourceBuilderImpl {});
+        let packs: Box<dyn PackRepository> =
+            Box::new(PackRepositoryImpl::new(stores, store_builder)?);
+        Ok(packs)
     }
 
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {

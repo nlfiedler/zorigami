@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 /// Repository for entity records.
 ///
 #[cfg_attr(test, automock)]
-pub trait RecordRepository {
+pub trait RecordRepository: Send + Sync {
     /// Retrieve the configuration, or build a new one using default values.
     fn get_configuration(&self) -> Result<Configuration, Error>;
 
@@ -89,6 +89,12 @@ pub trait RecordRepository {
 
     /// Remove the store by the given identifier.
     fn delete_store(&self, id: &str) -> Result<(), Error>;
+
+    /// Construct a pack repository for the given dataset.
+    ///
+    /// If the dataset does not have any valid stores defined, an error is
+    /// returned, rather than producing a useless pack repository.
+    fn load_dataset_stores(&self, dataset: &Dataset) -> Result<Box<dyn PackRepository>, Error>;
 
     /// Save the given dataset to the repository.
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;

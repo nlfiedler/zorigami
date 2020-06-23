@@ -11,19 +11,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::tempdir;
-use zorigami::data::repositories::{PackRepositoryImpl, RecordRepositoryImpl};
-use zorigami::data::sources::{EntityDataSourceImpl, PackSourceBuilderImpl};
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum};
 use zorigami::domain::managers::backup::*;
 use zorigami::domain::managers::restore::*;
-use zorigami::domain::repositories::{PackRepository, RecordRepository};
+use zorigami::domain::repositories::RecordRepository;
 
 #[test]
 fn test_backup_restore() -> Result<(), Error> {
     let db_path = DBPath::new("_test_backup_restore");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Box<dyn RecordRepository> = Box::new(repo);
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
     let pack_path = "tmp/test/managers/backup/packs";
@@ -33,14 +33,13 @@ fn test_backup_restore() -> Result<(), Error> {
 
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert("basepath".to_owned(), pack_path.to_owned());
-    let stores = vec![entities::Store {
+    let store = entities::Store {
         id: "local123".to_owned(),
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
-    }];
-    let store_builder = Box::new(PackSourceBuilderImpl {});
-    let packs: Box<dyn PackRepository> = Box::new(PackRepositoryImpl::new(stores, store_builder)?);
+    };
+    dbase.put_store(&store)?;
 
     // create a dataset
     #[cfg(target_family = "unix")]
@@ -60,26 +59,26 @@ fn test_backup_restore() -> Result<(), Error> {
     assert!(fs::copy("tests/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = [basepath, "zero-length.txt"].iter().collect();
     assert!(fs::write(dest, vec![]).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("tests/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
     // perform the third backup
     let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
     assert!(fs::copy("tests/fixtures/washington-journal.txt", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
     // perform the fourth backup with shifted larger file
     let infile = Path::new("tests/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = [basepath, "SekienShifted.jpg"].iter().collect();
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, &packs, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
     assert!(backup_opt.is_some());
 
     // restore the file from the first snapshot
@@ -95,7 +94,6 @@ fn test_backup_restore() -> Result<(), Error> {
     let restored_file = outdir.path().join("restored.bin");
     restore_file(
         &dbase,
-        &packs,
         &dataset,
         "keyboard cat",
         digest_expected.clone(),
@@ -112,7 +110,6 @@ fn test_backup_restore() -> Result<(), Error> {
     let restored_file = outdir.path().join("restored.bin");
     restore_file(
         &dbase,
-        &packs,
         &dataset,
         "keyboard cat",
         digest_expected.clone(),
@@ -134,7 +131,6 @@ fn test_backup_restore() -> Result<(), Error> {
     let restored_file = outdir.path().join("restored.bin");
     restore_file(
         &dbase,
-        &packs,
         &dataset,
         "keyboard cat",
         digest_expected.clone(),
@@ -151,7 +147,6 @@ fn test_backup_restore() -> Result<(), Error> {
     let restored_file = outdir.path().join("restored.bin");
     restore_file(
         &dbase,
-        &packs,
         &dataset,
         "keyboard cat",
         digest_expected.clone(),
@@ -168,7 +163,6 @@ fn test_backup_restore() -> Result<(), Error> {
     let restored_file = outdir.path().join("restored.bin");
     restore_file(
         &dbase,
-        &packs,
         &dataset,
         "keyboard cat",
         digest_expected.clone(),

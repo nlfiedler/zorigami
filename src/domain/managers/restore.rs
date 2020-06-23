@@ -2,23 +2,24 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities;
-use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::domain::repositories::RecordRepository;
 use failure::{err_msg, Error};
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 ///
 /// Restore a single file identified by the given checksum.
 ///
 pub fn restore_file(
-    dbase: &Box<dyn RecordRepository>,
-    stores: &Box<dyn PackRepository>,
+    dbase: &Arc<dyn RecordRepository>,
     dataset: &entities::Dataset,
     passphrase: &str,
     checksum: entities::Checksum,
     outfile: &Path,
 ) -> Result<(), Error> {
+    let stores = dbase.load_dataset_stores(&dataset)?;
     // look up the file record to get chunks
     let saved_file = dbase
         .get_file(&checksum)?
