@@ -268,6 +268,48 @@ mod tests {
     }
 
     #[test]
+    fn test_load_dataset_stores_ok() {
+        // arrange
+        let mut local_props: HashMap<String, String> = HashMap::new();
+        local_props.insert("basepath".to_owned(), "/data/packs".to_owned());
+        let store = Store {
+            id: "local123".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "my local".to_owned(),
+            properties: local_props,
+        };
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_store()
+            .with(eq("local123"))
+            .returning(move |_| Ok(Some(store.clone())));
+        // act
+        let mut dataset = Dataset::new(Path::new("/home/planet"));
+        dataset = dataset.add_store("local123");
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.load_dataset_stores(&dataset);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_dataset_stores_none() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_store()
+            .with(eq("local123"))
+            .returning(move |_| Ok(None));
+        // act
+        let mut dataset = Dataset::new(Path::new("/home/planet"));
+        dataset = dataset.add_store("local123");
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.load_dataset_stores(&dataset);
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("no stores found for dataset"));
+    }
+
+    #[test]
     fn test_store_pack_single_source() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
