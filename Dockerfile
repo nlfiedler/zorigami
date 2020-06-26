@@ -8,7 +8,7 @@ RUN apt-get -q update && \
 WORKDIR /build
 COPY Cargo.toml .
 COPY src src/
-RUN cargo build --release
+RUN cargo build --workspace --release
 
 #
 # build the healthcheck binary

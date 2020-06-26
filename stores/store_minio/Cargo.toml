@@ -1,0 +1,16 @@
+[package]
+name = "store_minio"
+version = "0.1.0"
+authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+edition = "2018"
+
+[dependencies]
+dotenv = "0.15.0"
+failure = "0.1.6"
+futures = "0.1.28"
+futures-fs = "0.0.5"
+rusoto_core = "0.42.0"
+rusoto_credential = "0.42.0"
+rusoto_s3 = "0.42.0"
+store_core = { path = "../store_core" }
+tempfile = "3.1.0"

@@ -81,14 +81,13 @@
 ***** DONE test data source put/get latest snapshot
 **** DONE implement ~delete data set~ usecase (and graphql mutation)
 **** DONE migrate store implementations to be blob data sources
-**** TODO try using cargo workspaces to speed up compilation
+**** DONE try using cargo workspaces to speed up compilation
 ***** c.f. https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html
-***** domain, data, and preso become library crates
-***** enforces no dependencies from domain to other layers (crate dependencies are acyclic)
-***** =main.rs= moves to binary crate named =server=
 ***** each unit compiles separately
-***** tests move into the appropriate crate
-***** can run all tests or tests for one crate (=cargo test -p <name>=)
+***** tests move into the appropriate package
+***** can run all tests or tests for one package (=cargo test -p <name>=)
+***** database and pack store code go into separate library packages
+***** bulk of code moves to binary package named =server=
 **** TODO implement ~start backup~ usecase (and graphql mutation)
 ***** DONE migrate integ tests for backup manager
 ***** DONE migrate file restore code and tests

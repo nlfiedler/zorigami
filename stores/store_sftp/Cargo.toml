@@ -1,0 +1,18 @@
+[package]
+name = "store_sftp"
+version = "0.1.0"
+authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+edition = "2018"
+
+[dependencies]
+dotenv = "0.15.0"
+failure = "0.1.6"
+ssh2 = "0.8"
+store_core = { path = "../store_core" }
+tempfile = "3.1.0"
+
+[target.'cfg(windows)'.dependencies]
+openssl = { version = "0.10" }
+
+[target.'cfg(unix)'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }

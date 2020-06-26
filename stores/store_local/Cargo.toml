@@ -1,0 +1,10 @@
+[package]
+name = "store_local"
+version = "0.1.0"
+authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1.6"
+store_core = { path = "../store_core" }
+tempfile = "3.1.0"

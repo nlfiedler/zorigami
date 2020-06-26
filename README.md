@@ -36,13 +36,21 @@ above, _and_ it will likely fail to compile on 32-bit Windows.
 
 ```shell
 $ cargo update
-$ cargo build
-$ cargo test
+$ cargo build --workspace
+$ cargo test --workspace
 $ RUST_LOG=info cargo run
 ```
+
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
 For extremely verbose logging, use `RUST_LOG=trace` which will dump large
 volumes of output.
+
+To build or run tests for a single package, use the `-p` option, like so:
+
+```shell
+$ cargo build -p store_minio
+$ cargo test -p store_minio
+```
 
 ### Building, Testing, Starting the Frontend
 
@@ -99,6 +107,25 @@ $ docker-compose pull
 $ docker-compose rm -f -s
 $ docker-compose up -d
 ```
+
+## Design
+
+### Clean Architecture
+
+Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The domain layer defines the "policy" or business logic of the application, consisting of entities, use cases, and repositories. The data layer is the interface to the underlying system, defining the data models that are ultimately stored in a database. The presentation layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface.
+
+### Workspace and Packages
+
+The overall application is broken into several crates, or packages as they are
+sometimes called. The principle benefit of this is that the overall scale of the
+application is easier to manage as it grows. In particular, the dependencies and
+build time steadily grow as more store backends are added. These pack store
+implementations, and the database implementation as well, are in packages that
+are kept separate from the main `server` package. In theory this will help with
+build times for the crates, as each crate forms a single compilation unit in
+Rust, meaning that a change to any file within that crate will result in the
+entire crate being compiled again. Note also that the dependencies among crates
+form a directed acyclic graph, meaning there can be no mutual dependencies.
 
 ## Tools
 

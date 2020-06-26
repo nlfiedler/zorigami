@@ -1,0 +1,11 @@
+[package]
+name = "database_rocks"
+version = "0.1.0"
+authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+edition = "2018"
+
+[dependencies]
+database_core = { path = "../database_core" }
+failure = "0.1.6"
+lazy_static = "1.3.0"
+rocksdb = "0.14.0"
