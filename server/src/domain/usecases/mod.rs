@@ -8,6 +8,7 @@ use std::fmt;
 pub mod delete_dataset;
 pub mod delete_store;
 pub mod get_datasets;
+pub mod get_snapshot;
 pub mod get_stores;
 pub mod new_dataset;
 pub mod new_store;

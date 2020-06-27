@@ -99,7 +99,7 @@
 ***** DONE start the supervisor in the main thread
 ***** DONE write unit tests for the process manager
 ***** DONE try converting process integ tests to unit tests
-**** TODO implement ~get snapshot~ usecase (and graphql query)
+**** DONE implement ~get snapshot~ usecase (and graphql query)
 **** TODO implement ~get tree~ usecase (and graphql query)
 **** TODO convert tests in =schema_test.rs= to unit tests
 **** TODO implement ~put back~ usecase (and graphql query)

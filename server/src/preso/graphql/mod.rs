@@ -529,11 +529,17 @@ impl QueryRoot {
         Ok(stores)
     }
 
-    // /// Retrieve a specific snapshot.
-    // fn snapshot(executor: &Executor, digest: Checksum) -> FieldResult<Option<Snapshot>> {
-    //     let database = executor.context();
-    //     Ok(database.get_snapshot(&digest)?)
-    // }
+    /// Retrieve a specific snapshot.
+    fn snapshot(executor: &Executor, digest: Checksum) -> FieldResult<Option<entities::Snapshot>> {
+        use crate::domain::usecases::get_snapshot::{GetSnapshot, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetSnapshot::new(Box::new(repo));
+        let params: Params = Params::new(digest);
+        let result: Option<entities::Snapshot> = usecase.call(params)?;
+        Ok(result)
+    }
 
     // /// Retrieve a specific tree.
     // fn tree(executor: &Executor, digest: Checksum) -> FieldResult<Option<Tree>> {
@@ -1062,6 +1068,111 @@ mod tests {
         )
         .unwrap();
         // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_query_snapshot_some() {
+        // arrange
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = entities::Snapshot::new(None, tree_sha, 110);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let snapshot_sha2 = snapshot.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .withf(move |d| d == &snapshot_sha1)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Snapshot($digest: Checksum!) {
+                snapshot(digest: $digest) { fileCount }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("snapshot").unwrap();
+        let object = res.as_object_value().unwrap();
+        let field = object.get_field_value("fileCount").unwrap();
+        // fileCount is a bigint that comes over the wire as a string
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "110");
+    }
+
+    #[test]
+    fn test_query_snapshot_none() {
+        // arrange
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = entities::Snapshot::new(None, tree_sha, 110);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let snapshot_sha2 = snapshot.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .withf(move |d| d == &snapshot_sha1)
+            .returning(move |_| Ok(None));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Snapshot($digest: Checksum!) {
+                snapshot(digest: $digest) { fileCount }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("snapshot").unwrap();
+        assert!(res.is_null());
+    }
+
+    #[test]
+    fn test_query_snapshot_err() {
+        // arrange
+        let snapshot_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot_sha2 = snapshot_sha1.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_snapshot()
+            .withf(move |d| d == &snapshot_sha1)
+            .returning(move |_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Snapshot($digest: Checksum!) {
+                snapshot(digest: $digest) { fileCount }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("snapshot").unwrap();
         assert!(res.is_null());
         assert_eq!(errors.len(), 1);
         assert!(errors[0].error().message().contains("oh no"));
