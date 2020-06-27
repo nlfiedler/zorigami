@@ -26,12 +26,17 @@ struct MySupervisor {
     dbase: Option<Arc<dyn RecordRepository>>,
 }
 
+#[cfg(test)]
+static SUPERVISOR_INTERVAL: u64 = 100;
+#[cfg(not(test))]
+static SUPERVISOR_INTERVAL: u64 = 300_000;
+
 impl Actor for MySupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         debug!("supervisor actor started");
-        ctx.run_interval(Duration::from_millis(300_000), |this, _ctx| {
+        ctx.run_interval(Duration::from_millis(SUPERVISOR_INTERVAL), |this, _ctx| {
             trace!("supervisor interval fired");
             if let Some(dbase) = this.dbase.as_ref() {
                 if let Err(err) = start_due_datasets(dbase.clone()) {
@@ -238,5 +243,348 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset) {
                 state::dispatch(Action::ErrorBackup(dataset.id.clone()));
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::entities::schedule::Schedule;
+    use crate::domain::entities::{Checksum, Snapshot};
+    use crate::domain::repositories::MockRecordRepository;
+    use std::io;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    #[actix_rt::test]
+    async fn test_process_start() -> io::Result<()> {
+        // arrange
+        let outdir = tempdir()?;
+        // need a real path so the backup manager can create a workspace
+        let mut dataset = Dataset::new(outdir.path());
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(|_| Ok(None));
+        // The backup manager has started doing its thing, so we can cause it to
+        // exit on an error, we are done with the test at this point as we have
+        // effectively demonstrated that the supervisor and runner actors are
+        // working as expected.
+        mock.expect_get_excludes().returning(move || Vec::new());
+        mock.expect_insert_tree()
+            .returning(|_| Err(err_msg("oh no")));
+        let repo = Arc::new(mock);
+        // act
+        let result = start(repo);
+        thread::sleep(Duration::new(1, 0));
+        // assert
+        assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_should_run_no_schedule() {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(|_| Ok(None));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_should_run_first_backup_due() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(|_| Ok(None));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
+    }
+
+    #[test]
+    fn test_should_run_first_backup_running() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone = dataset.id.clone();
+        let datasets = vec![dataset];
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(|_| Ok(None));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // indicate that the dataset is already running a backup
+        state::dispatch(Action::StartBackup(dataset_id_clone));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_should_run_backup_not_overdue() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that finished just now
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let end_time = Utc::now();
+        snapshot = snapshot.end_time(end_time);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_should_run_backup_overdue() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that finished a while ago
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let day_ago = chrono::Duration::hours(25);
+        let end_time = Utc::now() - day_ago;
+        snapshot = snapshot.end_time(end_time);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
+    }
+
+    #[test]
+    fn test_should_run_old_snapshot_recent_backup() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone1 = dataset.id.clone();
+        let dataset_id_clone2 = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that finished a while ago
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let day_ago = chrono::Duration::hours(25);
+        let end_time = Utc::now() - day_ago;
+        snapshot = snapshot.end_time(end_time);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // insert a backup state that finished recently, which is the case when
+        // there were no file changes, but the backup "finished" nonetheless
+        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        state::dispatch(Action::FinishBackup(dataset_id_clone2));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_should_run_backup_restarted() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that did not finish
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // the app has restarted, so ensure there is no state
+        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
+        // and now there is backup state showing that it restarted
+        assert!(state::get_state().backups(&dataset_id_clone).is_some());
+    }
+
+    #[test]
+    fn test_should_run_backup_restarted_not_overdue() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that finished just now
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let end_time = Utc::now();
+        snapshot = snapshot.end_time(end_time);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // the app has restarted, so ensure there is no state
+        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+        // the backup should not run and there is still no state
+        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+    }
+
+    #[test]
+    fn test_should_run_overdue_backup_running() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone1 = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that finished a while ago
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let day_ago = chrono::Duration::hours(25);
+        let end_time = Utc::now() - day_ago;
+        snapshot = snapshot.end_time(end_time);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // indicate that the dataset is already running a backup
+        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_should_run_overdue_had_error() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        dataset = dataset.add_schedule(Schedule::Daily(None));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone1 = dataset.id.clone();
+        let dataset_id_clone2 = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that started just now
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // indicate that the backup started but then failed
+        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        state::dispatch(Action::ErrorBackup(dataset_id_clone2));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), true);
     }
 }

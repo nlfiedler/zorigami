@@ -13,23 +13,43 @@ use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
 use lazy_static::lazy_static;
 use log::info;
+use server::data::repositories::RecordRepositoryImpl;
+use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
+use server::domain::managers::process;
+use server::domain::managers::state;
+use server::domain::repositories::RecordRepository;
+use server::preso::graphql;
 use std::env;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
-use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
-use server::preso::graphql;
+
+// When running in test mode, the cwd is the server directory.
+#[cfg(test)]
+static DEFAULT_DB_PATH: &str = "../tmp/test/database";
+
+// Running in debug/release mode we assume cwd is root directory.
+#[cfg(not(test))]
+static DEFAULT_DB_PATH: &str = "./tmp/database";
+
+// When running in test mode, the cwd is the server directory.
+#[cfg(test)]
+static DEFAULT_WEB_PATH: &str = "../web/";
+
+// Running in debug/release mode we assume cwd is root directory.
+#[cfg(not(test))]
+static DEFAULT_WEB_PATH: &str = "./web/";
 
 lazy_static! {
     // Path to the database files.
     static ref DB_PATH: PathBuf = {
         dotenv::dotenv().ok();
-        let path = env::var("DB_PATH").unwrap_or_else(|_| "./tmp/database".to_owned());
+        let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
         PathBuf::from(path)
     };
     // Path to the static web files.
     static ref STATIC_PATH: PathBuf = {
-        let path = env::var("STATIC_FILES").unwrap_or_else(|_| "./web/".to_owned());
+        let path = env::var("STATIC_FILES").unwrap_or_else(|_| DEFAULT_WEB_PATH.to_owned());
         PathBuf::from(path)
     };
     // Path of the fallback page for web requests.
@@ -76,31 +96,31 @@ async fn graphql(
 //     Ok(file)
 // }
 
-// fn log_state_changes(state: &state::State) {
-//     for (key, backup) in state.active_datasets() {
-//         if let Some(end_time) = backup.end_time() {
-//             // the backup finished recently, log one last entry
-//             let sys_time = chrono::Utc::now();
-//             let interval = sys_time - end_time;
-//             if interval.num_seconds() < 60 {
-//                 info!(
-//                     "complete for {}: packs: {}, files: {}",
-//                     key,
-//                     backup.packs_uploaded(),
-//                     backup.files_uploaded()
-//                 );
-//             }
-//         } else {
-//             // this backup is not yet finished
-//             info!(
-//                 "progress for {}: packs: {}, files: {}",
-//                 key,
-//                 backup.packs_uploaded(),
-//                 backup.files_uploaded()
-//             );
-//         }
-//     }
-// }
+fn log_state_changes(state: &state::State) {
+    for (key, backup) in state.active_datasets() {
+        if let Some(end_time) = backup.end_time() {
+            // the backup finished recently, log one last entry
+            let sys_time = chrono::Utc::now();
+            let interval = sys_time - end_time;
+            if interval.num_seconds() < 60 {
+                info!(
+                    "complete for {}: packs: {}, files: {}",
+                    key,
+                    backup.packs_uploaded(),
+                    backup.files_uploaded()
+                );
+            }
+        } else {
+            // this backup is not yet finished
+            info!(
+                "progress for {}: packs: {}, files: {}",
+                key,
+                backup.packs_uploaded(),
+                backup.files_uploaded()
+            );
+        }
+    }
+}
 
 // All requests that fail to match anything else will be directed to the index
 // page, where the client-side code will handle the routing and "page not found"
@@ -110,11 +130,18 @@ async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
     Ok(file.use_last_modified(true))
 }
 
+fn start_supervisor() {
+    let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+    process::start(dbase).unwrap();
+}
+
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     env_logger::init();
-    //     state::subscribe("main-logger", log_state_changes);
-    //     supervisor::start(DB_PATH.clone()).unwrap();
+    state::subscribe("main-logger", log_state_changes);
+    start_supervisor();
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
     let addr = format!("{}:{}", host, port);

@@ -88,24 +88,24 @@
 ***** can run all tests or tests for one package (=cargo test -p <name>=)
 ***** database and pack store code go into separate library packages
 ***** bulk of code moves to binary package named =server=
-**** TODO implement ~start backup~ usecase (and graphql mutation)
+**** DONE enable the main ~supervisor~ code to start at bootup
 ***** DONE migrate integ tests for backup manager
 ***** DONE migrate file restore code and tests
 ***** DONE migrate process management code and tests
 ***** DONE resolve the domain/data layer violation
 ****** add function to record repo to create pack repo for given dataset
 ****** pass the boxed record repo to the supervisor code, not the db_path
-***** TODO write tests for =load_dataset_stores()= in repo impl
-***** TODO design and implement the usecase to start a backup
-***** TODO backup manager: skip datasets that have no stores
-**** TODO implement ~put back~ usecase (and graphql query)
-***** this is the new ~put back~ feature, not the download file feature
+***** DONE write tests for =load_dataset_stores()= in repo impl
+***** DONE start the supervisor in the main thread
+***** DONE write unit tests for the process manager
+***** DONE try converting process integ tests to unit tests
 **** TODO implement ~get snapshot~ usecase (and graphql query)
 **** TODO implement ~get tree~ usecase (and graphql query)
-**** TODO process manager either needs IoC or move outside of domain layer
-***** currently constructing repository implementations
-***** dependency injection may make sense for this
-***** need to construct the pack sources as needed because configuration will change
+**** TODO convert tests in =schema_test.rs= to unit tests
+**** TODO implement ~put back~ usecase (and graphql query)
+***** this is the new ~put back~ feature, not the download file feature
+**** TODO implement ~start backup~ usecase (and graphql mutation)
+***** TODO design and implement the usecase to start a backup
 **** TODO write a store validator to validate input to use cases
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source
