@@ -673,7 +673,7 @@ pub struct DatasetInput {
     pub basepath: String,
     /// List of schedules to apply to this dataset.
     pub schedules: Vec<ScheduleInput>,
-    // Path to temporary workspace for backup process.
+    /// Path to temporary workspace for backup process.
     pub workspace: Option<String>,
     /// Desired byte length of pack files.
     pub pack_size: BigInt,
