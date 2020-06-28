@@ -100,8 +100,8 @@
 ***** DONE write unit tests for the process manager
 ***** DONE try converting process integ tests to unit tests
 **** DONE implement ~get snapshot~ usecase (and graphql query)
-**** TODO implement ~get tree~ usecase (and graphql query)
-**** TODO convert tests in =schema_test.rs= to unit tests
+**** DONE implement ~get tree~ usecase (and graphql query)
+**** DONE convert tests in =schema_test.rs= to unit tests
 **** TODO implement ~put back~ usecase (and graphql query)
 ***** this is the new ~put back~ feature, not the download file feature
 **** TODO implement ~start backup~ usecase (and graphql mutation)
@@ -110,6 +110,7 @@
 ***** constructs the =Store= entity, passes to blob repo for validation
 ***** blob repo consults with the appropriate blob data source
 ***** each blob data source implementation then validates the store definition
+**** TODO get the frontend working again
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates

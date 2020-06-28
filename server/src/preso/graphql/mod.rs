@@ -6,7 +6,7 @@
 
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::data::sources::EntityDataSource;
-use crate::domain::entities::{self, Checksum};
+use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::repositories::RecordRepository;
 use chrono::prelude::*;
 use juniper::{
@@ -118,25 +118,91 @@ graphql_scalar!(Checksum where Scalar = <S> {
 //
 // need `where Scalar = <S>` parameterization to use this with objects c.f.
 // https://github.com/graphql-rust/juniper/issues/358 for details
-// graphql_scalar!(TreeReference where Scalar = <S> {
-//     description: "Reference for a tree entry, such as a file or tree."
+graphql_scalar!(TreeReference where Scalar = <S> {
+    description: "Reference for a tree entry, such as a file or tree."
 
-//     resolve(&self) -> Value {
-//         let value = format!("{}", self);
-//         Value::scalar(value)
-//     }
+    resolve(&self) -> Value {
+        let value = format!("{}", self);
+        Value::scalar(value)
+    }
 
-//     from_input_value(v: &InputValue) -> Option<TreeReference> {
-//         v.as_scalar_value::<String>().filter(|s| {
-//             // make sure the input value actually looks like a digest
-//             s.starts_with("sha1-") || s.starts_with("sha256-")
-//         }).map(|s| FromStr::from_str(s).unwrap())
-//     }
+    from_input_value(v: &InputValue) -> Option<TreeReference> {
+        v.as_scalar_value::<String>().filter(|s| {
+            // make sure the input value actually looks like a digest
+            s.starts_with("sha1-") || s.starts_with("sha256-")
+        }).map(|s| FromStr::from_str(s).unwrap())
+    }
 
-//     from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
-//         <String as ParseScalarValue<S>>::from_str(value)
-//     }
-// });
+    from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+});
+
+/// Tree entry type, such as a file or directory.
+#[derive(Copy, Clone, GraphQLEnum)]
+pub enum EntryType {
+    /// Anything that is not a directory or symlink.
+    FILE,
+    /// Represents a directory.
+    DIR,
+    /// Represents a symbolic link.
+    LINK,
+    /// Error occurred while processing the entry.
+    ERROR,
+}
+
+impl From<entities::EntryType> for EntryType {
+    fn from(dow: entities::EntryType) -> Self {
+        match dow {
+            entities::EntryType::FILE => EntryType::FILE,
+            entities::EntryType::DIR => EntryType::DIR,
+            entities::EntryType::LINK => EntryType::LINK,
+            entities::EntryType::ERROR => EntryType::ERROR,
+        }
+    }
+}
+
+impl Into<entities::EntryType> for EntryType {
+    fn into(self) -> entities::EntryType {
+        match self {
+            EntryType::FILE => entities::EntryType::FILE,
+            EntryType::DIR => entities::EntryType::DIR,
+            EntryType::LINK => entities::EntryType::LINK,
+            EntryType::ERROR => entities::EntryType::ERROR,
+        }
+    }
+}
+
+#[juniper::object(description = "A file, directory, or symbolic link within a tree.")]
+impl entities::TreeEntry {
+    /// Name of the file, directory, or symbolic link.
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Basic type of the entry, e.g. file or directory.
+    fn fstype(&self) -> EntryType {
+        self.fstype.into()
+    }
+
+    /// Modification time of the entry.
+    fn mod_time(&self) -> DateTime<Utc> {
+        self.mtime.clone()
+    }
+
+    /// Reference to the entry itself.
+    fn reference(&self) -> TreeReference {
+        self.reference.clone()
+    }
+}
+
+#[juniper::object(description = "A set of file system entries in a directory.")]
+impl entities::Tree {
+    /// Set of entries making up this tree.
+    fn entries(&self) -> Vec<entities::TreeEntry> {
+        self.entries.clone()
+    }
+}
 
 #[juniper::object(description = "A single backup, either in progress or completed.")]
 impl entities::Snapshot {
@@ -541,11 +607,17 @@ impl QueryRoot {
         Ok(result)
     }
 
-    // /// Retrieve a specific tree.
-    // fn tree(executor: &Executor, digest: Checksum) -> FieldResult<Option<Tree>> {
-    //     let database = executor.context();
-    //     Ok(database.get_tree(&digest)?)
-    // }
+    /// Retrieve a specific tree.
+    fn tree(executor: &Executor, digest: Checksum) -> FieldResult<Option<entities::Tree>> {
+        use crate::domain::usecases::get_tree::{GetTree, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetTree::new(Box::new(repo));
+        let params: Params = Params::new(digest);
+        let result: Option<entities::Tree> = usecase.call(params)?;
+        Ok(result)
+    }
 }
 
 /// Property defines a name/value pair.
@@ -1173,6 +1245,116 @@ mod tests {
         // assert
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("snapshot").unwrap();
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_query_tree_some() {
+        // arrange
+        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let reference = TreeReference::FILE(file_digest);
+        let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
+        let entry = entities::TreeEntry::new(filepath, reference);
+        let tree = entities::Tree::new(vec![entry], 1);
+        let tree_sha1 = tree.digest.clone();
+        let tree_sha2 = tree.digest.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_tree()
+            .withf(move |d| d == &tree_sha1)
+            .returning(move |_| Ok(Some(tree.clone())));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Tree($digest: Checksum!) {
+                tree(digest: $digest) { entries { name } }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("tree").unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("entries").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 1);
+        let object = list[0].as_object_value().unwrap();
+        let field = object.get_field_value("name").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "lorem-ipsum.txt");
+    }
+
+    #[test]
+    fn test_query_tree_none() {
+        // arrange
+        let tree_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let tree_sha2 = tree_sha1.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_tree()
+            .withf(move |d| d == &tree_sha1)
+            .returning(move |_| Ok(None));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Tree($digest: Checksum!) {
+                tree(digest: $digest) { entries { name } }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("tree").unwrap();
+        assert!(res.is_null());
+    }
+
+    #[test]
+    fn test_query_tree_err() {
+        // arrange
+        let tree_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let tree_sha2 = tree_sha1.clone();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_tree()
+            .withf(move |d| d == &tree_sha1)
+            .returning(move |_| Err(err_msg("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let mut vars = Variables::new();
+        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        let (res, errors) = juniper::execute(
+            r#"query Tree($digest: Checksum!) {
+                tree(digest: $digest) { entries { name } }
+            }"#,
+            None,
+            &schema,
+            &vars,
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("tree").unwrap();
         assert!(res.is_null());
         assert_eq!(errors.len(), 1);
         assert!(errors[0].error().message().contains("oh no"));
