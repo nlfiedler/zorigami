@@ -102,14 +102,7 @@
 **** DONE implement ~get snapshot~ usecase (and graphql query)
 **** DONE implement ~get tree~ usecase (and graphql query)
 **** DONE convert tests in =schema_test.rs= to unit tests
-**** TODO implement ~put back~ usecase (and graphql query)
-***** this is the new ~put back~ feature, not the download file feature
-**** TODO implement ~start backup~ usecase (and graphql mutation)
-***** TODO design and implement the usecase to start a backup
-**** TODO write a store validator to validate input to use cases
-***** constructs the =Store= entity, passes to blob repo for validation
-***** blob repo consults with the appropriate blob data source
-***** each blob data source implementation then validates the store definition
+**** DONE write a store validator to validate input to use cases
 **** TODO get the frontend working again
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
@@ -312,6 +305,7 @@
 **** write a usecase for checking the progress of the request
 **** direct user to a "restore requests" page that shows progress
 ** Manual Backup controls
+*** write use cases for starting and stopping a backup
 *** add a "backup now" button to datasets listing
 **** need a GraphQL mutation to signal backup to start
 **** add a =start_dataset_now()= in =supervisor= module, similar to =start_due_datasets()=

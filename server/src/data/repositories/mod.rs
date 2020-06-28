@@ -107,6 +107,9 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
+        // validate the store configuration
+        let builder = PackSourceBuilderImpl {};
+        builder.build_source(store)?;
         self.datasource.put_store(store)
     }
 
