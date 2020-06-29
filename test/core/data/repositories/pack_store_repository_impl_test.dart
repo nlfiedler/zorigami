@@ -129,12 +129,11 @@ void main() {
       () async {
         // arrange
         when(mockRemoteDataSource.deletePackStore(any))
-            .thenAnswer((_) async => tPackStoreModel);
+            .thenAnswer((_) async => tPackStoreModel.key);
         // act
-        final result = await repository.deletePackStore(tPackStore);
+        await repository.deletePackStore(tPackStore);
         // assert
         verify(mockRemoteDataSource.deletePackStore(any));
-        expect(result.unwrap(), equals(tPackStore));
       },
     );
 

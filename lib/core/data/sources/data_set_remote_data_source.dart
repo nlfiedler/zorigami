@@ -9,14 +9,13 @@ import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class DataSetRemoteDataSource {
   Future<List<DataSetModel>> getAllDataSets();
-  Future<DataSetModel> getDataSet(String key);
-  Future<DataSetModel> deleteDataSet(DataSet input);
+  Future<String> deleteDataSet(DataSet input);
   Future<DataSetModel> defineDataSet(DataSet input);
   Future<DataSetModel> updateDataSet(DataSet input);
 }
 
 const String dataSetFields = '''
-  key
+  id
   computerId
   basepath
   schedules {
@@ -73,37 +72,10 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
   }
 
   @override
-  Future<DataSetModel> getDataSet(String key) async {
-    final query = '''
-      query FetchDataset(\$identifier: String!) {
-        dataset(key: \$identifier) {
-          ${dataSetFields}
-        }
-      }
-    ''';
-    final queryOptions = QueryOptions(
-      documentNode: gql(query),
-      variables: <String, dynamic>{
-        'identifier': key,
-      },
-      fetchPolicy: FetchPolicy.noCache,
-    );
-    final QueryResult result = await client.query(queryOptions);
-    if (result.hasException) {
-      throw ServerException(result.exception.toString());
-    }
-    final Map<String, dynamic> object =
-        result.data['dataset'] as Map<String, dynamic>;
-    return object == null ? null : DataSetModel.fromJson(object);
-  }
-
-  @override
-  Future<DataSetModel> deleteDataSet(DataSet input) async {
+  Future<String> deleteDataSet(DataSet input) async {
     final deleteDataSet = '''
       mutation DeleteDataset(\$identifier: String!) {
-        deleteDataset(key: \$identifier) {
-          ${dataSetFields}
-        }
+        deleteDataset(key: \$identifier)
       }
     ''';
     final mutationOptions = MutationOptions(
@@ -116,15 +88,15 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final dataset = result.data['deleteDataset'] as Map<String, dynamic>;
-    return DataSetModel.fromJson(dataset);
+    final identifier = result.data['deleteDataset'] as String;
+    return identifier;
   }
 
   @override
   Future<DataSetModel> defineDataSet(DataSet input) async {
     final defineStore = '''
-      mutation DefineDataset(\$dataset: InputDataset!) {
-        defineDataset(dataset: \$dataset) {
+      mutation DefineDataset(\$input: DatasetInput!) {
+        defineDataset(input: \$input) {
           ${dataSetFields}
         }
       }
@@ -133,7 +105,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final mutationOptions = MutationOptions(
       documentNode: gql(defineStore),
       variables: <String, dynamic>{
-        'dataset': encoded,
+        'input': encoded,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);
@@ -147,8 +119,8 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
   @override
   Future<DataSetModel> updateDataSet(DataSet input) async {
     final updateStore = '''
-      mutation UpdateDataset(\$dataset: InputDataset!) {
-        updateDataset(dataset: \$dataset) {
+      mutation UpdateDataset(\$input: DatasetInput!) {
+        updateDataset(input: \$input) {
           ${dataSetFields}
         }
       }
@@ -157,7 +129,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final mutationOptions = MutationOptions(
       documentNode: gql(updateStore),
       variables: <String, dynamic>{
-        'dataset': encoded,
+        'input': encoded,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);

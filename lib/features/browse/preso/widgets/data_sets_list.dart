@@ -26,35 +26,41 @@ class DataSetsList extends StatelessWidget {
             return Text('Error: ' + state.message);
           }
           if (state is Loaded) {
-            final elements = List<Widget>.from(
-              state.sets.map((e) {
-                return Card(
-                  child: ListTile(
-                    leading: Icon(Icons.dns),
-                    title: Text(e.basepath + ', runs ' + getSchedule(e)),
-                    subtitle: Text('Status: ' + getStatus(e)),
-                    trailing: Icon(Icons.chevron_right),
-                    onTap: () {
-                      if (e.snapshot is Some) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SnapshotScreen(dataset: e),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                );
-              }),
-            );
-            return ListView(children: elements);
+            return state.sets.isEmpty
+                ? buildHelp(context)
+                : buildDatasetList(context, state.sets);
           }
           return Text('Loading...');
         },
       ),
     );
   }
+}
+
+Widget buildDatasetList(BuildContext context, List<DataSet> sets) {
+  final elements = List<Widget>.from(
+    sets.map((e) {
+      return Card(
+        child: ListTile(
+          leading: Icon(Icons.dns),
+          title: Text(e.basepath + ', runs ' + getSchedule(e)),
+          subtitle: Text('Status: ' + getStatus(e)),
+          trailing: Icon(Icons.chevron_right),
+          onTap: () {
+            if (e.snapshot is Some) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SnapshotScreen(dataset: e),
+                ),
+              );
+            }
+          },
+        ),
+      );
+    }),
+  );
+  return ListView(children: elements);
 }
 
 String getSchedule(DataSet dataset) {
@@ -74,5 +80,19 @@ String getStatus(DataSet dataset) {
       () => 'still running',
     ),
     () => 'not yet run',
+  );
+}
+
+Widget buildHelp(BuildContext context) {
+  return Card(
+    child: ListTile(
+      leading: Icon(Icons.dns),
+      title: Text('No data sets found'),
+      subtitle: Text(
+          'First configure one or more pack stores, then create a data set using those stores.'),
+      trailing: Icon(Icons.chevron_right),
+      onTap: () => Navigator.pushNamedAndRemoveUntil(
+          context, '/stores', ModalRoute.withName('/')),
+    ),
   );
 }

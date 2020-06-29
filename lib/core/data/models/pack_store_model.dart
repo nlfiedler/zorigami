@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'dart:convert';
 import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 
@@ -18,25 +17,34 @@ class PackStoreModel extends PackStore {
           options: options,
         );
 
-  factory PackStoreModel.fromJson(Map<String, dynamic> json) {
-    final kind = decodeKind(json['kind']);
-    final options = decodeOptions(json['options']);
+  factory PackStoreModel.fromStore(PackStore store) {
     return PackStoreModel(
-      key: json['key'],
-      label: json['label'],
+      key: store.key,
+      label: store.label,
+      kind: store.kind,
+      options: store.options,
+    );
+  }
+
+  factory PackStoreModel.fromJson(Map<String, dynamic> json) {
+    final kind = decodeKind(json['storeType']);
+    final options = decodeOptions(json['properties']);
+    return PackStoreModel(
+      key: json['id'],
       kind: kind,
+      label: json['label'],
       options: options,
     );
   }
 
   Map<String, dynamic> toJson() {
     final kind = encodeKind(this.kind);
-    final encodedOptions = encodeOptions(options);
+    final options = encodeOptions(this.options);
     return {
-      'key': key,
+      'id': key,
+      'storeType': kind,
       'label': label,
-      'kind': kind,
-      'options': encodedOptions,
+      'properties': options,
     };
   }
 }
@@ -49,7 +57,7 @@ StoreKind decodeKind(String kind) {
   } else if (kind == 'sftp') {
     return StoreKind.sftp;
   } else {
-    throw ArgumentError('kind is not recognized');
+    throw ArgumentError('kind "${kind}" is not recognized');
   }
 }
 
@@ -66,16 +74,20 @@ String encodeKind(StoreKind kind) {
   }
 }
 
-Map<String, dynamic> decodeOptions(String options) {
+Map<String, dynamic> decodeOptions(List<dynamic> options) {
   if (options.isEmpty) {
     return <String, dynamic>{};
   }
-  return json.decode(utf8.decode(base64Url.decode(options)));
+  final Map<String, dynamic> results = {};
+  options.forEach((e) => results[e['name']] = e['value']);
+  return results;
 }
 
-String encodeOptions(Map<String, dynamic> options) {
+List<Map<String, dynamic>> encodeOptions(Map<String, dynamic> options) {
   if (options.isEmpty) {
-    return '';
+    return [];
   }
-  return base64Url.encode(utf8.encode(json.encode(options)));
+  final List<Map<String, dynamic>> results = [];
+  options.forEach((key, value) => results.add({'name': key, 'value': value}));
+  return results;
 }

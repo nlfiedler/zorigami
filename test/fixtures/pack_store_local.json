@@ -1,6 +1,11 @@
 {
-  "key": "123",
+  "id": "123",
   "label": "Label",
-  "kind": "local",
-  "options": "eyJsYWJlbCI6IkxhYmVsIiwiYmFzZXBhdGgiOiIvaG9tZS91c2VycyJ9"
+  "storeType": "local",
+  "properties": [
+    {
+      "name": "basepath",
+      "value": "/home/users"
+    }
+  ]
 }

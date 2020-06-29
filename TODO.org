@@ -53,7 +53,7 @@
 ***** basically the graphql schema implementation
 ***** probably do not need =dataset()= and =store()= queries
 ***** can remove the =dataset()= and =store()= queries from Dart code, they are unused
-*** TODO Action Plan
+*** DONE Action Plan
 **** DONE implement ~new store~ usecase
 ***** define =Store= entity
 ***** define =StoreDef= model for serialization
@@ -103,7 +103,15 @@
 **** DONE implement ~get tree~ usecase (and graphql query)
 **** DONE convert tests in =schema_test.rs= to unit tests
 **** DONE write a store validator to validate input to use cases
-**** TODO get the frontend working again
+**** DONE get the frontend working again
+***** store query/mutation
+****** new: supply type (e.g. ~local~), label, and list of name/value pairs
+****** update: same as new, plus the store identifier is required
+***** dataset query/mutation
+****** renamed =key= field to =id=
+****** added =workspace= field on input
+****** =computerId= is not guaranteed to be present in query
+***** ensure snapshots and browsing is working
 ** Update rusoto to latest
 *** with 0.43 they use std future now instead of futures
 *** maybe can remove the =futures= and =futures-fs= crates
@@ -233,7 +241,6 @@
 **** currently selected option should be highlighted, not actionable
 *** TODO improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
-*** TODO show a message when there are no datasets, packs, snapshots
 *** TODO improve snapshot tree browser
 **** for larger number of entries, should use =PaginatedDataTable=
 **** nice to have: sticky table header
@@ -244,6 +251,7 @@
 *** TODO dataset status says "running" even though it had an error
 **** need to expose the error status via GraphQL
 *** TODO improve the data sets form
+**** TODO add padding around the form, its touching the edge of the screen
 **** TODO use the =validate()= function on =DataSet= to ensure validity
 **** TODO should decode the computer ID to improve readability
 **** TODO would be better to have frequency options in a row

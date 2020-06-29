@@ -133,7 +133,7 @@ void main() {
       () async {
         // arrange
         when(mockRemoteDataSource.deleteDataSet(any))
-            .thenAnswer((_) async => tDataSetModel);
+            .thenAnswer((_) async => tDataSetModel.key);
         // act
         final result = await repository.deleteDataSet(tDataSet);
         // assert

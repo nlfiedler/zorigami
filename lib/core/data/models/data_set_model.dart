@@ -139,8 +139,9 @@ class DataSetModel extends DataSet {
     final List<String> stores = List.from(
       json['stores'].map((e) => e.toString()),
     );
+    // note that computerId is optional, but we will ignore that for now
     return DataSetModel(
-      key: json['key'],
+      key: json['id'],
       computerId: json['computerId'],
       basepath: json['basepath'],
       schedules: schedules,
@@ -156,7 +157,7 @@ class DataSetModel extends DataSet {
       this.schedules.map((s) => ScheduleModel.from(s).toJson()),
     );
     final result = {
-      'key': key,
+      'id': key,
       'basepath': basepath,
       'schedules': schedules,
       'packSize': packSize.toString(),

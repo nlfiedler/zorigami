@@ -12,7 +12,7 @@ void main() {
     key: '123',
     label: 'Label',
     kind: StoreKind.local,
-    options: {'label': 'Label', 'basepath': '/home/users'},
+    options: {'basepath': '/home/users'},
   );
 
   test(
@@ -58,10 +58,15 @@ void main() {
         final result = tPackStoreModel.toJson();
         // assert
         final expectedMap = {
-          'key': '123',
+          'id': '123',
           'label': 'Label',
-          'kind': 'local',
-          'options': 'eyJsYWJlbCI6IkxhYmVsIiwiYmFzZXBhdGgiOiIvaG9tZS91c2VycyJ9'
+          'storeType': 'local',
+          'properties': [
+            {
+              'name': 'basepath',
+              'value': '/home/users',
+            }
+          ]
         };
         expect(result, expectedMap);
       },
@@ -75,7 +80,7 @@ void main() {
         key: 'abc123',
         label: 'MyLabel',
         kind: StoreKind.local,
-        options: {'label': 'MyLabel', 'basepath': '/home/planet'},
+        options: {'basepath': '/home/planet'},
       );
       // act
       final result = PackStoreModel.fromJson(model.toJson());
@@ -90,7 +95,6 @@ void main() {
         label: 'SecureFTP',
         kind: StoreKind.sftp,
         options: {
-          'label': 'SecureFTP',
           'remote_addr': '192.168.1.1',
           'username': 'charlie',
           'password': null,

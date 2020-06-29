@@ -34,17 +34,30 @@ void main() {
     key: 'abc123',
     label: 'lstore',
     kind: StoreKind.local,
-    options: {'path': '/home/user'},
+    options: {'basepath': '/home/user'},
   );
 
-  void setUpMockHttpClientGraphQLResponse(String operation, String options) {
+  void setUpMockDeleteGraphQLResponse() {
+    final response = {
+      'data': {'deleteStore': 'abc123'}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
+  void setUpMockHttpClientGraphQLResponse(
+      String operation, List<dynamic> options) {
     final response = {
       'data': {
         operation: {
-          'key': 'abc123',
+          'id': 'abc123',
           'label': 'lstore',
-          'kind': 'local',
-          'options': options
+          'storeType': 'local',
+          'properties': options
         }
       }
     };
@@ -76,21 +89,9 @@ void main() {
     });
   }
 
-  void setUpMockGraphQLNullResponse() {
-    final response = {
-      'data': {'store': null}
-    };
-    // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
-      final bytes = utf8.encode(json.encode(response));
-      final stream = http.ByteStream.fromBytes(bytes);
-      return http.StreamedResponse(stream, 200);
-    });
-  }
-
   void setUpMockHttpClientFailure403() {
     when(mockHttpClient.send(any)).thenAnswer((_) async {
-      final bytes = List<int>();
+      final bytes = <int>[];
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 403);
     });
@@ -125,7 +126,12 @@ void main() {
         final response = {
           'data': {
             'stores': [
-              {'key': 'a1', 'label': 's1', 'kind': 'minio', 'options': ''},
+              {
+                'id': 'a1',
+                'label': 's1',
+                'storeType': 'minio',
+                'properties': []
+              },
             ]
           }
         };
@@ -157,9 +163,24 @@ void main() {
         final response = {
           'data': {
             'stores': [
-              {'key': 'a1', 'label': 's1', 'kind': 'minio', 'options': ''},
-              {'key': 'b2', 'label': 's2', 'kind': 'local', 'options': ''},
-              {'key': 'c3', 'label': 's3', 'kind': 'sftp', 'options': ''},
+              {
+                'id': 'a1',
+                'label': 's1',
+                'storeType': 'minio',
+                'properties': []
+              },
+              {
+                'id': 'b2',
+                'label': 's2',
+                'storeType': 'local',
+                'properties': []
+              },
+              {
+                'id': 'c3',
+                'label': 's3',
+                'storeType': 'sftp',
+                'properties': []
+              },
             ]
           }
         };
@@ -211,74 +232,6 @@ void main() {
         } catch (e) {
           expect(e, isA<ServerException>());
         }
-        //
-        // wanted to do this, but it failed with an "asynchronous gap" error,
-        // tried numerous alternatives to no avail
-        //
-        // final future = dataSource.getPackStore('foobar');
-        // expect(future, completion(throwsA(ServerException)));
-      },
-    );
-  });
-
-  group('getPackStore', () {
-    test(
-      'should return a specific pack store',
-      () async {
-        // arrange
-        setUpMockHttpClientGraphQLResponse('store', '');
-        // act
-        final result = await dataSource.getPackStore('abc123');
-        // assert
-        final store = PackStoreModel(
-          key: 'abc123',
-          label: 'lstore',
-          kind: StoreKind.local,
-          options: {},
-        );
-        expect(result, equals(store));
-      },
-    );
-
-    test(
-      'should report failure when response unsuccessful',
-      () async {
-        // arrange
-        setUpMockHttpClientFailure403();
-        // act, assert
-        try {
-          await dataSource.getPackStore('foobar');
-          fail('should have raised an error');
-        } catch (e) {
-          expect(e, isA<ServerException>());
-        }
-      },
-    );
-
-    test(
-      'should raise error when GraphQL server returns an error',
-      () async {
-        // arrange
-        setUpMockHttpClientGraphQLError();
-        // act, assert
-        try {
-          await dataSource.getPackStore('foobar');
-          fail('should have raised an error');
-        } catch (e) {
-          expect(e, isA<ServerException>());
-        }
-      },
-    );
-
-    test(
-      'should return null when response is null',
-      () async {
-        // arrange
-        setUpMockGraphQLNullResponse();
-        // act
-        final result = await dataSource.getPackStore('foobar');
-        // assert
-        expect(result, isNull);
       },
     );
   });
@@ -288,17 +241,10 @@ void main() {
       'should delete a specific pack store',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse('deleteStore', '');
+        setUpMockDeleteGraphQLResponse();
         // act
-        final result = await dataSource.deletePackStore(tPackStoreModel);
-        // assert
-        final store = PackStoreModel(
-          key: 'abc123',
-          label: 'lstore',
-          kind: StoreKind.local,
-          options: {},
-        );
-        expect(result, equals(store));
+        await dataSource.deletePackStore(tPackStoreModel);
+        // assert: nothing to assert
       },
     );
 

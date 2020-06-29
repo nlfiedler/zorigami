@@ -62,9 +62,9 @@ void main() {
   );
   final tDataSetModel = DataSetModel.from(tDataSet);
 
-  void setUpMockGraphQLNullResponse() {
+  void setUpMockDeleteGraphQLResponse() {
     final response = {
-      'data': {'dataset': null}
+      'data': {'deleteDataset': 'setkey1'}
     };
     // graphql client uses the 'send' method
     when(mockHttpClient.send(any)).thenAnswer((_) async {
@@ -78,7 +78,7 @@ void main() {
     final response = {
       'data': {
         operation: {
-          'key': 'setkey1',
+          'id': 'setkey1',
           'computerId': 'cray-11',
           'basepath': '/home/planet',
           'schedules': [
@@ -168,7 +168,7 @@ void main() {
           'data': {
             'datasets': [
               {
-                'key': 'a1',
+                'id': 'a1',
                 'computerId': 's1',
                 'basepath': '/home/planet',
                 'schedules': [],
@@ -210,7 +210,7 @@ void main() {
           'data': {
             'datasets': [
               {
-                'key': 'a1',
+                'id': 'a1',
                 'computerId': 's1',
                 'basepath': '/home/planet',
                 'schedules': [],
@@ -219,7 +219,7 @@ void main() {
                 'latestSnapshot': null,
               },
               {
-                'key': 'a2',
+                'id': 'a2',
                 'computerId': 's2',
                 'basepath': '/home/town',
                 'schedules': [],
@@ -228,7 +228,7 @@ void main() {
                 'latestSnapshot': null,
               },
               {
-                'key': 'a3',
+                'id': 'a3',
                 'computerId': 's3',
                 'basepath': '/home/sweet/home',
                 'schedules': [],
@@ -289,70 +289,8 @@ void main() {
         } catch (e) {
           expect(e, isA<ServerException>());
         }
-        //
-        // wanted to do this, but it failed with an "asynchronous gap" error,
-        // tried numerous alternatives to no avail
-        //
-        // final future = dataSource.getDataSet('foobar');
-        // expect(future, completion(throwsA(ServerException)));
       },
     );
-  });
-
-  group('getDataSet', () {
-    test(
-      'should return a specific data set',
-      () async {
-        // arrange
-        setUpMockHttpClientGraphQLResponse('dataset');
-        // act
-        final result = await dataSource.getDataSet('abc123');
-        // assert
-        expect(result, equals(tDataSetModel));
-        expect(result.packSize, equals(tDataSetModel.packSize));
-        expect(result.schedules, equals(tDataSetModel.schedules));
-        expect(result.snapshot, equals(tDataSetModel.snapshot));
-      },
-    );
-
-    test(
-      'should report failure when response unsuccessful',
-      () async {
-        // arrange
-        setUpMockHttpClientFailure403();
-        // act, assert
-        try {
-          await dataSource.getDataSet('foobar');
-          fail('should have raised an error');
-        } catch (e) {
-          expect(e, isA<ServerException>());
-        }
-      },
-    );
-
-    test(
-      'should raise error when GraphQL server returns an error',
-      () async {
-        // arrange
-        setUpMockHttpClientGraphQLError();
-        // act, assert
-        try {
-          await dataSource.getDataSet('foobar');
-          fail('should have raised an error');
-        } catch (e) {
-          expect(e, isA<ServerException>());
-        }
-      },
-    );
-
-    test('should return null when response is null', () async {
-      // arrange
-      setUpMockGraphQLNullResponse();
-      // act
-      final result = await dataSource.getDataSet('foobar');
-      // assert
-      expect(result, isNull);
-    });
   });
 
   group('deleteDataSet', () {
@@ -360,11 +298,11 @@ void main() {
       'should delete a specific data set',
       () async {
         // arrange
-        setUpMockHttpClientGraphQLResponse('deleteDataset');
+        setUpMockDeleteGraphQLResponse();
         // act
         final result = await dataSource.deleteDataSet(tDataSet);
         // assert
-        expect(result, equals(tDataSetModel));
+        expect(result, equals(tDataSetModel.key));
       },
     );
 

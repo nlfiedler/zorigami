@@ -1,6 +1,6 @@
 {
-  "key": "123",
+  "id": "123",
   "label": "Label",
-  "kind": "foobar",
-  "options": ""
+  "storeType": "foobar",
+  "properties": []
 }
