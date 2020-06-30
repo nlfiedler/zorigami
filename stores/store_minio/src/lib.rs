@@ -1,20 +1,19 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use bytes::Bytes;
 use failure::{err_msg, Error};
-use futures::stream::Stream;
-use futures::Future;
-use futures_fs::FsPool;
+use futures::{TryStreamExt, FutureExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
     CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
     GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs::File;
 use std::path::Path;
 use store_core::Coordinates;
+use tokio::fs;
 
 ///
 /// A pack store implementation that uses the Amazon S3 protocol to connect to a
@@ -85,9 +84,8 @@ impl MinioStore {
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
         //
-        let meta = fs::metadata(packfile)?;
-        let fs = FsPool::default();
-        let read_stream = fs.read(packfile.to_owned(), Default::default());
+        let meta = std::fs::metadata(packfile)?;
+        let read_stream = fs::read(packfile.to_owned()).into_stream().map_ok(|b| Bytes::from(b));
         let req = PutObjectRequest {
             bucket: bucket.to_owned(),
             key: object.to_owned(),
@@ -95,7 +93,9 @@ impl MinioStore {
             body: Some(StreamingBody::new(read_stream)),
             ..Default::default()
         };
-        let result = client.put_object(req).sync()?;
+        // wait for the future(s) to complete
+        let mut runtime = create_runtime()?;
+        let result = runtime.block_on(client.put_object(req))?;
         if let Some(ref etag) = result.e_tag {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
@@ -116,7 +116,9 @@ impl MinioStore {
             key: location.object.clone(),
             ..Default::default()
         };
-        let result = client.get_object(request).sync()?;
+        // wait for the future(s) to complete
+        let mut runtime = create_runtime()?;
+        let result = runtime.block_on(client.get_object(request))?;
         let stream = result.body.ok_or_else(|| {
             err_msg(format!(
                 "failed to retrieve object {} from bucket {}",
@@ -125,15 +127,16 @@ impl MinioStore {
             ))
         })?;
         let mut file = File::create(outfile)?;
-        stream
-            .for_each(move |chunk| file.write_all(&chunk).map_err(Into::into))
-            .wait()?;
+        let mut body = stream.into_blocking_read();
+        std::io::copy(&mut body, &mut file)?;
         Ok(())
     }
 
     pub fn list_buckets(&self) -> Result<Vec<String>, Error> {
         let client = self.connect();
-        let result = client.list_buckets().sync()?;
+        // wait for the future(s) to complete
+        let mut runtime = create_runtime()?;
+        let result = runtime.block_on(client.list_buckets())?;
         let mut results = Vec::new();
         if let Some(buckets) = result.buckets {
             for bucket in buckets {
@@ -155,7 +158,9 @@ impl MinioStore {
         let mut results = Vec::new();
         loop {
             // we will be re-using the request, so clone it each time
-            let result = client.list_objects_v2(request.clone()).sync()?;
+            // wait for the future(s) to complete
+            let mut runtime = create_runtime()?;
+            let result = runtime.block_on(client.list_objects_v2(request.clone()))?;
             if let Some(contents) = result.contents {
                 for entry in contents {
                     if let Some(key) = entry.key {
@@ -179,7 +184,9 @@ impl MinioStore {
             key: object.to_owned(),
             ..Default::default()
         };
-        client.delete_object(request).sync()?;
+        // wait for the future(s) to complete
+        let mut runtime = create_runtime()?;
+        runtime.block_on(client.delete_object(request))?;
         Ok(())
     }
 
@@ -188,7 +195,9 @@ impl MinioStore {
         let request = DeleteBucketRequest {
             bucket: bucket.to_owned(),
         };
-        let result = client.delete_bucket(request).sync();
+        // wait for the future(s) to complete
+        let mut runtime = create_runtime()?;
+        let result = runtime.block_on(client.delete_bucket(request));
         // certain error conditions are okay
         match result {
             Err(e) => match e {
@@ -206,7 +215,9 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
         bucket: bucket.to_owned(),
         ..Default::default()
     };
-    let result = client.create_bucket(request).sync();
+    // wait for the future(s) to complete
+    let mut runtime = create_runtime()?;
+    let result = runtime.block_on(client.create_bucket(request));
     // certain error conditions are okay
     match result {
         Err(e) => match e {
@@ -218,6 +229,18 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
         },
         Ok(_) => Ok(()),
     }
+}
+
+/// Create the tokio runtime for running asynchronous tasks.
+fn create_runtime() -> Result<tokio::runtime::Runtime, Error> {
+    // Build the simplest and lightest runtime we can, while still enabling us
+    // to wait for futures to complete synchronously. Must enable io and time
+    // otherwise runtime does not really start.
+    let runtime = tokio::runtime::Builder::new()
+        .basic_scheduler()
+        .enable_all()
+        .build()?;
+    Ok(runtime)
 }
 
 #[cfg(test)]

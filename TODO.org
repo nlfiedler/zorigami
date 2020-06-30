@@ -1,11 +1,6 @@
 * Tasks
 ** crate updates
 *** latest =time= crate is incompatible with =chrono= for now
-** Update rusoto to latest
-*** with 0.43 they use std future now instead of futures
-*** maybe can remove the =futures= and =futures-fs= crates
-**** actix may be using the futures crate, but likely can all be updated
-*** look at the rusoto_s3 API documentation to figure out how to use it now
 ** Advanced Scheduling
 *** TODO frontend
 **** TODO Support multiple schedules in interface

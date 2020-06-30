@@ -5,12 +5,13 @@ authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2018"
 
 [dependencies]
+bytes = "0.5"
 dotenv = "0.15.0"
 failure = "0.1.6"
-futures = "0.1.28"
-futures-fs = "0.0.5"
-rusoto_core = "0.42.0"
-rusoto_credential = "0.42.0"
-rusoto_s3 = "0.42.0"
+futures = "0.3.5"
+rusoto_core = "0.44.0"
+rusoto_credential = "0.44.0"
+rusoto_s3 = "0.44.0"
 store_core = { path = "../store_core" }
 tempfile = "3.1.0"
+tokio = { version = "0.2", features = ["time", "rt-core", "fs"] }
