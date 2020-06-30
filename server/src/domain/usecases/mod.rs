@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use failure::{Error};
+use failure::Error;
 use std::cmp;
 use std::fmt;
 

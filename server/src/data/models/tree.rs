@@ -9,8 +9,8 @@
 // 5. cargo expand
 // 6. Copy the results here, stripping away the compiler directives
 //
-use chrono::prelude::*;
 use crate::domain::entities::{Checksum, EntryType, Tree, TreeEntry, TreeReference};
+use chrono::prelude::*;
 use std::collections::HashMap;
 
 impl serde::Serialize for EntryType {

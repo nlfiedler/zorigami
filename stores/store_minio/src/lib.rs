@@ -3,7 +3,7 @@
 //
 use bytes::Bytes;
 use failure::{err_msg, Error};
-use futures::{TryStreamExt, FutureExt};
+use futures::{FutureExt, TryStreamExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
     CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
@@ -85,7 +85,9 @@ impl MinioStore {
         // upload and upload the large file in chunks.
         //
         let meta = std::fs::metadata(packfile)?;
-        let read_stream = fs::read(packfile.to_owned()).into_stream().map_ok(|b| Bytes::from(b));
+        let read_stream = fs::read(packfile.to_owned())
+            .into_stream()
+            .map_ok(|b| Bytes::from(b));
         let req = PutObjectRequest {
             bucket: bucket.to_owned(),
             key: object.to_owned(),

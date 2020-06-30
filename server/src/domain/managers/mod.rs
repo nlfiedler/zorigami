@@ -19,8 +19,8 @@ use std::time::{Duration, SystemTimeError};
 use tar::{Archive, Builder, Header};
 
 pub mod backup;
-pub mod restore;
 pub mod process;
+pub mod restore;
 pub mod state;
 
 ///

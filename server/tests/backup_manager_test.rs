@@ -6,15 +6,15 @@ mod common;
 use common::DBPath;
 
 use failure::Error;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
 use server::domain::managers::backup::*;
 use server::domain::repositories::RecordRepository;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[test]
 fn test_basic_snapshots() -> Result<(), Error> {

@@ -4,11 +4,11 @@
 mod common;
 
 use common::DBPath;
+use server::data::sources::{self, EntityDataSource, EntityDataSourceImpl};
+use server::domain::entities::{self, Checksum};
 use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
 use std::path::Path;
-use server::data::sources::{self, EntityDataSource, EntityDataSourceImpl};
-use server::domain::entities::{self, Checksum};
 
 #[test]
 fn test_insert_get_chunk() {

@@ -43,13 +43,7 @@ pub fn perform_backup(
                 let parent_sha1 = snapshot.parent;
                 let current_sha1 = latest.to_owned();
                 debug!("continuing previous backup {}", &current_sha1);
-                return continue_backup(
-                    dataset,
-                    repo,
-                    passphrase,
-                    parent_sha1,
-                    current_sha1,
-                );
+                return continue_backup(dataset, repo, passphrase, parent_sha1, current_sha1);
             }
         }
     }
@@ -76,13 +70,7 @@ pub fn perform_backup(
         Some(current_sha1) => {
             repo.put_latest_snapshot(&dataset.id, &current_sha1)?;
             debug!("starting new backup {}", &current_sha1);
-            continue_backup(
-                dataset,
-                repo,
-                passphrase,
-                latest_snapshot,
-                current_sha1,
-            )
+            continue_backup(dataset, repo, passphrase, latest_snapshot, current_sha1)
         }
     }
 }

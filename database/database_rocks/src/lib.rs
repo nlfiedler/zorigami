@@ -55,7 +55,6 @@ impl Database {
 }
 
 impl database_core::Database for Database {
-
     /// Return the path to the database files.
     fn get_path(&self) -> &Path {
         self.db.path()
