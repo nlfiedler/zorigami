@@ -37,7 +37,7 @@ pub fn md5sum_file(infile: &Path) -> Result<String, Error> {
     let mut file = File::open(infile)?;
     let mut hasher = Md5::new();
     io::copy(&mut file, &mut hasher)?;
-    let digest = hasher.result();
+    let digest = hasher.finalize();
     let result = format!("{:x}", digest);
     Ok(result)
 }
@@ -64,5 +64,24 @@ impl Coordinates {
             bucket: bucket.to_owned(),
             object: object.to_owned(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_md5sum_file() {
+        let infile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let md5sum = md5sum_file(&infile).unwrap();
+        #[cfg(target_family = "unix")]
+        assert_eq!(md5sum, "40756e6058736e2485119410c2014380");
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            // this checksum is wrong and will need to be fixed
+            md5sum,
+            "40756e6058736e2485119410c2014380"
+        );
     }
 }
