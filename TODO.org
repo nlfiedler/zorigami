@@ -1,6 +1,4 @@
 * Tasks
-** crate updates
-*** latest =time= crate is incompatible with =chrono= for now
 ** Advanced Scheduling
 *** TODO frontend
 **** TODO Support multiple schedules in interface

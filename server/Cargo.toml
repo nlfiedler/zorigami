@@ -45,7 +45,6 @@ store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
 tar = "0.4.26"
 tempfile = "3.1.0"
-time = "0.1"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 whoami = "0.9"
 

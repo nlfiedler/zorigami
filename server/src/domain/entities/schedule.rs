@@ -226,7 +226,7 @@ impl Schedule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use time::Duration;
+    use chrono::Duration;
 
     #[test]
     fn test_time_range() {
