@@ -35,8 +35,8 @@ impl Checksum {
     pub fn sha1_from_bytes(data: &[u8]) -> Checksum {
         use sha1::{Digest, Sha1};
         let mut hasher = Sha1::new();
-        hasher.input(data);
-        let digest = hasher.result();
+        hasher.update(data);
+        let digest = hasher.finalize();
         Checksum::SHA1(format!("{:x}", digest))
     }
 
@@ -46,8 +46,8 @@ impl Checksum {
     pub fn sha256_from_bytes(data: &[u8]) -> Checksum {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
-        hasher.input(data);
-        let digest = hasher.result();
+        hasher.update(data);
+        let digest = hasher.finalize();
         Checksum::SHA256(format!("{:x}", digest))
     }
 
@@ -59,7 +59,7 @@ impl Checksum {
         let mut file = fs::File::open(infile)?;
         let mut hasher = Sha256::new();
         io::copy(&mut file, &mut hasher)?;
-        let digest = hasher.result();
+        let digest = hasher.finalize();
         Ok(Checksum::SHA256(format!("{:x}", digest)))
     }
 
