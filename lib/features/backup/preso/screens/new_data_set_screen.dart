@@ -47,9 +47,12 @@ class NewDataSetScreen extends StatelessWidget {
             }
             if (state is psb.Loaded) {
               final dataset = defaultDataSet();
-              return NewDataSetWidget(
-                dataset: dataset,
-                stores: state.stores,
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: NewDataSetWidget(
+                  dataset: dataset,
+                  stores: state.stores,
+                ),
               );
             }
             return Text('Loading pack stores...');
