@@ -35,7 +35,7 @@ impl juniper::Context for GraphContext {}
 // Define a larger integer type so we can represent those larger values, such as
 // file sizes. Some of the core types define fields that are larger than i32, so
 // this type is used to represent those values in GraphQL.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BigInt(i64);
 
 impl BigInt {
@@ -129,7 +129,7 @@ graphql_scalar!(TreeReference where Scalar = <S> {
     from_input_value(v: &InputValue) -> Option<TreeReference> {
         v.as_scalar_value::<String>().filter(|s| {
             // make sure the input value actually looks like a digest
-            s.starts_with("sha1-") || s.starts_with("sha256-")
+            s.starts_with("file-") || s.starts_with("link-") || s.starts_with("tree-")
         }).map(|s| FromStr::from_str(s).unwrap())
     }
 
@@ -983,8 +983,59 @@ mod tests {
     use super::*;
     use crate::data::sources::MockEntityDataSource;
     use failure::err_msg;
-    use juniper::{InputValue, ToInputValue, Variables};
+    use juniper::{FromInputValue, InputValue, ToInputValue, Variables};
     use mockall::predicate::*;
+
+    #[test]
+    fn test_bigint_scalar() {
+        let iv: InputValue<juniper::DefaultScalarValue> =
+            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("1048576".to_owned()));
+        let option: Option<BigInt> = BigInt::from_input_value(&iv);
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert_eq!(actual, BigInt(1048576));
+
+        // not a number
+        let iv: InputValue<juniper::DefaultScalarValue> =
+            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("madokami".to_owned()));
+        let option: Option<BigInt> = BigInt::from_input_value(&iv);
+        assert!(option.is_none());
+    }
+
+    #[test]
+    fn test_checksum_scalar() {
+        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
+            juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
+        );
+        let option: Option<Checksum> = Checksum::from_input_value(&iv);
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert!(actual.is_sha1());
+
+        // missing algorithm prefix
+        let iv: InputValue<juniper::DefaultScalarValue> =
+            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("cafebabe".to_owned()));
+        let option: Option<Checksum> = Checksum::from_input_value(&iv);
+        assert!(option.is_none());
+    }
+
+    #[test]
+    fn test_treereference_scalar() {
+        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
+            juniper::DefaultScalarValue::String("tree-sha1-cafebabe".to_owned()),
+        );
+        let option: Option<TreeReference> = TreeReference::from_input_value(&iv);
+        assert!(option.is_some());
+        let actual = option.unwrap();
+        assert!(actual.is_tree());
+
+        // missing entry type prefix
+        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
+            juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
+        );
+        let option: Option<TreeReference> = TreeReference::from_input_value(&iv);
+        assert!(option.is_none());
+    }
 
     #[test]
     fn test_query_configuration() {
@@ -1061,6 +1112,33 @@ mod tests {
     }
 
     #[test]
+    fn test_query_stores_none() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_stores().returning(move || Ok(Vec::new()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                stores { storeType label }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("stores").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 0);
+    }
+
+    #[test]
     fn test_query_stores_err() {
         // arrange
         let mut mock = MockEntityDataSource::new();
@@ -1117,6 +1195,33 @@ mod tests {
         let field = object.get_field_value("basepath").unwrap();
         let value = field.as_scalar_value::<String>().unwrap();
         assert_eq!(value, "/home/planet");
+    }
+
+    #[test]
+    fn test_query_datasets_none() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_datasets().returning(move || Ok(Vec::new()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                datasets { basepath }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("datasets").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 0);
     }
 
     #[test]

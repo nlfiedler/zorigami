@@ -7,7 +7,7 @@
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
 *** TODO backend
-**** Supervisor needs to consider start time in the time range (if any)
+**** =process.rs= needs to consider start time in the time range (if any)
 **** =BackupMaster= needs to calculate the stop time in =new()=
 **** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
 **** supervisor to report the =OutOfTimeError= a little better than normal errors
@@ -21,7 +21,7 @@
 **** e.g. minio gets an md5 mismatch when storing an object
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
-**** merge with the defaults in =engine.rs=
+**** merge with the defaults in =backup.rs=
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
@@ -93,31 +93,13 @@
 **** seemingly only on Ubuntu (maybe Debian, need to test)
 *** TODO file restore in =main.rs= should schedule cleanup of the temporary file
 **** supervisor could delete anything last modified an hour ago
-*** TODO need to schedule pruning old database snapshots on remote store
-**** there is no deduplication of the database files, so it uses more space
-**** only really need the most recent copy
-**** be mindful of remote storage deletion policies
 ** Loose GraphQL tasks
-*** TODO test the GraphQL schema and resolvers
-**** TODO "integers" that are not radix 10 integers
-**** TODO digests that lack the proper algorithm prefix
-**** TODO querying for things when there is nothing in the database
-**** TODO querying snapshots
-**** TODO querying trees
-**** TODO querying files
-**** DONE fetching configuration record
-**** TODO updating configuration record
-**** DONE querying datasets
-**** DONE mutating datasets
-**** DONE querying stores
-**** DONE mutating stores
 *** TODO probably should use a better client cache
 **** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
 **** uses the "type" of the object and its unique identifier as the caching key
 **** our objects would need to have a "typename" for this to work
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
-*** TODO handle errors in getting Database ref in graphql handler
 ** Loose WebUI tasks
 *** TODO improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
@@ -213,6 +195,10 @@
 **** Imagine a computer lab all sharing a single cloud storage account
 ** Snapshot Pruning
 *** Should probably not run collection while a backup is in progress
+*** Need to prune old database snapshots on remote store
+**** there is no deduplication of the database files, so it uses more space
+**** only really need the most recent copy
+**** be mindful of remote storage deletion policies
 *** Consider how to prune old snapshots, pack files, etc
 **** Time Machine and Attic both have retention policies
 **** Based on retention policy, delete stale snapshot records
