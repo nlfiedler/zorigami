@@ -107,8 +107,6 @@
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
-*** TODO use =CircularProgressIndicator= instead of a "loading" text widget
-*** TODO move =usecases/usecase.dart= to be under =domain=
 *** TODO improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
 *** TODO improve (server) error handling

@@ -7,9 +7,10 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/repositories/configuration_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
-import 'package:zorigami/core/usecases/usecase.dart';
+import 'package:zorigami/core/domain/usecases/usecase.dart';
 
-class MockConfigurationRepository extends Mock implements ConfigurationRepository {}
+class MockConfigurationRepository extends Mock
+    implements ConfigurationRepository {}
 
 void main() {
   GetConfiguration usecase;

@@ -7,7 +7,7 @@ import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
-import 'package:zorigami/core/usecases/usecase.dart';
+import 'package:zorigami/core/domain/usecases/usecase.dart';
 
 //
 // events

@@ -6,7 +6,7 @@ import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
-import 'package:zorigami/core/usecases/usecase.dart';
+import 'package:zorigami/core/domain/usecases/usecase.dart';
 import 'package:zorigami/core/error/failures.dart';
 
 class GetTree implements UseCase<Tree, Params> {

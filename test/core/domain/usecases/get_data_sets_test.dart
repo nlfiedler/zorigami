@@ -7,7 +7,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
-import 'package:zorigami/core/usecases/usecase.dart';
+import 'package:zorigami/core/domain/usecases/usecase.dart';
 
 class MockDataSetRepository extends Mock implements DataSetRepository {}
 

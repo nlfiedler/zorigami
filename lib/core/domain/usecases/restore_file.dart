@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
-import 'package:zorigami/core/usecases/usecase.dart';
+import 'package:zorigami/core/domain/usecases/usecase.dart';
 import 'package:zorigami/core/error/failures.dart';
 
 class RestoreFile implements UseCase<String, Params> {
