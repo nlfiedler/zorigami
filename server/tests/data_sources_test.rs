@@ -174,6 +174,9 @@ fn test_put_get_delete_datasets() {
         .iter()
         .any(|s| s.basepath.to_string_lossy() == "/home/town"));
 
+    let actual = datasource.get_dataset(&datasets[0].id).unwrap();
+    assert!(actual.is_some());
+
     // delete one of the datasets
     datasource.delete_dataset(&datasets[0].id).unwrap();
     let datasets = datasource.get_datasets().unwrap();

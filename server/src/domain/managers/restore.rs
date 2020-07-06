@@ -20,6 +20,7 @@ pub fn restore_file(
     outfile: &Path,
 ) -> Result<(), Error> {
     let stores = dbase.load_dataset_stores(&dataset)?;
+    fs::create_dir_all(&dataset.workspace)?;
     // look up the file record to get chunks
     let saved_file = dbase
         .get_file(&checksum)?

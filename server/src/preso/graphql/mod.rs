@@ -969,6 +969,24 @@ impl MutationRoot {
         usecase.call(params)?;
         Ok(id)
     }
+
+    /// Restore the given file, returning the path to the restored file.
+    fn restoreFile(
+        executor: &Executor,
+        digest: Checksum,
+        filepath: String,
+        dataset: String,
+    ) -> FieldResult<String> {
+        use crate::domain::usecases::put_back::{Params, PutBack};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = PutBack::new(Arc::new(repo));
+        let fpath = PathBuf::from(filepath);
+        let params: Params = Params::new(digest.clone(), fpath, dataset);
+        let result = usecase.call(params)?;
+        Ok(result.to_string_lossy().into_owned())
+    }
 }
 
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;

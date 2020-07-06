@@ -77,4 +77,51 @@ void main() {
       },
     );
   });
+
+  group('restoreFile', () {
+    test(
+      'should return remote data when remote data source returns data',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.restoreFile(any, any, any))
+            .thenAnswer((_) async => '/path/to/file');
+        // act
+        final result =
+            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.restoreFile(any, any, any));
+        expect(result.unwrap(), equals('/path/to/file'));
+      },
+    );
+
+    test(
+      'should return failure when remote data source returns null',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.restoreFile(any, any, any))
+            .thenAnswer((_) async => null);
+        // act
+        final result =
+            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.restoreFile(any, any, any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+
+    test(
+      'should return server failure when remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.restoreFile(any, any, any))
+            .thenThrow(ServerException());
+        // act
+        final result =
+            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.restoreFile(any, any, any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
 }

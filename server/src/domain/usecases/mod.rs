@@ -13,6 +13,7 @@ pub mod get_stores;
 pub mod get_tree;
 pub mod new_dataset;
 pub mod new_store;
+pub mod put_back;
 pub mod update_dataset;
 pub mod update_store;
 

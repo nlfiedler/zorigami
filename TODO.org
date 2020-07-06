@@ -12,10 +12,20 @@
 **** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
 **** supervisor to report the =OutOfTimeError= a little better than normal errors
 ** Put Back feature
-*** TODO write usecase for ~put back~ that restores file to original path
-*** TODO add GraphQL mutation to invoke ~put back~ usecase
-*** TODO Rename the "restore" button to "download"
-*** TODO Add a "put back" button to invoke the GraphQL mutation
+*** DONE write usecase for ~put back~ that restores file to original path
+*** DONE add GraphQL mutation to invoke ~put back~ usecase
+*** DONE Rename the "restore" button to "download"
+*** DONE Add a "put back" button to invoke the GraphQL mutation
+**** DONE write data source function to run graphql mutation
+**** DONE test the data source function
+**** DONE expose repository function to restore file
+**** DONE test the restore function in repo
+**** DONE write a new client-side usecase to restore a file
+**** DONE decide if =TreeBrowserBloc= will handle the restore, or a new bloc
+**** DONE can show each file name as it is restored using a =SnackBar=
+**** DONE test the new bloc event/state
+*** DONE should be able to put back all selected files
+*** DONE deselect files once they are restored
 ** Cloud Backup
 *** TODO retry a pack upload if it encounters a temporary error
 **** e.g. minio gets an md5 mismatch when storing an object
@@ -89,10 +99,6 @@
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
-*** TODO sometimes =test_db_threads_one_path()= test fails getting a lock
-**** seemingly only on Ubuntu (maybe Debian, need to test)
-*** TODO file restore in =main.rs= should schedule cleanup of the temporary file
-**** supervisor could delete anything last modified an hour ago
 ** Loose GraphQL tasks
 *** TODO probably should use a better client cache
 **** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
@@ -101,6 +107,8 @@
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
+*** TODO use =CircularProgressIndicator= instead of a "loading" text widget
+*** TODO move =usecases/usecase.dart= to be under =domain=
 *** TODO improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
 *** TODO improve (server) error handling
@@ -143,10 +151,11 @@
 **** add hints to improve the presentation of information
 ***** configuration panel
 ***** snapshot browser
-** Multi-file Restore
+** Better file/tree Restore
+*** this improved UI should replace the put-back button
+**** the put-back feature relies on a quick response which is not guaranteed
 *** backend
 **** receive requests of tree/file digests to be restored
-**** only works for "put back" feature, not the "download" to browser
 **** limit the number of digests that can be submitted in one request
 **** return a request ID to the client for querying later
 **** add the requests to a limited size queue to prevent abuse
@@ -163,6 +172,9 @@
 **** write a usecase for submitting the tree/file digests
 **** write a usecase for checking the progress of the request
 **** direct user to a "restore requests" page that shows progress
+**** write a new bloc for this restore management
+**** consider how to show errors with respect to files
+**** maybe show list of all files being restored, with status/error in a table
 ** Manual Backup controls
 *** write use cases for starting and stopping a backup
 *** add a "backup now" button to datasets listing

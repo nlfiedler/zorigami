@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart' as launcher;
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
-import 'package:zorigami/environment_config.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 class TreeViewer extends StatelessWidget {
@@ -19,7 +17,29 @@ class TreeViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      child: BlocBuilder<TreeBrowserBloc, TreeBrowserState>(
+      child: BlocConsumer<TreeBrowserBloc, TreeBrowserState>(
+        listener: (context, state) {
+          if (state is Loaded) {
+            if (state.restoreResult != null) {
+              // this is just a temporary solution until the proper (multi-)file
+              // restore screen is developed
+              final content = state.restoreResult.mapOrElse(
+                (success) => ListTile(
+                  title: Text('File restored'),
+                  subtitle: Text(success),
+                ),
+                (failure) => ListTile(
+                  title: Text('Restore failed'),
+                  subtitle: Text(failure.toString()),
+                ),
+              );
+              // must show snackbar outside of builder
+              Scaffold.of(context).showSnackBar(
+                SnackBar(content: content),
+              );
+            }
+          }
+        },
         builder: (context, state) {
           if (state is Empty) {
             // kick off the initial remote request
@@ -51,21 +71,6 @@ class TreePath extends StatelessWidget {
 
   TreePath({@required this.state});
 
-  void restoreFile(DataSet dataset, TreeEntry entry) async {
-    // Just construct URL here for now, eventually there will be a usecase that
-    // will have this configured via dependency injection and this function will
-    // simply initiate the request via the usecase and then display the progress
-    // (not to mention it will process multiple trees/files, not just one).
-    final baseUrl = EnvironmentConfig.base_url;
-    final digest = entry.reference.value;
-    final url = '${baseUrl}/restore/${dataset.key}/${digest}/${entry.name}';
-    if (await launcher.canLaunch(url)) {
-      await launcher.launch(url);
-    } else {
-      throw 'Could not launch $url';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -82,12 +87,15 @@ class TreePath extends StatelessWidget {
           ),
           SizedBox(width: 16.0),
           RaisedButton(
-            child: Text('Restore'),
+            child: Text('Put Back'),
             onPressed: state.selections.isNotEmpty
-                ? () async => restoreFile(
-                      Provider.of<DataSet>(context, listen: false),
-                      state.selections[0],
-                    )
+                ? () {
+                    final dataset =
+                        Provider.of<DataSet>(context, listen: false);
+                    BlocProvider.of<TreeBrowserBloc>(context).add(
+                      RestoreSelections(datasetKey: dataset.key),
+                    );
+                  }
                 : null,
           ),
           SizedBox(width: 56.0),

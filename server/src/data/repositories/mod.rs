@@ -153,6 +153,10 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_datasets()
     }
 
+    fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error> {
+        self.datasource.get_dataset(id)
+    }
+
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
         self.datasource.delete_dataset(id)
     }

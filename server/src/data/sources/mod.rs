@@ -108,6 +108,9 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve all defined dataset configurations.
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error>;
 
+    /// Retrieve the dataset by the given identifier.
+    fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error>;
+
     /// Remove the dataset by the given identifier.
     fn delete_dataset(&self, id: &str) -> Result<(), Error>;
 
@@ -366,6 +369,20 @@ impl EntityDataSource for EntityDataSourceImpl {
             results.push(result);
         }
         Ok(results)
+    }
+
+    fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error> {
+        let key = format!("dataset/{}", id);
+        let encoded = self.database.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = DatasetDef::deserialize(&mut de)?;
+                result.id = id.to_owned();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
     }
 
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {

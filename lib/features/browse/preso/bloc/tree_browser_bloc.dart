@@ -5,8 +5,11 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
+import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
-import 'package:zorigami/core/domain/usecases/get_tree.dart';
+import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
+import 'package:zorigami/core/domain/usecases/restore_file.dart' as rf;
+import 'package:zorigami/core/error/failures.dart';
 
 //
 // events
@@ -36,6 +39,12 @@ class SetSelection extends TreeBrowserEvent {
   SetSelection({@required this.entry, @required this.selected});
 }
 
+class RestoreSelections extends TreeBrowserEvent {
+  final String datasetKey;
+
+  RestoreSelections({@required this.datasetKey});
+}
+
 class NavigateUpward extends TreeBrowserEvent {}
 
 class ResetTree extends TreeBrowserEvent {}
@@ -59,13 +68,19 @@ class Loaded extends TreeBrowserState {
   final List<String> path;
   // list of selected entries
   final List<TreeEntry> selections;
+  // result of most recently restored file, or null if none
+  final Result<String, Failure> restoreResult;
 
-  Loaded({@required this.tree, @required selections, @required path})
-      : selections = List.unmodifiable(selections),
+  Loaded({
+    @required this.tree,
+    @required selections,
+    @required path,
+    this.restoreResult,
+  })  : selections = List.unmodifiable(selections),
         path = List.unmodifiable(path);
 
   @override
-  List<Object> get props => [tree, selections];
+  List<Object> get props => [tree, selections, restoreResult];
 
   @override
   bool get stringify => true;
@@ -88,7 +103,8 @@ class Error extends TreeBrowserState {
 //
 
 class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
-  final GetTree usecase;
+  final gt.GetTree getTree;
+  final rf.RestoreFile restoreFile;
   // tree checksums in hierarchy order (added on load)
   final List<String> history = [];
   // entry names in hierarchy order ("root" is not included)
@@ -99,7 +115,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   @override
   TreeBrowserState get initialState => Empty();
 
-  TreeBrowserBloc({this.usecase});
+  TreeBrowserBloc({this.getTree, this.restoreFile});
 
   @override
   Stream<TreeBrowserState> mapEventToState(
@@ -141,13 +157,40 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
       // Something else has happened (i.e. navigating snapshots) outside of this
       // bloc that requires signaling the consumers of the change.
       yield initialState;
+    } else if (event is RestoreSelections) {
+      if (state is Loaded) {
+        final tree = (state as Loaded).tree;
+        while (selections.isNotEmpty) {
+          final entry = selections.removeLast();
+          if (entry.reference.type == EntryType.file) {
+            final filepath =
+                path.isEmpty ? entry.name : path.join('/') + '/' + entry.name;
+            final params = rf.Params(
+              digest: entry.reference.value,
+              filepath: filepath,
+              dataset: event.datasetKey,
+            );
+            final result = await restoreFile(params);
+            // This design for reporting the results of each file restore is
+            // temporary, ultimately there will be a dedicated screen for
+            // showing the results of all of the files being restored, including
+            // any errors that each might have along the way.
+            yield Loaded(
+              tree: tree,
+              selections: selections,
+              path: path,
+              restoreResult: result,
+            );
+          }
+        }
+      }
     }
   }
 
   Stream<TreeBrowserState> _loadTree(String digest) async* {
     selections.clear();
     yield Loading();
-    final result = await usecase(Params(checksum: digest));
+    final result = await getTree(gt.Params(checksum: digest));
     yield result.mapOrElse(
       (tree) {
         history.add(digest);

@@ -81,21 +81,6 @@ async fn graphql(
         .body(body))
 }
 
-// async fn restore(info: web::Path<(String, String, String)>) -> Result<NamedFile> {
-//     let dbase = Database::new(DB_PATH.as_path())?;
-//     let dataset = dbase
-//         .get_dataset(info.0.as_ref())?
-//         .ok_or_else(|| err_msg(format!("missing dataset: {:?}", info.0)))?;
-//     let passphrase = core::get_passphrase();
-//     let checksum = core::Checksum::from_str(&info.1)?;
-//     let mut outfile = PathBuf::from(&dataset.workspace);
-//     outfile.push(info.2.clone());
-//     engine::restore_file(&dbase, &dataset, &passphrase, checksum, &outfile)?;
-//     // NamedFile does everything we need from here.
-//     let file = NamedFile::open(&outfile)?;
-//     Ok(file)
-// }
-
 fn log_state_changes(state: &state::State) {
     for (key, backup) in state.active_datasets() {
         if let Some(end_time) = backup.end_time() {
@@ -163,10 +148,6 @@ async fn main() -> io::Result<()> {
             )
             .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
-            // .service(
-            //     web::resource("/restore/{dataset}/{checksum}/{filename}")
-            //         .route(web::get().to(restore)),
-            // )
             .service(Files::new("/", STATIC_PATH.clone()).index_file("index.html"))
             .default_service(web::get().to(default_index))
     })

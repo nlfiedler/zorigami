@@ -102,6 +102,9 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve all defined dataset configurations.
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error>;
 
+    /// Retrieve the dataset by the given identifier.
+    fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error>;
+
     /// Remove the dataset by the given identifier.
     fn delete_dataset(&self, id: &str) -> Result<(), Error>;
 

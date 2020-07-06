@@ -65,7 +65,7 @@ void init() {
     () => TreeBloc(usecase: getIt()),
   );
   getIt.registerFactory(
-    () => TreeBrowserBloc(usecase: getIt()),
+    () => TreeBrowserBloc(getTree: getIt(), restoreFile: getIt()),
   );
 
   // widgets

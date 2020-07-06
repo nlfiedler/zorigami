@@ -11,6 +11,7 @@ import 'get_data_sets.dart';
 import 'get_pack_stores.dart';
 import 'get_snapshot.dart';
 import 'get_tree.dart';
+import 'restore_file.dart';
 import 'update_data_set.dart';
 import 'update_pack_store.dart';
 
@@ -26,4 +27,5 @@ void initUseCases(GetIt getIt) {
   getIt.registerLazySingleton(() => GetTree(getIt()));
   getIt.registerLazySingleton(() => UpdateDataSet(getIt()));
   getIt.registerLazySingleton(() => UpdatePackStore(getIt()));
+  getIt.registerLazySingleton(() => RestoreFile(getIt()));
 }

@@ -6,16 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
+import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
+import 'package:zorigami/core/domain/usecases/restore_file.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
-class MockSnapshotRepository extends Mock implements TreeRepository {}
+class MockTreeRepository extends Mock implements TreeRepository {}
+
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
 
 void main() {
+  MockTreeRepository mockTreeRepository;
   MockSnapshotRepository mockSnapshotRepository;
-  GetTree usecase;
+  GetTree getTree;
+  RestoreFile restoreFile;
 
   final tTree1 = Tree(
     entries: [
@@ -82,32 +88,32 @@ void main() {
 
   group('normal cases', () {
     setUp(() {
-      mockSnapshotRepository = MockSnapshotRepository();
-      usecase = GetTree(mockSnapshotRepository);
-      when(mockSnapshotRepository.getTree('sha1-cafebabe'))
+      mockTreeRepository = MockTreeRepository();
+      getTree = GetTree(mockTreeRepository);
+      when(mockTreeRepository.getTree('sha1-cafebabe'))
           .thenAnswer((_) async => Ok(tTree1));
-      when(mockSnapshotRepository.getTree('sha1-cafed00d'))
+      when(mockTreeRepository.getTree('sha1-cafed00d'))
           .thenAnswer((_) async => Ok(tTree2));
-      when(mockSnapshotRepository.getTree('sha1-deadbeef'))
+      when(mockTreeRepository.getTree('sha1-deadbeef'))
           .thenAnswer((_) async => Ok(tTree3));
     });
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       expect: [],
     );
 
     blocTest(
       'emits updated state when LoadTree is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
       expect: [Loading(), Loaded(tree: tTree1, selections: [], path: [])],
     );
 
     blocTest(
       'selects an entry when SetSelection is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -122,7 +128,7 @@ void main() {
 
     blocTest(
       'toggle entry selection on and off',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -139,7 +145,7 @@ void main() {
 
     blocTest(
       'selection emitted once for multiple identical SetSelection events',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -156,14 +162,14 @@ void main() {
 
     blocTest(
       'should emit nothing when LoadEntry is added without a tree',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadEntry(entry: tTree1.entries[1])),
       expect: [],
     );
 
     blocTest(
       'clears selections when LoadEntry is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -185,7 +191,7 @@ void main() {
 
     blocTest(
       'clears state when LoadTree is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -203,7 +209,7 @@ void main() {
 
     blocTest(
       'clears state when ResetTree is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -220,14 +226,14 @@ void main() {
 
     blocTest(
       'should emit nothing when NavigateUpward is added without history',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(NavigateUpward()),
       expect: [],
     );
 
     blocTest(
       'should pop history when NavigateUpward is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(LoadEntry(entry: tTree1.entries[1]));
@@ -249,17 +255,56 @@ void main() {
     );
   });
 
+  group('file restoration', () {
+    setUp(() {
+      mockTreeRepository = MockTreeRepository();
+      mockSnapshotRepository = MockSnapshotRepository();
+      getTree = GetTree(mockTreeRepository);
+      restoreFile = RestoreFile(mockSnapshotRepository);
+      when(mockTreeRepository.getTree('sha1-cafebabe'))
+          .thenAnswer((_) async => Ok(tTree1));
+      when(mockSnapshotRepository.restoreFile(
+              'sha256-8c983bd', 'file1', 'dataset1'))
+          .thenAnswer((_) async => Ok('file1'));
+    });
+
+    blocTest(
+      'emits [Loading, Loaded, ...] when RestoreSelections is added',
+      build: () async => TreeBrowserBloc(
+        getTree: getTree,
+        restoreFile: restoreFile,
+      ),
+      act: (bloc) {
+        bloc.add(LoadTree(digest: 'sha1-cafebabe'));
+        bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
+        bloc.add(RestoreSelections(datasetKey: 'dataset1'));
+        return;
+      },
+      expect: [
+        Loading(),
+        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(
+          tree: tTree1,
+          selections: [],
+          path: [],
+          restoreResult: Ok('file1'),
+        ),
+      ],
+    );
+  });
+
   group('error cases', () {
     setUp(() {
-      mockSnapshotRepository = MockSnapshotRepository();
-      usecase = GetTree(mockSnapshotRepository);
-      when(mockSnapshotRepository.getTree(any))
+      mockTreeRepository = MockTreeRepository();
+      getTree = GetTree(mockTreeRepository);
+      when(mockTreeRepository.getTree(any))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 
     blocTest(
       'emits [Loading, Error] when LoadTree is added',
-      build: () async => TreeBrowserBloc(usecase: usecase),
+      build: () async => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
