@@ -121,15 +121,10 @@
 *** TODO dataset status says "running" even though it had an error
 **** need to expose the error status via GraphQL
 *** TODO improve the data sets form
-**** DONE add padding around the form, its touching the edge of the screen
 **** TODO use the =validate()= function on =DataSet= to ensure validity
 **** TODO should decode the computer ID to improve readability
 **** TODO would be better to have frequency options in a row
 ***** need to use =FormBuilderCustomField= and return a =Row= of widgets
-**** TODO store selection should be easier for the user
-**** TODO disable Save button until form is valid
-**** TODO store input validator should check stores actually exist
-**** TODO pack size should have minimum and maximum values
 *** TODO should sort the datasets so they are always in the same order
 **** maybe sort them by date, with most recent first
 *** TODO tree entries of =ERROR= type should be displayed as such
@@ -139,7 +134,6 @@
 **** probably need paging in the ui and graphql api
 **** consider presenting in a style similar to Time Machine
 *** TODO improve the page for defining stores
-**** TODO disable Save button until form is valid
 **** TODO delete button should be far away from the other button(s)
 **** TODO delete button should require two clicks, with "are you sure?"
 **** TODO display help text on stores page when there are no stores defined
