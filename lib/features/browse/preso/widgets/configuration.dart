@@ -17,7 +17,6 @@ class Configuration extends StatelessWidget {
             // kick off the initial remote request
             BlocProvider.of<ConfigurationBloc>(context)
                 .add(LoadConfiguration());
-            return Text('Starting...');
           }
           if (state is Error) {
             return Text('Error: ' + state.message);
@@ -35,7 +34,7 @@ class Configuration extends StatelessWidget {
               accountName: Text(config.computerId),
             );
           }
-          return Text('Loading...');
+          return CircularProgressIndicator();
         },
       ),
     );

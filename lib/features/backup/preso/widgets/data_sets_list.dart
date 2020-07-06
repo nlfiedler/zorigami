@@ -30,7 +30,6 @@ class DataSetsList extends StatelessWidget {
             // kick off the initial remote request
             BlocProvider.of<psb.PackStoresBloc>(context)
                 .add(psb.LoadAllPackStores());
-            return Text('Starting...');
           }
           if (state is psb.Error) {
             return Card(
@@ -46,7 +45,7 @@ class DataSetsList extends StatelessWidget {
               stores: state.stores,
             );
           }
-          return Text('Loading pack stores...');
+          return CircularProgressIndicator();
         },
       ),
     );

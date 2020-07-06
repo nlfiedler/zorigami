@@ -23,7 +23,6 @@ class PackStoresScreen extends StatelessWidget {
             if (state is Empty) {
               // kick off the initial remote request
               BlocProvider.of<PackStoresBloc>(context).add(LoadAllPackStores());
-              return Text('Starting...');
             }
             if (state is Error) {
               return Card(
@@ -44,7 +43,7 @@ class PackStoresScreen extends StatelessWidget {
                 ],
               );
             }
-            return Text('Loading...');
+            return CircularProgressIndicator();
           },
         ),
       ),

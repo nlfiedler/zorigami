@@ -39,7 +39,6 @@ class SnapshotScreen extends StatelessWidget {
               BlocProvider.of<SnapshotBrowserBloc>(context).add(
                 LoadSnapshot(digest: dataset.snapshot.unwrap().checksum),
               );
-              return Text('Starting...');
             }
             if (state is Error) {
               return Text('Error getting snapshot: ' + state.message);
@@ -50,7 +49,7 @@ class SnapshotScreen extends StatelessWidget {
                 child: SnapshotViewer(state: state),
               );
             }
-            return Text('Loading...');
+            return CircularProgressIndicator();
           },
         ),
       ),

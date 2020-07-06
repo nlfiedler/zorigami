@@ -46,7 +46,6 @@ class DataSetsScreen extends StatelessWidget {
     if (state is Empty) {
       // kick off the initial remote request
       BlocProvider.of<DataSetsBloc>(context).add(LoadAllDataSets());
-      return Text('Starting...');
     }
     if (state is Error) {
       return Card(
@@ -59,6 +58,6 @@ class DataSetsScreen extends StatelessWidget {
     if (state is Loaded) {
       return DataSetsList(sets: state.sets);
     }
-    return Text('Loading data sets...');
+    return CircularProgressIndicator();
   }
 }

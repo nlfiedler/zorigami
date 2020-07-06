@@ -46,7 +46,6 @@ class TreeViewer extends StatelessWidget {
             BlocProvider.of<TreeBrowserBloc>(context).add(
               LoadTree(digest: rootTree),
             );
-            return Text('Starting...');
           }
           if (state is Error) {
             return Text('Error: ' + state.message);
@@ -59,7 +58,7 @@ class TreeViewer extends StatelessWidget {
               ],
             );
           }
-          return Text('Loading...');
+          return CircularProgressIndicator();
         },
       ),
     );

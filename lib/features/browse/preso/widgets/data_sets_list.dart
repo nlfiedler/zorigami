@@ -20,7 +20,6 @@ class DataSetsList extends StatelessWidget {
           if (state is Empty) {
             // kick off the initial remote request
             BlocProvider.of<DataSetsBloc>(context).add(LoadAllDataSets());
-            return Text('Starting...');
           }
           if (state is Error) {
             return Text('Error: ' + state.message);
@@ -30,7 +29,7 @@ class DataSetsList extends StatelessWidget {
                 ? buildHelp(context)
                 : buildDatasetList(context, state.sets);
           }
-          return Text('Loading...');
+          return CircularProgressIndicator();
         },
       ),
     );
