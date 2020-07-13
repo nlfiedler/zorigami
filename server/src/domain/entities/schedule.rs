@@ -208,6 +208,8 @@ impl Schedule {
     /// Return the time at which the backup should stop.
     ///
     /// Will return `None` if there is no stop time (i.e. no time range).
+    ///
+    /// The time should be the current time ("now").
     pub fn stop_time(&self, time: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match *self {
             Schedule::Hourly => None,

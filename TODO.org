@@ -1,31 +1,4 @@
 * Tasks
-** Advanced Scheduling
-*** TODO frontend
-**** TODO Support multiple schedules in interface
-**** TODO Support day-of-week in schedule
-**** TODO Support day-of-month in schedule
-**** TODO Support week-of-month in schedule
-**** TODO Support time-range in schedule
-*** TODO backend
-**** =process.rs= needs to consider start time in the time range (if any)
-**** =BackupMaster= needs to calculate the stop time in =new()=
-**** if stop time is reached in =BackupMaster.handle_file()= then raise =OutOfTimeError=
-**** supervisor to report the =OutOfTimeError= a little better than normal errors
-** Put Back feature
-*** DONE write usecase for ~put back~ that restores file to original path
-*** DONE add GraphQL mutation to invoke ~put back~ usecase
-*** DONE Rename the "restore" button to "download"
-*** DONE Add a "put back" button to invoke the GraphQL mutation
-**** DONE write data source function to run graphql mutation
-**** DONE test the data source function
-**** DONE expose repository function to restore file
-**** DONE test the restore function in repo
-**** DONE write a new client-side usecase to restore a file
-**** DONE decide if =TreeBrowserBloc= will handle the restore, or a new bloc
-**** DONE can show each file name as it is restored using a =SnackBar=
-**** DONE test the new bloc event/state
-*** DONE should be able to put back all selected files
-*** DONE deselect files once they are restored
 ** Cloud Backup
 *** TODO retry a pack upload if it encounters a temporary error
 **** e.g. minio gets an md5 mismatch when storing an object
@@ -121,10 +94,9 @@
 *** TODO dataset status says "running" even though it had an error
 **** need to expose the error status via GraphQL
 *** TODO improve the data sets form
+**** TODO FAB covers the =DELETE= button even when scrolled all the way down
 **** TODO use the =validate()= function on =DataSet= to ensure validity
 **** TODO should decode the computer ID to improve readability
-**** TODO would be better to have frequency options in a row
-***** need to use =FormBuilderCustomField= and return a =Row= of widgets
 *** TODO should sort the datasets so they are always in the same order
 **** maybe sort them by date, with most recent first
 *** TODO tree entries of =ERROR= type should be displayed as such
@@ -221,6 +193,13 @@
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
+** Advanced Scheduling
+*** frontend
+**** TODO Support multiple schedules in interface
+**** TODO Support day-of-week in schedule
+**** TODO Support day-of-month in schedule
+**** TODO Support week-of-month in schedule
+**** TODO Support time-range in schedule
 ** More Functionality
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff

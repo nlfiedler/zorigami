@@ -2,11 +2,12 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 
-//! The `supervisor` module spawns threads to perform backups, ensuring backups
-//! are performed for each dataset according to a schedule.
+//! The `process` module spawns threads to perform backups, ensuring backups are
+//! performed for each dataset according to a schedule.
 
 use super::state::{self, Action};
 use crate::domain::entities::Dataset;
+use crate::domain::entities::schedule::Schedule;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use chrono::prelude::*;
@@ -80,6 +81,7 @@ impl Handler<Start> for MySupervisor {
 struct StartBackup {
     dbase: Arc<dyn RecordRepository>,
     dataset: Dataset,
+    schedule: Schedule,
 }
 
 struct Runner;
@@ -93,7 +95,7 @@ impl Handler<StartBackup> for Runner {
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<Runner>) {
         debug!("runner received backup message");
-        run_dataset(msg.dbase, msg.dataset.clone());
+        run_dataset(msg.dbase, msg.dataset.clone(), msg.schedule.clone());
         debug!("runner finished backup");
         ctx.stop();
     }
@@ -135,10 +137,11 @@ pub fn start(repo: Arc<dyn RecordRepository>) -> std::io::Result<()> {
 fn start_due_datasets(dbase: Arc<dyn RecordRepository>) -> Result<(), Error> {
     let datasets = dbase.get_datasets()?;
     for set in datasets {
-        if should_run(&dbase, &set)? {
+        if let Some(schedule) = should_run(&dbase, &set)? {
             let msg = StartBackup {
                 dbase: dbase.clone(),
                 dataset: set,
+                schedule,
             };
             let addr = Actor::start_in_arbiter(&MY_RUNNER, |_| Runner {});
             if let Err(err) = addr.try_send(msg) {
@@ -152,7 +155,9 @@ fn start_due_datasets(dbase: Arc<dyn RecordRepository>) -> Result<(), Error> {
 ///
 /// Check if the given dataset should be processed now.
 ///
-pub fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<bool, Error> {
+/// Returns the applicative schedule for the same of setting the end time.
+///
+fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option<Schedule>, Error> {
     // public function so it can be tested from an external crate
 
     // only consider those datasets that have a schedule, otherwise
@@ -171,9 +176,10 @@ pub fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<bo
         for schedule in set.schedules.iter() {
             // check if backup overdue
             let mut maybe_run = if let Some(et) = end_time {
+                // this checks both the overdue status and any time range
                 schedule.is_ready(et)
             } else {
-                true
+                schedule.within_range(Utc::now())
             };
             // Check if a backup is still running or had an error; if it had an
             // error, definitely try running again; if it is still running, then do
@@ -201,24 +207,25 @@ pub fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<bo
                 state::dispatch(Action::StartBackup(set.id.clone()));
             }
             if maybe_run {
-                return Ok(true);
+                return Ok(Some(schedule.to_owned()));
             }
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
 ///
 /// Run the backup procedure for the named dataset. Takes the passphrase from
 /// the environment.
 ///
-fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset) {
+fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Schedule) {
     let passphrase = super::get_passphrase();
     info!("dataset {} to be backed up", &dataset.id);
     let start_time = SystemTime::now();
+    let stop_time = schedule.stop_time(Utc::now());
     // reset any error state in the backup
     state::dispatch(Action::RestartBackup(dataset.id.clone()));
-    match super::backup::perform_backup(&dataset, &dbase, &passphrase) {
+    match super::backup::perform_backup(&dataset, &dbase, &passphrase, stop_time) {
         Ok(Some(checksum)) => {
             let end_time = SystemTime::now();
             let time_diff = end_time.duration_since(start_time);
@@ -230,7 +237,7 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset) {
             );
         }
         Ok(None) => info!("no new snapshot required"),
-        Err(err) => match err.downcast::<super::backup::OutOfTimeError>() {
+        Err(err) => match err.downcast::<super::backup::OutOfTimeFailure>() {
             Ok(_) => {
                 info!("backup window has reached its end");
                 // put the backup in the error state so we try again
@@ -305,7 +312,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
@@ -327,7 +334,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap().is_some());
     }
 
     #[test]
@@ -352,7 +359,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
@@ -382,7 +389,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
@@ -413,7 +420,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap().is_some());
     }
 
     #[test]
@@ -450,7 +457,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
@@ -481,7 +488,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap().is_some());
         // and now there is backup state showing that it restarted
         assert!(state::get_state().backups(&dataset_id_clone).is_some());
     }
@@ -516,7 +523,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
         // the backup should not run and there is still no state
         assert!(state::get_state().backups(&dataset_id_clone).is_none());
     }
@@ -552,7 +559,7 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
@@ -585,6 +592,6 @@ mod tests {
         let result = should_run(&repo, &dataset_clone);
         // assert
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap().is_some());
     }
 }

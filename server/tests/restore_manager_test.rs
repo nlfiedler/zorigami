@@ -59,26 +59,26 @@ fn test_backup_restore() -> Result<(), Error> {
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = [basepath, "zero-length.txt"].iter().collect();
     assert!(fs::write(dest, vec![]).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // perform the second backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // perform the third backup
     let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // perform the fourth backup with shifted larger file
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = [basepath, "SekienShifted.jpg"].iter().collect();
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // restore the file from the first snapshot

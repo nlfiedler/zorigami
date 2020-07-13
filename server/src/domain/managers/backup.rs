@@ -9,7 +9,7 @@
 use crate::domain::entities;
 use crate::domain::managers::state::{self, Action};
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
 use rusty_ulid::generate_ulid_string;
@@ -30,6 +30,7 @@ pub fn perform_backup(
     dataset: &entities::Dataset,
     repo: &Arc<dyn RecordRepository>,
     passphrase: &str,
+    stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
     debug!("performing backup for {}", dataset);
     fs::create_dir_all(&dataset.workspace)?;
@@ -43,7 +44,14 @@ pub fn perform_backup(
                 let parent_sha1 = snapshot.parent;
                 let current_sha1 = latest.to_owned();
                 debug!("continuing previous backup {}", &current_sha1);
-                return continue_backup(dataset, repo, passphrase, parent_sha1, current_sha1);
+                return continue_backup(
+                    dataset,
+                    repo,
+                    passphrase,
+                    parent_sha1,
+                    current_sha1,
+                    stop_time,
+                );
             }
         }
     }
@@ -70,7 +78,14 @@ pub fn perform_backup(
         Some(current_sha1) => {
             repo.put_latest_snapshot(&dataset.id, &current_sha1)?;
             debug!("starting new backup {}", &current_sha1);
-            continue_backup(dataset, repo, passphrase, latest_snapshot, current_sha1)
+            continue_backup(
+                dataset,
+                repo,
+                passphrase,
+                latest_snapshot,
+                current_sha1,
+                stop_time,
+            )
         }
     }
 }
@@ -85,8 +100,9 @@ fn continue_backup(
     passphrase: &str,
     parent_sha1: Option<entities::Checksum>,
     current_sha1: entities::Checksum,
+    stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
-    let mut bmaster = BackupMaster::new(dataset, repo, passphrase)?;
+    let mut bmaster = BackupMaster::new(dataset, repo, passphrase, stop_time)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
     match parent_sha1 {
@@ -125,9 +141,9 @@ fn continue_backup(
 /// resuming at a later time.
 ///
 #[derive(Fail, Debug)]
-pub struct OutOfTimeError;
+pub struct OutOfTimeFailure;
 
-impl fmt::Display for OutOfTimeError {
+impl fmt::Display for OutOfTimeFailure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ran out of time")
     }
@@ -143,6 +159,7 @@ struct BackupMaster<'a> {
     passphrase: String,
     bucket_name: String,
     stores: Box<dyn PackRepository>,
+    stop_time: Option<DateTime<Utc>>,
 }
 
 impl<'a> BackupMaster<'a> {
@@ -151,6 +168,7 @@ impl<'a> BackupMaster<'a> {
         dataset: &'a entities::Dataset,
         dbase: &'a Arc<dyn RecordRepository>,
         passphrase: &str,
+        stop_time: Option<DateTime<Utc>>,
     ) -> Result<Self, Error> {
         let computer_id = dbase.get_computer_id(&dataset.id)?.unwrap();
         let stores = dbase.load_dataset_stores(&dataset)?;
@@ -163,6 +181,7 @@ impl<'a> BackupMaster<'a> {
             passphrase: passphrase.to_owned(),
             bucket_name,
             stores,
+            stop_time,
         })
     }
 
@@ -188,6 +207,13 @@ impl<'a> BackupMaster<'a> {
             // (adding a very large file may require multiple packs)
             while self.builder.is_full() {
                 self.send_one_pack()?;
+            }
+        }
+        // check if the stop time (if any) has been reached
+        if let Some(stop_time) = self.stop_time {
+            let now = Utc::now();
+            if now > stop_time {
+                return Err(Error::from(OutOfTimeFailure {}));
             }
         }
         Ok(())

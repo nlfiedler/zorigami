@@ -39,17 +39,21 @@ final List<FrequencyOption> frequencies = [
 class DataSetForm extends StatelessWidget {
   final DataSet dataset;
   final List<PackStore> stores;
+  final GlobalKey<FormBuilderState> formKey;
 
   DataSetForm({
     Key key,
     @required this.dataset,
     @required this.stores,
+    @required this.formKey,
   }) : super(key: key);
 
   Map<String, dynamic> initialValuesFrom(DataSet dataset) {
     // convert pack size int of bytes to string of megabytes
     final packSize = (dataset.packSize / 1048576).round().toString();
     final frequency = frequencyFromDataSet(dataset);
+    final start = startTimeFromDataSet(dataset);
+    final stop = stopTimeFromDataSet(dataset);
     final initialStores = buildInitialStores(dataset, stores);
     return {
       'key': dataset.key,
@@ -57,6 +61,8 @@ class DataSetForm extends StatelessWidget {
       'basepath': dataset.basepath,
       'packSize': packSize,
       'frequency': frequency,
+      'start': start,
+      'stop': stop,
       'stores': initialStores,
     };
   }
@@ -82,6 +88,14 @@ class DataSetForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final frequency = frequencyFromDataSet(dataset);
+    final start = startTimeFromDataSet(dataset);
+    final stop = stopTimeFromDataSet(dataset);
+    //
+    // For now, always enable the time pickers, until changing one form field
+    // can fire a rebuild of the form to cause other fields to be disabled.
+    //
+    // final timePickersEnabled = allowTimeRange(frequency);
+    final timePickersEnabled = true;
     final initialStores = buildInitialStores(dataset, stores);
     final packStoreOptions = buildStoreOptions(stores);
     return Column(
@@ -146,9 +160,47 @@ class DataSetForm extends StatelessWidget {
           }).toList(growable: false),
           decoration: const InputDecoration(
             icon: Icon(Icons.calendar_today),
-            labelText: 'Schedule',
+            labelText: 'Frequency',
           ),
-        )
+        ),
+        FormBuilderDateTimePicker(
+          attribute: 'start',
+          initialValue: start,
+          enabled: timePickersEnabled,
+          inputType: InputType.time,
+          decoration: const InputDecoration(
+            icon: Icon(Icons.schedule),
+            labelText: 'Start Time',
+          ),
+          validators: [
+            (val) {
+              final stop = formKey.currentState.fields['stop'];
+              if (stop.currentState.value == null && val != null) {
+                return 'Please set stop time';
+              }
+              return null;
+            },
+          ],
+        ),
+        FormBuilderDateTimePicker(
+          attribute: 'stop',
+          initialValue: stop,
+          enabled: timePickersEnabled,
+          inputType: InputType.time,
+          decoration: const InputDecoration(
+            icon: Icon(Icons.schedule),
+            labelText: 'Stop Time',
+          ),
+          validators: [
+            (val) {
+              final start = formKey.currentState.fields['start'];
+              if (start.currentState.value == null && val != null) {
+                return 'Please set start time';
+              }
+              return null;
+            },
+          ],
+        ),
       ],
     );
   }
@@ -194,18 +246,92 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
   }
 }
 
+DateTime startTimeFromDataSet(DataSet dataset) {
+  final option = getTimeFromDataSet(dataset, (Schedule schedule) {
+    return schedule.timeRange.map((v) {
+      return timeFromInt(v.start);
+    });
+  });
+  return option.unwrapOr(null);
+}
+
+DateTime stopTimeFromDataSet(DataSet dataset) {
+  final option = getTimeFromDataSet(dataset, (Schedule schedule) {
+    return schedule.timeRange.map((v) {
+      return timeFromInt(v.stop);
+    });
+  });
+  return option.unwrapOr(null);
+}
+
+Option<DateTime> getTimeFromDataSet(
+  DataSet dataset,
+  Option<DateTime> Function(Schedule) op,
+) {
+  if (dataset.schedules.isEmpty) {
+    return None();
+  }
+  switch (dataset.schedules[0].frequency) {
+    case Frequency.hourly:
+      return None();
+    case Frequency.daily:
+      return op(dataset.schedules[0]);
+    case Frequency.weekly:
+      return op(dataset.schedules[0]);
+    case Frequency.monthly:
+      return op(dataset.schedules[0]);
+    default:
+      throw ArgumentError('frequency is not recognized');
+  }
+}
+
+DateTime timeFromInt(int time) {
+  final int as_minutes = (time / 60) as int;
+  final int hour = as_minutes ~/ 60;
+  final int minutes = as_minutes % 60;
+  return DateTime(1, 1, 1, hour, minutes);
+}
+
 List<Schedule> schedulesFromState(FormBuilderState state) {
   final FrequencyOption option = state.value['frequency'];
   if (option.frequency == null) {
+    // manual (no) scheduling
     return [];
   }
+  final timeRange = allowTimeRange(option) ? timeRangeFromState(state) : None();
   return [
     Schedule(
       frequency: option.frequency,
-      timeRange: None(),
+      timeRange: timeRange,
       weekOfMonth: None(),
       dayOfWeek: None(),
       dayOfMonth: None(),
     )
   ];
+}
+
+Option<TimeRange> timeRangeFromState(FormBuilderState state) {
+  final startDateTime = state.value['start'];
+  final stopDateTime = state.value['stop'];
+  if (startDateTime != null && stopDateTime != null) {
+    final start = (startDateTime.hour * 60 + startDateTime.minute) * 60;
+    final stop = (stopDateTime.hour * 60 + stopDateTime.minute) * 60;
+    return Some(TimeRange(start: start, stop: stop));
+  }
+  return None();
+}
+
+bool allowTimeRange(FrequencyOption frequency) {
+  //
+  // For now, only daily can have a time range. Eventually, once advanced
+  // scheduling is supported, then combinations of frequency and day-of-week,
+  // day-of-month, or week-of-month will make sense when combined with a time
+  // range.
+  //
+  switch (frequency.frequency) {
+    case Frequency.daily:
+      return true;
+    default:
+      return false;
+  }
 }

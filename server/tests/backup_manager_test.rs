@@ -562,7 +562,7 @@ fn test_continue_backup() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
     let first_sha1 = backup_opt.unwrap();
 
@@ -572,7 +572,7 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_snapshot(&snapshot)?;
 
     // run the backup again to make sure it is finished
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat")?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();
     assert_eq!(first_sha1, second_sha1);

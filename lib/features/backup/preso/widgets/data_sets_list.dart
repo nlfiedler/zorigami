@@ -149,7 +149,11 @@ class DataSetListDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final datasetForm = DataSetForm(dataset: dataset, stores: stores);
+    final datasetForm = DataSetForm(
+      dataset: dataset,
+      stores: stores,
+      formKey: formKey,
+    );
     return BlocConsumer<edsb.EditDataSetsBloc, edsb.EditDataSetsState>(
       listener: (context, state) {
         if (state is edsb.Submitted) {
