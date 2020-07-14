@@ -1,10 +1,6 @@
 * Tasks
 ** Cloud Backup
-*** TODO retry a pack upload if it encounters a temporary error
-**** e.g. minio gets an md5 mismatch when storing an object
-*** TODO support excluding certain file patterns from backup
-**** part of dataset configuration
-**** merge with the defaults in =backup.rs=
+*** DONE retry a pack upload/download if it encounters an error
 *** TODO add store that supports Google Cloud Storage
 **** Check for bucket name collisions and retry in pack store
 **** https://cloud.google.com/storage/docs/best-practices
@@ -201,6 +197,9 @@
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
 ** More Functionality
+*** TODO support excluding certain file patterns from backup
+**** part of dataset configuration
+**** merge with the defaults in =backup.rs=
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content

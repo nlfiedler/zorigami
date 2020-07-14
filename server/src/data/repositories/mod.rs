@@ -9,6 +9,7 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error};
+use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -201,7 +202,7 @@ impl PackRepository for PackRepositoryImpl {
     ) -> Result<Vec<PackLocation>, Error> {
         let mut results: Vec<PackLocation> = Vec::new();
         for source in self.sources.values() {
-            let loc = source.store_pack(packfile, bucket, object)?;
+            let loc = store_pack_retry(source, packfile, bucket, object)?;
             results.push(loc.into());
         }
         Ok(results)
@@ -212,7 +213,14 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id && source.is_local() {
-                    return source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(&loc, outfile);
+                    if result.is_ok() {
+                        return result;
+                    }
+                    warn!(
+                        "pack retrieval failed, will try another source: {:?}",
+                        result
+                    );
                 }
             }
         }
@@ -221,7 +229,14 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id && !source.is_slow() {
-                    return source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(&loc, outfile);
+                    if result.is_ok() {
+                        return result;
+                    }
+                    warn!(
+                        "pack retrieval failed, will try another source: {:?}",
+                        result
+                    );
                 }
             }
         }
@@ -230,12 +245,40 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id {
-                    return source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(&loc, outfile);
+                    if result.is_ok() {
+                        return result;
+                    }
+                    warn!(
+                        "pack retrieval failed, will try another source: {:?}",
+                        result
+                    );
                 }
             }
         }
 
-        Err(err_msg("cannot find any store for pack"))
+        Err(err_msg("unable to retrieve pack file"))
+    }
+}
+
+// Try to store the pack file up to three times before giving up.
+fn store_pack_retry(
+    source: &Box<dyn PackDataSource>,
+    packfile: &Path,
+    bucket: &str,
+    object: &str,
+) -> Result<PackLocation, Error> {
+    let mut retries = 0;
+    loop {
+        let result = source.store_pack(packfile, bucket, object);
+        if result.is_ok() {
+            return result;
+        }
+        retries += 1;
+        if retries == 3 {
+            return result;
+        }
+        warn!("pack store failed, will retry: {:?}", result);
     }
 }
 
@@ -580,6 +623,6 @@ mod tests {
         // assert
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
-        assert!(err_string.contains("cannot find any store for pack"));
+        assert!(err_string.contains("unable to retrieve pack file"));
     }
 }
