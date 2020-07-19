@@ -32,7 +32,7 @@ class SftpStoreForm extends PackStoreForm {
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
-      kind: StoreKind.minio,
+      kind: StoreKind.sftp,
       options: {
         'remote_addr': state.value['remote_addr'],
         'username': state.value['username'],
