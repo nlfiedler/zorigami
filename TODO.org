@@ -19,7 +19,7 @@
 **** DONE get bucket deletion working
 **** DONE handle paging of results (e.g. listing objects, buckets)
 **** DONE implement pack source for google store
-*** TODO add form for defining a Google Cloud Storage store
+*** DONE add form for defining a Google Cloud Storage store
 *** TODO use this to replace =akashita= for online backups
 **** define a new google cloud project named ~zorigami~
 **** eventually remove the old ~akashita~ project and files
@@ -91,6 +91,9 @@
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
+*** TODO local store basepath and google credentials should use file picker
+**** https://pub.dev/packages/form_builder_file_picker
+***** waiting for a license to be chosen by the author
 *** TODO improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
 *** TODO improve (server) error handling
@@ -185,6 +188,8 @@
 ***** that is, many cloud providers charge extra for deleting archives too soon
 ***** pack store can suggest a number of days since that is often already known
 ****** i.e. Google and Amazon have infrequently changing, published policies
+****** Google has different minimum storage durations for each storage class
+******* https://cloud.google.com/storage/docs/storage-classes
 ***** user can specify their own value for each pack store if necessary
 *** Strategies for finding unreachable objects
 **** Mark and Sweep using a separate database instance

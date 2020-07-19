@@ -14,6 +14,7 @@ final List<NewStoreItem> storeItems = [
   // nothing is created until the user selects something.
   NewStoreItem(title: 'Select Type', kind: null),
   NewStoreItem(title: 'Local', kind: 'local'),
+  NewStoreItem(title: 'Google', kind: 'google'),
   NewStoreItem(title: 'Minio', kind: 'minio'),
   NewStoreItem(title: 'SFTP', kind: 'sftp'),
 ];

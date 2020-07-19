@@ -166,6 +166,8 @@ String packStoreTitle(PackStore store) {
 
 String packStoreSubtitle(PackStore store) {
   switch (store.kind) {
+    case StoreKind.google:
+      return store.options['project'];
     case StoreKind.local:
       return store.options['basepath'];
     case StoreKind.minio:
@@ -181,6 +183,8 @@ String prettyKind(StoreKind kind) {
   switch (kind) {
     case StoreKind.local:
       return 'local disk';
+    case StoreKind.google:
+      return 'remote google';
     case StoreKind.minio:
       return 'remote minio';
     case StoreKind.sftp:

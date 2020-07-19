@@ -50,7 +50,9 @@ class PackStoreModel extends PackStore {
 }
 
 StoreKind decodeKind(String kind) {
-  if (kind == 'local') {
+  if (kind == 'google') {
+    return StoreKind.google;
+  } else if (kind == 'local') {
     return StoreKind.local;
   } else if (kind == 'minio') {
     return StoreKind.minio;
@@ -63,6 +65,8 @@ StoreKind decodeKind(String kind) {
 
 String encodeKind(StoreKind kind) {
   switch (kind) {
+    case StoreKind.google:
+      return 'google';
     case StoreKind.local:
       return 'local';
     case StoreKind.minio:

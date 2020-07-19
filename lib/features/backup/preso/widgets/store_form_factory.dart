@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/pack_store.dart';
+import 'package:zorigami/features/backup/preso/widgets/google_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/local_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
@@ -11,6 +12,9 @@ import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 PackStoreForm buildStoreForm(PackStore store, void param2) {
   if (store.kind == StoreKind.local) {
     return LocalStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.google) {
+    return GoogleStoreForm(store: store);
   }
   if (store.kind == StoreKind.minio) {
     return MinioStoreForm(store: store);
@@ -31,6 +35,17 @@ PackStore defaultPackStore(String kind, void param2) {
         label: 'local',
         options: <String, dynamic>{
           'basepath': '.',
+        },
+      );
+    case 'google':
+      return PackStore(
+        kind: StoreKind.google,
+        key: 'auto-generated',
+        label: 'google',
+        options: <String, dynamic>{
+          'credentials': '/Users/charlie/credentials.json',
+          'project': 'white-sunspot-12345',
+          'storage': 'NEARLINE',
         },
       );
     case 'minio':

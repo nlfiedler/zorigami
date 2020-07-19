@@ -4,7 +4,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 
-enum StoreKind { local, minio, sftp }
+enum StoreKind { google, local, minio, sftp }
 
 class PackStore extends Equatable {
   /// The `key` is unique among all pack stores.
