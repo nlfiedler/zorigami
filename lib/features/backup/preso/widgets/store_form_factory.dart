@@ -45,6 +45,7 @@ PackStore defaultPackStore(String kind, void param2) {
         options: <String, dynamic>{
           'credentials': '/Users/charlie/credentials.json',
           'project': 'white-sunspot-12345',
+          'region': 'us-west1',
           'storage': 'NEARLINE',
         },
       );

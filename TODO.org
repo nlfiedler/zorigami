@@ -20,64 +20,22 @@
 **** DONE handle paging of results (e.g. listing objects, buckets)
 **** DONE implement pack source for google store
 *** DONE add form for defining a Google Cloud Storage store
+*** DONE add a region property to google store
+**** DONE set the =location= property of the =Bucket= when creating it
+**** DONE add form field in flutter
+**** DONE test at least one backup to google
 *** TODO use this to replace =akashita= for online backups
 **** define a new google cloud project named ~zorigami~
+**** copy the old settings before wiping the database
+**** develop the ansible script for preparing google store
+***** copy the credentials file to the server
 **** eventually remove the old ~akashita~ project and files
 **** old akashita configuration file:
 #+BEGIN_SRC erlang
 {gcs_region, "us-west1"}.
 {gcp_credentials, "/working/config/credentials.json"}.
-{use_sudo, false}.
 {go_times, ["07:00-13:00"]}. % times are UTC
-{tmpdir, "/akashita"}.
 {split_size, "128M"}.
-{default_excludes, [".apdisk", ".DS_Store", ".localized", ".thumbnails"]}.
-
-{buckets, [
-    {"misc", [
-        {dataset, "zeniba/shared"},
-        {clone_base, "zeniba/akashita"},
-        {paths, [
-            "Antonia",
-            "Applications",
-            "Artwork",
-            "Books",
-            "Certificates",
-            "Correspondence",
-            "Documents",
-            "Historical",
-            "Medical",
-            "Nathan",
-            "Performances",
-            "Projects",
-            "Receipts",
-            "Sounds",
-            "Writings"
-        ]},
-        {compressed, true}
-    ]},
-    {"photos", [
-        {dataset, "zeniba/shared"},
-        {clone_base, "zeniba/akashita"},
-        {paths, [
-            "Pictures"
-        ]}
-    ]},
-    {"videos", [
-        {dataset, "zeniba/shared"},
-        {clone_base, "zeniba/akashita"},
-        {paths, [
-            "Movies"
-        ]}
-    ]},
-    {"tanuki", [
-        {dataset, "zeniba/shared"},
-        {clone_base, "zeniba/akashita"},
-        {paths, [
-            "tanuki"
-        ]}
-    ]}
-]}.
 #+END_SRC
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month

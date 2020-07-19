@@ -13,17 +13,22 @@ class GoogleStoreForm extends PackStoreForm {
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {
+    final region = store.options['region'] ?? '';
+    final storage = store.options['storage'] ?? '';
     return {
       'key': store.key,
       'label': store.label,
       'credentials': store.options['credentials'],
       'project': store.options['project'],
-      'storage': store.options['storage'],
+      'region': region,
+      'storage': storage,
     };
   }
 
   @override
   PackStore storeFromState(FormBuilderState state) {
+    final String region = state.value['region'];
+    final String storage = state.value['storage'];
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
@@ -31,7 +36,8 @@ class GoogleStoreForm extends PackStoreForm {
       options: {
         'credentials': state.value['credentials'],
         'project': state.value['project'],
-        'storage': state.value['storage'],
+        'region': region.isEmpty ? null : region,
+        'storage': storage.isEmpty ? null : storage,
       },
     );
   }
@@ -72,6 +78,13 @@ class GoogleStoreForm extends PackStoreForm {
           ),
           validators: [FormBuilderValidators.required()],
         ),
+        FormBuilderTextField(
+          attribute: 'region',
+          decoration: const InputDecoration(
+            icon: Icon(Icons.location_on),
+            labelText: 'Region',
+          ),
+        ),
         FormBuilderDropdown(
           attribute: 'storage',
           decoration: const InputDecoration(
@@ -79,7 +92,6 @@ class GoogleStoreForm extends PackStoreForm {
             labelText: 'Storage Class',
           ),
           hint: Text('Select storage class'),
-          validators: [FormBuilderValidators.required()],
           items: ['STANDARD', 'NEARLINE', 'COLDLINE', 'ARCHIVE']
               .map(
                 (sclass) => DropdownMenuItem(

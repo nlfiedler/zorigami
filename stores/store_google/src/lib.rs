@@ -16,7 +16,8 @@ pub struct GoogleStore {
     store_id: String,
     credentials: String,
     project: String,
-    storage: String,
+    region: Option<String>,
+    storage: Option<String>,
 }
 
 impl GoogleStore {
@@ -28,14 +29,14 @@ impl GoogleStore {
         let project = props
             .get("project")
             .ok_or_else(|| err_msg("missing project property"))?;
-        let storage = props
-            .get("storage")
-            .ok_or_else(|| err_msg("missing storage property"))?;
+        let region = props.get("region").map(|s| s.to_owned());
+        let storage = props.get("storage").map(|s| s.to_owned());
         Ok(Self {
             store_id: store_id.to_owned(),
             credentials: credentials.to_owned(),
             project: project.to_owned(),
-            storage: storage.to_owned(),
+            region,
+            storage,
         })
     }
 
@@ -64,7 +65,7 @@ impl GoogleStore {
     ) -> Result<Coordinates, Error> {
         let hub = self.connect()?;
         // the bucket must exist before receiving objects
-        create_bucket(&hub, &self.project, bucket, &self.storage)?;
+        create_bucket(&hub, &self.project, bucket, &self.region, &self.storage)?;
         let mut req = Object::default();
         req.name = Some(object.to_owned());
         let result = hub.objects().insert(req, bucket).upload(
@@ -184,11 +185,13 @@ pub fn create_bucket(
     hub: &StorageHub,
     project_id: &str,
     name: &str,
-    storage_class: &str,
+    region: &Option<String>,
+    storage_class: &Option<String>,
 ) -> Result<(), Error> {
     let mut req = Bucket::default();
     req.name = Some(name.to_owned());
-    req.storage_class = Some(storage_class.to_owned());
+    req.location = region.to_owned();
+    req.storage_class = storage_class.to_owned();
     let result = hub.buckets().insert(req, project_id).doit();
     if let Err(error) = result {
         match error {
@@ -241,6 +244,7 @@ mod tests {
         }
         let credentials = creds_var.unwrap();
         let project_id = env::var("GOOGLE_PROJECT_ID").unwrap();
+        let region = env::var("GOOGLE_REGION").unwrap();
 
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("credentials".to_owned(), credentials);
@@ -248,6 +252,7 @@ mod tests {
         // use standard storage class for testing since it is cheaper when
         // performing frequent downloads and deletions
         properties.insert("storage".to_owned(), "STANDARD".to_owned());
+        properties.insert("region".to_owned(), region);
         let result = GoogleStore::new("google1", &properties);
         assert!(result.is_ok());
         let source = result.unwrap();
