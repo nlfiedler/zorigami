@@ -86,7 +86,11 @@ class NewDataSetWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final datasetForm = DataSetForm(dataset: dataset, stores: stores);
+    final datasetForm = DataSetForm(
+      dataset: dataset,
+      stores: stores,
+      formKey: formKey,
+    );
     return BlocConsumer<CreateDataSetsBloc, CreateDataSetsState>(
       listener: (context, state) {
         if (state is Submitted) {
