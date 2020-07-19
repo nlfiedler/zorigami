@@ -7,7 +7,9 @@ RUN apt-get -q update && \
     apt-get -q -y install clang
 WORKDIR /build
 COPY Cargo.toml .
-COPY src src/
+COPY database database/
+COPY server server/
+COPY stores stores/
 RUN cargo build --workspace --release
 
 #
@@ -27,12 +29,12 @@ RUN cargo build --release
 # setting everything ourselves anyway.
 #
 FROM cirrusci/flutter:beta-web AS flutter
-ARG BASE_URL
+ARG BASE_URL=http://localhost:8080
 RUN flutter channel beta
 RUN flutter upgrade
 RUN flutter config --enable-web
 WORKDIR /flutter
-COPY assets assets/
+COPY fonts fonts/
 COPY lib lib/
 COPY pubspec.yaml .
 COPY web web/
@@ -51,7 +53,7 @@ FROM debian:latest
 RUN adduser --disabled-password --gecos '' zorigami
 USER zorigami
 WORKDIR /zorigami
-COPY --from=builder /build/target/release/zorigami .
+COPY --from=builder /build/target/release/server zorigami
 COPY --from=healthy /health/target/release/healthcheck .
 COPY --from=flutter /flutter/build/web web/
 VOLUME /database
