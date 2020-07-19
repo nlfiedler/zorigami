@@ -216,7 +216,7 @@ List<FormBuilderFieldOption> buildStoreOptions(List<PackStore> stores) {
   final List<FormBuilderFieldOption> options = List.from(
     stores.map((e) {
       return FormBuilderFieldOption(
-        child: Text(e.key),
+        child: Text(e.label),
         value: e,
       );
     }),
