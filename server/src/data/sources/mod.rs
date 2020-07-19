@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 mod local;
+mod google;
 mod minio;
 mod sftp;
 
@@ -476,6 +477,7 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
         // for managing the cache.
         let source: Box<dyn PackDataSource> = match store.store_type {
             StoreType::LOCAL => Box::new(local::LocalPackSource::new(&store)?),
+            StoreType::GOOGLE => Box::new(google::GooglePackSource::new(&store)?),
             StoreType::MINIO => Box::new(minio::MinioPackSource::new(&store)?),
             StoreType::SFTP => Box::new(sftp::SftpPackSource::new(&store)?),
         };

@@ -1,9 +1,24 @@
 * Tasks
 ** Cloud Backup
 *** DONE retry a pack upload/download if it encounters an error
-*** TODO add store that supports Google Cloud Storage
-**** Check for bucket name collisions and retry in pack store
-**** https://cloud.google.com/storage/docs/best-practices
+*** DONE add store that supports Google Cloud Storage
+**** https://crates.io/crates/google-storage1
+**** c.f. https://docs.rs/google-storage1/1.0.14+20200623/google_storage1/
+**** c.f. https://cloud.google.com/storage/docs/best-practices
+**** avoid retrying as pack repo will do that anyway
+**** DONE create a new crate for google storage
+**** DONE copy the necessary dependencies from the API docs
+**** DONE set up a test account in google
+**** DONE get the authentication working
+**** DONE get the bucket creation working
+**** DONE get pack file store working
+**** DONE get pack file retrieval working
+**** DONE get object listing working
+**** DONE get bucket listing working
+**** DONE get pack file deletion working
+**** DONE get bucket deletion working
+**** DONE handle paging of results (e.g. listing objects, buckets)
+**** DONE implement pack source for google store
 *** TODO add form for defining a Google Cloud Storage store
 *** TODO use this to replace =akashita= for online backups
 **** define a new google cloud project named ~zorigami~

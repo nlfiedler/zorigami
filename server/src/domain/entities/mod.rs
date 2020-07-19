@@ -158,6 +158,7 @@ impl Chunk {
 /// StoreType identifies a kind of store.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum StoreType {
+    GOOGLE,
     LOCAL,
     MINIO,
     SFTP,
@@ -166,6 +167,7 @@ pub enum StoreType {
 impl ToString for StoreType {
     fn to_string(&self) -> String {
         match self {
+            StoreType::GOOGLE => String::from("google"),
             StoreType::LOCAL => String::from("local"),
             StoreType::MINIO => String::from("minio"),
             StoreType::SFTP => String::from("sftp"),
@@ -178,6 +180,7 @@ impl FromStr for StoreType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "google" => Ok(StoreType::GOOGLE),
             "local" => Ok(StoreType::LOCAL),
             "minio" => Ok(StoreType::MINIO),
             "sftp" => Ok(StoreType::SFTP),

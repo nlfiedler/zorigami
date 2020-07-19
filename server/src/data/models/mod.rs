@@ -141,6 +141,7 @@ pub struct ChunkDef {
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "StoreType")]
 pub enum StoreTypeDef {
+    GOOGLE,
     LOCAL,
     MINIO,
     SFTP,

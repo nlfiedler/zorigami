@@ -40,6 +40,7 @@ sha-1 = "0.9.0"
 sha2 = "0.9.0"
 sodiumoxide = "0.2.4"
 store_core = { path = "../stores/store_core" }
+store_google = { path = "../stores/store_google" }
 store_local = { path = "../stores/store_local" }
 store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
