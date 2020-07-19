@@ -33,13 +33,16 @@ class PackStoresScreen extends StatelessWidget {
               );
             }
             if (state is Loaded) {
+              final body = state.stores.isEmpty
+                  ? buildHelp(context)
+                  : Expanded(child: PackStoresList(stores: state.stores));
               return Column(
                 children: <Widget>[
                   BlocProvider.value(
                     value: BlocProvider.of<PackStoresBloc>(context),
                     child: PackStoreHeader(),
                   ),
-                  Expanded(child: PackStoresList(stores: state.stores)),
+                  body,
                 ],
               );
             }
@@ -50,4 +53,14 @@ class PackStoresScreen extends StatelessWidget {
       drawer: NavigationDrawer(),
     );
   }
+}
+
+Widget buildHelp(BuildContext context) {
+  return Card(
+    child: ListTile(
+      leading: Icon(Icons.dns),
+      title: Text('No pack stores found'),
+      subtitle: Text('Use the form above to create a store.'),
+    ),
+  );
 }

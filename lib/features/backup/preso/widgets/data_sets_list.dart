@@ -40,16 +40,44 @@ class DataSetsList extends StatelessWidget {
             );
           }
           if (state is psb.Loaded) {
-            return DataSetsListInner(
-              sets: sets,
-              stores: state.stores,
-            );
+            return state.stores.isEmpty
+                ? buildStoresHelp(context)
+                : sets.isEmpty
+                    ? buildSetsHelp(context)
+                    : DataSetsListInner(
+                        sets: sets,
+                        stores: state.stores,
+                      );
           }
           return CircularProgressIndicator();
         },
       ),
     );
   }
+}
+
+Widget buildStoresHelp(BuildContext context) {
+  return Card(
+    child: ListTile(
+      leading: Icon(Icons.dns),
+      title: Text('No pack stores found'),
+      subtitle: Text(
+          'First configure one or more pack stores, then create a data set using those stores.'),
+      trailing: Icon(Icons.chevron_right),
+      onTap: () => Navigator.pushNamedAndRemoveUntil(
+          context, '/stores', ModalRoute.withName('/')),
+    ),
+  );
+}
+
+Widget buildSetsHelp(BuildContext context) {
+  return Card(
+    child: ListTile(
+      leading: Icon(Icons.dns),
+      title: Text('No data sets found'),
+      subtitle: Text('Use the + button below to add a data set.'),
+    ),
+  );
 }
 
 class DataSetsListInner extends StatefulWidget {

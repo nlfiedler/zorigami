@@ -298,7 +298,8 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
     // manual (no) scheduling
     return [];
   }
-  final timeRange = allowTimeRange(option) ? timeRangeFromState(state) : None();
+  final Option<TimeRange> timeRange =
+      allowTimeRange(option) ? timeRangeFromState(state) : None();
   return [
     Schedule(
       frequency: option.frequency,
