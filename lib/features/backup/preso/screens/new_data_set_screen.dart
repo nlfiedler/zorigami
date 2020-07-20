@@ -108,28 +108,30 @@ class NewDataSetWidget extends StatelessWidget {
         }
       },
       builder: (context, state) {
-        return Column(
-          children: <Widget>[
-            FormBuilder(
-              key: formKey,
-              initialValue: datasetForm.initialValuesFrom(dataset),
-              autovalidate: true,
-              child: datasetForm,
-              // not convinced this readOnly is effective
-              readOnly: (state is Submitting),
-            ),
-            ButtonBar(
-              children: <Widget>[
-                RaisedButton.icon(
-                  icon: Icon(Icons.save),
-                  label: const Text('ADD'),
-                  onPressed: (state is Submitting)
-                      ? null
-                      : () => addDataSet(context, datasetForm),
-                ),
-              ],
-            )
-          ],
+        return SingleChildScrollView(
+          child: Column(
+            children: <Widget>[
+              FormBuilder(
+                key: formKey,
+                initialValue: datasetForm.initialValuesFrom(dataset),
+                autovalidate: true,
+                child: datasetForm,
+                // not convinced this readOnly is effective
+                readOnly: (state is Submitting),
+              ),
+              ButtonBar(
+                children: <Widget>[
+                  RaisedButton.icon(
+                    icon: Icon(Icons.save),
+                    label: const Text('ADD'),
+                    onPressed: (state is Submitting)
+                        ? null
+                        : () => addDataSet(context, datasetForm),
+                  ),
+                ],
+              )
+            ],
+          ),
         );
       },
     );
