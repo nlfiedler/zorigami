@@ -108,6 +108,20 @@ $ docker-compose rm -f -s
 $ docker-compose up -d
 ```
 
+## Google Cloud Setup
+
+How to create a new project and get the service account credentials file.
+
+1. Create a new project in Google Cloud Platform
+1. Navigate to **APIs & Services**
+1. Open **Credentials** screen
+1. Click _CREATE CREDENTIALS_ and select _Service_ account
+1. Enter an account name and optional description
+1. Click **CREATE** button
+1. Click _Manage service accounts_ link or navigate to **IAM & Admin / Service Accounts**
+1. Click on the _Actions_ 3-dot button and select _Create key_
+1. Choose *JSON* and click **CREATE** button
+
 ## Design
 
 ### Clean Architecture
