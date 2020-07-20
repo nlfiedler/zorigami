@@ -282,3 +282,8 @@ Deployed to server using Docker. Replaced gpgme encryption with libsodium.
 ### February 2020
 
 Replaced the ReasonML web interface with Flutter.
+
+### June/July 2020
+
+Rewrite server code according to Clean Architecture design, breaking database
+and pack stores into separate packages within the overall workspace.
