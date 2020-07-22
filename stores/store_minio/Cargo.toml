@@ -14,4 +14,4 @@ rusoto_credential = "0.44.0"
 rusoto_s3 = "0.44.0"
 store_core = { path = "../store_core" }
 tempfile = "3.1.0"
-tokio = { version = "0.2", features = ["time", "rt-core", "fs"] }
+tokio = { version = "0.2", features = ["blocking", "fs", "rt-threaded", "time"] }

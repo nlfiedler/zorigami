@@ -96,8 +96,7 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        let mut runtime = create_runtime()?;
-        let result = runtime.block_on(client.put_object(req))?;
+        let result = block_on(client.put_object(req))??;
         if let Some(ref etag) = result.e_tag {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
@@ -119,8 +118,7 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        let mut runtime = create_runtime()?;
-        let result = runtime.block_on(client.get_object(request))?;
+        let result = block_on(client.get_object(request))??;
         let stream = result.body.ok_or_else(|| {
             err_msg(format!(
                 "failed to retrieve object {} from bucket {}",
@@ -137,8 +135,7 @@ impl MinioStore {
     pub fn list_buckets(&self) -> Result<Vec<String>, Error> {
         let client = self.connect();
         // wait for the future(s) to complete
-        let mut runtime = create_runtime()?;
-        let result = runtime.block_on(client.list_buckets())?;
+        let result = block_on(client.list_buckets())??;
         let mut results = Vec::new();
         if let Some(buckets) = result.buckets {
             for bucket in buckets {
@@ -161,8 +158,7 @@ impl MinioStore {
         loop {
             // we will be re-using the request, so clone it each time
             // wait for the future(s) to complete
-            let mut runtime = create_runtime()?;
-            let result = runtime.block_on(client.list_objects_v2(request.clone()))?;
+            let result = block_on(client.list_objects_v2(request.clone()))??;
             if let Some(contents) = result.contents {
                 for entry in contents {
                     if let Some(key) = entry.key {
@@ -187,8 +183,7 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        let mut runtime = create_runtime()?;
-        runtime.block_on(client.delete_object(request))?;
+        block_on(client.delete_object(request))??;
         Ok(())
     }
 
@@ -198,8 +193,7 @@ impl MinioStore {
             bucket: bucket.to_owned(),
         };
         // wait for the future(s) to complete
-        let mut runtime = create_runtime()?;
-        let result = runtime.block_on(client.delete_bucket(request));
+        let result = block_on(client.delete_bucket(request))?;
         // certain error conditions are okay
         match result {
             Err(e) => match e {
@@ -218,8 +212,7 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
         ..Default::default()
     };
     // wait for the future(s) to complete
-    let mut runtime = create_runtime()?;
-    let result = runtime.block_on(client.create_bucket(request));
+    let result = block_on(client.create_bucket(request))?;
     // certain error conditions are okay
     match result {
         Err(e) => match e {
@@ -233,16 +226,29 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     }
 }
 
-/// Create the tokio runtime for running asynchronous tasks.
-fn create_runtime() -> Result<tokio::runtime::Runtime, Error> {
-    // Build the simplest and lightest runtime we can, while still enabling us
-    // to wait for futures to complete synchronously. Must enable io and time
-    // otherwise runtime does not really start.
-    let runtime = tokio::runtime::Builder::new()
-        .basic_scheduler()
-        .enable_all()
-        .build()?;
-    Ok(runtime)
+/// Run the given future on the current runtime, or build one as needed.
+fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
+    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+        // error: cannot start a runtime from within a runtime
+        // Ok(tokio::task::block_in_place(|| handle.block_on(future)))
+
+        // this just happens to work, but is risky and may hang indefinitely
+        // Ok(futures::executor::block_on(future))
+
+        // this works, but may be just as risky as the above
+        Ok(tokio::task::block_in_place(|| {
+            futures::executor::block_on(future)
+        }))
+    } else {
+        // Build the simplest and lightest runtime we can, while still enabling us
+        // to wait for futures to complete synchronously. Must enable io and time
+        // otherwise runtime does not really start.
+        let mut runtime = tokio::runtime::Builder::new()
+            .basic_scheduler()
+            .enable_all()
+            .build()?;
+        Ok(runtime.block_on(future))
+    }
 }
 
 #[cfg(test)]
@@ -270,6 +276,31 @@ mod tests {
         properties.insert("access_key".to_owned(), "minio".to_owned());
         properties.insert("secret_key".to_owned(), "shminio".to_owned());
         let result = MinioStore::new("minio123", &properties);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test(core_threads = 4)]
+    async fn test_create_bucket_async() {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let endp_var = env::var("MINIO_ENDPOINT");
+        if endp_var.is_err() {
+            // bail out silently if minio is not available
+            return;
+        }
+        let endpoint = endp_var.unwrap();
+        let region_str = env::var("MINIO_REGION").unwrap();
+        let access_key = env::var("MINIO_ACCESS_KEY").unwrap();
+        let secret_key = env::var("MINIO_SECRET_KEY").unwrap();
+        let region = Region::Custom {
+            name: region_str,
+            endpoint: endpoint,
+        };
+        let client = rusoto_core::request::HttpClient::new().unwrap();
+        let creds = rusoto_credential::StaticProvider::new(access_key, secret_key, None, None);
+        let client = S3Client::new_with(client, creds, region);
+        // test the async function while running in an async runtime
+        let result = create_bucket(&client, "7057118a9aa40c2747267d56e4c1730f");
         assert!(result.is_ok());
     }
 
