@@ -226,23 +226,23 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     }
 }
 
-/// Run the given future on the current runtime, or build one as needed.
+/// Run the given future on a single-threaded future executor.
 fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
     if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-        // error: cannot start a runtime from within a runtime
-        // Ok(tokio::task::block_in_place(|| handle.block_on(future)))
-
-        // this just happens to work, but is risky and may hang indefinitely
-        // Ok(futures::executor::block_on(future))
-
-        // this works, but may be just as risky as the above
-        Ok(tokio::task::block_in_place(|| {
-            futures::executor::block_on(future)
-        }))
+        // This condition is difficult to handle correctly, so it is treated as
+        // an error. Instead, the application is expected to invoke this store
+        // on a dedicated thread (or more likely the backup process will be
+        // running on a dedicated thread).
+        //
+        // * c.f. https://github.com/tokio-rs/tokio/issues/2603
+        // * c.f. https://github.com/tokio-rs/tokio/issues/2376
+        // * c.f. https://github.com/tokio-rs/tokio/discussions/2653
+        Err(err_msg("running in tokio not permitted"))
     } else {
-        // Build the simplest and lightest runtime we can, while still enabling us
-        // to wait for futures to complete synchronously. Must enable io and time
-        // otherwise runtime does not really start.
+        // Build the simplest and lightest runtime we can, while still enabling
+        // us to wait for this future (and everything it spawns) to complete
+        // synchronously. Must enable the io and time features otherwise the
+        // runtime does not really start.
         let mut runtime = tokio::runtime::Builder::new()
             .basic_scheduler()
             .enable_all()
@@ -279,8 +279,18 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test(core_threads = 4)]
+    #[tokio::test]
     async fn test_create_bucket_async() {
+        //
+        // This test is run within the tokio runtime, in an effort to simulate
+        // the server process manager, which itself will be running a tokio
+        // runtime (via actix). In such an environment, the async functions
+        // invoked by this store must have their Future results processed to
+        // completion, in a blocking environment. To do this, the store uses its
+        // own runtime, which must be separate from any other async runtime. As
+        // such, this test spawns a thread and runs an asynchronous task
+        // (creating a bucket) to simulate that scenario.
+        //
         // set up the environment and remote connection
         dotenv().ok();
         let endp_var = env::var("MINIO_ENDPOINT");
@@ -292,15 +302,17 @@ mod tests {
         let region_str = env::var("MINIO_REGION").unwrap();
         let access_key = env::var("MINIO_ACCESS_KEY").unwrap();
         let secret_key = env::var("MINIO_SECRET_KEY").unwrap();
-        let region = Region::Custom {
-            name: region_str,
-            endpoint: endpoint,
-        };
-        let client = rusoto_core::request::HttpClient::new().unwrap();
-        let creds = rusoto_credential::StaticProvider::new(access_key, secret_key, None, None);
-        let client = S3Client::new_with(client, creds, region);
-        // test the async function while running in an async runtime
-        let result = create_bucket(&client, "7057118a9aa40c2747267d56e4c1730f");
+        let handler = std::thread::spawn(|| {
+            let region = Region::Custom {
+                name: region_str,
+                endpoint: endpoint,
+            };
+            let client = rusoto_core::request::HttpClient::new().unwrap();
+            let creds = rusoto_credential::StaticProvider::new(access_key, secret_key, None, None);
+            let client = S3Client::new_with(client, creds, region);
+            create_bucket(&client, "7057118a9aa40c2747267d56e4c1730f")
+        });
+        let result = handler.join().unwrap();
         assert!(result.is_ok());
     }
 

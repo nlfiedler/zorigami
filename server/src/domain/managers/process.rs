@@ -6,8 +6,8 @@
 //! performed for each dataset according to a schedule.
 
 use super::state::{self, Action};
-use crate::domain::entities::Dataset;
 use crate::domain::entities::schedule::Schedule;
+use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use chrono::prelude::*;
@@ -95,8 +95,14 @@ impl Handler<StartBackup> for Runner {
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<Runner>) {
         debug!("runner received backup message");
-        run_dataset(msg.dbase, msg.dataset.clone(), msg.schedule.clone());
-        debug!("runner finished backup");
+        thread::spawn(|| {
+            // Allow the backup process to run an async runtime of its own, if
+            // necessary, possibly with a threaded future executor, by spawning
+            // it to a separate thread. This helps with some pack stores that
+            // call into libraries that return their results as a Future.
+            run_dataset(msg.dbase, msg.dataset.clone(), msg.schedule.clone());
+        });
+        debug!("runner spawned backup process");
         ctx.stop();
     }
 }
