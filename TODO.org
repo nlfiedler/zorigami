@@ -25,18 +25,37 @@
 **** DONE add form field in flutter
 **** DONE test at least one backup to google
 *** TODO use this to replace =akashita= for online backups
-**** define a new google cloud project named ~zorigami~
-**** copy the old settings before wiping the database
-**** develop the ansible script for preparing google store
-***** copy the credentials file to the server
-**** eventually remove the old ~akashita~ project and files
-**** old akashita configuration file:
-#+BEGIN_SRC erlang
-{gcs_region, "us-west1"}.
-{gcp_credentials, "/working/config/credentials.json"}.
-{go_times, ["07:00-13:00"]}. % times are UTC
-{split_size, "128M"}.
-#+END_SRC
+**** DONE define a new google cloud project named ~zorigami~
+**** DONE copy the old settings before wiping the database
+***** dataset
+:basepath: /datasets
+:schedule: daily
+:packsize: 64
+***** local store
+:label: safe
+:path: /packstore
+***** minio store
+:label: yubaba
+:region: us-west-1
+:endpoint: http://192.168.1.3:9000
+:access-key: minio
+:secret-key: keyboard cat
+**** DONE document setting up the google cloud project
+1) create a new project in Google Cloud Platform
+2) navigate to APIs & Services
+3) open Credentials screen
+4) click CREATE CREDENTIALS and select Service account
+5) enter an account name and optional description
+6) click CREATE button
+7) click ~Manage service accounts~ link or navigate to IAM & Admin -> Service Accounts
+8) click on the Actions 3-dot button and select ~Create key~
+9) choose JSON and click CREATE button
+**** DONE process the rusoto future to completion
+***** actix uses the basic scheduler tokio runtime, so no blocking calls
+***** spawn a thread in =process.rs= so that it is indepedent of actix/tokio runtime
+***** create a basic scheduler in store_minio to process the future(s)
+**** DONE dataset form shows a very large grey rectangle
+*** TODO eventually remove the old ~akashita~ project and files
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -49,6 +68,15 @@
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
+*** TODO should disable the ~manual~, ~weekly~, and ~monthly~ frequency options for now
+*** TODO test with a smaller browser window to surface sizing issues
+*** TODO when there are no snapshots, clicking the dataset row does nothing
+*** TODO how to refresh the snapshots screen?
+**** gets stale as soon as a backup has been run
+**** navigation to the snapshots does not work if there were none to start with
+**** maybe add a refresh button like in google cloud console
+*** TODO dataset start/stop schedule should make clear it is 24-hour UTC
+**** even better, show the local time as well
 *** TODO local store basepath and google credentials should use file picker
 **** https://pub.dev/packages/form_builder_file_picker
 ***** waiting for a license to be chosen by the author
