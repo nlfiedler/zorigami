@@ -177,7 +177,7 @@ class _DataSetFormState extends State<DataSetForm> {
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
-            labelText: 'Start Time',
+            labelText: 'Start Time (UTC)',
           ),
           validators: [
             (val) {
@@ -195,7 +195,7 @@ class _DataSetFormState extends State<DataSetForm> {
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
-            labelText: 'Stop Time',
+            labelText: 'Stop Time (UTC)',
           ),
           validators: [
             (val) {
