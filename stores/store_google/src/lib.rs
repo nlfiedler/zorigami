@@ -41,20 +41,29 @@ impl GoogleStore {
     }
 
     fn connect(&self) -> Result<StorageHub, Error> {
-        let client_secret = yup_oauth2::service_account_key_from_file(&self.credentials)?;
-        let access = ServiceAccountAccess::new(
-            client_secret,
-            Client::with_connector(hyper::net::HttpsConnector::new(
-                hyper_rustls::TlsClient::new(),
-            )),
-        );
-        let hub = Storage::new(
-            Client::with_connector(hyper::net::HttpsConnector::new(
-                hyper_rustls::TlsClient::new(),
-            )),
-            access,
-        );
-        Ok(hub)
+        match yup_oauth2::service_account_key_from_file(&self.credentials) {
+            Ok(client_secret) => {
+                let access = ServiceAccountAccess::new(
+                    client_secret,
+                    Client::with_connector(hyper::net::HttpsConnector::new(
+                        hyper_rustls::TlsClient::new(),
+                    )),
+                );
+                let hub = Storage::new(
+                    Client::with_connector(hyper::net::HttpsConnector::new(
+                        hyper_rustls::TlsClient::new(),
+                    )),
+                    access,
+                );
+                Ok(hub)
+            }
+            Err(err) => {
+                return Err(err_msg(format!(
+                    "error reading account key {}: {:?}",
+                    self.credentials, err
+                )));
+            }
+        }
     }
 
     pub fn store_pack(

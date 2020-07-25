@@ -9,7 +9,7 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error};
-use log::warn;
+use log::{error, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -201,9 +201,14 @@ impl PackRepository for PackRepositoryImpl {
         object: &str,
     ) -> Result<Vec<PackLocation>, Error> {
         let mut results: Vec<PackLocation> = Vec::new();
-        for source in self.sources.values() {
-            let loc = store_pack_retry(source, packfile, bucket, object)?;
-            results.push(loc.into());
+        for (store, source) in self.sources.iter() {
+            match store_pack_retry(source, packfile, bucket, object) {
+                Ok(loc) => results.push(loc.into()),
+                Err(err) => {
+                    error!("pack store {} failed for {}/{}", store.id, bucket, object);
+                    return Err(err);
+                }
+            }
         }
         Ok(results)
     }
