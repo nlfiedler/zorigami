@@ -287,9 +287,21 @@ Option<DateTime> getTimeFromDataSet(
 
 DateTime timeFromInt(int time) {
   final int as_minutes = (time / 60) as int;
-  final int hour = as_minutes ~/ 60;
-  final int minutes = as_minutes % 60;
-  return DateTime(1, 1, 1, hour, minutes);
+  //
+  // This code works fine in dartdevc:
+  //
+  // final int hour = as_minutes ~/ 60;
+  // final int minutes = as_minutes % 60;
+  // return DateTime(1, 1, 1, hour, minutes);
+  //
+  // However, it seems like the dart2js compiler produces something erroneous
+  // and it causes this code to fail miserably, which in turn causes the
+  // component to paint an enormous grey rectangle. As such, perform all the
+  // arithmetic using not-integer operators and then convert to ints at the end.
+  //
+  final hour = as_minutes / 60;
+  final minutes = as_minutes - (hour.toInt() * 60);
+  return DateTime(1, 1, 1, hour.toInt(), minutes.toInt());
 }
 
 List<Schedule> schedulesFromState(FormBuilderState state) {
@@ -298,6 +310,7 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
     // manual (no) scheduling
     return [];
   }
+  // dart needs help knowing exactly what type of option is returned
   final Option<TimeRange> timeRange =
       allowTimeRange(option) ? timeRangeFromState(state) : None();
   return [
