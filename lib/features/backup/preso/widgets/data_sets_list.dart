@@ -166,7 +166,7 @@ class DataSetListDetails extends StatelessWidget {
 
   void saveDataSet(BuildContext context, DataSetForm setForm) {
     if (formKey.currentState.saveAndValidate()) {
-      final dataset = setForm.datasetFromState(
+      final dataset = DataSetForm.datasetFromState(
         formKey.currentState,
       );
       BlocProvider.of<edsb.EditDataSetsBloc>(context).add(
@@ -203,7 +203,7 @@ class DataSetListDetails extends StatelessWidget {
           children: <Widget>[
             FormBuilder(
               key: formKey,
-              initialValue: datasetForm.initialValuesFrom(dataset),
+              initialValue: DataSetForm.initialValuesFrom(dataset, stores),
               autovalidate: true,
               child: datasetForm,
               // not convinced this readOnly is effective

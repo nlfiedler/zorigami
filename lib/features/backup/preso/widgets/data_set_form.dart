@@ -28,15 +28,16 @@ final frequencyMonthly = FrequencyOption(
   frequency: Frequency.monthly,
 );
 
+// Only allow hourly and daily frequencies for the time being.
 final List<FrequencyOption> frequencies = [
-  frequencyManual,
+  // frequencyManual,
   frequencyHourly,
   frequencyDaily,
-  frequencyWeekly,
-  frequencyMonthly,
+  // frequencyWeekly,
+  // frequencyMonthly,
 ];
 
-class DataSetForm extends StatelessWidget {
+class DataSetForm extends StatefulWidget {
   final DataSet dataset;
   final List<PackStore> stores;
   final GlobalKey<FormBuilderState> formKey;
@@ -48,7 +49,10 @@ class DataSetForm extends StatelessWidget {
     @required this.formKey,
   }) : super(key: key);
 
-  Map<String, dynamic> initialValuesFrom(DataSet dataset) {
+  static Map<String, dynamic> initialValuesFrom(
+    DataSet dataset,
+    List<PackStore> stores,
+  ) {
     // convert pack size int of bytes to string of megabytes
     final packSize = (dataset.packSize / 1048576).round().toString();
     final frequency = frequencyFromDataSet(dataset);
@@ -67,7 +71,7 @@ class DataSetForm extends StatelessWidget {
     };
   }
 
-  DataSet datasetFromState(FormBuilderState state) {
+  static DataSet datasetFromState(FormBuilderState state) {
     // convert pack size string of megabytes to int of bytes
     final packSize = int.parse(state.value['packSize']) * 1048576;
     final schedules = schedulesFromState(state);
@@ -86,18 +90,21 @@ class DataSetForm extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  _DataSetFormState createState() {
     final frequency = frequencyFromDataSet(dataset);
-    final start = startTimeFromDataSet(dataset);
-    final stop = stopTimeFromDataSet(dataset);
-    //
-    // For now, always enable the time pickers, until changing one form field
-    // can fire a rebuild of the form to cause other fields to be disabled.
-    //
-    // final timePickersEnabled = allowTimeRange(frequency);
-    final timePickersEnabled = true;
-    final initialStores = buildInitialStores(dataset, stores);
-    final packStoreOptions = buildStoreOptions(stores);
+    final enableTimePickers = allowTimeRange(frequency);
+    return _DataSetFormState(timePickersEnabled: enableTimePickers);
+  }
+}
+
+class _DataSetFormState extends State<DataSetForm> {
+  bool timePickersEnabled;
+
+  _DataSetFormState({@required this.timePickersEnabled});
+
+  @override
+  Widget build(BuildContext context) {
+    final packStoreOptions = buildStoreOptions(widget.stores);
     return Column(
       children: <Widget>[
         FormBuilderTextField(
@@ -138,7 +145,6 @@ class DataSetForm extends StatelessWidget {
         ),
         FormBuilderCheckboxList(
           attribute: 'stores',
-          initialValue: initialStores,
           leadingInput: true,
           options: packStoreOptions,
           decoration: InputDecoration(
@@ -150,7 +156,6 @@ class DataSetForm extends StatelessWidget {
         ),
         FormBuilderRadio(
           attribute: 'frequency',
-          initialValue: frequency,
           leadingInput: true,
           options: frequencies.map((item) {
             return FormBuilderFieldOption(
@@ -162,11 +167,13 @@ class DataSetForm extends StatelessWidget {
             icon: Icon(Icons.calendar_today),
             labelText: 'Frequency',
           ),
+          onChanged: (val) {
+            setState(() => timePickersEnabled = allowTimeRange(val));
+          },
         ),
         FormBuilderDateTimePicker(
           attribute: 'start',
-          initialValue: start,
-          enabled: timePickersEnabled,
+          readOnly: !timePickersEnabled,
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
@@ -174,7 +181,7 @@ class DataSetForm extends StatelessWidget {
           ),
           validators: [
             (val) {
-              final stop = formKey.currentState.fields['stop'];
+              final stop = widget.formKey.currentState.fields['stop'];
               if (stop.currentState.value == null && val != null) {
                 return 'Please set stop time';
               }
@@ -184,8 +191,7 @@ class DataSetForm extends StatelessWidget {
         ),
         FormBuilderDateTimePicker(
           attribute: 'stop',
-          initialValue: stop,
-          enabled: timePickersEnabled,
+          readOnly: !timePickersEnabled,
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
@@ -193,7 +199,7 @@ class DataSetForm extends StatelessWidget {
           ),
           validators: [
             (val) {
-              final start = formKey.currentState.fields['start'];
+              final start = widget.formKey.currentState.fields['start'];
               if (start.currentState.value == null && val != null) {
                 return 'Please set start time';
               }
@@ -230,7 +236,9 @@ List<PackStore> buildInitialStores(DataSet dataset, List<PackStore> stores) {
 
 FrequencyOption frequencyFromDataSet(DataSet dataset) {
   if (dataset.schedules.isEmpty) {
-    return frequencyManual;
+    // for now, only allow hourly and daily frequencies
+    // return frequencyManual;
+    return frequencyHourly;
   }
   switch (dataset.schedules[0].frequency) {
     case Frequency.hourly:
@@ -238,9 +246,13 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
     case Frequency.daily:
       return frequencyDaily;
     case Frequency.weekly:
-      return frequencyWeekly;
+      // for now, only allow hourly and daily frequencies
+      // return frequencyWeekly;
+      return frequencyDaily;
     case Frequency.monthly:
-      return frequencyMonthly;
+      // for now, only allow hourly and daily frequencies
+      // return frequencyMonthly;
+      return frequencyDaily;
     default:
       throw ArgumentError('frequency is not recognized');
   }
@@ -275,9 +287,7 @@ Option<DateTime> getTimeFromDataSet(
     case Frequency.hourly:
       return None();
     case Frequency.daily:
-      return op(dataset.schedules[0]);
     case Frequency.weekly:
-      return op(dataset.schedules[0]);
     case Frequency.monthly:
       return op(dataset.schedules[0]);
     default:
