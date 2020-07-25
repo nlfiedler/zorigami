@@ -24,11 +24,10 @@ RUN cargo build --release
 #
 # build the flutter app
 #
-# Not really sure what the point of the "beta-web" tag is because it is
-# neither set to the beta channel nor is the web enabled, so we end up
-# setting everything ourselves anyway.
+# Use their "beta" tag, but also set the channel to beta anyway, and make sure
+# it is completely up-to-date, and then enable the web channel as well.
 #
-FROM cirrusci/flutter:beta-web AS flutter
+FROM cirrusci/flutter:beta AS flutter
 ARG BASE_URL=http://localhost:8080
 RUN flutter channel beta
 RUN flutter upgrade
