@@ -118,6 +118,10 @@ How to create a new project and get the service account credentials file.
 1. Click _CREATE CREDENTIALS_ and select _Service_ account
 1. Enter an account name and optional description
 1. Click **CREATE** button
+1. Navigate to **IAM & Admin / IAM** and click the **ADD** button
+1. Start typing the name of the service account and select the result
+1. Add role for _Storage Admin_ under the _Cloud Storage_ category
+    * The service account needs to be able to create buckets and objects.
 1. Click _Manage service accounts_ link or navigate to **IAM & Admin / Service Accounts**
 1. Click on the _Actions_ 3-dot button and select _Create key_
 1. Choose *JSON* and click **CREATE** button
