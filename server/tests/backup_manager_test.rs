@@ -531,9 +531,9 @@ fn test_continue_backup() -> Result<(), Error> {
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
     #[cfg(target_family = "unix")]
-    let pack_path = "tmp/test/managers/backup/packs";
+    let pack_path = "tmp/test/managers/cont_backup/packs";
     #[cfg(target_family = "windows")]
-    let pack_path = "tmp\\test\\managers\\backup\\packs";
+    let pack_path = "tmp\\test\\managers\\cont_backup\\packs";
     let _ = fs::remove_dir_all(pack_path);
 
     let mut local_props: HashMap<String, String> = HashMap::new();
@@ -548,9 +548,9 @@ fn test_continue_backup() -> Result<(), Error> {
 
     // create a dataset
     #[cfg(target_family = "unix")]
-    let basepath = "tmp/test/managers/backup/fixtures";
+    let basepath = "tmp/test/managers/cont_backup/fixtures";
     #[cfg(target_family = "windows")]
-    let basepath = "tmp\\test\\managers\\backup\\fixtures";
+    let basepath = "tmp\\test\\managers\\cont_backup\\fixtures";
     let _ = fs::remove_dir_all(basepath);
     fs::create_dir_all(basepath)?;
     let mut dataset = entities::Dataset::new(Path::new(basepath));
@@ -579,5 +579,53 @@ fn test_continue_backup() -> Result<(), Error> {
     let snapshot = dbase.get_snapshot(&first_sha1)?.unwrap();
     assert!(snapshot.end_time.is_some());
 
+    Ok(())
+}
+
+#[test]
+fn test_backup_out_of_time() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_backup_out_of_time");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    #[cfg(target_family = "unix")]
+    let pack_path = "tmp/test/managers/backup_time/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\managers\\backup_time\\packs";
+    let _ = fs::remove_dir_all(pack_path);
+
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert("basepath".to_owned(), pack_path.to_owned());
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+    };
+    dbase.put_store(&store)?;
+
+    // create a dataset
+    #[cfg(target_family = "unix")]
+    let basepath = "tmp/test/managers/backup_time/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\managers\\backup_time\\fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let mut dataset = entities::Dataset::new(Path::new(basepath));
+    dataset = dataset.add_store("local123");
+    dataset.pack_size = 65536 as u64;
+    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
+    dbase.put_computer_id(&dataset.id, &computer_id)?;
+
+    // start the backup manager after the stop time has already passed; should
+    // return an "out of time" error
+    let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
+    assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    let stop_time = Some(chrono::Utc::now() - chrono::Duration::minutes(5));
+    match perform_backup(&mut dataset, &dbase, "keyboard cat", stop_time) {
+        Ok(_) => panic!("expected backup to return an error"),
+        Err(err) => assert!(err.downcast::<OutOfTimeFailure>().is_ok()),
+    }
     Ok(())
 }

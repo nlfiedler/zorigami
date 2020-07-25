@@ -32,7 +32,11 @@ pub fn perform_backup(
     passphrase: &str,
     stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
-    debug!("performing backup for {}", dataset);
+    if let Some(time) = stop_time {
+        debug!("performing backup for {} until {}", dataset, time);
+    } else {
+        debug!("performing backup for {} until completion", dataset);
+    }
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
     // that the previous backup did not complete successfully.
@@ -113,7 +117,7 @@ fn continue_backup(
             let tree = snapshot.tree;
             let iter = TreeWalker::new(repo, &dataset.basepath, tree);
             for result in iter {
-                bmaster.handle_file(result)?;
+                bmaster.handle_file(result?)?;
             }
         }
         Some(ref parent) => {
@@ -124,7 +128,7 @@ fn continue_backup(
                 current_sha1.clone(),
             )?;
             for result in iter {
-                bmaster.handle_file(result)?;
+                bmaster.handle_file(result?)?;
             }
         }
     }
@@ -187,20 +191,19 @@ impl<'a> BackupMaster<'a> {
 
     /// Handle a single changed file, adding it to the pack, and possibly
     /// uploading one or more pack files as needed.
-    fn handle_file(&mut self, changed: Result<ChangedFile, Error>) -> Result<(), Error> {
-        let entry = changed?;
+    fn handle_file(&mut self, changed: ChangedFile) -> Result<(), Error> {
         // ignore files which already have records
-        if self.dbase.get_file(&entry.digest)?.is_none() {
+        if self.dbase.get_file(&changed.digest)?.is_none() {
             if self
                 .builder
-                .add_file(&entry.path, entry.digest.clone())
+                .add_file(&changed.path, changed.digest.clone())
                 .is_err()
             {
                 // file disappeared out from under us, record it as
                 // having zero length; file restore will handle it
                 // without any problem
-                error!("file {:?} went missing during backup", entry.path);
-                let file = entities::File::new(entry.digest, 0, vec![]);
+                error!("file {:?} went missing during backup", changed.path);
+                let file = entities::File::new(changed.digest, 0, vec![]);
                 self.dbase.insert_file(&file)?;
             }
             // loop until pack builder is below desired size
