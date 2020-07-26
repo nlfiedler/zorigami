@@ -210,13 +210,16 @@ impl<'a> BackupMaster<'a> {
             // (adding a very large file may require multiple packs)
             while self.builder.is_full() {
                 self.send_one_pack()?;
-            }
-        }
-        // check if the stop time (if any) has been reached
-        if let Some(stop_time) = self.stop_time {
-            let now = Utc::now();
-            if now > stop_time {
-                return Err(Error::from(OutOfTimeFailure {}));
+                // Check if the stop time (if any) has been reached, even if
+                // this was the last file to be processed, we'll finish
+                // everything up later when the time comes. A large file may not
+                // be finished, but will be picked up again next time.
+                if let Some(stop_time) = self.stop_time {
+                    let now = Utc::now();
+                    if now > stop_time {
+                        return Err(Error::from(OutOfTimeFailure {}));
+                    }
+                }
             }
         }
         Ok(())
@@ -878,6 +881,12 @@ impl<'a> PackBuilder<'a> {
                 }
             }
         });
+        if chunks.len() > 120 {
+            // For very large files, give some indication that we will be busy
+            // for a while processing that one file since it requires many pack
+            // files to completely finish this one file.
+            info!("packing large file {} with {} chunks", path.to_string_lossy(), chunks.len());
+        }
         // save the chunks under the digest of the file they came from to make
         // it easy to save everything to the database later
         self.file_chunks.insert(file_digest, chunks);
