@@ -37,13 +37,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => CreateDataSetsBloc(usecase: usecase),
+      build: () => CreateDataSetsBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Submitting, Submitted] when DefineDataSet is added',
-      build: () async => CreateDataSetsBloc(usecase: usecase),
+      build: () => CreateDataSetsBloc(usecase: usecase),
       act: (bloc) => bloc.add(DefineDataSet(dataset: tDataSet)),
       expect: [Submitting(), Submitted()],
     );
@@ -59,7 +59,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when DefineDataSet is added',
-      build: () async => CreateDataSetsBloc(usecase: usecase),
+      build: () => CreateDataSetsBloc(usecase: usecase),
       act: (bloc) => bloc.add(DefineDataSet(dataset: tDataSet)),
       expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );

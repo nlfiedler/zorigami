@@ -60,19 +60,7 @@ class Error extends PackStoresState {
 class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
   final GetPackStores usecase;
 
-  PackStoresBloc({this.usecase});
-
-  @override
-  PackStoresState get initialState => Empty();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<PackStoresEvent, PackStoresState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  PackStoresBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<PackStoresState> mapEventToState(
@@ -87,7 +75,7 @@ class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
       );
     } else if (event is ReloadPackStores) {
       // force an update as something changed elsewhere
-      yield initialState;
+      yield Empty();
     }
   }
 }

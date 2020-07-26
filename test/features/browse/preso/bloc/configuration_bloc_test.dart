@@ -34,13 +34,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => ConfigurationBloc(usecase: usecase),
+      build: () => ConfigurationBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadConfiguration is added',
-      build: () async => ConfigurationBloc(usecase: usecase),
+      build: () => ConfigurationBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadConfiguration()),
       expect: [Loading(), Loaded(config: tConfiguration)],
     );
@@ -56,7 +56,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadConfiguration is added',
-      build: () async => ConfigurationBloc(usecase: usecase),
+      build: () => ConfigurationBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadConfiguration()),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

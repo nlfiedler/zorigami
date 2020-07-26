@@ -58,20 +58,20 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => SnapshotBrowserBloc(usecase: usecase),
+      build: () => SnapshotBrowserBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadSnapshot is added',
-      build: () async => SnapshotBrowserBloc(usecase: usecase),
+      build: () => SnapshotBrowserBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
       expect: [Loading(), Loaded(snapshot: tSubsequent)],
     );
 
     blocTest(
       'should support moving forward and backward',
-      build: () async => SnapshotBrowserBloc(usecase: usecase),
+      build: () => SnapshotBrowserBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadSnapshot(digest: 'cafebabe'));
         bloc.add(LoadParent());
@@ -108,7 +108,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadSnapshot is added',
-      build: () async => SnapshotBrowserBloc(usecase: usecase),
+      build: () => SnapshotBrowserBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

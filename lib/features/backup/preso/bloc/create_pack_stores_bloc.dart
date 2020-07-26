@@ -55,19 +55,7 @@ class CreatePackStoresBloc
     extends Bloc<CreatePackStoresEvent, CreatePackStoresState> {
   final dps.DefinePackStore usecase;
 
-  CreatePackStoresBloc({this.usecase});
-
-  @override
-  CreatePackStoresState get initialState => Editing();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<CreatePackStoresEvent, CreatePackStoresState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  CreatePackStoresBloc({this.usecase}) : super(Editing());
 
   @override
   Stream<CreatePackStoresState> mapEventToState(

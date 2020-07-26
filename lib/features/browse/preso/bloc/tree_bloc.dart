@@ -61,10 +61,7 @@ class Error extends TreeState {
 class TreeBloc extends Bloc<TreeEvent, TreeState> {
   final GetTree usecase;
 
-  TreeBloc({this.usecase});
-
-  @override
-  TreeState get initialState => Empty();
+  TreeBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<TreeState> mapEventToState(

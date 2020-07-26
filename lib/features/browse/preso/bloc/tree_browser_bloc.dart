@@ -112,10 +112,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   // selected tree entries
   final List<TreeEntry> selections = [];
 
-  @override
-  TreeBrowserState get initialState => Empty();
-
-  TreeBrowserBloc({this.getTree, this.restoreFile});
+  TreeBrowserBloc({this.getTree, this.restoreFile}) : super(Empty());
 
   @override
   Stream<TreeBrowserState> mapEventToState(
@@ -156,7 +153,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
     } else if (event is ResetTree) {
       // Something else has happened (i.e. navigating snapshots) outside of this
       // bloc that requires signaling the consumers of the change.
-      yield initialState;
+      yield Empty();
     } else if (event is RestoreSelections) {
       if (state is Loaded) {
         final tree = (state as Loaded).tree;

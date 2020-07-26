@@ -61,10 +61,7 @@ class Error extends SnapshotState {
 class SnapshotBloc extends Bloc<SnapshotEvent, SnapshotState> {
   final GetSnapshot usecase;
 
-  SnapshotBloc({this.usecase});
-
-  @override
-  SnapshotState get initialState => Empty();
+  SnapshotBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<SnapshotState> mapEventToState(

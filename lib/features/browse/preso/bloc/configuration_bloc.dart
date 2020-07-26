@@ -58,10 +58,7 @@ class Error extends ConfigurationState {
 class ConfigurationBloc extends Bloc<ConfigurationEvent, ConfigurationState> {
   final GetConfiguration usecase;
 
-  ConfigurationBloc({this.usecase});
-
-  @override
-  ConfigurationState get initialState => Empty();
+  ConfigurationBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<ConfigurationState> mapEventToState(

@@ -37,13 +37,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => DataSetsBloc(usecase: usecase),
+      build: () => DataSetsBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllDataSets is added',
-      build: () async => DataSetsBloc(usecase: usecase),
+      build: () => DataSetsBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadAllDataSets()),
       expect: [
         Loading(),
@@ -53,7 +53,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Loaded, Empty] when ReloadDataSets is added',
-      build: () async => DataSetsBloc(usecase: usecase),
+      build: () => DataSetsBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadAllDataSets());
         bloc.add(ReloadDataSets());
@@ -77,7 +77,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadAllDataSets is added',
-      build: () async => DataSetsBloc(usecase: usecase),
+      build: () => DataSetsBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadAllDataSets()),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

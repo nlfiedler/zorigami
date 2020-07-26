@@ -75,17 +75,7 @@ class SnapshotBrowserBloc
   final GetSnapshot usecase;
   final List<String> history = [];
 
-  SnapshotBrowserBloc({this.usecase});
-
-  @override
-  SnapshotBrowserState get initialState => Empty();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(Transition<SnapshotBrowserEvent, SnapshotBrowserState> transition) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  SnapshotBrowserBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<SnapshotBrowserState> mapEventToState(

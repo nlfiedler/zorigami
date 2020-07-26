@@ -60,19 +60,7 @@ class Error extends DataSetsState {
 class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
   final GetDataSets usecase;
 
-  DataSetsBloc({this.usecase});
-
-  @override
-  DataSetsState get initialState => Empty();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<DataSetsEvent, DataSetsState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  DataSetsBloc({this.usecase}) : super(Empty());
 
   @override
   Stream<DataSetsState> mapEventToState(
@@ -87,7 +75,7 @@ class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
       );
     } else if (event is ReloadDataSets) {
       // force an update as something changed elsewhere
-      yield initialState;
+      yield Empty();
     }
   }
 }

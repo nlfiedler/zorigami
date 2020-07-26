@@ -100,20 +100,20 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       expect: [],
     );
 
     blocTest(
       'emits updated state when LoadTree is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
       expect: [Loading(), Loaded(tree: tTree1, selections: [], path: [])],
     );
 
     blocTest(
       'selects an entry when SetSelection is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -128,7 +128,7 @@ void main() {
 
     blocTest(
       'toggle entry selection on and off',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -145,7 +145,7 @@ void main() {
 
     blocTest(
       'selection emitted once for multiple identical SetSelection events',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -162,14 +162,14 @@ void main() {
 
     blocTest(
       'should emit nothing when LoadEntry is added without a tree',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadEntry(entry: tTree1.entries[1])),
       expect: [],
     );
 
     blocTest(
       'clears selections when LoadEntry is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -191,7 +191,7 @@ void main() {
 
     blocTest(
       'clears state when LoadTree is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -209,7 +209,7 @@ void main() {
 
     blocTest(
       'clears state when ResetTree is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(SetSelection(entry: tTree1.entries[0], selected: true));
@@ -226,14 +226,14 @@ void main() {
 
     blocTest(
       'should emit nothing when NavigateUpward is added without history',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(NavigateUpward()),
       expect: [],
     );
 
     blocTest(
       'should pop history when NavigateUpward is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
         bloc.add(LoadEntry(entry: tTree1.entries[1]));
@@ -270,7 +270,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Loaded, ...] when RestoreSelections is added',
-      build: () async => TreeBrowserBloc(
+      build: () => TreeBrowserBloc(
         getTree: getTree,
         restoreFile: restoreFile,
       ),
@@ -304,7 +304,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadTree is added',
-      build: () async => TreeBrowserBloc(getTree: getTree),
+      build: () => TreeBrowserBloc(getTree: getTree),
       act: (bloc) => bloc.add(LoadTree(digest: 'sha1-cafebabe')),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

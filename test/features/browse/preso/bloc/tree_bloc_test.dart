@@ -34,13 +34,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => TreeBloc(usecase: usecase),
+      build: () => TreeBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadTree is added',
-      build: () async => TreeBloc(usecase: usecase),
+      build: () => TreeBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadTree(digest: 'cafebabe')),
       expect: [Loading(), Loaded(tree: tTree)],
     );
@@ -56,7 +56,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadTree is added',
-      build: () async => TreeBloc(usecase: usecase),
+      build: () => TreeBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadTree(digest: 'cafebabe')),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

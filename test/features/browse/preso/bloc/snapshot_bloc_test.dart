@@ -36,13 +36,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => SnapshotBloc(usecase: usecase),
+      build: () => SnapshotBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllDataSets is added',
-      build: () async => SnapshotBloc(usecase: usecase),
+      build: () => SnapshotBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
       expect: [Loading(), Loaded(snapshot: tSnapshot)],
     );
@@ -58,7 +58,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Error] when LoadAllDataSets is added',
-      build: () async => SnapshotBloc(usecase: usecase),
+      build: () => SnapshotBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
       expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );

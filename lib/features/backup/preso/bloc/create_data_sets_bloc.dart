@@ -55,19 +55,7 @@ class CreateDataSetsBloc
     extends Bloc<CreateDataSetsEvent, CreateDataSetsState> {
   final dps.DefineDataSet usecase;
 
-  CreateDataSetsBloc({this.usecase});
-
-  @override
-  CreateDataSetsState get initialState => Editing();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<CreateDataSetsEvent, CreateDataSetsState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  CreateDataSetsBloc({this.usecase}) : super(Editing());
 
   @override
   Stream<CreateDataSetsState> mapEventToState(

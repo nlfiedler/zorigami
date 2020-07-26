@@ -34,13 +34,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => PackStoresBloc(usecase: usecase),
+      build: () => PackStoresBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllPackStores is added',
-      build: () async => PackStoresBloc(usecase: usecase),
+      build: () => PackStoresBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadAllPackStores()),
       expect: [
         Loading(),
@@ -50,7 +50,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Loaded, Empty] when ReloadDataSets is added',
-      build: () async => PackStoresBloc(usecase: usecase),
+      build: () => PackStoresBloc(usecase: usecase),
       act: (bloc) {
         bloc.add(LoadAllPackStores());
         bloc.add(ReloadPackStores());
@@ -74,7 +74,7 @@ void main() {
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllPackStores is added',
-      build: () async => PackStoresBloc(usecase: usecase),
+      build: () => PackStoresBloc(usecase: usecase),
       act: (bloc) => bloc.add(LoadAllPackStores()),
       expect: [
         Loading(),

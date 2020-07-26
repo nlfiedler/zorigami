@@ -66,19 +66,7 @@ class EditPackStoresBloc
   EditPackStoresBloc({
     this.updatePackStore,
     this.deletePackStore,
-  });
-
-  @override
-  EditPackStoresState get initialState => Editing();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<EditPackStoresEvent, EditPackStoresState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  }) : super(Editing());
 
   @override
   Stream<EditPackStoresState> mapEventToState(

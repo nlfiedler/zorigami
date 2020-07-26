@@ -42,7 +42,7 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => EditDataSetsBloc(
+      build: () => EditDataSetsBloc(
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
@@ -51,7 +51,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Submitted] when DeleteDataSet is added',
-      build: () async => EditDataSetsBloc(
+      build: () => EditDataSetsBloc(
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
@@ -61,7 +61,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Submitted] when UpdateDataSet is added',
-      build: () async => EditDataSetsBloc(
+      build: () => EditDataSetsBloc(
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
@@ -83,7 +83,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when DeleteDataSet is added',
-      build: () async => EditDataSetsBloc(
+      build: () => EditDataSetsBloc(
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
@@ -93,7 +93,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when UpdateDataSet is added',
-      build: () async => EditDataSetsBloc(
+      build: () => EditDataSetsBloc(
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),

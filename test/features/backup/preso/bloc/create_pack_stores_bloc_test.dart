@@ -34,13 +34,13 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => CreatePackStoresBloc(usecase: usecase),
+      build: () => CreatePackStoresBloc(usecase: usecase),
       expect: [],
     );
 
     blocTest(
       'emits [Submitting, Submitted] when DefinePackStore is added',
-      build: () async => CreatePackStoresBloc(usecase: usecase),
+      build: () => CreatePackStoresBloc(usecase: usecase),
       act: (bloc) => bloc.add(DefinePackStore(store: tPackStore)),
       expect: [Submitting(), Submitted()],
     );
@@ -56,7 +56,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when DefinePackStore is added',
-      build: () async => CreatePackStoresBloc(usecase: usecase),
+      build: () => CreatePackStoresBloc(usecase: usecase),
       act: (bloc) => bloc.add(DefinePackStore(store: tPackStore)),
       expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );

@@ -65,19 +65,7 @@ class EditDataSetsBloc extends Bloc<EditDataSetsEvent, EditDataSetsState> {
   EditDataSetsBloc({
     this.updateDataSet,
     this.deleteDataSet,
-  });
-
-  @override
-  EditDataSetsState get initialState => Editing();
-
-  // very helpful for debugging
-  // @override
-  // void onTransition(
-  //   Transition<EditDataSetsEvent, EditDataSetsState> transition,
-  // ) {
-  //   super.onTransition(transition);
-  //   print(transition);
-  // }
+  }) : super(Editing());
 
   @override
   Stream<EditDataSetsState> mapEventToState(

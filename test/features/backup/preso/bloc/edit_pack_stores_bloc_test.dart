@@ -39,7 +39,7 @@ void main() {
 
     blocTest(
       'emits [] when nothing is added',
-      build: () async => EditPackStoresBloc(
+      build: () => EditPackStoresBloc(
         updatePackStore: updateUsecase,
         deletePackStore: deleteUsecase,
       ),
@@ -48,7 +48,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Submitted] when DeletePackStore is added',
-      build: () async => EditPackStoresBloc(
+      build: () => EditPackStoresBloc(
         updatePackStore: updateUsecase,
         deletePackStore: deleteUsecase,
       ),
@@ -58,7 +58,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Submitted] when UpdatePackStore is added',
-      build: () async => EditPackStoresBloc(
+      build: () => EditPackStoresBloc(
         updatePackStore: updateUsecase,
         deletePackStore: deleteUsecase,
       ),
@@ -80,7 +80,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when DeletePackStore is added',
-      build: () async => EditPackStoresBloc(
+      build: () => EditPackStoresBloc(
         updatePackStore: updateUsecase,
         deletePackStore: deleteUsecase,
       ),
@@ -90,7 +90,7 @@ void main() {
 
     blocTest(
       'emits [Submitting, Error] when UpdatePackStore is added',
-      build: () async => EditPackStoresBloc(
+      build: () => EditPackStoresBloc(
         updatePackStore: updateUsecase,
         deletePackStore: deleteUsecase,
       ),
