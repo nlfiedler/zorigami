@@ -52,6 +52,8 @@ pub enum Action {
     FinishBackup(String),
     /// Sets the backup in the "error" state.
     ErrorBackup(String),
+    /// Sets the backup in the "paused" state.
+    PauseBackup(String),
     /// Clear the error state and end time to indicate a restart.
     RestartBackup(String),
 }
@@ -66,6 +68,7 @@ pub struct BackupState {
     packs_uploaded: u64,
     files_uploaded: u64,
     had_error: bool,
+    paused: bool,
 }
 
 impl Default for BackupState {
@@ -76,44 +79,40 @@ impl Default for BackupState {
             packs_uploaded: 0,
             files_uploaded: 0,
             had_error: false,
+            paused: false,
         }
     }
 }
 
 impl BackupState {
-    ///
     /// Return the start time for the backup of this dataset.
-    ///
     pub fn start_time(&self) -> DateTime<Utc> {
         self.start_time
     }
 
-    ///
     /// Return the completion time for the backup of this dataset.
-    ///
     pub fn end_time(&self) -> Option<DateTime<Utc>> {
         self.end_time
     }
 
-    ///
     /// Return the number of packs uploaded for this dataset.
-    ///
     pub fn packs_uploaded(&self) -> u64 {
         self.packs_uploaded
     }
 
-    ///
     /// Return the number of files uploaded for this dataset.
-    ///
     pub fn files_uploaded(&self) -> u64 {
         self.files_uploaded
     }
 
-    ///
     /// Return the state of the error flag.
-    ///
     pub fn had_error(&self) -> bool {
         self.had_error
+    }
+
+    /// Return the state of the paused flag.
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 }
 
@@ -168,9 +167,15 @@ impl Reducer<Action> for State {
                     record.had_error = true;
                 }
             }
+            Action::PauseBackup(key) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.paused = true;
+                }
+            }
             Action::RestartBackup(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.had_error = false;
+                    record.paused = false;
                     record.end_time = None;
                 }
             }
@@ -248,14 +253,14 @@ mod tests {
 
     #[test]
     fn test_upload_state() {
-        let key = "mydataset";
+        let key = "dataset0";
         dispatch(Action::StartBackup(key.to_owned()));
         dispatch(Action::UploadPack(key.to_owned()));
         dispatch(Action::UploadPack(key.to_owned()));
         dispatch(Action::UploadFiles(key.to_owned(), 2));
         dispatch(Action::UploadFiles(key.to_owned(), 3));
         let state = get_state();
-        let backup = state.backups("mydataset").unwrap();
+        let backup = state.backups("dataset0").unwrap();
         assert_eq!(backup.packs_uploaded(), 2);
         assert_eq!(backup.files_uploaded(), 5);
         assert!(get_state().backups("foobar").is_none());
@@ -269,5 +274,17 @@ mod tests {
         let state = get_state();
         let backup = state.backups("dataset1").unwrap();
         assert_eq!(backup.had_error(), true);
+        assert_eq!(backup.is_paused(), false);
+    }
+
+    #[test]
+    fn test_paused_state() {
+        let key = "dataset2";
+        dispatch(Action::StartBackup(key.to_owned()));
+        dispatch(Action::PauseBackup(key.to_owned()));
+        let state = get_state();
+        let backup = state.backups("dataset2").unwrap();
+        assert_eq!(backup.had_error(), false);
+        assert_eq!(backup.is_paused(), true);
     }
 }

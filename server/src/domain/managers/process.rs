@@ -164,10 +164,6 @@ fn start_due_datasets(dbase: Arc<dyn RecordRepository>) -> Result<(), Error> {
 /// Returns the applicative schedule for the same of setting the end time.
 ///
 fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option<Schedule>, Error> {
-    // public function so it can be tested from an external crate
-
-    // only consider those datasets that have a schedule, otherwise
-    // the user is expected to manually start the backup process
     if !set.schedules.is_empty() {
         let latest_snapshot = dbase.get_latest_snapshot(&set.id)?;
         let end_time: Option<DateTime<Utc>> = if let Some(checksum) = latest_snapshot {
@@ -178,37 +174,31 @@ fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option
         } else {
             None
         };
-        // consider each schedule until one is found that should start now
+        let redux = state::get_state();
+        let backup_state = redux.backups(&set.id);
         for schedule in set.schedules.iter() {
-            // check if backup overdue
+            // consider if backup is overdue based on snapshot
             let mut maybe_run = if let Some(et) = end_time {
-                // this checks both the overdue status and any time range
                 schedule.is_ready(et)
             } else {
                 schedule.within_range(Utc::now())
             };
-            // Check if a backup is still running or had an error; if it had an
-            // error, definitely try running again; if it is still running, then do
-            // nothing for now.
-            //
-            // Also consider recently finished backups where there were no changes
-            // in which case we clear the overdue flag.
-            let redux = state::get_state();
-            if let Some(backup) = redux.backups(&set.id) {
+            // consider how the backup state may affect the decision
+            if let Some(backup) = backup_state {
                 if backup.had_error() {
                     maybe_run = true;
                     debug!("dataset {} backup had an error, will restart", &set.id);
                 } else if let Some(et) = backup.end_time() {
+                    // a backup ran but there were no changes found
                     if !schedule.is_ready(et) {
                         maybe_run = false;
                     }
-                } else {
+                } else if !backup.is_paused() {
                     maybe_run = false;
                     debug!("dataset {} backup already in progress", &set.id);
                 }
             } else if maybe_run {
-                // kickstart the application state when it appears that our
-                // application has restarted while a backup was in progress
+                // maybe the application restarted after a crash
                 debug!("reset missing backup state to start");
                 state::dispatch(Action::StartBackup(set.id.clone()));
             }
@@ -246,8 +236,8 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Sch
         Err(err) => match err.downcast::<super::backup::OutOfTimeFailure>() {
             Ok(_) => {
                 info!("backup window has reached its end");
-                // put the backup in the error state so we try again
-                state::dispatch(Action::ErrorBackup(dataset.id.clone()));
+                // put the backup in the paused state for the time being
+                state::dispatch(Action::PauseBackup(dataset.id.clone()));
             }
             Err(err) => {
                 // here `err` is the original error
@@ -262,7 +252,7 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Sch
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::schedule::Schedule;
+    use crate::domain::entities::schedule::{Schedule, TimeRange};
     use crate::domain::entities::{Checksum, Snapshot};
     use crate::domain::repositories::MockRecordRepository;
     use std::io;
@@ -599,5 +589,48 @@ mod tests {
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn test_should_run_time_range_and_paused() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        // schedule has a time range that already passed, so even with an error
+        // condition, the backup should not be restarted
+        let start_time = chrono::Utc::now() - chrono::Duration::minutes(305);
+        let stop_time = chrono::Utc::now() - chrono::Duration::minutes(5);
+        let range = TimeRange::new(
+            start_time.hour(),
+            start_time.minute(),
+            stop_time.hour(),
+            stop_time.minute(),
+        );
+        dataset = dataset.add_schedule(Schedule::Daily(Some(range)));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone1 = dataset.id.clone();
+        let dataset_id_clone2 = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that started recently
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // indicate that the backup has been paused
+        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        state::dispatch(Action::PauseBackup(dataset_id_clone2));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

@@ -24,6 +24,8 @@
 **** DONE set the =location= property of the =Bucket= when creating it
 **** DONE add form field in flutter
 **** DONE test at least one backup to google
+*** DONE backup not stopping and staying stopped
+**** treat the pausing of the backup differently than the error case
 *** TODO use this to replace =akashita= for online backups
 **** DONE define a new google cloud project named ~zorigami~
 **** DONE copy the old settings before wiping the database
@@ -83,6 +85,15 @@ INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
 #+END_SRC
 ***** DONE add tests for the backup stopping early
 *** TODO eventually remove the old ~akashita~ project and files
+*** TODO when backup finishes, remove some files
+**** Apple macintosh files
+#+BEGIN_SRC shell
+find . -name '._*' -delete
+#+END_SRC
+**** old tanuki database files
+1) /zeniba/shared/couchdb
+2) /zeniba/shared/tanuki/thumbs
+3) /zeniba/shared/tanuki/thumbs
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -95,6 +106,8 @@ INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
+*** TODO sometimes get an HTTP error in GraphQL client
+**** should automatically retry the query a few times before giving up
 *** TODO test with a smaller browser window to surface sizing issues
 *** TODO when there are no snapshots, clicking the dataset row does nothing
 *** TODO how to refresh the snapshots screen?
@@ -109,6 +122,7 @@ INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
 *** TODO improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
 *** TODO improve snapshot tree browser
+**** should sort entries by filename case-insensitively
 **** for larger number of entries, should use =PaginatedDataTable=
 **** nice to have: sticky table header
 **** nice to have: sort by file type
