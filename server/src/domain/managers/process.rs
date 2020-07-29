@@ -185,17 +185,18 @@ fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option
             };
             // consider how the backup state may affect the decision
             if let Some(backup) = backup_state {
-                if backup.had_error() {
-                    maybe_run = true;
-                    debug!("dataset {} backup had an error, will restart", &set.id);
-                } else if let Some(et) = backup.end_time() {
-                    // a backup ran but there were no changes found
-                    if !schedule.is_ready(et) {
+                // ignore the error state, it does not override the schedule
+                if !backup.had_error() {
+                    if let Some(et) = backup.end_time() {
+                        // a backup ran but there were no changes found
+                        if !schedule.is_ready(et) {
+                            maybe_run = false;
+                        }
+                    } else if !backup.is_paused() {
+                        // not error and not paused means it is still running
                         maybe_run = false;
+                        debug!("dataset {} backup already in progress", &set.id);
                     }
-                } else if !backup.is_paused() {
-                    maybe_run = false;
-                    debug!("dataset {} backup already in progress", &set.id);
                 }
             } else if maybe_run {
                 // maybe the application restarted after a crash
@@ -595,8 +596,8 @@ mod tests {
     fn test_should_run_time_range_and_paused() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        // schedule has a time range that already passed, so even with an error
-        // condition, the backup should not be restarted
+        // schedule has a time range that already passed, so that a paused
+        // backup should not be restarted
         let start_time = chrono::Utc::now() - chrono::Duration::minutes(305);
         let stop_time = chrono::Utc::now() - chrono::Duration::minutes(5);
         let range = TimeRange::new(
@@ -627,6 +628,49 @@ mod tests {
         // indicate that the backup has been paused
         state::dispatch(Action::StartBackup(dataset_id_clone1));
         state::dispatch(Action::PauseBackup(dataset_id_clone2));
+        // act
+        let result = should_run(&repo, &dataset_clone);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_should_run_time_range_had_error() {
+        // arrange
+        let mut dataset = Dataset::new(Path::new("/some/path"));
+        // schedule has a time range that already passed, so even with an error
+        // condition, the backup should not be restarted
+        let start_time = chrono::Utc::now() - chrono::Duration::minutes(305);
+        let stop_time = chrono::Utc::now() - chrono::Duration::minutes(5);
+        let range = TimeRange::new(
+            start_time.hour(),
+            start_time.minute(),
+            stop_time.hour(),
+            stop_time.minute(),
+        );
+        dataset = dataset.add_schedule(Schedule::Daily(Some(range)));
+        let dataset_clone = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let dataset_id_clone1 = dataset.id.clone();
+        let dataset_id_clone2 = dataset.id.clone();
+        let datasets = vec![dataset];
+        // build a "latest" snapshot that started recently
+        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
+        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot_sha1 = snapshot.digest.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(move |_| Ok(Some(snapshot_sha1.clone())));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        let repo: Arc<dyn RecordRepository> = Arc::new(mock);
+        // indicate that the backup started but then failed
+        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        state::dispatch(Action::ErrorBackup(dataset_id_clone2));
         // act
         let result = should_run(&repo, &dataset_clone);
         // assert

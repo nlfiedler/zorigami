@@ -26,6 +26,7 @@
 **** DONE test at least one backup to google
 *** DONE backup not stopping and staying stopped
 **** treat the pausing of the backup differently than the error case
+*** DONE backup will restart even outside schedule, if there had been an error
 *** TODO use this to replace =akashita= for online backups
 **** DONE define a new google cloud project named ~zorigami~
 **** DONE copy the old settings before wiping the database
@@ -84,6 +85,8 @@ INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
 INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
 #+END_SRC
 ***** DONE add tests for the backup stopping early
+*** TODO use gcloud tools to verify that same pack files exist everywhere
+**** buckets and objects in safe, yubaba, and google should all match
 *** TODO eventually remove the old ~akashita~ project and files
 *** TODO when backup finishes, remove some files
 **** Apple macintosh files
@@ -114,6 +117,7 @@ find . -name '._*' -delete
 **** gets stale as soon as a backup has been run
 **** navigation to the snapshots does not work if there were none to start with
 **** maybe add a refresh button like in google cloud console
+*** TODO schedule start/stop times should be using local time (no excuse for not doing this)
 *** TODO local store basepath and google credentials should use file picker
 **** https://pub.dev/packages/form_builder_file_picker
 ***** waiting for a license to be chosen by the author
@@ -233,6 +237,8 @@ find . -name '._*' -delete
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
+*** Test Case: Google
+**** there is a bucket (=01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1=) that should be pruned
 ** Advanced Scheduling
 *** frontend
 **** TODO Support multiple schedules in interface
@@ -277,6 +283,14 @@ find . -name '._*' -delete
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
 **** would have to keep track in the database
+** Data Integrity
+*** TODO support database integrity checks
+**** ensure all referenced records actually exist
+**** like git fsck, start at the top and traverse everything
+**** find and report dangling objects
+**** an automated scan could be run on occasion
+*** TODO support bucket/object checks
+**** make sure all pack stores have all of the expected buckets and objects
 ** Architecture Review
 *** Database migrations
 **** Use the =serde= crate features (c.f. https://serde.rs)
@@ -360,11 +374,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** user must remember their old passwords in order to decrypt old pack files
 **** the application will never store the actual password anywhere
 **** will need to prompt the user when a different passphrase is needed
-*** TODO support database integrity checks
-**** ensure all referenced records actually exist
-**** like git fsck, start at the top and traverse everything
-**** find and report dangling objects
-**** an automated scan could be run on occasion
 *** TODO Automatically prune backups more then N days old
 **** For Google and Amazon, anything older than 90 days is free to remove
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
