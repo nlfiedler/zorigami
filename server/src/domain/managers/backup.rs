@@ -233,6 +233,12 @@ impl<'a> BackupMaster<'a> {
             .suffix(".bin")
             .tempfile_in(&self.dataset.workspace)?;
         let mut pack = self.builder.build_pack(outfile.path(), &self.passphrase)?;
+        if pack.digest.is_none() {
+            // This can happen if the backup consists only of files that were
+            // zero bytes in length (or some other reason the files could not be
+            // put into a pack).
+            return Ok(());
+        }
         let pack_rec = self.dbase.get_pack(pack.digest.as_ref().unwrap())?;
         if pack_rec.is_none() {
             // new pack file, need to upload this and record to database
@@ -885,7 +891,11 @@ impl<'a> PackBuilder<'a> {
             // For very large files, give some indication that we will be busy
             // for a while processing that one file since it requires many pack
             // files to completely finish this one file.
-            info!("packing large file {} with {} chunks", path.to_string_lossy(), chunks.len());
+            info!(
+                "packing large file {} with {} chunks",
+                path.to_string_lossy(),
+                chunks.len()
+            );
         }
         // save the chunks under the digest of the file they came from to make
         // it easy to save everything to the database later

@@ -78,12 +78,11 @@
 :01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
 :01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
 *** TODO eventually remove the old ~akashita~ project and files
-*** TODO what happens to files that have an error during backup?
+*** DONE what happens to files that have an error during backup?
 **** files in =/zeniba/shared/tanuki/assets/2020/07/26/2130= were not readable
 **** failed to read file while calculating the checksum in =scan_tree()=
 **** write a (unix only) test case for this
-*** TODO backup where the only new file is zero bytes in length
-**** backup code chokes on the non-existent pack file
+*** DONE test backup where the only new file is zero bytes in length
 *** DONE when backup finishes, remove some files
 **** Apple macintosh files
 #+BEGIN_SRC shell

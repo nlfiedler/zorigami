@@ -632,6 +632,51 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+fn test_backup_empty_file() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_backup_empty_file");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    #[cfg(target_family = "unix")]
+    let pack_path = "tmp/test/managers/backup_empty/packs";
+    #[cfg(target_family = "windows")]
+    let pack_path = "tmp\\test\\managers\\backup_empty\\packs";
+    let _ = fs::remove_dir_all(pack_path);
+
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert("basepath".to_owned(), pack_path.to_owned());
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+    };
+    dbase.put_store(&store)?;
+
+    // create a dataset
+    #[cfg(target_family = "unix")]
+    let basepath = "tmp/test/managers/backup_empty/fixtures";
+    #[cfg(target_family = "windows")]
+    let basepath = "tmp\\test\\managers\\backup_empty\\fixtures";
+    let _ = fs::remove_dir_all(basepath);
+    fs::create_dir_all(basepath)?;
+    let mut dataset = entities::Dataset::new(Path::new(basepath));
+    dataset = dataset.add_store("local123");
+    dataset.pack_size = 65536 as u64;
+    let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
+    dbase.put_computer_id(&dataset.id, &computer_id)?;
+
+    // perform a backup where there is only an empty file
+    let dest: PathBuf = [basepath, "zero-length.txt"].iter().collect();
+    assert!(fs::write(dest, vec![]).is_ok());
+    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    // it did not blow up, so that counts as passing
+    assert!(backup_opt.is_some());
+    Ok(())
+}
+
 #[cfg(target_family = "unix")]
 #[test]
 fn test_backup_recover_errorred_files() -> Result<(), Error> {
