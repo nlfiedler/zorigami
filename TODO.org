@@ -27,7 +27,7 @@
 *** DONE backup not stopping and staying stopped
 **** treat the pausing of the backup differently than the error case
 *** DONE backup will restart even outside schedule, if there had been an error
-*** TODO use this to replace =akashita= for online backups
+*** DONE use this to replace =akashita= for online backups
 **** DONE define a new google cloud project named ~zorigami~
 **** DONE copy the old settings before wiping the database
 ***** dataset
@@ -58,45 +58,42 @@
 ***** spawn a thread in =process.rs= so that it is indepedent of actix/tokio runtime
 ***** create a basic scheduler in store_minio to process the future(s)
 **** DONE dataset form shows a very large grey rectangle
-**** TODO failed to stop at the right time
-***** was changing the schedule and letting the backup restart
-***** log contents
-#+BEGIN_SRC
-DEBUG server::domain::managers::process] dataset 01edn29q3m3n7ccpd2sfh4244b backup had an error, will restart
-DEBUG server::domain::managers::process] runner received backup message
-DEBUG server::domain::managers::process] runner spawned backup process
-INFO  server::domain::managers::process] dataset 01edn29q3m3n7ccpd2sfh4244b to be backed up
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 0, files: 0
-DEBUG server::domain::managers::backup] performing backup for dataset-01edn29q3m3n7ccpd2sfh4244b
-DEBUG server::domain::managers::backup] continuing previous backup sha1-b4e84b17854e3af3689aa9bcaf8b36d81c029e67
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 1, files: 0
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 1, files: 5
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 2, files: 5
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 2, files: 13
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 3, files: 13
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 3, files: 18
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 4, files: 18
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 4, files: 28
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 5, files: 28
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 5, files: 47
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 6, files: 47
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 6, files: 62
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
-INFO  server] progress for 01edn29q3m3n7ccpd2sfh4244b: packs: 7, files: 62
-#+END_SRC
-***** DONE add tests for the backup stopping early
-*** TODO use gcloud tools to verify that same pack files exist everywhere
-**** buckets and objects in safe, yubaba, and google should all match
+*** DONE use gcloud tools to verify that same pack files exist everywhere
+**** safe
+:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
+:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
+:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 89
+:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
+:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
+**** yubaba
+:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
+:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
+:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 90
+:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
+:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
+**** google
+:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
+:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
+:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 89
+:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
+:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
 *** TODO eventually remove the old ~akashita~ project and files
-*** TODO when backup finishes, remove some files
+*** TODO what happens to files that have an error during backup?
+**** files in =/zeniba/shared/tanuki/assets/2020/07/26/2130= were not readable
+**** failed to read file while calculating the checksum in =scan_tree()=
+**** write a (unix only) test case for this
+*** TODO backup where the only new file is zero bytes in length
+**** backup code chokes on the non-existent pack file
+*** DONE when backup finishes, remove some files
 **** Apple macintosh files
 #+BEGIN_SRC shell
 find . -name '._*' -delete
 #+END_SRC
 **** old tanuki database files
 1) /zeniba/shared/couchdb
-2) /zeniba/shared/tanuki/thumbs
+2) /zeniba/shared/tanuki/database
 3) /zeniba/shared/tanuki/thumbs
+*** DONE document the deployment/update procedure for zorigami online
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -291,6 +288,8 @@ find . -name '._*' -delete
 **** an automated scan could be run on occasion
 *** TODO support bucket/object checks
 **** make sure all pack stores have all of the expected buckets and objects
+*** TODO prune objects that have no database references
+**** bucket =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1= on yubaba has a dead pack
 ** Architecture Review
 *** Database migrations
 **** Use the =serde= crate features (c.f. https://serde.rs)
