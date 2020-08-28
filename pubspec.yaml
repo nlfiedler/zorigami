@@ -4,6 +4,7 @@ version: 1.0.0+1
 homepage: https://github.com/nlfiedler/zorigami
 repository: https://github.com/nlfiedler/zorigami.git
 issue_tracker: https://github.com/nlfiedler/zorigami/issues
+publish_to: 'none'
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
@@ -27,6 +28,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
   bloc_test: ^7.0.0
   environment_config: ^2.2.0+2
   http: ^0.12.0+4

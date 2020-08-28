@@ -1,4 +1,9 @@
 * Tasks
+** ADR
+*** TODO add ADR documents like tanuki
+** Quick fixes
+*** Snapshot tree browser
+**** why only clicking on ~name~ navigates to folder?
 ** Cloud Backup
 *** DONE retry a pack upload/download if it encounters an error
 *** DONE add store that supports Google Cloud Storage
@@ -77,7 +82,10 @@
 :01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 89
 :01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
 :01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
-*** TODO eventually remove the old ~akashita~ project and files
+*** DONE test restoring some files
+**** a small file contained in a single pack file
+**** one that spans multiple pack files
+*** DONE eventually remove the old ~akashita~ project and files
 *** DONE what happens to files that have an error during backup?
 **** files in =/zeniba/shared/tanuki/assets/2020/07/26/2130= were not readable
 **** failed to read file while calculating the checksum in =scan_tree()=
@@ -93,66 +101,19 @@ find . -name '._*' -delete
 2) /zeniba/shared/tanuki/database
 3) /zeniba/shared/tanuki/thumbs
 *** DONE document the deployment/update procedure for zorigami online
-** Loose backend issues
-*** TODO the monthly fuzzy schedule test fails on the 30th of the month
-*** TODO schema custom types need some unit tests
-**** especially the schedule validation code
-** Loose GraphQL tasks
-*** TODO probably should use a better client cache
-**** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
-**** uses the "type" of the object and its unique identifier as the caching key
-**** our objects would need to have a "typename" for this to work
-*** TODO find out how to document arguments to mutations
-**** c.f. juniper API docs: Attribute Macro juniper::object
-** Loose WebUI tasks
-*** TODO sometimes get an HTTP error in GraphQL client
-**** should automatically retry the query a few times before giving up
-*** TODO test with a smaller browser window to surface sizing issues
-*** TODO when there are no snapshots, clicking the dataset row does nothing
-*** TODO how to refresh the snapshots screen?
-**** gets stale as soon as a backup has been run
-**** navigation to the snapshots does not work if there were none to start with
-**** maybe add a refresh button like in google cloud console
-*** TODO schedule start/stop times should be using local time (no excuse for not doing this)
-*** TODO local store basepath and google credentials should use file picker
-**** https://pub.dev/packages/form_builder_file_picker
-***** waiting for a license to be chosen by the author
-*** TODO improve the navigation drawer
-**** currently selected option should be highlighted, not actionable
-*** TODO improve (server) error handling
-**** when a temporary server error occurs, offer a "Retry" button
-*** TODO improve snapshot tree browser
-**** should sort entries by filename case-insensitively
-**** for larger number of entries, should use =PaginatedDataTable=
-**** nice to have: sticky table header
-**** nice to have: sort by file type
-*** TODO consider how to hide the minio secret key using a show/hide button
-*** TODO consider approaches to l10n and i18n
-**** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
-*** TODO improve the data sets form
-**** TODO FAB covers the =DELETE= button even when scrolled all the way down
-**** TODO use the =validate()= function on =DataSet= to ensure validity
-**** TODO should decode the computer ID to improve readability
-*** TODO should sort the datasets so they are always in the same order
-**** maybe sort them by date, with most recent first
-*** TODO tree entries of =ERROR= type should be displayed as such
-**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
-***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** TODO should have ui for listing all snapshots in a dataset
-**** probably need paging in the ui and graphql api
-**** consider presenting in a style similar to Time Machine
-*** TODO improve the page for defining stores
-**** TODO delete button should be far away from the other button(s)
-**** TODO delete button should require two clicks, with "are you sure?"
-*** TODO use breadcrumbs in the tree navigator to get back to parent directories
-*** TODO consider and improve accessibility
-**** enable testing for a11y sanity
-**** add hints to improve the presentation of information
-***** configuration panel
-***** snapshot browser
 ** Backup Status
+*** TODO a backup with no files reports as taking zero time, but the snapshot took an hour
+**** something does not add up, the reporting has to be wrong
+**** track snapshot time and pack/upload time separately
+*** TODO collect errors in the app state so it can be reported
+**** in fact, collect the last N backup states in the database
+**** frontend can then query and display this information later
 *** TODO dataset status says "running" even though it stopped due to schedule
 *** TODO dataset status says "running" even though it had an error
+*** TODO if there are errors, should report the collected list (in app state) to the user
+**** that is, collect the errors in the app state
+**** graphql query to retrieve all of the details about the snapshot
+**** if there are errors, add a button to show them on a detail screen
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -190,6 +151,64 @@ find . -name '._*' -delete
 **** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
+** Loose backend issues
+*** TODO the monthly fuzzy schedule test fails on the 30th of the month
+*** TODO schema custom types need some unit tests
+**** especially the schedule validation code
+** Loose GraphQL tasks
+*** TODO probably should use a better client cache
+**** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
+**** uses the "type" of the object and its unique identifier as the caching key
+**** our objects would need to have a "typename" for this to work
+*** TODO find out how to document arguments to mutations
+**** c.f. juniper API docs: Attribute Macro juniper::object
+** Loose WebUI tasks
+*** TODO sometimes get an HTTP error in GraphQL client
+**** should automatically retry the query a few times before giving up
+*** TODO test with a smaller browser window to surface sizing issues
+*** TODO when there are no snapshots, clicking the dataset row does nothing
+*** TODO how to refresh the snapshots screen?
+**** gets stale as soon as a backup has been run
+**** navigation to the snapshots does not work if there were none to start with
+**** maybe add a refresh button like in google cloud console
+*** TODO schedule start/stop times should be using local time (no excuse for not doing this)
+*** TODO local store basepath and google credentials should use file picker
+**** https://pub.dev/packages/form_builder_file_picker
+*** TODO improve the navigation drawer
+**** currently selected option should be highlighted, not actionable
+*** TODO improve (server) error handling
+**** when a temporary server error occurs, offer a "Retry" button
+*** TODO improve snapshot tree browser
+**** should sort entries by filename case-insensitively
+**** for larger number of entries, should use =PaginatedDataTable=
+**** nice to have: sticky table header
+**** nice to have: sort by file type
+*** TODO consider how to hide the minio secret key using a show/hide button
+*** TODO consider approaches to l10n and i18n
+**** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
+*** TODO improve the data sets form
+**** TODO FAB covers the =DELETE= button even when scrolled all the way down
+**** TODO use the =validate()= function on =DataSet= to ensure validity
+**** TODO should decode the computer ID to improve readability
+*** TODO should sort the datasets so they are always in the same order
+**** maybe sort them by date, with most recent first
+*** TODO tree entries of =ERROR= type should be displayed as such
+**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
+***** e.g. =TreeReference.ERROR(String)= where the string is the error message
+*** TODO should have ui for listing all snapshots in a dataset
+**** consider presenting in a style similar to Time Machine
+**** e.g. a timeline of the snapshots
+**** c.f. https://pub.dev/packages/flutter_timeline
+**** probably need paging in the ui and graphql api
+*** TODO improve the page for defining stores
+**** TODO delete button should be far away from the other button(s)
+**** TODO delete button should require two clicks, with "are you sure?"
+*** TODO use breadcrumbs in the tree navigator to get back to parent directories
+*** TODO consider and improve accessibility
+**** enable testing for a11y sanity
+**** add hints to improve the presentation of information
+***** configuration panel
+***** snapshot browser
 ** Initial Configuration
 *** Allow user to set user/host names for computer UUID
 **** They may need to avoid naming conflicts with other local users
