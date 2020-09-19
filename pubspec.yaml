@@ -13,26 +13,33 @@ dependencies:
   flutter:
     sdk: flutter
 
-  equatable: ^1.1.1
+  equatable: ^1.2.5
   flutter_bloc: ^6.0.1
   # specifying dev version of flutter_chips_input to temporarily get around an
   # API incompatibility with beta channel flutter
-  flutter_chips_input: ^1.9.0-dev.3
-  flutter_form_builder: ^3.11.4
-  get_it: ^4.0.0
-  graphql: ^3.0.1-beta.3
+  flutter_chips_input: ^1.9.4
+  # workaround for https://github.com/danvick/flutter_form_builder/issues/382
+  # flutter_form_builder: ^3.14.0-alpha.2
+  # workaround for https://github.com/danvick/flutter_form_builder/issues/465
+  flutter_form_builder:
+    git:
+      url: https://github.com/knaeckeKami/flutter_form_builder.git
+      ref: v3.14.0-alpha.2-fix
+  get_it: ^4.0.4
+  graphql: ^3.1.0
   intl: ^0.16.1
   oxidized: ^3.1.0
-  provider: ^4.0.4
+  provider: ^4.3.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   bloc_test: ^7.0.0
-  environment_config: ^2.2.0+2
+  environment_config: ^2.2.3
   http: ^0.12.0+4
-  mockito: ^4.1.1
+  # mockito 4.1.2 breaks bloc_test (https://github.com/felangel/bloc/issues/1676)
+  mockito: 4.1.1
   pedantic: ^1.8.0
 
 flutter:

@@ -1,6 +1,4 @@
 * Tasks
-** ADR
-*** TODO add ADR documents like tanuki
 ** Quick fixes
 *** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
