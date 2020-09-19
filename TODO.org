@@ -2,105 +2,13 @@
 ** ADR
 *** TODO add ADR documents like tanuki
 ** Quick fixes
+*** Too many open files (in RocksDB)
+**** need to set =set_max_open_files()= on database options
+**** default ulimit on macOS is 256, so something less would be ideal
+**** ran out of files in tanuki when rocksdb directory contained 217 files
+**** maybe consider a means of countering this error at runtime
 *** Snapshot tree browser
 **** why only clicking on ~name~ navigates to folder?
-** Cloud Backup
-*** DONE retry a pack upload/download if it encounters an error
-*** DONE add store that supports Google Cloud Storage
-**** https://crates.io/crates/google-storage1
-**** c.f. https://docs.rs/google-storage1/1.0.14+20200623/google_storage1/
-**** c.f. https://cloud.google.com/storage/docs/best-practices
-**** avoid retrying as pack repo will do that anyway
-**** DONE create a new crate for google storage
-**** DONE copy the necessary dependencies from the API docs
-**** DONE set up a test account in google
-**** DONE get the authentication working
-**** DONE get the bucket creation working
-**** DONE get pack file store working
-**** DONE get pack file retrieval working
-**** DONE get object listing working
-**** DONE get bucket listing working
-**** DONE get pack file deletion working
-**** DONE get bucket deletion working
-**** DONE handle paging of results (e.g. listing objects, buckets)
-**** DONE implement pack source for google store
-*** DONE add form for defining a Google Cloud Storage store
-*** DONE add a region property to google store
-**** DONE set the =location= property of the =Bucket= when creating it
-**** DONE add form field in flutter
-**** DONE test at least one backup to google
-*** DONE backup not stopping and staying stopped
-**** treat the pausing of the backup differently than the error case
-*** DONE backup will restart even outside schedule, if there had been an error
-*** DONE use this to replace =akashita= for online backups
-**** DONE define a new google cloud project named ~zorigami~
-**** DONE copy the old settings before wiping the database
-***** dataset
-:basepath: /datasets
-:schedule: daily
-:packsize: 64
-***** local store
-:label: safe
-:path: /packstore
-***** minio store
-:label: yubaba
-:region: us-west-1
-:endpoint: http://192.168.1.3:9000
-:access-key: minio
-:secret-key: keyboard cat
-**** DONE document setting up the google cloud project
-1) create a new project in Google Cloud Platform
-2) navigate to APIs & Services
-3) open Credentials screen
-4) click CREATE CREDENTIALS and select Service account
-5) enter an account name and optional description
-6) click CREATE button
-7) click ~Manage service accounts~ link or navigate to IAM & Admin -> Service Accounts
-8) click on the Actions 3-dot button and select ~Create key~
-9) choose JSON and click CREATE button
-**** DONE process the rusoto future to completion
-***** actix uses the basic scheduler tokio runtime, so no blocking calls
-***** spawn a thread in =process.rs= so that it is indepedent of actix/tokio runtime
-***** create a basic scheduler in store_minio to process the future(s)
-**** DONE dataset form shows a very large grey rectangle
-*** DONE use gcloud tools to verify that same pack files exist everywhere
-**** safe
-:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
-:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
-:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 89
-:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
-:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
-**** yubaba
-:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
-:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
-:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 90
-:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
-:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
-**** google
-:01ee4x2z12r35sc6r7wp7gzzqtafd73b8b997a5452b94a6b7c564041b1: 1086
-:01ee7fdfv3x3b4qtmhferh2cd4afd73b8b997a5452b94a6b7c564041b1: 1023
-:01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1: 89
-:01eea1zkhbkt1mg8ynkaab08c3afd73b8b997a5452b94a6b7c564041b1: 1011
-:01eecmegs4x4nm32m9tnfptt92afd73b8b997a5452b94a6b7c564041b1: 434
-*** DONE test restoring some files
-**** a small file contained in a single pack file
-**** one that spans multiple pack files
-*** DONE eventually remove the old ~akashita~ project and files
-*** DONE what happens to files that have an error during backup?
-**** files in =/zeniba/shared/tanuki/assets/2020/07/26/2130= were not readable
-**** failed to read file while calculating the checksum in =scan_tree()=
-**** write a (unix only) test case for this
-*** DONE test backup where the only new file is zero bytes in length
-*** DONE when backup finishes, remove some files
-**** Apple macintosh files
-#+BEGIN_SRC shell
-find . -name '._*' -delete
-#+END_SRC
-**** old tanuki database files
-1) /zeniba/shared/couchdb
-2) /zeniba/shared/tanuki/database
-3) /zeniba/shared/tanuki/thumbs
-*** DONE document the deployment/update procedure for zorigami online
 ** Backup Status
 *** TODO a backup with no files reports as taking zero time, but the snapshot took an hour
 **** something does not add up, the reporting has to be wrong

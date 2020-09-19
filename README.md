@@ -147,11 +147,6 @@ form a directed acyclic graph, meaning there can be no mutual dependencies.
 
 ## Tools
 
-### Visual Studio Code and Dart Language Server
-
-When adding new Dart/Flutter dependencies to the project, it may be necessary to
-restart VS Code so that references to the new code will be resolved correctly.
-
 ### Finding Outdated Crates
 
 Use https://github.com/kbknapp/cargo-outdated and run `cargo outdated`
