@@ -161,6 +161,11 @@
 *** Test Case: Google
 **** there is a bucket (=01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1=) that should be pruned
 ** Advanced Scheduling
+*** backend
+**** Permit ~hourly~ backups every N hours
+**** Permit ~daily~ backups every N days
+**** Permit ~weekly~ backups every N weeks
+**** Permit ~monthly~ backups every N months
 *** frontend
 **** TODO Support multiple schedules in interface
 **** TODO Support day-of-week in schedule

@@ -37,9 +37,6 @@ COPY fonts fonts/
 COPY lib lib/
 COPY pubspec.yaml .
 COPY web web/
-# silly docker and this image do not see eye-to-eye on permissions
-# c.f. https://github.com/cirruslabs/docker-images-flutter/issues/12
-RUN sudo chown -R cirrus:cirrus /flutter
 RUN flutter pub get
 ENV BASE_URL ${BASE_URL}
 RUN flutter pub run environment_config:generate
