@@ -11,17 +11,17 @@ license = "BSD-2-Clause"
 
 [dependencies]
 actix = "0.10"
-actix-cors = "0.4"
-actix-files = "0.3"
+actix-cors = "0.5"
+actix-files = "0.4"
 actix-rt = "1.1"
 actix-web = "3.0"
-base64 = "0.12"
+base64 = "0.13"
 blob-uuid = "0.4.0"
 chrono = { version = "0.4", features = ["serde"] }
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenv = "0.15.0"
-env_logger = "0.7.0"
+env_logger = "0.8"
 failure = "0.1.6"
 failure_derive = "0.1.6"
 fastcdc = "1.0.1"
