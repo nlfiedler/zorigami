@@ -57,6 +57,8 @@
 **** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
+** Offer a ~test~ for the pack stores
+*** When creating/configuring the pack store, offer a test feature
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 *** TODO schema custom types need some unit tests
@@ -199,6 +201,9 @@
 ***** use store form to take paths for public and private keys
 **** TODO allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
+*** TODO Repair pack stores that were off-line during a backup
+**** e.g. a pack store was unchecked in the dataset, then later checked again
+**** resolve the missing packs and tranfer from one of the other pack stores
 ** More Information
 *** TODO Show details about snapshots and files
 **** show differences between two snapshots
