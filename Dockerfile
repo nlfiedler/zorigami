@@ -46,8 +46,6 @@ RUN flutter build web
 # build the final image
 #
 FROM debian:latest
-RUN adduser --disabled-password --gecos '' zorigami
-USER zorigami
 WORKDIR /zorigami
 COPY --from=builder /build/target/release/server zorigami
 COPY --from=healthy /health/target/release/healthcheck .
