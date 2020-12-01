@@ -8,9 +8,6 @@
 *** Snapshot tree browser
 **** why only clicking on ~name~ navigates to folder?
 ** Backup Status
-*** TODO a backup with no files reports as taking zero time, but the snapshot took an hour
-**** something does not add up, the reporting has to be wrong
-**** track snapshot time and pack/upload time separately
 *** TODO collect errors in the app state so it can be reported
 **** in fact, collect the last N backup states in the database
 **** frontend can then query and display this information later

@@ -685,9 +685,7 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    ///
     /// Construct a new `Snapshot` for the given tree, and optional parent.
-    ///
     pub fn new(parent: Option<Checksum>, tree: Checksum, file_count: u32) -> Self {
         let start_time = Utc::now();
         let mut snapshot = Self {
@@ -709,6 +707,12 @@ impl Snapshot {
     /// Add the end_time property.
     pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
         self.end_time = Some(end_time);
+        self
+    }
+
+    /// Set the start_time property to overwrite the default of `now`.
+    pub fn start_time(mut self, start_time: DateTime<Utc>) -> Self {
+        self.start_time = start_time;
         self
     }
 }

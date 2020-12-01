@@ -309,6 +309,7 @@ pub fn take_snapshot(
     excludes: Vec<PathBuf>,
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
+    let actual_start_time = Utc::now();
     let tree = scan_tree(basepath, dbase, &excludes)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
@@ -322,11 +323,12 @@ pub fn take_snapshot(
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
     let pretty_time = super::pretty_print_duration(time_diff);
-    let snap = entities::Snapshot::new(parent, tree.digest.clone(), tree.file_count);
+    let mut snap = entities::Snapshot::new(parent, tree.digest.clone(), tree.file_count);
     info!(
         "took snapshot {} with {} files after {}",
         snap.digest, tree.file_count, pretty_time
     );
+    snap = snap.start_time(actual_start_time);
     dbase.put_snapshot(&snap)?;
     Ok(Some(snap.digest))
 }
