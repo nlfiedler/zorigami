@@ -244,7 +244,7 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Sch
                 // here `err` is the original error
                 error!("could not perform backup: {}", err);
                 // put the backup in the error state so we try again
-                state::dispatch(Action::ErrorBackup(dataset.id.clone()));
+                state::dispatch(Action::ErrorBackup(dataset.id.clone(), err.to_string()));
             }
         },
     }
@@ -584,7 +584,10 @@ mod tests {
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the backup started but then failed
         state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::ErrorBackup(dataset_id_clone2));
+        state::dispatch(Action::ErrorBackup(
+            dataset_id_clone2,
+            String::from("oh no"),
+        ));
         // act
         let result = should_run(&repo, &dataset_clone);
         // assert
@@ -670,7 +673,10 @@ mod tests {
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the backup started but then failed
         state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::ErrorBackup(dataset_id_clone2));
+        state::dispatch(Action::ErrorBackup(
+            dataset_id_clone2,
+            String::from("oh no"),
+        ));
         // act
         let result = should_run(&repo, &dataset_clone);
         // assert

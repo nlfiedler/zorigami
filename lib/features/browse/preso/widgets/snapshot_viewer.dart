@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
+import 'package:provider/provider.dart';
+import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart'
     as tbb;
@@ -44,6 +46,8 @@ class SnapshotViewer extends StatelessWidget {
       (e) => DateFormat.yMd().add_jm().format(e.toLocal()),
       () => 'running...',
     );
+    final dataset = Provider.of<DataSet>(context, listen: false);
+    final error = dataset.errorMsg.mapOr((e) => ', Error: ${e}', '');
     return Column(
       children: <Widget>[
         Card(
@@ -51,8 +55,9 @@ class SnapshotViewer extends StatelessWidget {
             leading: Icon(Icons.history),
             title: Text('Snapshot: ${digest}'),
             subtitle: Text(
-              'Files: ${count}, Started: ${started}, Finished: ${ended}',
+              'Files: ${count}, Started: ${started}, Finished: ${ended}${error}',
             ),
+            isThreeLine: true,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[

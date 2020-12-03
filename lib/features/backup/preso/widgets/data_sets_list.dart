@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:intl/intl.dart';
+import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -249,6 +250,9 @@ String getSchedule(DataSet dataset) {
 }
 
 String getStatus(DataSet dataset) {
+  if (dataset.errorMsg is Some) {
+    return dataset.errorMsg.unwrap();
+  }
   return dataset.snapshot.mapOrElse(
     (s) => s.endTime.mapOrElse(
       (e) => 'finished at ' + DateFormat.yMd().add_jm().format(e.toLocal()),

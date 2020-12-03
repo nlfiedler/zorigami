@@ -73,6 +73,9 @@ String getSchedule(DataSet dataset) {
 }
 
 String getStatus(DataSet dataset) {
+  if (dataset.errorMsg is Some) {
+    return dataset.errorMsg.unwrap();
+  }
   return dataset.snapshot.mapOrElse(
     (s) => s.endTime.mapOrElse(
       (e) => 'finished at ' + DateFormat.yMd().add_jm().format(e.toLocal()),

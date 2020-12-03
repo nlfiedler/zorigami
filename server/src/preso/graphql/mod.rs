@@ -271,6 +271,13 @@ impl entities::Dataset {
         self.schedules.clone()
     }
 
+    /// Error message for the most recent snapshot, if any.
+    fn error_message(&self) -> Option<String> {
+        use crate::domain::managers::state;
+        let redux = state::get_state();
+        redux.backups(&self.id).map(|e| e.error_message()).flatten()
+    }
+
     /// Most recent snapshot for this dataset, if any.
     fn latest_snapshot(&self, executor: &Executor) -> Option<entities::Snapshot> {
         let ctx = executor.context().clone();

@@ -28,6 +28,7 @@ const String dataSetFields = '''
     dayOfWeek
     dayOfMonth
   }
+  errorMessage
   latestSnapshot {
     checksum
     parent

@@ -212,6 +212,7 @@ void main() {
           tree: 'deadbeef',
         ),
       ),
+      errorMsg: None(),
     );
     test(
       'should be a subclass of Schedule entity',
@@ -244,6 +245,7 @@ void main() {
           packSize: 0,
           stores: ['store/local/storey'],
           snapshot: None(),
+          errorMsg: None(),
         );
         // assert
         expect(
@@ -282,6 +284,7 @@ void main() {
             tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
           ),
         ),
+        errorMsg: None(),
       );
       final dataSetModel = DataSetModel(
         key: 'setkey1',
@@ -310,6 +313,7 @@ void main() {
             tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
           ),
         ),
+        errorMsg: None(),
       );
       // act
       final result = DataSetModel.from(dataSet);

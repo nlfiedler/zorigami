@@ -314,6 +314,7 @@ void main() {
           packSize: 0,
           stores: [],
           snapshot: None(),
+          errorMsg: None(),
         ).validate();
         expect(result, isA<Err>());
         expect(
@@ -340,6 +341,7 @@ void main() {
         packSize: 0,
         stores: ['foo'],
         snapshot: None(),
+        errorMsg: None(),
       ).validate();
       expect(result, isA<Err>());
       expect(
@@ -359,6 +361,7 @@ void main() {
           packSize: 0,
           stores: ['foo'],
           snapshot: None(),
+          errorMsg: None(),
         ).validate();
         expect(result, isA<Ok>());
       },

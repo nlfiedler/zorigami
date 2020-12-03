@@ -1,5 +1,7 @@
 * Tasks
 ** Quick fixes
+*** Fix any deprecated API usage in Dart/Flutter
+**** c.f. =showSnackBar()= has a new way to be invoked
 *** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
@@ -8,15 +10,11 @@
 *** Snapshot tree browser
 **** why only clicking on ~name~ navigates to folder?
 ** Backup Status
-*** TODO collect errors in the app state so it can be reported
-**** in fact, collect the last N backup states in the database
+*** DONE dataset status says "running" even though it had an error
+**** collect error message in the app state so it can be reported
+**** graphql query to retrieve dataset status, including error message
 **** frontend can then query and display this information later
 *** TODO dataset status says "running" even though it stopped due to schedule
-*** TODO dataset status says "running" even though it had an error
-*** TODO if there are errors, should report the collected list (in app state) to the user
-**** that is, collect the errors in the app state
-**** graphql query to retrieve all of the details about the snapshot
-**** if there are errors, add a button to show them on a detail screen
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -58,9 +56,9 @@
 *** When creating/configuring the pack store, offer a test feature
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
+** Loose GraphQL tasks
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
-** Loose GraphQL tasks
 *** TODO probably should use a better client cache
 **** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
 **** uses the "type" of the object and its unique identifier as the caching key
@@ -519,23 +517,3 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Rust: nominal subtyping is much easier to follow
 **** Rust: streamlined error handling
 **** Rust: fine-grained namespaces and visibility control
-* Internal Notes
-** Deployments
-*** Server Configuration
-**** data set
-:basepath: /datasets
-:packsize: 64
-:schedule: daily 06:30 13:00
-:stores: all of them
-**** pack store: local
-:basepath: /packstore
-**** pack store: minio
-:region: us-west-1
-:endpoint: http://192.168.1.3:9000
-:access-key: minio
-:secret-key: keyboard cat
-**** pack store: google
-:credentials: /datasets/zorigami.json
-:project-id: zorigami-37120
-:region: us-west1
-:storage-class: NEARLINE

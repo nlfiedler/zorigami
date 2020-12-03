@@ -50,8 +50,8 @@ pub enum Action {
     UploadFiles(String, u64),
     /// Set the completion time for the backup of a given dataset.
     FinishBackup(String),
-    /// Sets the backup in the "error" state.
-    ErrorBackup(String),
+    /// Sets the backup in the "error" state (dataset key and error message).
+    ErrorBackup(String, String),
     /// Sets the backup in the "paused" state.
     PauseBackup(String),
     /// Clear the error state and end time to indicate a restart.
@@ -67,7 +67,7 @@ pub struct BackupState {
     end_time: Option<DateTime<Utc>>,
     packs_uploaded: u64,
     files_uploaded: u64,
-    had_error: bool,
+    error_msg: Option<String>,
     paused: bool,
 }
 
@@ -78,7 +78,7 @@ impl Default for BackupState {
             end_time: None,
             packs_uploaded: 0,
             files_uploaded: 0,
-            had_error: false,
+            error_msg: None,
             paused: false,
         }
     }
@@ -107,9 +107,13 @@ impl BackupState {
 
     /// Return the state of the error flag.
     pub fn had_error(&self) -> bool {
-        self.had_error
+        self.error_msg.is_some()
     }
 
+    /// Return the textual error message, if any.
+    pub fn error_message(&self) -> Option<String> {
+        self.error_msg.clone()
+    }
     /// Return the state of the paused flag.
     pub fn is_paused(&self) -> bool {
         self.paused
@@ -162,9 +166,9 @@ impl Reducer<Action> for State {
                     record.end_time = Some(Utc::now());
                 }
             }
-            Action::ErrorBackup(key) => {
+            Action::ErrorBackup(key, msg) => {
                 if let Some(record) = self.backups.get_mut(&key) {
-                    record.had_error = true;
+                    record.error_msg = Some(msg);
                 }
             }
             Action::PauseBackup(key) => {
@@ -174,7 +178,7 @@ impl Reducer<Action> for State {
             }
             Action::RestartBackup(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
-                    record.had_error = false;
+                    record.error_msg = None;
                     record.paused = false;
                     record.end_time = None;
                 }
@@ -270,10 +274,11 @@ mod tests {
     fn test_error_state() {
         let key = "dataset1";
         dispatch(Action::StartBackup(key.to_owned()));
-        dispatch(Action::ErrorBackup(key.to_owned()));
+        dispatch(Action::ErrorBackup(key.to_owned(), String::from("oh no")));
         let state = get_state();
         let backup = state.backups("dataset1").unwrap();
         assert_eq!(backup.had_error(), true);
+        assert_eq!(backup.error_message(), Some(String::from("oh no")));
         assert_eq!(backup.is_paused(), false);
     }
 

@@ -164,6 +164,7 @@ class DataSet extends Equatable {
   final int packSize;
   final List<String> stores;
   final Option<Snapshot> snapshot;
+  final Option<String> errorMsg;
 
   DataSet({
     @required this.key,
@@ -173,6 +174,7 @@ class DataSet extends Equatable {
     @required this.packSize,
     @required this.stores,
     @required this.snapshot,
+    @required this.errorMsg,
   });
 
   @override

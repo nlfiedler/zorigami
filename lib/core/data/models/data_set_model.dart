@@ -102,6 +102,7 @@ class DataSetModel extends DataSet {
     @required int packSize,
     @required List<String> stores,
     @required Option<SnapshotModel> snapshot,
+    @required Option<String> errorMsg,
   }) : super(
           key: key,
           computerId: computerId,
@@ -110,6 +111,7 @@ class DataSetModel extends DataSet {
           packSize: packSize,
           stores: stores,
           snapshot: snapshot,
+          errorMsg: errorMsg,
         );
 
   factory DataSetModel.from(DataSet dataset) {
@@ -125,6 +127,7 @@ class DataSetModel extends DataSet {
       packSize: dataset.packSize,
       stores: dataset.stores,
       snapshot: snapshot,
+      errorMsg: dataset.errorMsg,
     );
   }
 
@@ -149,6 +152,7 @@ class DataSetModel extends DataSet {
       packSize: int.parse(json['packSize']),
       stores: stores,
       snapshot: snapshot,
+      errorMsg: Option.some(json['errorMessage']),
     );
   }
 

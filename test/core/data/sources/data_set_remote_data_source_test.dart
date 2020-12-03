@@ -59,6 +59,7 @@ void main() {
         tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
       ),
     ),
+    errorMsg: None(),
   );
   final tDataSetModel = DataSetModel.from(tDataSet);
 
@@ -197,6 +198,7 @@ void main() {
           packSize: 67108864,
           stores: ['foo'],
           snapshot: None(),
+          errorMsg: None(),
         );
         expect(result, contains(simpleModel));
       },
@@ -257,6 +259,7 @@ void main() {
           packSize: 67108864,
           stores: ['foo'],
           snapshot: None(),
+          errorMsg: None(),
         );
         expect(result, contains(simpleModel));
       },
