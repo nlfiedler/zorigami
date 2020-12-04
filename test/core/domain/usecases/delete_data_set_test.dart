@@ -19,7 +19,6 @@ void main() {
     usecase = DeleteDataSet(mockDataSetRepository);
   });
 
-  final key = 'cafebabe';
   final tDataSet = DataSet(
     key: 'cafebabe',
     computerId: 'cray-11',
@@ -28,6 +27,7 @@ void main() {
     stores: ['storytime'],
     packSize: 65536,
     snapshot: None(),
+    errorMsg: None(),
   );
 
   test(

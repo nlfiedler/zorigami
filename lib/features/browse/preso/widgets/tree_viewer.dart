@@ -34,7 +34,7 @@ class TreeViewer extends StatelessWidget {
                 ),
               );
               // must show snackbar outside of builder
-              Scaffold.of(context).showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: content),
               );
             }

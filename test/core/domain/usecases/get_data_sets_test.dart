@@ -21,12 +21,15 @@ void main() {
   });
 
   final tDataSet = DataSet(
-      key: 'cafebabe',
-      computerId: 'data1',
-      basepath: '',
-      schedules: [],
-      packSize: 0,
-      stores: []);
+    key: 'cafebabe',
+    computerId: 'data1',
+    basepath: '',
+    schedules: [],
+    packSize: 0,
+    stores: [],
+    snapshot: None(),
+    errorMsg: None(),
+  );
   // annotate the type to assist with matching
   final List<DataSet> tDataSets = List.from([tDataSet]);
 

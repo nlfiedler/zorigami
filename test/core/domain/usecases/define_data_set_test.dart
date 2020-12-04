@@ -20,12 +20,15 @@ void main() {
   });
 
   final tDataSet = DataSet(
-      key: 'cafebabe',
-      computerId: 'data1',
-      basepath: '',
-      schedules: [],
-      packSize: 0,
-      stores: []);
+    key: 'cafebabe',
+    computerId: 'data1',
+    basepath: '',
+    schedules: [],
+    packSize: 0,
+    stores: [],
+    snapshot: None(),
+    errorMsg: None(),
+  );
 
   test(
     'should define a data set within the repository',

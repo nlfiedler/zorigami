@@ -189,7 +189,7 @@ class DataSetListDetails extends StatelessWidget {
           // this will force everything to rebuild
           BlocProvider.of<DataSetsBloc>(context).add(ReloadDataSets());
         } else if (state is edsb.Error) {
-          Scaffold.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: ListTile(
                 title: Text('Error updating data set'),

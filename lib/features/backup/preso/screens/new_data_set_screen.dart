@@ -97,7 +97,7 @@ class NewDataSetWidget extends StatelessWidget {
           // this will force everything to rebuild
           Navigator.pop(context, true);
         } else if (state is Error) {
-          Scaffold.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: ListTile(
                 title: Text('Error updating data set'),
@@ -147,5 +147,6 @@ DataSet defaultDataSet() {
     basepath: '/',
     schedules: [],
     stores: [],
+    errorMsg: None(),
   );
 }

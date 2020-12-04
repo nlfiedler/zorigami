@@ -27,6 +27,7 @@ void main() {
     packSize: 1048576,
     stores: ['store/local/abc'],
     snapshot: None(),
+    errorMsg: None(),
   );
 
   group('normal cases', () {

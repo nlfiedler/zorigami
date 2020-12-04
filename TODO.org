@@ -1,7 +1,5 @@
 * Tasks
 ** Quick fixes
-*** Fix any deprecated API usage in Dart/Flutter
-**** c.f. =showSnackBar()= has a new way to be invoked
 *** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal

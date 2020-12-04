@@ -110,7 +110,7 @@ class PackStoreListDetails extends StatelessWidget {
           // this will force everything to rebuild
           BlocProvider.of<PackStoresBloc>(context).add(ReloadPackStores());
         } else if (state is epsb.Error) {
-          Scaffold.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: ListTile(
                 title: Text('Error updating pack store'),

@@ -86,6 +86,7 @@ class DataSetForm extends StatefulWidget {
       snapshot: None(),
       schedules: schedules,
       stores: selectedStores,
+      errorMsg: None(),
     );
   }
 
@@ -143,9 +144,8 @@ class _DataSetFormState extends State<DataSetForm> {
             FormBuilderValidators.max(256),
           ],
         ),
-        FormBuilderCheckboxList(
+        FormBuilderCheckboxGroup(
           attribute: 'stores',
-          leadingInput: true,
           options: packStoreOptions,
           decoration: InputDecoration(
             icon: Icon(Icons.archive),
@@ -154,9 +154,8 @@ class _DataSetFormState extends State<DataSetForm> {
           // require at least one pack store is selected
           validators: [FormBuilderValidators.required()],
         ),
-        FormBuilderRadio(
+        FormBuilderRadioGroup(
           attribute: 'frequency',
-          leadingInput: true,
           options: frequencies.map((item) {
             return FormBuilderFieldOption(
               value: item,
