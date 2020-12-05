@@ -1,5 +1,13 @@
 * Tasks
 ** Quick fixes
+*** Replace =provider= usage with =riverpod=, a better Provider
+**** c.f. https://resocoder.com/2020/11/27/flutter-riverpod-tutorial-the-better-provider/
+**** offers a streamlined way to code async interfaces like fetching remote data
+**** https://pub.dev/packages/riverpod
+**** https://pub.dev/packages/flutter_riverpod
+**** currently only the snapshot screen is using =Provider=
+**** this is not a replacement for BLoC, only Provider
+**** may be useful for replacing =get_it=, needs evaluation
 *** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
