@@ -65,6 +65,7 @@
 ** Loose backend issues
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
+*** TODO update juniper to latest release; 0.15 API changes substantially
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
 *** TODO probably should use a better client cache
