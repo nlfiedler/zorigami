@@ -19,8 +19,8 @@ use mockall::automock;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-mod local;
 mod google;
+mod local;
 mod minio;
 mod sftp;
 
