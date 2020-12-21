@@ -64,7 +64,7 @@ $ flutter run -d chrome
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the
-application (e.g. SFTP). A Docker Compose file is located in the `test/docker`
+application (e.g. SFTP). A Docker Compose file is located in the `server/tests/docker`
 directory, which describes the services used for testing. With the services
 running, and a `.env` file in the base directory, the tests will leverage the
 services.
