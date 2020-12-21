@@ -1,5 +1,7 @@
 * Tasks
 ** Quick fixes
+*** Pack store checkboxes in data set form are not selected when they should be
+*** Show number of files in a directory in the tree browser
 *** Replace =provider= usage with =riverpod=, a better Provider
 **** c.f. https://resocoder.com/2020/11/27/flutter-riverpod-tutorial-the-better-provider/
 **** offers a streamlined way to code async interfaces like fetching remote data
@@ -8,8 +10,6 @@
 **** currently only the snapshot screen is using =Provider=
 **** this is not a replacement for BLoC, only Provider
 **** may be useful for replacing =get_it=, needs evaluation
-*** Update the healthcheck code: https://github.com/mastertinner/healthcheck
-*** Try basing final image from alpine
 *** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal

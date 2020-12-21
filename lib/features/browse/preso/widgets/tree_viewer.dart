@@ -106,6 +106,7 @@ class TreePath extends StatelessWidget {
             ' / ${state.path.join(' / ')}',
             style: TextStyle(fontFamily: 'RobotoMono'),
           )
+          // TODO: show state.tree.entries.length in a text widget
         ],
       ),
     );
