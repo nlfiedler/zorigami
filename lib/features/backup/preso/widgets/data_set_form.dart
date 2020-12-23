@@ -71,13 +71,13 @@ class DataSetForm extends StatefulWidget {
     };
   }
 
-  static DataSet datasetFromState(FormBuilderState state) {
+  static DataSet datasetFromState(
+    FormBuilderState state,
+    List<PackStore> stores,
+  ) {
     // convert pack size string of megabytes to int of bytes
     final packSize = int.parse(state.value['packSize']) * 1048576;
     final schedules = schedulesFromState(state);
-    final List<String> selectedStores = List.from(
-      state.value['stores'].map((e) => e.key),
-    );
     return DataSet(
       key: state.value['key'],
       computerId: state.value['computerId'],
@@ -85,7 +85,7 @@ class DataSetForm extends StatefulWidget {
       packSize: packSize,
       snapshot: None(),
       schedules: schedules,
-      stores: selectedStores,
+      stores: state.value['stores'],
       errorMsg: None(),
     );
   }
@@ -105,7 +105,8 @@ class _DataSetFormState extends State<DataSetForm> {
 
   @override
   Widget build(BuildContext context) {
-    final packStoreOptions = buildStoreOptions(widget.stores);
+    final packStoreOptions = buildStoreOptions(widget.dataset, widget.stores);
+    FormBuilderState formState = FormBuilder.of(context);
     return Column(
       children: <Widget>[
         FormBuilderTextField(
@@ -147,6 +148,8 @@ class _DataSetFormState extends State<DataSetForm> {
         FormBuilderCheckboxGroup(
           attribute: 'stores',
           options: packStoreOptions,
+          // bug? https://github.com/danvick/flutter_form_builder/issues/657
+          initialValue: formState.initialValue['stores'],
           decoration: InputDecoration(
             icon: Icon(Icons.archive),
             labelText: 'Pack Store(s)',
@@ -217,20 +220,28 @@ class FrequencyOption {
   final Frequency frequency;
 }
 
-List<FormBuilderFieldOption> buildStoreOptions(List<PackStore> stores) {
+// The key of the option is used to determine if it is checked.
+List<FormBuilderFieldOption> buildStoreOptions(
+  DataSet dataset,
+  List<PackStore> stores,
+) {
   final List<FormBuilderFieldOption> options = List.from(
     stores.map((e) {
       return FormBuilderFieldOption(
         child: Text(e.label),
-        value: e,
+        value: e.key,
       );
     }),
   );
   return options;
 }
 
-List<PackStore> buildInitialStores(DataSet dataset, List<PackStore> stores) {
-  return stores.where((e) => dataset.stores.contains(e.key)).toList();
+// Return the keys of the stores that are to be selected initially.
+List<String> buildInitialStores(DataSet dataset, List<PackStore> stores) {
+  return stores
+      .where((e) => dataset.stores.contains(e.key))
+      .map((e) => e.key)
+      .toList();
 }
 
 FrequencyOption frequencyFromDataSet(DataSet dataset) {

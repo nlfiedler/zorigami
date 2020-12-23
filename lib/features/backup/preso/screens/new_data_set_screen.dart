@@ -77,6 +77,7 @@ class NewDataSetWidget extends StatelessWidget {
     if (formKey.currentState.saveAndValidate()) {
       final dataset = DataSetForm.datasetFromState(
         formKey.currentState,
+        stores,
       );
       BlocProvider.of<CreateDataSetsBloc>(context).add(
         DefineDataSet(dataset: dataset),

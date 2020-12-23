@@ -169,6 +169,7 @@ class DataSetListDetails extends StatelessWidget {
     if (formKey.currentState.saveAndValidate()) {
       final dataset = DataSetForm.datasetFromState(
         formKey.currentState,
+        stores,
       );
       BlocProvider.of<edsb.EditDataSetsBloc>(context).add(
         edsb.UpdateDataSet(dataset: dataset),

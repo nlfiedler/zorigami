@@ -1,8 +1,10 @@
 * Tasks
 ** Quick fixes
-*** Pack store checkboxes in data set form are not selected when they should be
-*** Show number of files in a directory in the tree browser
-*** Replace =provider= usage with =riverpod=, a better Provider
+*** DONE Pack store checkboxes in data set form are not selected when they should be
+*** DONE Make the pack store order consistent in data set form
+*** DONE Ensure the dataset frequency is behaving correctly
+*** TODO Show number of files in a directory in the tree browser
+*** TODO Replace =provider= usage with =riverpod=, a better Provider
 **** c.f. https://resocoder.com/2020/11/27/flutter-riverpod-tutorial-the-better-provider/
 **** offers a streamlined way to code async interfaces like fetching remote data
 **** https://pub.dev/packages/riverpod
@@ -10,12 +12,22 @@
 **** currently only the snapshot screen is using =Provider=
 **** this is not a replacement for BLoC, only Provider
 **** may be useful for replacing =get_it=, needs evaluation
-*** Too many open files (in RocksDB)
+*** TODO next backup initially shows stats from previous backup
+*** TODO for a backup with nothing new, emits progress 3 times
+#+BEGIN_SRC
+[INFO  server::domain::managers::process] dataset 01et6rw56bvndgwb7n3q19rqp6 to be backed up
+[INFO  server] progress for 01et6rw56bvndgwb7n3q19rqp6: packs: 0, files: 0
+[INFO  server] progress for 01et6rw56bvndgwb7n3q19rqp6: packs: 0, files: 0
+[INFO  server] complete for 01et6rw56bvndgwb7n3q19rqp6: packs: 0, files: 0
+[INFO  server::domain::managers::process] no new snapshot required
+#+END_SRC
+*** TODO look at updating =mockall= dependency
+*** TODO Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
 **** ran out of files in tanuki when rocksdb directory contained 217 files
 **** maybe consider a means of countering this error at runtime
-*** Snapshot tree browser
+*** TODO Snapshot tree browser
 **** why only clicking on ~name~ navigates to folder?
 ** Backup Status
 *** DONE dataset status says "running" even though it had an error

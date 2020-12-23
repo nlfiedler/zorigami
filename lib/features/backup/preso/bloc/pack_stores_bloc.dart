@@ -70,7 +70,11 @@ class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
       yield Loading();
       final result = await usecase(NoParams());
       yield result.mapOrElse(
-        (stores) => Loaded(stores: stores),
+        (stores) {
+          // put the pack stores in a consistent order
+          stores.sort((a, b) => a.key.compareTo(b.key));
+          return Loaded(stores: stores);
+        },
         (failure) => Error(message: failure.toString()),
       );
     } else if (event is ReloadPackStores) {
