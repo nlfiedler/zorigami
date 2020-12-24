@@ -53,5 +53,5 @@ whoami = "1.0"
 xattr = "0.2.2"
 
 [dev-dependencies]
-mockall = "0.8"
+mockall = "0.9"
 rocksdb = "0.15"
