@@ -9,7 +9,19 @@
 **** https://pub.dev/packages/riverpod
 **** https://pub.dev/packages/flutter_riverpod
 **** c.f. https://riverpod.dev/docs/cookbooks/testing for neat examples
-*** TODO evaluate replacing simple blocs with async providers via =riverpod=
+**** TODO use =ScopedProvider= from =riverpod= to pass dataset down the tree
+***** in =snapshot_viewer.dart= and =snapshot_screen.dart=
+***** c.f. https://pub.dev/documentation/riverpod/latest/all/ScopedProvider-class.html
+***** define a global dummy provider that throws an exception
+***** set the override provider in the snapshot screen
+**** TODO replace =get_it= factory methods with =riverpod= providers?
+***** see =getIt<PackStore>= in =pack_store_creator.dart=
+***** see =getIt<PackStoreForm>= in =pack_stores_list.dart=
+**** TODO consider moving just the domain related stuff out of =container.dart=
+***** that is, only wire up the data layer pieces in =container.dart=
+***** strive to minimize the size of the =get_it= container
+***** add =riverpod= providers in the ui layer for the domain elements
+*** TODO consider replacing simple blocs with async providers via =riverpod=
 **** e.g. =ConfigurationBloc= is just a remote data async provider
 **** c.f. https://riverpod.dev/docs/concepts/reading use of =.when()=
 *** TODO Too many open files (in RocksDB)
