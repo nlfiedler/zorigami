@@ -19,9 +19,7 @@ import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/store_form_factory.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
-import 'package:zorigami/features/browse/preso/bloc/snapshot_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
-import 'package:zorigami/features/browse/preso/bloc/tree_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 final getIt = GetIt.instance;
@@ -56,13 +54,7 @@ void init() {
     ),
   );
   getIt.registerFactory(
-    () => SnapshotBloc(usecase: getIt()),
-  );
-  getIt.registerFactory(
     () => SnapshotBrowserBloc(usecase: getIt()),
-  );
-  getIt.registerFactory(
-    () => TreeBloc(usecase: getIt()),
   );
   getIt.registerFactory(
     () => TreeBrowserBloc(getTree: getIt(), restoreFile: getIt()),
