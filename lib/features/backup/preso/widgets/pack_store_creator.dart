@@ -85,7 +85,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
           onPressed: selectedItem.kind == null
               ? null
               : () {
-                  final packStore = getIt<PackStore>(param1: selectedItem.kind);
+                  final packStore = defaultPackStore(selectedItem.kind);
                   BlocProvider.of<CreatePackStoresBloc>(context).add(
                     DefinePackStore(
                       store: packStore,
@@ -105,4 +105,57 @@ class NewStoreItem {
   });
   final String title;
   final String kind;
+}
+
+/// Factory to create a generic pack store for the given kind.
+PackStore defaultPackStore(String kind) {
+  switch (kind) {
+    case 'local':
+      return PackStore(
+        kind: StoreKind.local,
+        key: 'auto-generated',
+        label: 'local',
+        options: <String, dynamic>{
+          'basepath': '.',
+        },
+      );
+    case 'google':
+      return PackStore(
+        kind: StoreKind.google,
+        key: 'auto-generated',
+        label: 'google',
+        options: <String, dynamic>{
+          'credentials': '/Users/charlie/credentials.json',
+          'project': 'white-sunspot-12345',
+          'region': 'us-west1',
+          'storage': 'NEARLINE',
+        },
+      );
+    case 'minio':
+      return PackStore(
+        kind: StoreKind.minio,
+        key: 'auto-generated',
+        label: 'minio',
+        options: <String, dynamic>{
+          'region': 'us-west-1',
+          'endpoint': 'http://localhost:9000',
+          'access_key': 'AKIAIOSFODNN7EXAMPLE',
+          'secret_key': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        },
+      );
+    case 'sftp':
+      return PackStore(
+        kind: StoreKind.sftp,
+        key: 'auto-generated',
+        label: 'sftp',
+        options: <String, dynamic>{
+          'remote_addr': '127.0.0.1:22',
+          'username': 'charlie',
+          'password': null,
+          'basepath': null,
+        },
+      );
+    default:
+      throw ArgumentError('kind is not recognized');
+  }
 }

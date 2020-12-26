@@ -14,13 +14,17 @@
 ***** c.f. https://pub.dev/documentation/riverpod/latest/all/ScopedProvider-class.html
 ***** define a global dummy provider that throws an exception
 ***** set the override provider in the snapshot screen
-**** TODO replace =get_it= factory methods with =riverpod= providers?
-***** see =getIt<PackStore>= in =pack_store_creator.dart=
-***** see =getIt<PackStoreForm>= in =pack_stores_list.dart=
+**** DONE replace =registerFactoryParam()= calls with simple functions
+**** TODO replace =registerFactory()= calls with =.autoDispose()= modifier
+**** TODO replace =registerLazySingleton()= with regular =Provider= instance
 **** TODO consider moving just the domain related stuff out of =container.dart=
 ***** that is, only wire up the data layer pieces in =container.dart=
 ***** strive to minimize the size of the =get_it= container
 ***** add =riverpod= providers in the ui layer for the domain elements
+**** TODO doc: why riverpod over get_it for service location
+***** easy to forget to register services using get_it (runtime exceptions)
+***** back-tracking with get_it is nearly impossible (hard to find the usages)
+***** the parameterized factory is clumsy and suffers from runtime exceptions
 *** TODO consider replacing simple blocs with async providers via =riverpod=
 **** e.g. =ConfigurationBloc= is just a remote data async provider
 **** c.f. https://riverpod.dev/docs/concepts/reading use of =.when()=

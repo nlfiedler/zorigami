@@ -9,7 +9,11 @@ import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart'
     as epsb;
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/widgets/google_store_form.dart';
+import 'package:zorigami/features/backup/preso/widgets/local_store_form.dart';
+import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
+import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 
 class PackStoresList extends StatefulWidget {
   final List<PackStore> stores;
@@ -103,7 +107,7 @@ class PackStoreListDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final storeForm = getIt<PackStoreForm>(param1: store);
+    final storeForm = buildStoreForm(store);
     return BlocConsumer<epsb.EditPackStoresBloc, epsb.EditPackStoresState>(
       listener: (context, state) {
         if (state is epsb.Submitted) {
@@ -203,4 +207,21 @@ class ExpansionItem {
   Widget expandedValue;
   Widget headerValue;
   bool isExpanded;
+}
+
+/// Factory to build form widgets for pack store details.
+PackStoreForm buildStoreForm(PackStore store) {
+  if (store.kind == StoreKind.local) {
+    return LocalStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.google) {
+    return GoogleStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.minio) {
+    return MinioStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.sftp) {
+    return SftpStoreForm(store: store);
+  }
+  return null;
 }

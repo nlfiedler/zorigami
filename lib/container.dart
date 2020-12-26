@@ -3,10 +3,8 @@
 //
 import 'package:get_it/get_it.dart';
 import 'package:graphql/client.dart';
-import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/repositories/container.dart';
 import 'package:zorigami/core/data/sources/container.dart';
-import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/container.dart';
 import 'package:zorigami/environment_config.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_data_sets_bloc.dart';
@@ -14,8 +12,6 @@ import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart
 import 'package:zorigami/features/backup/preso/bloc/edit_data_sets_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
-import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
-import 'package:zorigami/features/backup/preso/widgets/store_form_factory.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
@@ -59,20 +55,9 @@ void init() {
     () => TreeBrowserBloc(getTree: getIt(), restoreFile: getIt()),
   );
 
-  // widgets
-  // (would prefer using PackStore here but get_it rejects it at runtime)
-  getIt.registerFactoryParam<PackStoreForm, PackStoreModel, void>(
-    (param1, param2) => buildStoreForm(param1, param2),
-  );
-
   initUseCases(getIt);
   initRepositories(getIt);
   initDataSources(getIt);
-
-  // core
-  getIt.registerFactoryParam<PackStore, String, void>(
-    (param1, param2) => defaultPackStore(param1, param2),
-  );
 
   // external
   getIt.registerLazySingleton(() {
