@@ -3,7 +3,6 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:provider/provider.dart';
 import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
@@ -44,10 +43,7 @@ class SnapshotScreen extends StatelessWidget {
               return Text('Error getting snapshot: ' + state.message);
             }
             if (state is Loaded) {
-              return Provider<DataSet>.value(
-                value: dataset,
-                child: SnapshotViewer(state: state),
-              );
+              return SnapshotViewer(state: state, dataset: dataset);
             }
             return CircularProgressIndicator();
           },

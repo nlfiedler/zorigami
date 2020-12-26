@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
-import 'package:provider/provider.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart'
@@ -14,8 +13,13 @@ import 'package:zorigami/features/browse/preso/widgets/tree_viewer.dart';
 
 class SnapshotViewer extends StatelessWidget {
   final Loaded state;
+  final DataSet dataset;
 
-  SnapshotViewer({Key key, @required this.state}) : super(key: key);
+  SnapshotViewer({
+    Key key,
+    @required this.state,
+    @required this.dataset,
+  }) : super(key: key);
 
   Function loadSubsequent(Loaded state, BuildContext context) {
     return state.hasSubsequent
@@ -46,7 +50,6 @@ class SnapshotViewer extends StatelessWidget {
       (e) => DateFormat.yMd().add_jm().format(e.toLocal()),
       () => 'running...',
     );
-    final dataset = Provider.of<DataSet>(context, listen: false);
     final error = dataset.errorMsg.mapOr((e) => ', Error: ${e}', '');
     return Column(
       children: <Widget>[
