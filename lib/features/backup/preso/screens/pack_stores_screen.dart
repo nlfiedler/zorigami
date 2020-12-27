@@ -3,8 +3,9 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:zorigami/container.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_creator.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_stores_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
@@ -17,7 +18,7 @@ class PackStoresScreen extends StatelessWidget {
         title: Text('PACK STORES'),
       ),
       body: BlocProvider<PackStoresBloc>(
-        create: (_) => getIt<PackStoresBloc>(),
+        create: (_) => BuildContextX(context).read(packStoresBlocProvider),
         child: BlocBuilder<PackStoresBloc, PackStoresState>(
           builder: (context, state) {
             if (state is Empty) {

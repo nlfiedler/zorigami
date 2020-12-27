@@ -2,14 +2,13 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/features/backup/preso/screens/data_sets_screen.dart';
 import 'package:zorigami/features/backup/preso/screens/pack_stores_screen.dart';
 import 'package:zorigami/features/browse/preso/screens/home_screen.dart';
-import 'container.dart' as ioc;
 
 void main() {
-  ioc.init();
-  runApp(MyApp());
+  runApp(ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

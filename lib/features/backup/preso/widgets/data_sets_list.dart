@@ -4,17 +4,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
-import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
+import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_data_sets_bloc.dart'
     as edsb;
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
     as psb;
+import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
-import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 
 class DataSetsList extends StatelessWidget {
   final List<DataSet> sets;
@@ -24,7 +25,7 @@ class DataSetsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<psb.PackStoresBloc>(
-      create: (_) => getIt<psb.PackStoresBloc>(),
+      create: (_) => BuildContextX(context).read(packStoresBlocProvider),
       child: BlocBuilder<psb.PackStoresBloc, psb.PackStoresState>(
         builder: (context, state) {
           if (state is psb.Empty) {
@@ -63,7 +64,8 @@ Widget buildStoresHelp(BuildContext context) {
       leading: Icon(Icons.dns),
       title: Text('No pack stores found'),
       subtitle: Text(
-          'First configure one or more pack stores, then create a data set using those stores.'),
+        'First configure one or more pack stores, then create a data set using those stores.',
+      ),
       trailing: Icon(Icons.chevron_right),
       onTap: () => Navigator.pushNamedAndRemoveUntil(
           context, '/stores', ModalRoute.withName('/')),
@@ -130,7 +132,7 @@ class _DataSetsListState extends State<DataSetsListInner> {
     return SingleChildScrollView(
       child: Container(
         child: BlocProvider<edsb.EditDataSetsBloc>(
-          create: (_) => getIt<edsb.EditDataSetsBloc>(),
+          create: (_) => BuildContextX(context).read(editDataSetsBlocProvider),
           child: ExpansionPanelList(
             expansionCallback: (int index, bool isExpanded) {
               setState(() {

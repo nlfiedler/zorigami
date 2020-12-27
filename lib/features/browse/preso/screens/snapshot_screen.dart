@@ -3,8 +3,9 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:zorigami/container.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
+import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart'
     as tbb;
@@ -25,10 +26,11 @@ class SnapshotScreen extends StatelessWidget {
       body: MultiBlocProvider(
         providers: [
           BlocProvider<SnapshotBrowserBloc>(
-            create: (_) => getIt<SnapshotBrowserBloc>(),
+            create: (_) =>
+                BuildContextX(context).read(snapshotBrowserBlocProvider),
           ),
           BlocProvider<tbb.TreeBrowserBloc>(
-            create: (_) => getIt<tbb.TreeBrowserBloc>(),
+            create: (_) => BuildContextX(context).read(treeBrowserBlocProvider),
           ),
         ],
         child: BlocBuilder<SnapshotBrowserBloc, SnapshotBrowserState>(

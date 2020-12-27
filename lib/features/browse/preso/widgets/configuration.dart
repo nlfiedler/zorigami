@@ -2,15 +2,16 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:zorigami/container.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 
 class Configuration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<ConfigurationBloc>(
-      create: (_) => getIt<ConfigurationBloc>(),
+      create: (_) => BuildContextX(context).read(configurationBlocProvider),
       child: BlocBuilder<ConfigurationBloc, ConfigurationState>(
         builder: (context, state) {
           if (state is Empty) {

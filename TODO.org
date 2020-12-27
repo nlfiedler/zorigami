@@ -1,33 +1,5 @@
 * Tasks
 ** Quick fixes
-*** DONE Pack store checkboxes in data set form are not selected when they should be
-*** DONE Make the pack store order consistent in data set form
-*** DONE Ensure the dataset frequency is behaving correctly
-*** DONE Show number of files in a directory in the tree browser
-*** DONE look at updating =mockall= dependency
-*** TODO evaluate replacing =get_it= with =riverpod=
-**** https://pub.dev/packages/riverpod
-**** https://pub.dev/packages/flutter_riverpod
-**** c.f. https://riverpod.dev/docs/cookbooks/testing for neat examples
-**** TODO use =ScopedProvider= from =riverpod= to pass dataset down the tree
-***** in =snapshot_viewer.dart= and =snapshot_screen.dart=
-***** c.f. https://pub.dev/documentation/riverpod/latest/all/ScopedProvider-class.html
-***** define a global dummy provider that throws an exception
-***** set the override provider in the snapshot screen
-**** DONE replace =registerFactoryParam()= calls with simple functions
-**** TODO replace =registerFactory()= calls with =.autoDispose()= modifier
-**** TODO replace =registerLazySingleton()= with regular =Provider= instance
-**** TODO consider moving just the domain related stuff out of =container.dart=
-***** that is, only wire up the data layer pieces in =container.dart=
-***** strive to minimize the size of the =get_it= container
-***** add =riverpod= providers in the ui layer for the domain elements
-**** TODO doc: why riverpod over get_it for service location
-***** easy to forget to register services using get_it (runtime exceptions)
-***** back-tracking with get_it is nearly impossible (hard to find the usages)
-***** the parameterized factory is clumsy and suffers from runtime exceptions
-*** TODO consider replacing simple blocs with async providers via =riverpod=
-**** e.g. =ConfigurationBloc= is just a remote data async provider
-**** c.f. https://riverpod.dev/docs/concepts/reading use of =.when()=
 *** TODO Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal

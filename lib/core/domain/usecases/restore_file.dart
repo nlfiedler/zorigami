@@ -36,4 +36,7 @@ class Params extends Equatable {
 
   @override
   List<Object> get props => [digest];
+
+  @override
+  bool get stringify => true;
 }

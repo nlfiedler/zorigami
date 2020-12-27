@@ -3,27 +3,28 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:zorigami/container.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
     as psb;
+import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 
 final List<NewStoreItem> storeItems = [
   // The null kind signals the action button to be disabled, so by default
   // nothing is created until the user selects something.
   NewStoreItem(title: 'Select Type', kind: null),
-  NewStoreItem(title: 'Local', kind: 'local'),
-  NewStoreItem(title: 'Google', kind: 'google'),
-  NewStoreItem(title: 'Minio', kind: 'minio'),
-  NewStoreItem(title: 'SFTP', kind: 'sftp'),
+  NewStoreItem(title: 'Local', kind: StoreKind.local),
+  NewStoreItem(title: 'Google', kind: StoreKind.google),
+  NewStoreItem(title: 'Minio', kind: StoreKind.minio),
+  NewStoreItem(title: 'SFTP', kind: StoreKind.sftp),
 ];
 
 class PackStoreHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<CreatePackStoresBloc>(
-      create: (_) => getIt<CreatePackStoresBloc>(),
+      create: (_) => BuildContextX(context).read(createPackStoresBlocProvider),
       child: BlocListener<CreatePackStoresBloc, CreatePackStoresState>(
         listener: (context, state) {
           if (state is Submitted) {
@@ -104,13 +105,13 @@ class NewStoreItem {
     @required this.kind,
   });
   final String title;
-  final String kind;
+  final StoreKind kind;
 }
 
 /// Factory to create a generic pack store for the given kind.
-PackStore defaultPackStore(String kind) {
+PackStore defaultPackStore(StoreKind kind) {
   switch (kind) {
-    case 'local':
+    case StoreKind.local:
       return PackStore(
         kind: StoreKind.local,
         key: 'auto-generated',
@@ -119,7 +120,7 @@ PackStore defaultPackStore(String kind) {
           'basepath': '.',
         },
       );
-    case 'google':
+    case StoreKind.google:
       return PackStore(
         kind: StoreKind.google,
         key: 'auto-generated',
@@ -131,7 +132,7 @@ PackStore defaultPackStore(String kind) {
           'storage': 'NEARLINE',
         },
       );
-    case 'minio':
+    case StoreKind.minio:
       return PackStore(
         kind: StoreKind.minio,
         key: 'auto-generated',
@@ -143,7 +144,7 @@ PackStore defaultPackStore(String kind) {
           'secret_key': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
         },
       );
-    case 'sftp':
+    case StoreKind.sftp:
       return PackStore(
         kind: StoreKind.sftp,
         key: 'auto-generated',
@@ -151,8 +152,8 @@ PackStore defaultPackStore(String kind) {
         options: <String, dynamic>{
           'remote_addr': '127.0.0.1:22',
           'username': 'charlie',
-          'password': null,
-          'basepath': null,
+          'password': 'secret123',
+          'basepath': '.',
         },
       );
     default:

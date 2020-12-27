@@ -54,14 +54,14 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
   @override
   Future<String> deletePackStore(PackStore input) async {
     final getStore = r'''
-      mutation DeleteStore($identifier: String!) {
-        deleteStore(id: $identifier)
+      mutation DeleteStore($id: String!) {
+        deleteStore(id: $id)
       }
     ''';
     final mutationOptions = MutationOptions(
       documentNode: gql(getStore),
       variables: <String, dynamic>{
-        'identifier': input.key,
+        'id': input.key,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);

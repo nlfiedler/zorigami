@@ -4,11 +4,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
-import 'package:zorigami/container.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart'
     as epsb;
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
+import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 import 'package:zorigami/features/backup/preso/widgets/google_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/local_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
@@ -61,7 +62,8 @@ class _PackStoresListState extends State<PackStoresList> {
     return SingleChildScrollView(
       child: Container(
         child: BlocProvider<epsb.EditPackStoresBloc>(
-          create: (_) => getIt<epsb.EditPackStoresBloc>(),
+          create: (_) =>
+              BuildContextX(context).read(editPackStoresBlocProvider),
           child: ExpansionPanelList(
             expansionCallback: (int index, bool isExpanded) {
               setState(() {

@@ -7,7 +7,7 @@ issue_tracker: https://github.com/nlfiedler/zorigami/issues
 publish_to: 'none'
 
 environment:
-  sdk: ">=2.1.0 <3.0.0"
+  sdk: ">=2.6.0 <3.0.0"
 
 dependencies:
   flutter:
@@ -25,7 +25,7 @@ dependencies:
     git:
       url: https://github.com/knaeckeKami/flutter_form_builder.git
       ref: v3.14.0-alpha.2-fix
-  get_it: ^5.0.1
+  flutter_riverpod: ^0.12.1
   graphql: ^3.1.0
   intl: ^0.16.1
   oxidized: ^3.1.0

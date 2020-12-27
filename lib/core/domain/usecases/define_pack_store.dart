@@ -27,4 +27,7 @@ class Params extends Equatable {
 
   @override
   List<Object> get props => [store];
+
+  @override
+  bool get stringify => true;
 }

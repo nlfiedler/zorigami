@@ -74,15 +74,15 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<String> deleteDataSet(DataSet input) async {
-    final deleteDataSet = '''
-      mutation DeleteDataset(\$identifier: String!) {
-        deleteDataset(key: \$identifier)
+    final deleteDataSet = r'''
+      mutation DeleteDataset($id: String!) {
+        deleteDataset(id: $id)
       }
     ''';
     final mutationOptions = MutationOptions(
       documentNode: gql(deleteDataSet),
       variables: <String, dynamic>{
-        'identifier': input.key,
+        'id': input.key,
       },
     );
     final QueryResult result = await client.mutate(mutationOptions);

@@ -3,17 +3,18 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:zorigami/container.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/features/backup/preso/screens/new_data_set_screen.dart';
 import 'package:zorigami/features/backup/preso/widgets/data_sets_list.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DataSetsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<DataSetsBloc>(
-      create: (_) => getIt<DataSetsBloc>(),
+      create: (_) => BuildContextX(context).read(datasetsBlocProvider),
       child: BlocBuilder<DataSetsBloc, DataSetsState>(
         builder: (context, state) {
           return Scaffold(

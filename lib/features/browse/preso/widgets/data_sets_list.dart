@@ -3,18 +3,19 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
-import 'package:zorigami/container.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/features/browse/preso/screens/snapshot_screen.dart';
 
 class DataSetsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<DataSetsBloc>(
-      create: (_) => getIt<DataSetsBloc>(),
+      create: (_) => BuildContextX(context).read(datasetsBlocProvider),
       child: BlocBuilder<DataSetsBloc, DataSetsState>(
         builder: (context, state) {
           if (state is Empty) {
@@ -91,7 +92,8 @@ Widget buildHelp(BuildContext context) {
       leading: Icon(Icons.dns),
       title: Text('No data sets found'),
       subtitle: Text(
-          'First configure one or more pack stores, then create a data set using those stores.'),
+        'First configure one or more pack stores, then create a data set using those stores.',
+      ),
       trailing: Icon(Icons.chevron_right),
       onTap: () => Navigator.pushNamedAndRemoveUntil(
           context, '/stores', ModalRoute.withName('/')),
