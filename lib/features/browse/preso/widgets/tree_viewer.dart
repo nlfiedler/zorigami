@@ -135,14 +135,7 @@ class _TreeTableState extends State<TreeTable> {
             ? Icons.folder_open
             : Icons.insert_drive_file),
       );
-      final name = DataCell(
-        Text(e.name, style: mono),
-        onTap: e.reference.type == EntryType.tree
-            ? () => BlocProvider.of<TreeBrowserBloc>(context).add(
-                  LoadEntry(entry: e),
-                )
-            : null,
-      );
+      final name = DataCell(Text(e.name, style: mono));
       final date = DataCell(Text(
         DateFormat.yMd().add_jm().format(e.modTime.toLocal()),
       ));
@@ -151,7 +144,9 @@ class _TreeTableState extends State<TreeTable> {
           ? (selected) => BlocProvider.of<TreeBrowserBloc>(context).add(
                 SetSelection(entry: e, selected: selected),
               )
-          : null;
+          : (_) => BlocProvider.of<TreeBrowserBloc>(context).add(
+                LoadEntry(entry: e),
+              );
       final selected = widget.state.selections.contains(e);
       return DataRow(
         cells: [icon, name, date, ref],

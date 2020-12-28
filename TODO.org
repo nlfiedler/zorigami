@@ -5,8 +5,6 @@
 **** default ulimit on macOS is 256, so something less would be ideal
 **** ran out of files in tanuki when rocksdb directory contained 217 files
 **** maybe consider a means of countering this error at runtime
-*** TODO Snapshot tree browser
-**** why only clicking on ~name~ navigates to folder?
 ** Backup Status
 *** DONE dataset status says "running" even though it had an error
 **** collect error message in the app state so it can be reported
