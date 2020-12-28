@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
+import 'package:intl/intl.dart';
 import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
@@ -153,6 +154,8 @@ class Schedule extends Equatable {
   }
 }
 
+enum Status { none, running, finished, paused, failed }
+
 /// A `DataSet` may have zero or more schedules.
 ///
 /// With no [schedules], the data set is backed up manually by the user.
@@ -164,6 +167,7 @@ class DataSet extends Equatable {
   final int packSize;
   final List<String> stores;
   final Option<Snapshot> snapshot;
+  final Status status;
   final Option<String> errorMsg;
 
   DataSet({
@@ -174,6 +178,7 @@ class DataSet extends Equatable {
     @required this.packSize,
     @required this.stores,
     @required this.snapshot,
+    @required this.status,
     @required this.errorMsg,
   });
 
@@ -198,6 +203,33 @@ class DataSet extends Equatable {
       }
     }
     return Ok(0);
+  }
+
+  String describeStatus() {
+    switch (status) {
+      case Status.none:
+        return 'not yet run';
+      case Status.running:
+        return 'still running';
+      case Status.finished:
+        return 'finished at ' + finishedTime();
+      case Status.paused:
+        return 'paused';
+      case Status.failed:
+        return 'error: ${errorMsg.unwrapOr("unknown")}';
+      default:
+        throw ArgumentError('unrecognized status');
+    }
+  }
+
+  String finishedTime() {
+    return snapshot.mapOrElse(
+      (s) => s.endTime.mapOrElse(
+        (e) => DateFormat.yMd().add_jm().format(e.toLocal()),
+        () => null,
+      ),
+      () => null,
+    );
   }
 }
 

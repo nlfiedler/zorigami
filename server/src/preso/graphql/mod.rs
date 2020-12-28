@@ -237,6 +237,21 @@ impl entities::Snapshot {
     }
 }
 
+/// Status of the most recent snapshot for a dataset.
+#[derive(Copy, Clone, GraphQLEnum)]
+pub enum Status {
+    /// Backup has not run yet.
+    NONE,
+    /// Backup is still running.
+    RUNNING,
+    /// Backup has finished.
+    FINISHED,
+    /// Backup paused due to schedule.
+    PAUSED,
+    /// Backup failed, see `errorMessage` property.
+    FAILED,
+}
+
 #[juniper::object(
     Context = GraphContext,
     description = "Location, schedule, and pack store for a backup data set.")
@@ -269,6 +284,25 @@ impl entities::Dataset {
     /// Set of schedules that apply to this dataset.
     fn schedules(&self) -> Vec<entities::schedule::Schedule> {
         self.schedules.clone()
+    }
+
+    /// Status of the most recent snapshot for this dataset.
+    fn status(&self) -> Status {
+        use crate::domain::managers::state;
+        let redux = state::get_state();
+        if let Some(backup) = redux.backups(&self.id) {
+            if backup.is_paused() {
+                Status::PAUSED
+            } else if backup.had_error() {
+                Status::FAILED
+            } else if backup.end_time().is_none() {
+                Status::RUNNING
+            } else {
+                Status::FINISHED
+            }
+        } else {
+            Status::NONE
+        }
     }
 
     /// Error message for the most recent snapshot, if any.
@@ -1202,7 +1236,7 @@ mod tests {
         let schema = create_schema();
         let (res, errors) = juniper::execute(
             r#"query {
-                datasets { basepath }
+                datasets { basepath status }
             }"#,
             None,
             &schema,
@@ -1220,6 +1254,90 @@ mod tests {
         let field = object.get_field_value("basepath").unwrap();
         let value = field.as_scalar_value::<String>().unwrap();
         assert_eq!(value, "/home/planet");
+        let field = object.get_field_value("status").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "NONE");
+    }
+
+    #[test]
+    fn test_query_dataset_status_running() {
+        use crate::domain::managers::state;
+        // arrange
+        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
+        state::dispatch(state::Action::StartBackup(datasets[0].id.clone()));
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                datasets { basepath status }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("datasets").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 1);
+        let object = list[0].as_object_value().unwrap();
+        let field = object.get_field_value("basepath").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "/home/planet");
+        let field = object.get_field_value("status").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "RUNNING");
+    }
+
+    #[test]
+    fn test_query_dataset_status_error() {
+        use crate::domain::managers::state;
+        // arrange
+        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
+        state::dispatch(state::Action::StartBackup(datasets[0].id.clone()));
+        let err_msg = String::from("oh no");
+        state::dispatch(state::Action::ErrorBackup(datasets[0].id.clone(), err_msg));
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let ctx = Arc::new(GraphContext::new(datasource));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute(
+            r#"query {
+                datasets { basepath status errorMessage }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("datasets").unwrap();
+        let list = res.as_list_value().unwrap();
+        assert_eq!(list.len(), 1);
+        let object = list[0].as_object_value().unwrap();
+        let field = object.get_field_value("basepath").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "/home/planet");
+        let field = object.get_field_value("status").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "FAILED");
+        let field = object.get_field_value("errorMessage").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, "oh no");
     }
 
     #[test]

@@ -46,11 +46,7 @@ class SnapshotViewer extends StatelessWidget {
     final started = DateFormat.yMd().add_jm().format(
           state.snapshot.startTime.toLocal(),
         );
-    final ended = state.snapshot.endTime.mapOrElse(
-      (e) => DateFormat.yMd().add_jm().format(e.toLocal()),
-      () => 'running...',
-    );
-    final error = dataset.errorMsg.mapOr((e) => ', Error: ${e}', '');
+    final status = dataset.describeStatus();
     return Column(
       children: <Widget>[
         Card(
@@ -58,7 +54,7 @@ class SnapshotViewer extends StatelessWidget {
             leading: Icon(Icons.history),
             title: Text('Snapshot: ${digest}'),
             subtitle: Text(
-              'Files: ${count}, Started: ${started}, Finished: ${ended}${error}',
+              'Files: ${count}, Started: ${started}, Status: ${status}',
             ),
             isThreeLine: true,
             trailing: Row(

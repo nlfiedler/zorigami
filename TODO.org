@@ -1,16 +1,4 @@
 * Tasks
-** Quick fixes
-*** TODO Too many open files (in RocksDB)
-**** need to set =set_max_open_files()= on database options
-**** default ulimit on macOS is 256, so something less would be ideal
-**** ran out of files in tanuki when rocksdb directory contained 217 files
-**** maybe consider a means of countering this error at runtime
-** Backup Status
-*** DONE dataset status says "running" even though it had an error
-**** collect error message in the app state so it can be reported
-**** graphql query to retrieve dataset status, including error message
-**** frontend can then query and display this information later
-*** TODO dataset status says "running" even though it stopped due to schedule
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -51,6 +39,11 @@
 ** Offer a ~test~ for the pack stores
 *** When creating/configuring the pack store, offer a test feature
 ** Loose backend issues
+*** TODO Too many open files (in RocksDB)
+**** need to set =set_max_open_files()= on database options
+**** default ulimit on macOS is 256, so something less would be ideal
+**** ran out of files in tanuki when rocksdb directory contained 217 files
+**** maybe consider a means of countering this error at runtime
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
 *** TODO update juniper to latest release; 0.15 API changes substantially

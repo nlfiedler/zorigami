@@ -32,6 +32,7 @@ void main() {
     packSize: 67108864,
     stores: ['foo'],
     snapshot: None(),
+    status: Status.none,
     errorMsg: None(),
   );
   final tDataSetList = [tDataSetModel];

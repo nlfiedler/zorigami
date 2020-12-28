@@ -44,7 +44,7 @@ Widget buildDatasetList(BuildContext context, List<DataSet> sets) {
         child: ListTile(
           leading: Icon(Icons.dns),
           title: Text(e.basepath + ', runs ' + getSchedule(e)),
-          subtitle: Text('Status: ' + getStatus(e)),
+          subtitle: Text('Status: ' + e.describeStatus()),
           trailing: Icon(Icons.chevron_right),
           onTap: () {
             if (e.snapshot is Some) {
@@ -71,19 +71,6 @@ String getSchedule(DataSet dataset) {
     return 'on multiple schedules';
   }
   return dataset.schedules[0].toPrettyString();
-}
-
-String getStatus(DataSet dataset) {
-  if (dataset.errorMsg is Some) {
-    return dataset.errorMsg.unwrap();
-  }
-  return dataset.snapshot.mapOrElse(
-    (s) => s.endTime.mapOrElse(
-      (e) => 'finished at ' + DateFormat.yMd().add_jm().format(e.toLocal()),
-      () => 'still running',
-    ),
-    () => 'not yet run',
-  );
 }
 
 Widget buildHelp(BuildContext context) {

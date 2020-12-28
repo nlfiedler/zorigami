@@ -102,6 +102,7 @@ class DataSetModel extends DataSet {
     @required int packSize,
     @required List<String> stores,
     @required Option<SnapshotModel> snapshot,
+    @required Status status,
     @required Option<String> errorMsg,
   }) : super(
           key: key,
@@ -111,6 +112,7 @@ class DataSetModel extends DataSet {
           packSize: packSize,
           stores: stores,
           snapshot: snapshot,
+          status: status,
           errorMsg: errorMsg,
         );
 
@@ -127,6 +129,7 @@ class DataSetModel extends DataSet {
       packSize: dataset.packSize,
       stores: dataset.stores,
       snapshot: snapshot,
+      status: dataset.status,
       errorMsg: dataset.errorMsg,
     );
   }
@@ -152,6 +155,7 @@ class DataSetModel extends DataSet {
       packSize: int.parse(json['packSize']),
       stores: stores,
       snapshot: snapshot,
+      status: decodeStatus(json['status']),
       errorMsg: Option.some(json['errorMessage']),
     );
   }
@@ -169,8 +173,42 @@ class DataSetModel extends DataSet {
     };
     if (!input) {
       result['computerId'] = computerId;
+      result['status'] = encodeStatus(status);
     }
     return result;
+  }
+}
+
+Status decodeStatus(String status) {
+  if (status == 'NONE' || status == null) {
+    return Status.none;
+  } else if (status == 'RUNNING') {
+    return Status.running;
+  } else if (status == 'FINISHED') {
+    return Status.finished;
+  } else if (status == 'PAUSED') {
+    return Status.paused;
+  } else if (status == 'FAILED') {
+    return Status.failed;
+  } else {
+    throw ArgumentError('status is not recognized');
+  }
+}
+
+String encodeStatus(Status status) {
+  switch (status) {
+    case Status.none:
+      return 'NONE';
+    case Status.running:
+      return 'RUNNING';
+    case Status.finished:
+      return 'FINISHED';
+    case Status.paused:
+      return 'PAUSED';
+    case Status.failed:
+      return 'FAILED';
+    default:
+      throw ArgumentError('status is not recognized');
   }
 }
 

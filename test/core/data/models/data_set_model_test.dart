@@ -212,6 +212,7 @@ void main() {
           tree: 'deadbeef',
         ),
       ),
+      status: Status.finished,
       errorMsg: None(),
     );
     test(
@@ -245,6 +246,7 @@ void main() {
           packSize: 0,
           stores: ['store/local/storey'],
           snapshot: None(),
+          status: Status.none,
           errorMsg: None(),
         );
         // assert
@@ -284,6 +286,7 @@ void main() {
             tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
           ),
         ),
+        status: Status.finished,
         errorMsg: None(),
       );
       final dataSetModel = DataSetModel(
@@ -313,6 +316,7 @@ void main() {
             tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
           ),
         ),
+        status: Status.finished,
         errorMsg: None(),
       );
       // act
