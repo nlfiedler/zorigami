@@ -38,6 +38,11 @@
 *** consider how one might "pause" a backup in progress
 ** Offer a ~test~ for the pack stores
 *** When creating/configuring the pack store, offer a test feature
+*** Add a ~Test~ button to the pack store details panel
+*** For local: create a directory and file, then remove both
+*** For SFP: create a directory and file, then remove both
+*** For minio: test read access by listing buckets
+*** For google: test read access by listing buckets
 ** Loose backend issues
 *** TODO Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
