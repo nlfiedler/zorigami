@@ -101,12 +101,7 @@ class NewDataSetWidget extends StatelessWidget {
           Navigator.pop(context, true);
         } else if (state is Error) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: ListTile(
-                title: Text('Error updating data set'),
-                subtitle: Text(state.message),
-              ),
-            ),
+            SnackBar(content: Text('Error: ${state.message}')),
           );
         }
       },
@@ -151,5 +146,6 @@ DataSet defaultDataSet() {
     schedules: [],
     stores: [],
     errorMsg: None(),
+    status: Status.none,
   );
 }

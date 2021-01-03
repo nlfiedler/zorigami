@@ -29,9 +29,7 @@ class PackStoreHeader extends StatelessWidget {
         listener: (context, state) {
           if (state is Submitted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Created new pack store'),
-              ),
+              SnackBar(content: Text('Created new pack store')),
             );
             BlocProvider.of<psb.PackStoresBloc>(context).add(
               psb.ReloadPackStores(),
@@ -39,10 +37,7 @@ class PackStoreHeader extends StatelessWidget {
           } else if (state is Error) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: ListTile(
-                  title: Text('Error creating pack store'),
-                  subtitle: Text(state.message),
-                ),
+                content: Text('Error creating pack store: ${state.message}'),
               ),
             );
           }

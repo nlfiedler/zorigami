@@ -24,14 +24,8 @@ class TreeViewer extends StatelessWidget {
               // this is just a temporary solution until the proper (multi-)file
               // restore screen is developed
               final content = state.restoreResult.mapOrElse(
-                (success) => ListTile(
-                  title: Text('File restored'),
-                  subtitle: Text(success),
-                ),
-                (failure) => ListTile(
-                  title: Text('Restore failed'),
-                  subtitle: Text(failure.toString()),
-                ),
+                (success) => Text('File restored: $success'),
+                (failure) => Text('Restore failed: $failure'),
               );
               // must show snackbar outside of builder
               ScaffoldMessenger.of(context).showSnackBar(

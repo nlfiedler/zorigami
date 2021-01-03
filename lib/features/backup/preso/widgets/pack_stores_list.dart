@@ -118,10 +118,7 @@ class PackStoreListDetails extends StatelessWidget {
         } else if (state is epsb.Error) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: ListTile(
-                title: Text('Error updating pack store'),
-                subtitle: Text(state.message),
-              ),
+              content: Text('Error updating pack store: ${state.message}'),
             ),
           );
         }

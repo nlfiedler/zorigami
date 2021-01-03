@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
@@ -193,12 +192,7 @@ class DataSetListDetails extends StatelessWidget {
           BlocProvider.of<DataSetsBloc>(context).add(ReloadDataSets());
         } else if (state is edsb.Error) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: ListTile(
-                title: Text('Error updating data set'),
-                subtitle: Text(state.message),
-              ),
-            ),
+            SnackBar(content: Text('Error: ${state.message}')),
           );
         }
       },
