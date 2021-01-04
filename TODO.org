@@ -40,7 +40,7 @@
 *** When creating/configuring the pack store, offer a test feature
 *** Add a ~Test~ button to the pack store details panel
 *** For local: create a directory and file, then remove both
-*** For SFP: create a directory and file, then remove both
+*** For SFTP: create a directory and file, then remove both
 *** For minio: test read access by listing buckets
 *** For google: test read access by listing buckets
 ** Loose backend issues

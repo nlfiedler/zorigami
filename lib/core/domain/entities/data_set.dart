@@ -208,6 +208,10 @@ class DataSet extends Equatable {
   String describeStatus() {
     switch (status) {
       case Status.none:
+        final ft = finishedTime();
+        if (ft != null) {
+          return 'finished at $ft';
+        }
         return 'not yet run';
       case Status.running:
         return 'still running';
