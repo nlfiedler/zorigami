@@ -691,6 +691,21 @@ impl Into<crate::domain::usecases::new_store::Params> for StoreInput {
     }
 }
 
+impl Into<crate::domain::usecases::test_store::Params> for StoreInput {
+    fn into(self) -> crate::domain::usecases::test_store::Params {
+        let mut properties: HashMap<String, String> = HashMap::new();
+        for prop in self.properties.iter() {
+            properties.insert(prop.name.to_owned(), prop.value.to_owned());
+        }
+        crate::domain::usecases::test_store::Params::new(
+            self.id.unwrap_or(String::from("default")),
+            self.store_type,
+            self.label,
+            properties,
+        )
+    }
+}
+
 impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
     fn into(self) -> crate::domain::usecases::update_store::Params {
         let mut properties: HashMap<String, String> = HashMap::new();
@@ -951,6 +966,24 @@ impl MutationRoot {
         let params: Params = input.into();
         let result: crate::domain::entities::Store = usecase.call(params)?;
         Ok(result.into())
+    }
+
+    /// Test the given pack store definition for basic connectivity.
+    ///
+    /// Returns an error message, or 'ok' if there were no errors.
+    fn testStore(executor: &Executor, input: StoreInput) -> FieldResult<String> {
+        use crate::domain::usecases::test_store::{Params, TestStore};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context().clone();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = TestStore::new(Box::new(repo));
+        let params: Params = input.into();
+        let result = usecase.call(params);
+        if result.is_err() {
+            Ok(format!("{:?}", result.unwrap_err()))
+        } else {
+            Ok(String::from("ok"))
+        }
     }
 
     /// Delete the named store, returning the identifier.

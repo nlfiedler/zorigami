@@ -70,8 +70,9 @@ class TreePath extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       child: Row(
         children: <Widget>[
-          RaisedButton(
-            child: Text('Up'),
+          RaisedButton.icon(
+            icon: Icon(Icons.arrow_upward),
+            label: const Text('Up'),
             onPressed: state.path.isNotEmpty
                 ? () => BlocProvider.of<TreeBrowserBloc>(context).add(
                       NavigateUpward(),
@@ -79,8 +80,9 @@ class TreePath extends StatelessWidget {
                 : null,
           ),
           SizedBox(width: 16.0),
-          RaisedButton(
-            child: Text('Put Back'),
+          RaisedButton.icon(
+            icon: Icon(Icons.restore),
+            label: const Text('Put Back'),
             onPressed: state.selections.isNotEmpty
                 ? () {
                     final dataset =

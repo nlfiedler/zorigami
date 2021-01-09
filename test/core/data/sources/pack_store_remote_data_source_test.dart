@@ -49,6 +49,18 @@ void main() {
     });
   }
 
+  void setUpMockTestGraphQLResponse() {
+    final response = {
+      'data': {'testStore': 'ok'}
+    };
+    // graphql client uses the 'send' method
+    when(mockHttpClient.send(any)).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   void setUpMockHttpClientGraphQLResponse(
       String operation, List<dynamic> options) {
     final response = {
@@ -228,6 +240,50 @@ void main() {
         // act, assert
         try {
           await dataSource.getAllPackStores();
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+  });
+
+  group('testPackStore', () {
+    test(
+      'should test a specific pack store',
+      () async {
+        // arrange
+        setUpMockTestGraphQLResponse();
+        // act
+        final result = await dataSource.testPackStore(tPackStoreModel);
+        // assert
+        expect(result, equals('ok'));
+      },
+    );
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.testPackStore(tPackStoreModel);
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.testPackStore(tPackStoreModel);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());

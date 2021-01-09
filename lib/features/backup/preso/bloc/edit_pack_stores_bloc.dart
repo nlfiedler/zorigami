@@ -7,6 +7,7 @@ import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/delete_pack_store.dart' as dps;
+import 'package:zorigami/core/domain/usecases/test_pack_store.dart' as tps;
 import 'package:zorigami/core/domain/usecases/update_pack_store.dart' as ups;
 
 //
@@ -22,6 +23,12 @@ class UpdatePackStore extends EditPackStoresEvent {
   final PackStore store;
 
   UpdatePackStore({@required this.store});
+}
+
+class TestPackStore extends EditPackStoresEvent {
+  final PackStore store;
+
+  TestPackStore({@required this.store});
 }
 
 class DeletePackStore extends EditPackStoresEvent {
@@ -45,6 +52,15 @@ class Submitting extends EditPackStoresState {}
 
 class Submitted extends EditPackStoresState {}
 
+class Tested extends EditPackStoresState {
+  final String result;
+
+  Tested({@required this.result});
+
+  @override
+  List<Object> get props => [result];
+}
+
 class Error extends EditPackStoresState {
   final String message;
 
@@ -61,10 +77,12 @@ class Error extends EditPackStoresState {
 class EditPackStoresBloc
     extends Bloc<EditPackStoresEvent, EditPackStoresState> {
   final ups.UpdatePackStore updatePackStore;
+  final tps.TestPackStore testPackStore;
   final dps.DeletePackStore deletePackStore;
 
   EditPackStoresBloc({
     this.updatePackStore,
+    this.testPackStore,
     this.deletePackStore,
   }) : super(Editing());
 
@@ -79,6 +97,15 @@ class EditPackStoresBloc
       ));
       yield result.mapOrElse(
         (store) => Submitted(),
+        (failure) => Error(message: failure.toString()),
+      );
+    } else if (event is TestPackStore) {
+      yield Submitting();
+      final result = await testPackStore(tps.Params(
+        store: event.store,
+      ));
+      yield result.mapOrElse(
+        (result) => Tested(result: result),
         (failure) => Error(message: failure.toString()),
       );
     } else if (event is DeletePackStore) {

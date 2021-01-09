@@ -146,6 +146,14 @@ impl RecordRepository for RecordRepositoryImpl {
         Ok(packs)
     }
 
+    fn build_pack_repo(&self, store: &Store) -> Result<Box<dyn PackRepository>, Error> {
+        let stores: Vec<Store> = vec![store.to_owned()];
+        let store_builder = Box::new(PackSourceBuilderImpl {});
+        let pack: Box<dyn PackRepository> =
+            Box::new(PackRepositoryImpl::new(stores, store_builder)?);
+        Ok(pack)
+    }
+
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
         self.datasource.put_dataset(dataset)
     }
@@ -264,6 +272,16 @@ impl PackRepository for PackRepositoryImpl {
 
         Err(err_msg("unable to retrieve pack file"))
     }
+
+    fn test_store(&self, store_id: &str) -> Result<(), Error> {
+        for (store, source) in self.sources.iter() {
+            if store_id == store.id {
+                let _ = source.list_buckets()?;
+                break;
+            }
+        }
+        Ok(())
+    }
 }
 
 // Try to store the pack file up to three times before giving up.
@@ -362,6 +380,25 @@ mod tests {
         assert!(result.is_err());
         let err_string = result.err().unwrap().to_string();
         assert!(err_string.contains("no stores found for dataset"));
+    }
+
+    #[test]
+    fn test_build_pack_repo() {
+        // arrange
+        let mut local_props: HashMap<String, String> = HashMap::new();
+        local_props.insert("basepath".to_owned(), "/data/packs".to_owned());
+        let store = Store {
+            id: "local123".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "my local".to_owned(),
+            properties: local_props,
+        };
+        let mock = MockEntityDataSource::new();
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.build_pack_repo(&store);
+        // assert
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -629,5 +666,29 @@ mod tests {
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
         assert!(err_string.contains("unable to retrieve pack file"));
+    }
+
+    #[test]
+    fn test_test_store() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| Ok(Vec::new()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let result = repo.test_store("localtmp");
+        // assert
+        assert!(result.is_ok());
     }
 }

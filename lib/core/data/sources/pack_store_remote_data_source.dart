@@ -9,6 +9,7 @@ import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class PackStoreRemoteDataSource {
   Future<List<PackStoreModel>> getAllPackStores();
+  Future<String> testPackStore(PackStore input);
   Future<String> deletePackStore(PackStore input);
   Future<PackStoreModel> definePackStore(PackStore input);
   Future<PackStoreModel> updatePackStore(PackStore input);
@@ -49,6 +50,28 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
       }),
     );
     return results;
+  }
+
+  @override
+  Future<String> testPackStore(PackStore input) async {
+    final testStore = r'''
+      mutation TestStore($input: StoreInput!) {
+        testStore(input: $input)
+      }
+    ''';
+    final storeModel = PackStoreModel.fromStore(input);
+    final encodedStore = storeModel.toJson();
+    final mutationOptions = MutationOptions(
+      documentNode: gql(testStore),
+      variables: <String, dynamic>{
+        'input': encodedStore,
+      },
+    );
+    final QueryResult result = await client.mutate(mutationOptions);
+    if (result.hasException) {
+      throw ServerException(result.exception.toString());
+    }
+    return result.data['testStore'] as String;
   }
 
   @override

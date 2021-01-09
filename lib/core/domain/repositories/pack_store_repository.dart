@@ -15,6 +15,9 @@ abstract class PackStoreRepository {
   /// Update an existing pack store.
   Future<Result<PackStore, Failure>> updatePackStore(PackStore input);
 
+  /// Test the pack store connectivity.
+  Future<Result<String, Failure>> testPackStore(PackStore input);
+
   /// Remove a pack store.
   Future<Result<PackStore, Failure>> deletePackStore(PackStore input);
 }

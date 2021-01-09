@@ -14,6 +14,7 @@ import 'package:zorigami/core/domain/usecases/get_pack_stores.dart' as gps;
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart' as gds;
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart' as gs;
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
+import 'package:zorigami/core/domain/usecases/test_pack_store.dart' as tps;
 import 'package:zorigami/core/domain/usecases/restore_file.dart' as rf;
 
 final getConfigurationUsecaseProvider = Provider<gc.GetConfiguration>(
@@ -36,6 +37,12 @@ final createPackStoreUsecaseProvider = Provider<dps.DefinePackStore>(
 
 final updatePackStoreUsecaseProvider = Provider<ups.UpdatePackStore>(
   (ref) => ups.UpdatePackStore(
+    ref.read(packStoreRepositoryProvider),
+  ),
+);
+
+final testPackStoreUsecaseProvider = Provider<tps.TestPackStore>(
+  (ref) => tps.TestPackStore(
     ref.read(packStoreRepositoryProvider),
   ),
 );

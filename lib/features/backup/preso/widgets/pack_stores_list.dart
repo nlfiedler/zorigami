@@ -96,6 +96,17 @@ class PackStoreListDetails extends StatelessWidget {
   final formKey = GlobalKey<FormBuilderState>();
   final PackStore store;
 
+  void testPack(BuildContext context, PackStoreForm storeForm) {
+    if (formKey.currentState.saveAndValidate()) {
+      final store = storeForm.storeFromState(
+        formKey.currentState,
+      );
+      BlocProvider.of<epsb.EditPackStoresBloc>(context).add(
+        epsb.TestPackStore(store: store),
+      );
+    }
+  }
+
   void savePack(BuildContext context, PackStoreForm storeForm) {
     if (formKey.currentState.saveAndValidate()) {
       final store = storeForm.storeFromState(
@@ -115,6 +126,12 @@ class PackStoreListDetails extends StatelessWidget {
         if (state is epsb.Submitted) {
           // this will force everything to rebuild
           BlocProvider.of<PackStoresBloc>(context).add(ReloadPackStores());
+        } else if (state is epsb.Tested) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Test result: ${state.result}'),
+            ),
+          );
         } else if (state is epsb.Error) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -136,6 +153,13 @@ class PackStoreListDetails extends StatelessWidget {
             ),
             ButtonBar(
               children: <Widget>[
+                FlatButton.icon(
+                  icon: Icon(Icons.analytics_outlined),
+                  label: const Text('TEST'),
+                  onPressed: (state is epsb.Submitting)
+                      ? null
+                      : () => testPack(context, storeForm),
+                ),
                 RaisedButton.icon(
                   icon: Icon(Icons.save),
                   label: const Text('SAVE'),

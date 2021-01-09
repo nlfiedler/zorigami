@@ -123,6 +123,36 @@ void main() {
     );
   });
 
+  group('testPackStore', () {
+    test(
+      'should return remote data when the call to remote data source is successful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.testPackStore(any))
+            .thenAnswer((_) async => 'ok');
+        // act
+        final result = await repository.testPackStore(tPackStore);
+        // assert
+        verify(mockRemoteDataSource.testPackStore(any));
+        expect(result.unwrap(), equals('ok'));
+      },
+    );
+
+    test(
+      'should return server failure when the call to remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.testPackStore(any))
+            .thenThrow(ServerException());
+        // act
+        final result = await repository.testPackStore(tPackStore);
+        // assert
+        verify(mockRemoteDataSource.testPackStore(any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
+
   group('deletePackStore', () {
     test(
       'should return remote data when the call to remote data source is successful',

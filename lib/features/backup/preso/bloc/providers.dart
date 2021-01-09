@@ -37,6 +37,7 @@ final createPackStoresBlocProvider = Provider.autoDispose<CreatePackStoresBloc>(
 final editPackStoresBlocProvider = Provider.autoDispose<EditPackStoresBloc>(
   (ref) => EditPackStoresBloc(
     updatePackStore: ref.read(updatePackStoreUsecaseProvider),
+    testPackStore: ref.read(testPackStoreUsecaseProvider),
     deletePackStore: ref.read(deletePackStoreUsecaseProvider),
   ),
 );

@@ -96,6 +96,9 @@ pub trait RecordRepository: Send + Sync {
     /// returned, rather than producing a useless pack repository.
     fn load_dataset_stores(&self, dataset: &Dataset) -> Result<Box<dyn PackRepository>, Error>;
 
+    /// Construct a pack repository for the given pack store.
+    fn build_pack_repo(&self, store: &Store) -> Result<Box<dyn PackRepository>, Error>;
+
     /// Save the given dataset to the repository.
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error>;
 
@@ -123,9 +126,10 @@ pub trait RecordRepository: Send + Sync {
 ///
 #[cfg_attr(test, automock)]
 pub trait PackRepository {
-    /// Save the given pack to stores provided in the constructor. Returns the
-    /// list of all pack locations, which can be used to retrieve the pack at a
-    /// later time.
+    /// Save the given pack to stores provided in the constructor.
+    ///
+    /// Returns the list of all pack locations, which can be used to retrieve
+    /// the pack at a later time.
     fn store_pack(
         &self,
         packfile: &Path,
@@ -134,7 +138,14 @@ pub trait PackRepository {
     ) -> Result<Vec<PackLocation>, Error>;
 
     /// Retrieve the pack from one of the stores provided in the constructor.
+    ///
     /// The most suitable store will be utilized, preferring a local store over
     /// a remote one, and fast one over a slow one.
     fn retrieve_pack(&self, locations: &[PackLocation], outfile: &Path) -> Result<(), Error>;
+
+    /// Test the connection to the store with the given identifier.
+    ///
+    /// Only tests the connection and read access by listing buckets. Any errors
+    /// raised by the data source are returned as-is.
+    fn test_store(&self, store: &str) -> Result<(), Error>;
 }

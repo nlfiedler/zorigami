@@ -47,6 +47,16 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
   }
 
   @override
+  Future<Result<String, Failure>> testPackStore(PackStore input) async {
+    try {
+      final result = await remoteDataSource.testPackStore(input);
+      return Ok(result);
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Result<PackStore, Failure>> deletePackStore(PackStore input) async {
     try {
       await remoteDataSource.deletePackStore(input);
