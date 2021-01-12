@@ -1,5 +1,9 @@
 * Tasks
 ** TODO update to latest rusoto release
+** TODO update to latest serde release
+*** the =serde::export= module is now private
+*** may need to use serde in the domain layer entities
+*** maybe consider an entirely different serde solution
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
