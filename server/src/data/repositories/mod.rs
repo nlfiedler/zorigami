@@ -8,8 +8,8 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use failure::{err_msg, Error};
-use log::{error, warn};
+use failure::{err_msg, Error, ResultExt};
+use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -210,13 +210,12 @@ impl PackRepository for PackRepositoryImpl {
     ) -> Result<Vec<PackLocation>, Error> {
         let mut results: Vec<PackLocation> = Vec::new();
         for (store, source) in self.sources.iter() {
-            match store_pack_retry(source, packfile, bucket, object) {
-                Ok(loc) => results.push(loc.into()),
-                Err(err) => {
-                    error!("pack store {} failed for {}/{}", store.id, bucket, object);
-                    return Err(err);
-                }
-            }
+            let ctx = format!(
+                "pack store {} ({}) failed for {}/{}",
+                store.id, store.label, bucket, object
+            );
+            let loc = store_pack_retry(source, packfile, bucket, object).context(ctx)?;
+            results.push(loc.into())
         }
         Ok(results)
     }

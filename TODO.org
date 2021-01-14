@@ -1,4 +1,15 @@
 * Tasks
+** TODO restore database from nothing (simplified version)
+*** only restore the database with a matching computer UUID
+*** user defines a temporary pack configuration to start
+*** retrieve the most recent database archive from the pack store
+*** extract the archive to =.backup= directory
+*** restore the database from =.backup= directory
+**** need to close the current database, delete its files
+**** call the restore database function
+**** open the newly restored database
+*** write a use case and test with mocks
+*** write the flutter interface to invoke this
 ** TODO update to latest rusoto release
 ** TODO update to latest serde release
 *** the =serde::export= module is now private
@@ -42,6 +53,7 @@
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
 ** Loose backend issues
+*** TODO testing the minio? pack store showed a tokio runtime error
 *** TODO Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
@@ -59,6 +71,7 @@
 *** TODO find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
+*** TODO pack store ~test~ feature shows snackbar repeatedly
 *** TODO sometimes get an HTTP error in GraphQL client
 **** should automatically retry the query a few times before giving up
 *** TODO test with a smaller browser window to surface sizing issues
