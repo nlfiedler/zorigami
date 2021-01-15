@@ -5,16 +5,13 @@
 *** retrieve the most recent database archive from the pack store
 *** extract the archive to =.backup= directory
 *** restore the database from =.backup= directory
-**** need to close the current database, delete its files
+**** need to close the current database, rename the directory
 **** call the restore database function
 **** open the newly restored database
+**** delete the old database directory
 *** write a use case and test with mocks
 *** write the flutter interface to invoke this
 ** TODO update to latest rusoto release
-** TODO update to latest serde release
-*** the =serde::export= module is now private
-*** may need to use serde in the domain layer entities
-*** maybe consider an entirely different serde solution
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed

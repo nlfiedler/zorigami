@@ -3,134 +3,176 @@
 // to be serialized, with serde derive pragma.
 //
 // 1. cargo new serdex
-// 2. Add serde to Cargo.toml
+// 2. Add serde with "derive" to Cargo.toml
 // 3. Copy the type definitions to main.rs
 // 4. Add #[derive(Serialize, Deserialize)] to each type
 // 5. cargo expand
-// 6. Copy the results here, stripping away the compiler directives
+// 6. Copy the results here
 //
 use crate::domain::entities::Checksum;
 
-impl serde::Serialize for Checksum {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match *self {
-            Checksum::SHA1(ref s) => serializer.serialize_newtype_variant("Checksum", 0, "SHA1", s),
-            Checksum::SHA256(ref s) => {
-                serializer.serialize_newtype_variant("Checksum", 1, "SHA256", s)
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    #[allow(rust_2018_idioms, clippy::useless_attribute)]
+    extern crate serde as _serde;
+    #[automatically_derived]
+    impl _serde::Serialize for Checksum {
+        fn serialize<__S>(
+            &self,
+            __serializer: __S,
+        ) -> _serde::__private::Result<__S::Ok, __S::Error>
+        where
+            __S: _serde::Serializer,
+        {
+            match *self {
+                Checksum::SHA1(ref __field0) => _serde::Serializer::serialize_newtype_variant(
+                    __serializer,
+                    "Checksum",
+                    0u32,
+                    "SHA1",
+                    __field0,
+                ),
+                Checksum::SHA256(ref __field0) => _serde::Serializer::serialize_newtype_variant(
+                    __serializer,
+                    "Checksum",
+                    1u32,
+                    "SHA256",
+                    __field0,
+                ),
             }
         }
     }
-}
-
-impl<'de> serde::Deserialize<'de> for Checksum {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[allow(non_camel_case_types)]
-        enum __Field {
-            __field0,
-            __field1,
-        }
-        struct __FieldVisitor;
-        impl<'de> serde::de::Visitor<'de> for __FieldVisitor {
-            type Value = __Field;
-            fn expecting(
-                &self,
-                __formatter: &mut serde::export::Formatter,
-            ) -> serde::export::fmt::Result {
-                serde::export::Formatter::write_str(__formatter, "variant identifier")
+};
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    #[allow(rust_2018_idioms, clippy::useless_attribute)]
+    extern crate serde as _serde;
+    #[automatically_derived]
+    impl<'de> _serde::Deserialize<'de> for Checksum {
+        fn deserialize<__D>(__deserializer: __D) -> _serde::__private::Result<Self, __D::Error>
+        where
+            __D: _serde::Deserializer<'de>,
+        {
+            #[allow(non_camel_case_types)]
+            enum __Field {
+                __field0,
+                __field1,
             }
-            fn visit_u64<__E>(self, __value: u64) -> serde::export::Result<Self::Value, __E>
-            where
-                __E: serde::de::Error,
-            {
-                match __value {
-                    0u64 => serde::export::Ok(__Field::__field0),
-                    1u64 => serde::export::Ok(__Field::__field1),
-                    _ => serde::export::Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Unsigned(__value),
-                        &"variant index 0 <= i < 2",
-                    )),
+            struct __FieldVisitor;
+            impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                type Value = __Field;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(__formatter, "variant identifier")
                 }
-            }
-            fn visit_str<__E>(self, __value: &str) -> serde::export::Result<Self::Value, __E>
-            where
-                __E: serde::de::Error,
-            {
-                match __value {
-                    "SHA1" => serde::export::Ok(__Field::__field0),
-                    "SHA256" => serde::export::Ok(__Field::__field1),
-                    _ => serde::export::Err(serde::de::Error::unknown_variant(__value, VARIANTS)),
+                fn visit_u64<__E>(self, __value: u64) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        0u64 => _serde::__private::Ok(__Field::__field0),
+                        1u64 => _serde::__private::Ok(__Field::__field1),
+                        _ => _serde::__private::Err(_serde::de::Error::invalid_value(
+                            _serde::de::Unexpected::Unsigned(__value),
+                            &"variant index 0 <= i < 2",
+                        )),
+                    }
                 }
-            }
-            fn visit_bytes<__E>(self, __value: &[u8]) -> serde::export::Result<Self::Value, __E>
-            where
-                __E: serde::de::Error,
-            {
-                match __value {
-                    b"SHA1" => serde::export::Ok(__Field::__field0),
-                    b"SHA256" => serde::export::Ok(__Field::__field1),
-                    _ => {
-                        let __value = &serde::export::from_utf8_lossy(__value);
-                        serde::export::Err(serde::de::Error::unknown_variant(__value, VARIANTS))
+                fn visit_str<__E>(
+                    self,
+                    __value: &str,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        "SHA1" => _serde::__private::Ok(__Field::__field0),
+                        "SHA256" => _serde::__private::Ok(__Field::__field1),
+                        _ => _serde::__private::Err(_serde::de::Error::unknown_variant(
+                            __value, VARIANTS,
+                        )),
+                    }
+                }
+                fn visit_bytes<__E>(
+                    self,
+                    __value: &[u8],
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        b"SHA1" => _serde::__private::Ok(__Field::__field0),
+                        b"SHA256" => _serde::__private::Ok(__Field::__field1),
+                        _ => {
+                            let __value = &_serde::__private::from_utf8_lossy(__value);
+                            _serde::__private::Err(_serde::de::Error::unknown_variant(
+                                __value, VARIANTS,
+                            ))
+                        }
                     }
                 }
             }
-        }
-        impl<'de> serde::Deserialize<'de> for __Field {
-            #[inline]
-            fn deserialize<__D>(__deserializer: __D) -> serde::export::Result<Self, __D::Error>
-            where
-                __D: serde::Deserializer<'de>,
-            {
-                serde::Deserializer::deserialize_identifier(__deserializer, __FieldVisitor)
-            }
-        }
-        struct __Visitor<'de> {
-            marker: serde::export::PhantomData<Checksum>,
-            lifetime: serde::export::PhantomData<&'de ()>,
-        }
-        impl<'de> serde::de::Visitor<'de> for __Visitor<'de> {
-            type Value = Checksum;
-            fn expecting(
-                &self,
-                __formatter: &mut serde::export::Formatter,
-            ) -> serde::export::fmt::Result {
-                serde::export::Formatter::write_str(__formatter, "enum Checksum")
-            }
-            fn visit_enum<__A>(self, __data: __A) -> serde::export::Result<Self::Value, __A::Error>
-            where
-                __A: serde::de::EnumAccess<'de>,
-            {
-                match match serde::de::EnumAccess::variant(__data) {
-                    serde::export::Ok(__val) => __val,
-                    serde::export::Err(__err) => {
-                        return serde::export::Err(__err);
-                    }
-                } {
-                    (__Field::__field0, __variant) => serde::export::Result::map(
-                        serde::de::VariantAccess::newtype_variant::<String>(__variant),
-                        Checksum::SHA1,
-                    ),
-                    (__Field::__field1, __variant) => serde::export::Result::map(
-                        serde::de::VariantAccess::newtype_variant::<String>(__variant),
-                        Checksum::SHA256,
-                    ),
+            impl<'de> _serde::Deserialize<'de> for __Field {
+                #[inline]
+                fn deserialize<__D>(
+                    __deserializer: __D,
+                ) -> _serde::__private::Result<Self, __D::Error>
+                where
+                    __D: _serde::Deserializer<'de>,
+                {
+                    _serde::Deserializer::deserialize_identifier(__deserializer, __FieldVisitor)
                 }
             }
+            struct __Visitor<'de> {
+                marker: _serde::__private::PhantomData<Checksum>,
+                lifetime: _serde::__private::PhantomData<&'de ()>,
+            }
+            impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                type Value = Checksum;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(__formatter, "enum Checksum")
+                }
+                fn visit_enum<__A>(
+                    self,
+                    __data: __A,
+                ) -> _serde::__private::Result<Self::Value, __A::Error>
+                where
+                    __A: _serde::de::EnumAccess<'de>,
+                {
+                    match match _serde::de::EnumAccess::variant(__data) {
+                        _serde::__private::Ok(__val) => __val,
+                        _serde::__private::Err(__err) => {
+                            return _serde::__private::Err(__err);
+                        }
+                    } {
+                        (__Field::__field0, __variant) => _serde::__private::Result::map(
+                            _serde::de::VariantAccess::newtype_variant::<String>(__variant),
+                            Checksum::SHA1,
+                        ),
+                        (__Field::__field1, __variant) => _serde::__private::Result::map(
+                            _serde::de::VariantAccess::newtype_variant::<String>(__variant),
+                            Checksum::SHA256,
+                        ),
+                    }
+                }
+            }
+            const VARIANTS: &'static [&'static str] = &["SHA1", "SHA256"];
+            _serde::Deserializer::deserialize_enum(
+                __deserializer,
+                "Checksum",
+                VARIANTS,
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<Checksum>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
         }
-        const VARIANTS: &'static [&'static str] = &["SHA1", "SHA256"];
-        deserializer.deserialize_enum(
-            "Checksum",
-            VARIANTS,
-            __Visitor {
-                marker: serde::export::PhantomData::<Checksum>,
-                lifetime: serde::export::PhantomData,
-            },
-        )
     }
-}
+};

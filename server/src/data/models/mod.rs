@@ -30,7 +30,7 @@ mod checksum;
 
 mod pack_location;
 // #[derive(Serialize, Deserialize)]
-// pub struct PackLocationDef {
+// pub struct PackLocation {
 //     #[serde(rename = "s")]
 //     pub store: String,
 //     #[serde(rename = "b")]
