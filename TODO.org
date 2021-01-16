@@ -11,7 +11,6 @@
 **** delete the old database directory
 *** write a use case and test with mocks
 *** write the flutter interface to invoke this
-** TODO update to latest rusoto release
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed

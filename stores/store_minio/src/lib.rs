@@ -191,6 +191,7 @@ impl MinioStore {
         let client = self.connect();
         let request = DeleteBucketRequest {
             bucket: bucket.to_owned(),
+            expected_bucket_owner: None,
         };
         // wait for the future(s) to complete
         let result = block_on(client.delete_bucket(request))?;
@@ -243,8 +244,7 @@ fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
         // us to wait for this future (and everything it spawns) to complete
         // synchronously. Must enable the io and time features otherwise the
         // runtime does not really start.
-        let mut runtime = tokio::runtime::Builder::new()
-            .basic_scheduler()
+        let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
         Ok(runtime.block_on(future))
