@@ -1,7 +1,4 @@
 * Tasks
-** Flutter updates
-*** flutter form build has major updates
-*** look at all of the other dependencies
 ** Pack store bucket efficiency
 *** creating too many buckets, after 6 months over 700 buckets on google
 **** there are only 238 buckets in the safe and minio
@@ -118,6 +115,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** add hints to improve the presentation of information
 ***** configuration panel
 ***** snapshot browser
+** Flutter and form builder
+*** See comments in =pubspec.yaml= regarding =flutter_form_builder=
+*** Need *beta* channel for web platform support
+*** However, any flutter more recent than *stable* breaks =flutter_form_builder=
+*** Someday, when flutter is stable and =flutter_form_builder= works with it, update
 ** Initial Configuration
 *** Walk user through pack store and data set creation
 *** Offer path for restoring database from existing pack store

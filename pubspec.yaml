@@ -15,9 +15,17 @@ dependencies:
 
   equatable: ^1.2.5
   flutter_bloc: ^6.1.1
-  # workaround for https://github.com/danvick/flutter_form_builder/issues/382
-  # flutter_form_builder: ^3.14.0-alpha.2
-  # workaround for https://github.com/danvick/flutter_form_builder/issues/465
+  #
+  # Flutter and dependencies are complicated:
+  #
+  # 1) Flutter web support requires *beta* channel
+  # 2) Beta/dev versions of Flutter have breaking API changes
+  # 3) flutter_form_builder is especially sensitive to flutter API changes
+  # 4) Even more recent flutter versions break dependencies in other ways
+  #
+  # c.f. https://github.com/danvick/flutter_form_builder/issues/382
+  # c.f. https://github.com/danvick/flutter_form_builder/issues/465
+  #
   flutter_form_builder:
     git:
       url: https://github.com/knaeckeKami/flutter_form_builder.git
