@@ -1,10 +1,5 @@
 * Tasks
 ** Flutter updates
-*** Set flutter SDK version in docker build for consistent results
-**** c.f. https://github.com/flutter/flutter/issues/64238
-**** use https://pub.dev/packages/fvm
-**** =fvm install 1.26.0-1.0.pre=
-**** update instructions in =README.md=
 *** flutter form build has major updates
 *** look at all of the other dependencies
 ** Pack store bucket efficiency

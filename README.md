@@ -9,8 +9,21 @@ where it should go.
 ### Prerequisites
 
 * [Rust](https://www.rust-lang.org) stable (2018 edition)
-* [Flutter](https://flutter.dev) beta channel
-    - Enable the **web** configuration
+* [Flutter](https://flutter.dev) **dev** channel
+
+### Initial Setup
+
+Use [fvm](https://pub.dev/packages/fvm) to select a specific version of Flutter
+to be installed and used by the application. This is the most reliable method
+and produces consistent results when building the application.
+
+```shell
+$ brew install dart
+$ pub global activate fvm
+$ fvm install 1.26.0-1.0.pre
+$ fvm flutter config --enable-macos-desktop
+$ fvm flutter config --enable-web
+```
 
 #### Windows
 
@@ -55,10 +68,10 @@ $ cargo test -p store_minio
 ### Building, Testing, Starting the Frontend
 
 ```shell
-$ flutter pub get
-$ flutter pub run environment_config:generate
-$ flutter test
-$ flutter run -d chrome
+$ fvm flutter pub get
+$ fvm flutter pub run environment_config:generate
+$ fvm flutter test
+$ fvm flutter run -d chrome
 ```
 
 ### Docker
