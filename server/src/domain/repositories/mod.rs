@@ -35,7 +35,7 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve the digest of the latest snapshot for the dataset with the given key.
     fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error>;
 
-    /// Remvoe the digest of the latest snapshot for the dataset with the given key.
+    /// Remove the digest of the latest snapshot for the dataset with the given key.
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error>;
 
     /// Insert the given chunk into the repository, if one with the same digest does
@@ -117,8 +117,11 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 
-    /// Create a backup of the database, returning its path.
-    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error>;
+    /// Create a backup of the database, returning the path of the archive file.
+    fn create_backup(&self) -> Result<tempfile::TempPath, Error>;
+
+    /// Restore the database from the provided archive file.
+    fn restore_from_backup(&self, path: &Path) -> Result<(), Error>;
 }
 
 ///
@@ -148,4 +151,19 @@ pub trait PackRepository {
     /// Only tests the connection and read access by listing buckets. Any errors
     /// raised by the data source are returned as-is.
     fn test_store(&self, store: &str) -> Result<(), Error>;
+
+    /// Store the compressed database snapshot in the pack stores.
+    ///
+    /// This archive should be stored in such a manner that it can be retrieved
+    /// using only the computer identifier.
+    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<(), Error>;
+
+    /// Retrieve the most recent database snapshot for the given computer.
+    ///
+    /// Uses a random pack store to fetch the database. It is expected that only
+    /// one pack store is defined at this point and the user has configured the
+    /// most suitable pack store in order to retrieve the database.
+    ///
+    /// Returns the path to the retrieved archive file.
+    fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error>;
 }

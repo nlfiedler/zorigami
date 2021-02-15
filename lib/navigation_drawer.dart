@@ -13,7 +13,7 @@ class NavigationDrawer extends StatelessWidget {
         children: <Widget>[
           Configuration(),
           ListTile(
-            leading: Icon(Icons.history),
+            leading: Icon(Icons.timeline),
             title: Text('Snapshots'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context, '/', ModalRoute.withName('/')),
@@ -29,6 +29,12 @@ class NavigationDrawer extends StatelessWidget {
             title: Text('Pack Stores'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context, '/stores', ModalRoute.withName('/')),
+          ),
+          ListTile(
+            leading: Icon(Icons.restore),
+            title: Text('Database Restore'),
+            onTap: () => Navigator.pushNamedAndRemoveUntil(
+                context, '/restore', ModalRoute.withName('/')),
           ),
         ],
       ),

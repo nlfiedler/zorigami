@@ -35,10 +35,12 @@ class _PackStoresListState extends State<PackStoresList> {
       widget.stores.map((e) {
         final title = packStoreTitle(e);
         final subtitle = packStoreSubtitle(e);
-        final headerValue = ListTile(
-          leading: Icon(Icons.archive),
-          title: Text(title),
-          subtitle: Text(subtitle),
+        final headerValue = Card(
+          child: ListTile(
+            leading: Icon(Icons.archive),
+            title: Text(title),
+            subtitle: Text(subtitle),
+          ),
         );
         final expandedValue = Card(
           child: Padding(
@@ -184,40 +186,6 @@ class PackStoreListDetails extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-String packStoreTitle(PackStore store) {
-  return store.label + ' :: ' + prettyKind(store.kind);
-}
-
-String packStoreSubtitle(PackStore store) {
-  switch (store.kind) {
-    case StoreKind.google:
-      return store.options['project'];
-    case StoreKind.local:
-      return store.options['basepath'];
-    case StoreKind.minio:
-      return store.options['endpoint'];
-    case StoreKind.sftp:
-      return store.options['remote_addr'];
-    default:
-      throw ArgumentError('kind is not recognized');
-  }
-}
-
-String prettyKind(StoreKind kind) {
-  switch (kind) {
-    case StoreKind.local:
-      return 'local disk';
-    case StoreKind.google:
-      return 'remote google';
-    case StoreKind.minio:
-      return 'remote minio';
-    case StoreKind.sftp:
-      return 'remote SFTP';
-    default:
-      throw ArgumentError('kind is not recognized');
   }
 }
 

@@ -12,11 +12,11 @@ use env_logger;
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
 use lazy_static::lazy_static;
-use log::info;
+use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::managers::process;
-use server::domain::managers::state;
+use server::domain::managers::state::{self, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use server::preso::graphql;
 use std::env;
@@ -41,6 +41,12 @@ static DEFAULT_WEB_PATH: &str = "../web/";
 static DEFAULT_WEB_PATH: &str = "./web/";
 
 lazy_static! {
+    // Application state store.
+    static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    // Supervisor for managing the running of backups.
+    static ref PROCESSOR: Box<dyn process::Processor> = {
+        Box::new(process::ProcessorImpl::new(STATE_STORE.clone()))
+    };
     // Path to the database files.
     static ref DB_PATH: PathBuf = {
         dotenv::dotenv().ok();
@@ -73,7 +79,8 @@ async fn graphql(
 ) -> Result<HttpResponse> {
     let source = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
-    let ctx = Arc::new(graphql::GraphContext::new(datasource));
+    let state = STATE_STORE.clone();
+    let ctx = Arc::new(graphql::GraphContext::new(datasource, state));
     let res = data.execute(&st, &ctx);
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
@@ -81,7 +88,26 @@ async fn graphql(
         .body(body))
 }
 
-fn log_state_changes(state: &state::State) {
+// Start and stop the supervisor based on application state changes.
+fn manage_supervisor(state: &state::State, _previous: Option<&state::State>) {
+    if state.supervisor == state::SupervisorState::Stopping {
+        if let Err(err) = PROCESSOR.stop() {
+            error!("error stopping supervisor: {}", err);
+        }
+    } else if state.supervisor == state::SupervisorState::Starting {
+        let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
+        let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+        if let Err(err) = PROCESSOR.start(dbase) {
+            error!("error starting supervisor: {}", err);
+        }
+    }
+}
+
+// Log interesting changes in the application state (i.e. backup status).
+fn log_state_changes(state: &state::State, _previous: Option<&state::State>) {
+    // Ideally would compare state with previous to know if there is really
+    // anything worth reporting, but that's more trouble than it's worth.
     for (key, backup) in state.active_datasets() {
         if let Some(end_time) = backup.end_time() {
             // the backup finished recently, log one last entry
@@ -115,18 +141,12 @@ async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
     Ok(file.use_last_modified(true))
 }
 
-fn start_supervisor() {
-    let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-    process::start(dbase).unwrap();
-}
-
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     env_logger::init();
-    state::subscribe("main-logger", log_state_changes);
-    start_supervisor();
+    STATE_STORE.subscribe("super-manager", manage_supervisor);
+    STATE_STORE.subscribe("backup-logger", log_state_changes);
+    STATE_STORE.supervisor_event(state::SupervisorAction::Start);
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
     let addr = format!("{}:{}", host, port);

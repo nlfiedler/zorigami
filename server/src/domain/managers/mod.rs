@@ -105,42 +105,6 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
 }
 
 ///
-/// Return the unique bucket name for this computer and user.
-///
-pub fn computer_bucket_name(unique_id: &str) -> String {
-    match blob_uuid::to_uuid(unique_id) {
-        Ok(uuid) => uuid.to_simple().to_string(),
-        Err(err) => {
-            error!("failed to convert unique ID: {:?}", err);
-            generate_ulid_string().to_lowercase()
-        }
-    }
-}
-
-///
-/// Create a compressed tar file for the given directory structure.
-///
-pub fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
-    let file = File::create(outfile)?;
-    let encoder = ZlibEncoder::new(file, Compression::default());
-    let mut builder = Builder::new(encoder);
-    builder.append_dir_all(".", basepath)?;
-    let _output = builder.into_inner()?;
-    Ok(())
-}
-
-///
-/// Extract the contents of the compressed tar file to the given directory.
-///
-pub fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
-    let file = File::open(infile)?;
-    let decoder = ZlibDecoder::new(file);
-    let mut ar = Archive::new(decoder);
-    ar.unpack(outdir)?;
-    Ok(())
-}
-
-///
 /// Compress the file at the given path using zlib.
 ///
 pub fn compress_file(infile: &Path, outfile: &Path) -> Result<(), Error> {
@@ -495,48 +459,6 @@ mod tests {
         let salt = pwhash::gen_salt();
         let result = hash_password(passwd, &salt)?;
         assert_eq!(result.as_ref().len(), secretstream::KEYBYTES);
-        Ok(())
-    }
-
-    #[test]
-    fn test_tar_file() -> Result<(), Error> {
-        let outdir = tempdir()?;
-        let packfile = outdir.path().join("filename.tz");
-        create_tar(Path::new("../test/fixtures"), &packfile)?;
-        extract_tar(&packfile, outdir.path())?;
-
-        let file = outdir.path().join("SekienAkashita.jpg");
-        let chksum = Checksum::sha256_from_file(&file)?;
-        assert_eq!(
-            chksum.to_string(),
-            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
-        );
-        let file = outdir.path().join("lorem-ipsum.txt");
-        let chksum = Checksum::sha256_from_file(&file)?;
-        #[cfg(target_family = "unix")]
-        assert_eq!(
-            chksum.to_string(),
-            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
-        );
-        // line endings differ
-        #[cfg(target_family = "windows")]
-        assert_eq!(
-            chksum.to_string(),
-            "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
-        );
-        let file = outdir.path().join("washington-journal.txt");
-        let chksum = Checksum::sha256_from_file(&file)?;
-        #[cfg(target_family = "unix")]
-        assert_eq!(
-            chksum.to_string(),
-            "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
-        );
-        #[cfg(target_family = "windows")]
-        assert_eq!(
-            chksum.to_string(),
-            "sha256-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
-        );
-
         Ok(())
     }
 

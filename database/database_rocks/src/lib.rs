@@ -4,7 +4,7 @@
 
 //! Manages instances of RocksDB associated with file paths.
 
-use failure::Error;
+use failure::{err_msg, Error};
 use lazy_static::lazy_static;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::{Options, DB};
@@ -72,7 +72,7 @@ impl database_core::Database for Database {
             backup_path
         });
         let mut backup_engine = BackupEngine::open(&backup_opts, &backup_path)?;
-        backup_engine.create_new_backup(&self.db)?;
+        backup_engine.create_new_backup_flush(&self.db, true)?;
         backup_engine.purge_old_backups(1)?;
         Ok(backup_path)
     }
@@ -81,7 +81,26 @@ impl database_core::Database for Database {
     ///
     /// If `path` is `None`, the default behavior is to add the extension
     /// `.backup` to the database path.
+    ///
+    /// There must be zero strong references to the database when this function
+    /// is invoked, otherwise the RocksDB backup cannot acquire an exclusive
+    /// lock. The caller must open the database again via `new()`.
     fn restore_from_backup(path: Option<PathBuf>, db_path: &Path) -> Result<(), Error> {
+        // Release any weak database references so that when the caller "opens"
+        // it again, they get a new instance and thus see the restored data.
+        // From the RocksDB wiki: "You must reopen any live databases to see the
+        // restored data."
+        let mut db_refs = DBASE_REFS.lock().unwrap();
+        if let Some(reph) = db_refs.remove(db_path) {
+            // Ensure that there are no strong references (i.e. the database is
+            // not currently opened) otherwise the backup will fail to get the
+            // exclusive lock.
+            let strong_count = reph.strong_count();
+            if strong_count != 0 {
+                return Err(err_msg(format!("non-zero strong count: {}", strong_count)));
+            }
+        }
+        drop(db_refs);
         let backup_opts = BackupEngineOptions::default();
         let backup_path = path.unwrap_or_else(|| {
             let mut backup_path: PathBuf = PathBuf::from(db_path);
@@ -89,8 +108,7 @@ impl database_core::Database for Database {
             backup_path
         });
         let mut backup_engine = BackupEngine::open(&backup_opts, backup_path).unwrap();
-        let mut restore_option = rocksdb::backup::RestoreOptions::default();
-        restore_option.set_keep_log_files(true);
+        let restore_option = rocksdb::backup::RestoreOptions::default();
         backup_engine.restore_from_latest_backup(db_path, db_path, &restore_option)?;
         Ok(())
     }

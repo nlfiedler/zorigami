@@ -8,6 +8,7 @@ import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class SnapshotRemoteDataSource {
   Future<SnapshotModel> getSnapshot(String checksum);
+  Future<String> restoreDatabase(String storeId);
   Future<String> restoreFile(String checksum, String filepath, String dataset);
 }
 
@@ -47,6 +48,27 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
   }
 
   @override
+  Future<String> restoreDatabase(String storeId) async {
+    final query = r'''
+      mutation Restore($storeId: String!) {
+        restoreDatabase(storeId: $storeId)
+      }
+    ''';
+    final mutationOptions = MutationOptions(
+      documentNode: gql(query),
+      variables: <String, dynamic>{
+        'storeId': storeId,
+      },
+      fetchPolicy: FetchPolicy.noCache,
+    );
+    final QueryResult result = await client.mutate(mutationOptions);
+    if (result.hasException) {
+      throw ServerException(result.exception.toString());
+    }
+    return result.data['restoreDatabase'];
+  }
+
+  @override
   Future<String> restoreFile(
       String checksum, String filepath, String dataset) async {
     final query = r'''
@@ -54,7 +76,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         restoreFile(digest: $digest, filepath: $filepath, dataset: $dataset)
       }
     ''';
-    final queryOptions = QueryOptions(
+    final mutationOptions = MutationOptions(
       documentNode: gql(query),
       variables: <String, dynamic>{
         'digest': checksum,
@@ -63,7 +85,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
       },
       fetchPolicy: FetchPolicy.noCache,
     );
-    final QueryResult result = await client.query(queryOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }

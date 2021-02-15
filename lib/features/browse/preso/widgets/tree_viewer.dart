@@ -4,15 +4,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 class TreeViewer extends StatelessWidget {
   final String rootTree;
+  final DataSet dataset;
 
-  TreeViewer({Key key, @required this.rootTree}) : super(key: key);
+  TreeViewer({
+    Key key,
+    @required this.dataset,
+    @required this.rootTree,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +51,7 @@ class TreeViewer extends StatelessWidget {
           if (state is Loaded) {
             return Column(
               children: <Widget>[
-                TreePath(state: state),
+                TreePath(dataset: dataset, state: state),
                 Expanded(child: TreeTable(state: state)),
               ],
             );
@@ -60,9 +64,13 @@ class TreeViewer extends StatelessWidget {
 }
 
 class TreePath extends StatelessWidget {
+  final DataSet dataset;
   final Loaded state;
 
-  TreePath({@required this.state});
+  TreePath({
+    @required this.dataset,
+    @required this.state,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +93,6 @@ class TreePath extends StatelessWidget {
             label: const Text('Put Back'),
             onPressed: state.selections.isNotEmpty
                 ? () {
-                    final dataset =
-                        Provider.of<DataSet>(context, listen: false);
                     BlocProvider.of<TreeBrowserBloc>(context).add(
                       RestoreSelections(datasetKey: dataset.key),
                     );

@@ -74,16 +74,32 @@ String getSchedule(DataSet dataset) {
 }
 
 Widget buildHelp(BuildContext context) {
-  return Card(
-    child: ListTile(
-      leading: Icon(Icons.dns),
-      title: Text('No data sets found'),
-      subtitle: Text(
-        'First configure one or more pack stores, then create a data set using those stores.',
+  return ListView(
+    children: [
+      Card(
+        child: ListTile(
+          leading: Icon(Icons.dns),
+          title: Text('Create Pack Store'),
+          subtitle: Text(
+            'Click here to create a pack store',
+          ),
+          trailing: Icon(Icons.chevron_right),
+          onTap: () => Navigator.pushNamedAndRemoveUntil(
+              context, '/stores', ModalRoute.withName('/')),
+        ),
       ),
-      trailing: Icon(Icons.chevron_right),
-      onTap: () => Navigator.pushNamedAndRemoveUntil(
-          context, '/stores', ModalRoute.withName('/')),
-    ),
+      Card(
+        child: ListTile(
+          leading: Icon(Icons.dns),
+          title: Text('Restore Database'),
+          subtitle: Text(
+            'Click here to restore a database from a pack store',
+          ),
+          trailing: Icon(Icons.chevron_right),
+          onTap: () => Navigator.pushNamedAndRemoveUntil(
+              context, '/restore', ModalRoute.withName('/')),
+        ),
+      ),
+    ],
   );
 }

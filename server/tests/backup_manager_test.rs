@@ -11,6 +11,7 @@ use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
 use server::domain::managers::backup::*;
 use server::domain::managers::restore::*;
+use server::domain::managers::state::{StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use std::collections::HashMap;
 use std::fs;
@@ -564,7 +565,8 @@ fn test_continue_backup() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
     let first_sha1 = backup_opt.unwrap();
 
@@ -574,7 +576,7 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_snapshot(&snapshot)?;
 
     // run the backup again to make sure it is finished
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();
     assert_eq!(first_sha1, second_sha1);
@@ -624,8 +626,9 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     // return an "out of time" error
     let dest: PathBuf = [basepath, "SekienAkashita.jpg"].iter().collect();
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let stop_time = Some(chrono::Utc::now() - chrono::Duration::minutes(5));
-    match perform_backup(&mut dataset, &dbase, "keyboard cat", stop_time) {
+    match perform_backup(&mut dataset, &dbase, &state, "keyboard cat", stop_time) {
         Ok(_) => panic!("expected backup to return an error"),
         Err(err) => assert!(err.downcast::<OutOfTimeFailure>().is_ok()),
     }
@@ -671,7 +674,8 @@ fn test_backup_empty_file() -> Result<(), Error> {
     // perform a backup where there is only an empty file
     let dest: PathBuf = [basepath, "zero-length.txt"].iter().collect();
     assert!(fs::write(dest, vec![]).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     // it did not blow up, so that counts as passing
     assert!(backup_opt.is_some());
     Ok(())
@@ -714,7 +718,8 @@ fn test_backup_recover_errorred_files() -> Result<(), Error> {
     // perform the first backup
     let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // perform the second backup with a file that is not readable
@@ -724,7 +729,7 @@ fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // try to restore the file, it should fail
@@ -744,7 +749,7 @@ fn test_backup_recover_errorred_files() -> Result<(), Error> {
 
     // fix the file permissions and perform the third backup
     fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, "keyboard cat", None)?;
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
 
     // restore the file from the third snapshot

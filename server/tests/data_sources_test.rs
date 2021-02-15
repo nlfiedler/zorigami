@@ -4,7 +4,7 @@
 mod common;
 
 use common::DBPath;
-use server::data::sources::{self, EntityDataSource, EntityDataSourceImpl};
+use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::entities::{self, Checksum};
 use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
@@ -330,13 +330,14 @@ fn test_backup_restore() {
         .create_backup(Some(backup_path.as_ref().to_path_buf()))
         .unwrap();
 
-    // restore from backup (to a new path)
-    let new_path = DBPath::new("_test_backup_restore_new");
-    sources::restore_database(Some(backup_path.as_ref().to_path_buf()), new_path.as_ref()).unwrap();
+    // modify the database
+    assert!(datasource.put_computer_id("charlie", "remotehost").is_ok());
 
-    // open that new database and verify contents
-    let new_base = EntityDataSourceImpl::new(&new_path).unwrap();
-    match new_base.get_computer_id("charlie") {
+    // restore from backup
+    datasource.restore_from_backup(Some(backup_path.as_ref().to_path_buf())).unwrap();
+
+    // verify contents of restored database
+    match datasource.get_computer_id("charlie") {
         Ok(Some(value)) => assert_eq!(value, "localhost"),
         Ok(None) => panic!("missing computer id record"),
         Err(e) => panic!("error: {}", e),

@@ -5,26 +5,136 @@
 //! The `process` module spawns threads to perform backups, ensuring backups are
 //! performed for each dataset according to a schedule.
 
-use super::state::{self, Action};
+use super::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use chrono::prelude::*;
 use failure::{err_msg, Error};
-use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
-use std::sync::Arc;
+use log::{debug, error, info, trace};
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+///
+/// `Processor` manages a supervised actor which in turn spawns actors to
+/// process backups according to their schedules.
+///
+#[cfg_attr(test, automock)]
+pub trait Processor: Send + Sync {
+    /// Start a supervisor that will run scheduled backups.
+    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
+
+    /// Signal the supervisor to stop and release the database reference.
+    fn stop(&self) -> Result<(), Error>;
+}
+
+///
+/// Concrete implementation of `Processor` that uses the actix actor framework
+/// to spawn threads and send messages to actors to manage the backups according
+/// to their schedules.
+///
+pub struct ProcessorImpl {
+    // Arbiter manages the supervised actor that initiates backups.
+    runner: Arbiter,
+    // Application state to be provided to supervisor and runners.
+    state: Arc<dyn StateStore>,
+    // Address of the supervisor actor, if it has been started.
+    super_addr: Mutex<Option<Addr<BackupSupervisor>>>,
+}
+
+impl ProcessorImpl {
+    /// Construct a new instance of ProcessorImpl.
+    pub fn new(state: Arc<dyn StateStore>) -> Self {
+        // create an Arbiter to manage an event loop on a new thread
+        Self {
+            runner: Arbiter::new(),
+            state: state.clone(),
+            super_addr: Mutex::new(None),
+        }
+    }
+}
+
+impl Processor for ProcessorImpl {
+    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
+        let mut su_addr = self.super_addr.lock().unwrap();
+        if su_addr.is_none() {
+            // start supervisor within the arbiter created earlier
+            let state = self.state.clone();
+            let addr = actix::Supervisor::start_in_arbiter(&self.runner, move |_| {
+                BackupSupervisor::new(repo, state)
+            });
+            *su_addr = Some(addr);
+        }
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), Error> {
+        fn err_convert(err: SendError<Stop>) -> Error {
+            err_msg(format!("ProcessorImpl.stop(): {:?}", err))
+        }
+        let mut su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.take() {
+            addr.try_send(Stop()).map_err(err_convert)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[derive(Message)]
 #[rtype(result = "()")]
-struct Start(Arc<dyn RecordRepository>);
+struct Stop();
 
-#[derive(Default)]
-struct MySupervisor {
-    dbase: Option<Arc<dyn RecordRepository>>,
+//
+// Supervised actor that starts another actor to perform backups according to
+// the schedules defined by the user. Uses an interval timer to wake up
+// periodically to check the database.
+//
+struct BackupSupervisor {
+    // Database connection for querying datasets.
+    dbase: Arc<dyn RecordRepository>,
+    // Application state for signaling changes in backup status.
+    state: Arc<dyn StateStore>,
+    // Arbiter manages the runner actors that perform the backups.
+    runner: Arbiter,
+}
+
+impl BackupSupervisor {
+    fn new(repo: Arc<dyn RecordRepository>, state: Arc<dyn StateStore>) -> Self {
+        // Create an Arbiter to manage an event loop on a new thread, keeping
+        // the backup runners separate from the supervisor since they manage a
+        // significant workload for an extended period of time.
+        Self {
+            dbase: repo,
+            state,
+            runner: Arbiter::new(),
+        }
+    }
+
+    /// Begin the backup process for all datasets that are ready to run.
+    fn start_due_datasets(&self) -> Result<(), Error> {
+        let datasets = self.dbase.get_datasets()?;
+        let state = self.state.clone();
+        for set in datasets {
+            if let Some(schedule) = should_run(&self.dbase, &state, &set)? {
+                let msg = StartBackup {
+                    dbase: self.dbase.clone(),
+                    state: state.clone(),
+                    dataset: set,
+                    schedule,
+                };
+                let addr = Actor::start_in_arbiter(&self.runner, |_| BackupRunner {});
+                if let Err(err) = addr.try_send(msg) {
+                    return Err(err_msg(format!("error sending message to runner: {}", err)));
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -32,47 +142,34 @@ static SUPERVISOR_INTERVAL: u64 = 100;
 #[cfg(not(test))]
 static SUPERVISOR_INTERVAL: u64 = 300_000;
 
-impl Actor for MySupervisor {
+impl Actor for BackupSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        debug!("supervisor actor started");
+        debug!("supervisor started");
+        self.state.supervisor_event(SupervisorAction::Started);
         ctx.run_interval(Duration::from_millis(SUPERVISOR_INTERVAL), |this, _ctx| {
             trace!("supervisor interval fired");
-            if let Some(dbase) = this.dbase.as_ref() {
-                if let Err(err) = start_due_datasets(dbase.clone()) {
-                    error!("failed to check datasets: {}", err);
-                }
-            } else {
-                warn!("supervisor does not yet have a database path");
+            if let Err(err) = this.start_due_datasets() {
+                error!("failed to check datasets: {}", err);
             }
         });
     }
 }
 
-impl Supervised for MySupervisor {
-    fn restarting(&mut self, _ctx: &mut Context<MySupervisor>) {
-        debug!("supervisor actor restarting");
+impl Supervised for BackupSupervisor {
+    fn restarting(&mut self, _ctx: &mut Context<BackupSupervisor>) {
+        debug!("supervisor restarting");
     }
 }
 
-impl Handler<Start> for MySupervisor {
+impl Handler<Stop> for BackupSupervisor {
     type Result = ();
 
-    fn handle(&mut self, msg: Start, _ctx: &mut Context<MySupervisor>) {
-        debug!("supervisor received start message");
-        //
-        // Previously this code was managing the database instance, but then
-        // everything was changed for Clean Architecture.
-        //
-        // It is worth noting that opening and closing the database led to
-        // subtle timing issues with the supervisor and arbiter threads opening
-        // and closing databases at the same time. Would occasionally fail to
-        // get the exclusive lock when opening the database.
-        //
-        // Also, opening the database repeatedly seems to create many log files.
-        //
-        self.dbase = Some(msg.0);
+    fn handle(&mut self, _msg: Stop, ctx: &mut Context<BackupSupervisor>) {
+        debug!("supervisor received stop message");
+        self.state.supervisor_event(SupervisorAction::Stopped);
+        ctx.stop();
     }
 }
 
@@ -80,90 +177,52 @@ impl Handler<Start> for MySupervisor {
 #[rtype(result = "()")]
 struct StartBackup {
     dbase: Arc<dyn RecordRepository>,
+    state: Arc<dyn StateStore>,
     dataset: Dataset,
     schedule: Schedule,
 }
 
-struct Runner;
+//
+// Actor that performs a single backup of a dataset and then stops.
+//
+struct BackupRunner;
 
-impl Actor for Runner {
+impl Actor for BackupRunner {
     type Context = Context<Self>;
 }
 
-impl Handler<StartBackup> for Runner {
+impl Handler<StartBackup> for BackupRunner {
     type Result = ();
 
-    fn handle(&mut self, msg: StartBackup, ctx: &mut Context<Runner>) {
-        debug!("runner received backup message");
+    fn handle(&mut self, msg: StartBackup, ctx: &mut Context<BackupRunner>) {
+        debug!("runner received start backup message");
         thread::spawn(|| {
             // Allow the backup process to run an async runtime of its own, if
             // necessary, possibly with a threaded future executor, by spawning
             // it to a separate thread. This helps with some pack stores that
             // call into libraries that return their results as a Future.
-            run_dataset(msg.dbase, msg.dataset.clone(), msg.schedule.clone());
+            run_dataset(
+                msg.dbase,
+                msg.state,
+                msg.dataset.clone(),
+                msg.schedule.clone(),
+            );
         });
         debug!("runner spawned backup process");
         ctx.stop();
     }
 }
 
-lazy_static! {
-    // Address of our supervised actor. Need to keep this around lest our actor
-    // be terminated prematurely by the actix runtime.
-    static ref MY_SUPER: Addr<MySupervisor> = {
-        actix::Supervisor::start(|_| Default::default())
-    };
-    // Arbiter manages the runner actors that perform the backups. This will
-    // manage an event loop on a single thread. To allow for concurrent tasks
-    // use the SyncArbiter, which manages a single type of actor but runs them
-    // on multiple threads.
-    static ref MY_RUNNER: Arbiter = Arbiter::new();
-}
-
-///
-/// Spawn a thread to monitor the datasets, ensuring that backups are started
-/// according to the assigned schedules. If a dataset does not have a schedule
-/// then it is not run automatically by this process.
-///
-pub fn start(repo: Arc<dyn RecordRepository>) -> std::io::Result<()> {
-    thread::spawn(move || {
-        let system = System::new("backup-supervisor");
-        // must send a message to get the system to run our actor
-        if let Err(err) = MY_SUPER.try_send(Start(repo)) {
-            error!("error sending message to supervisor: {}", err);
-        }
-        system.run()
-    });
-    Ok(())
-}
-
-///
-/// Begin the backup process for all datasets that are ready to run.
-///
-fn start_due_datasets(dbase: Arc<dyn RecordRepository>) -> Result<(), Error> {
-    let datasets = dbase.get_datasets()?;
-    for set in datasets {
-        if let Some(schedule) = should_run(&dbase, &set)? {
-            let msg = StartBackup {
-                dbase: dbase.clone(),
-                dataset: set,
-                schedule,
-            };
-            let addr = Actor::start_in_arbiter(&MY_RUNNER, |_| Runner {});
-            if let Err(err) = addr.try_send(msg) {
-                error!("error sending message to runner: {}", err);
-            }
-        }
-    }
-    Ok(())
-}
-
 ///
 /// Check if the given dataset should be processed now.
 ///
-/// Returns the applicative schedule for the same of setting the end time.
+/// Returns the applicative schedule for the purpose of setting the end time.
 ///
-fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option<Schedule>, Error> {
+fn should_run(
+    dbase: &Arc<dyn RecordRepository>,
+    state: &Arc<dyn StateStore>,
+    set: &Dataset,
+) -> Result<Option<Schedule>, Error> {
     if !set.schedules.is_empty() {
         let latest_snapshot = dbase.get_latest_snapshot(&set.id)?;
         let end_time: Option<DateTime<Utc>> = if let Some(checksum) = latest_snapshot {
@@ -174,7 +233,7 @@ fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option
         } else {
             None
         };
-        let redux = state::get_state();
+        let redux = state.get_state();
         let backup_state = redux.backups(&set.id);
         for schedule in set.schedules.iter() {
             // consider if backup is overdue based on snapshot
@@ -201,7 +260,7 @@ fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option
             } else if maybe_run {
                 // maybe the application restarted after a crash
                 debug!("reset missing backup state to start");
-                state::dispatch(Action::StartBackup(set.id.clone()));
+                state.backup_event(BackupAction::Start(set.id.clone()));
             }
             if maybe_run {
                 return Ok(Some(schedule.to_owned()));
@@ -215,14 +274,19 @@ fn should_run(dbase: &Arc<dyn RecordRepository>, set: &Dataset) -> Result<Option
 /// Run the backup procedure for the named dataset. Takes the passphrase from
 /// the environment.
 ///
-fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Schedule) {
+fn run_dataset(
+    dbase: Arc<dyn RecordRepository>,
+    state: Arc<dyn StateStore>,
+    dataset: Dataset,
+    schedule: Schedule,
+) {
     let passphrase = super::get_passphrase();
     info!("dataset {} to be backed up", &dataset.id);
     let start_time = SystemTime::now();
     let stop_time = schedule.stop_time(Utc::now());
     // reset any error state in the backup
-    state::dispatch(Action::RestartBackup(dataset.id.clone()));
-    match super::backup::perform_backup(&dataset, &dbase, &passphrase, stop_time) {
+    state.backup_event(BackupAction::Restart(dataset.id.clone()));
+    match super::backup::perform_backup(&dataset, &dbase, &state, &passphrase, stop_time) {
         Ok(Some(checksum)) => {
             let end_time = SystemTime::now();
             let time_diff = end_time.duration_since(start_time);
@@ -238,13 +302,13 @@ fn run_dataset(dbase: Arc<dyn RecordRepository>, dataset: Dataset, schedule: Sch
             Ok(_) => {
                 info!("backup window has reached its end");
                 // put the backup in the paused state for the time being
-                state::dispatch(Action::PauseBackup(dataset.id.clone()));
+                state.backup_event(BackupAction::Pause(dataset.id.clone()));
             }
             Err(err) => {
                 // here `err` is the original error
                 error!("could not perform backup: {}", err);
                 // put the backup in the error state so we try again
-                state::dispatch(Action::ErrorBackup(dataset.id.clone(), err.to_string()));
+                state.backup_event(BackupAction::Error(dataset.id.clone(), err.to_string()));
             }
         },
     }
@@ -255,13 +319,14 @@ mod tests {
     use super::*;
     use crate::domain::entities::schedule::{Schedule, TimeRange};
     use crate::domain::entities::{Checksum, Snapshot};
+    use crate::domain::managers::state::{StateStore, StateStoreImpl};
     use crate::domain::repositories::MockRecordRepository;
     use std::io;
     use std::path::Path;
     use tempfile::tempdir;
 
     #[actix_rt::test]
-    async fn test_process_start() -> io::Result<()> {
+    async fn test_process_start_stop_restart() -> io::Result<()> {
         // arrange
         let outdir = tempdir()?;
         // need a real path so the backup manager can create a workspace
@@ -275,18 +340,27 @@ mod tests {
         mock.expect_get_latest_snapshot()
             .withf(move |id| id == dataset_id)
             .returning(|_| Ok(None));
-        // The backup manager has started doing its thing, so we can cause it to
-        // exit on an error, we are done with the test at this point as we have
-        // effectively demonstrated that the supervisor and runner actors are
-        // working as expected.
         mock.expect_get_excludes().returning(move || Vec::new());
+        // Once the backup process starts inserting trees into the database, we
+        // know that the supervisor and runner have done their part, so give an
+        // error to cause the backup to stop.
         mock.expect_insert_tree()
             .returning(|_| Err(err_msg("oh no")));
         let repo = Arc::new(mock);
-        // act
-        let result = start(repo);
+        // act (start)
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let sut = ProcessorImpl::new(state.clone());
+        let result = sut.start(repo.clone());
         thread::sleep(Duration::new(1, 0));
-        // assert
+        // assert (start)
+        assert!(result.is_ok());
+        // act (stop)
+        let result = sut.stop();
+        // assert (stop)
+        assert!(result.is_ok());
+        // act (start again)
+        let result = sut.start(repo);
+        // assert (start again)
         assert!(result.is_ok());
         Ok(())
     }
@@ -306,7 +380,8 @@ mod tests {
             .returning(|_| Ok(None));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -328,7 +403,8 @@ mod tests {
             .returning(|_| Ok(None));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -351,9 +427,10 @@ mod tests {
             .returning(|_| Ok(None));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the dataset is already running a backup
-        state::dispatch(Action::StartBackup(dataset_id_clone));
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -383,7 +460,8 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -414,7 +492,8 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -448,10 +527,11 @@ mod tests {
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // insert a backup state that finished recently, which is the case when
         // there were no file changes, but the backup "finished" nonetheless
-        state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::FinishBackup(dataset_id_clone2));
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone1));
+        state.backup_event(BackupAction::Finish(dataset_id_clone2));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -479,15 +559,16 @@ mod tests {
         mock.expect_get_snapshot()
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
-        // the app has restarted, so ensure there is no state
-        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+        // start with a clean state, as if the app has restarted
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        assert!(state.get_state().backups(&dataset_id_clone).is_none());
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
         // and now there is backup state showing that it restarted
-        assert!(state::get_state().backups(&dataset_id_clone).is_some());
+        assert!(state.get_state().backups(&dataset_id_clone).is_some());
     }
 
     #[test]
@@ -514,15 +595,16 @@ mod tests {
         mock.expect_get_snapshot()
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
-        // the app has restarted, so ensure there is no state
-        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+        // start with a clean state, as if the app has restarted
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        assert!(state.get_state().backups(&dataset_id_clone).is_none());
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
         // the backup should not run and there is still no state
-        assert!(state::get_state().backups(&dataset_id_clone).is_none());
+        assert!(state.get_state().backups(&dataset_id_clone).is_none());
     }
 
     #[test]
@@ -551,9 +633,10 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the dataset is already running a backup
-        state::dispatch(Action::StartBackup(dataset_id_clone1));
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone1));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -583,13 +666,14 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the backup started but then failed
-        state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::ErrorBackup(
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone1));
+        state.backup_event(BackupAction::Error(
             dataset_id_clone2,
             String::from("oh no"),
         ));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -629,10 +713,11 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the backup has been paused
-        state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::PauseBackup(dataset_id_clone2));
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone1));
+        state.backup_event(BackupAction::Pause(dataset_id_clone2));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -672,13 +757,14 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot.clone())));
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // indicate that the backup started but then failed
-        state::dispatch(Action::StartBackup(dataset_id_clone1));
-        state::dispatch(Action::ErrorBackup(
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id_clone1));
+        state.backup_event(BackupAction::Error(
             dataset_id_clone2,
             String::from("oh no"),
         ));
         // act
-        let result = should_run(&repo, &dataset_clone);
+        let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

@@ -7,12 +7,11 @@
 //! previous snapshot, building pack files, and sending them to the store.
 
 use crate::domain::entities;
-use crate::domain::managers::state::{self, Action};
+use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use chrono::{DateTime, Utc};
 use failure::{err_msg, Error};
 use log::{debug, error, info, trace};
-use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt;
@@ -29,6 +28,7 @@ use std::time::SystemTime;
 pub fn perform_backup(
     dataset: &entities::Dataset,
     repo: &Arc<dyn RecordRepository>,
+    state: &Arc<dyn StateStore>,
     passphrase: &str,
     stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
@@ -51,6 +51,7 @@ pub fn perform_backup(
                 return continue_backup(
                     dataset,
                     repo,
+                    state,
                     passphrase,
                     parent_sha1,
                     current_sha1,
@@ -63,7 +64,7 @@ pub fn perform_backup(
     // taken. The snapshot can take a very long time to build, and another
     // thread may spawn in the mean time and start taking another snapshot, and
     // again, and again until the system runs out of resources.
-    state::dispatch(Action::StartBackup(dataset.id.clone()));
+    state.backup_event(BackupAction::Start(dataset.id.clone()));
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
@@ -76,7 +77,7 @@ pub fn perform_backup(
     match snap_opt {
         None => {
             // indicate that the backup has finished (doing nothing)
-            state::dispatch(Action::FinishBackup(dataset.id.clone()));
+            state.backup_event(BackupAction::Finish(dataset.id.clone()));
             Ok(None)
         }
         Some(current_sha1) => {
@@ -85,6 +86,7 @@ pub fn perform_backup(
             continue_backup(
                 dataset,
                 repo,
+                state,
                 passphrase,
                 latest_snapshot,
                 current_sha1,
@@ -101,12 +103,13 @@ pub fn perform_backup(
 fn continue_backup(
     dataset: &entities::Dataset,
     repo: &Arc<dyn RecordRepository>,
+    state: &Arc<dyn StateStore>,
     passphrase: &str,
     parent_sha1: Option<entities::Checksum>,
     current_sha1: entities::Checksum,
     stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
-    let mut bmaster = BackupMaster::new(dataset, repo, passphrase, stop_time)?;
+    let mut bmaster = BackupMaster::new(dataset, repo, state, passphrase, stop_time)?;
     // if no previous snapshot, visit every file in the new snapshot, otherwise
     // find those files that changed from the previous snapshot
     match parent_sha1 {
@@ -159,6 +162,7 @@ impl fmt::Display for OutOfTimeFailure {
 struct BackupMaster<'a> {
     dataset: &'a entities::Dataset,
     dbase: &'a Arc<dyn RecordRepository>,
+    state: &'a Arc<dyn StateStore>,
     builder: PackBuilder<'a>,
     passphrase: String,
     bucket_name: String,
@@ -171,6 +175,7 @@ impl<'a> BackupMaster<'a> {
     fn new(
         dataset: &'a entities::Dataset,
         dbase: &'a Arc<dyn RecordRepository>,
+        state: &'a Arc<dyn StateStore>,
         passphrase: &str,
         stop_time: Option<DateTime<Utc>>,
     ) -> Result<Self, Error> {
@@ -181,6 +186,7 @@ impl<'a> BackupMaster<'a> {
         Ok(Self {
             dataset,
             dbase,
+            state,
             builder,
             passphrase: passphrase.to_owned(),
             bucket_name,
@@ -250,10 +256,10 @@ impl<'a> BackupMaster<'a> {
                 self.stores
                     .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
             pack.record_completed_pack(self.dbase, locations)?;
-            state::dispatch(Action::UploadPack(self.dataset.id.clone()));
+            self.state.backup_event(BackupAction::UploadPack(self.dataset.id.clone()));
         }
         let count = pack.record_completed_files(self.dbase)? as u64;
-        state::dispatch(Action::UploadFiles(self.dataset.id.clone(), count));
+        self.state.backup_event(BackupAction::UploadFiles(self.dataset.id.clone(), count));
         Ok(())
     }
 
@@ -274,25 +280,15 @@ impl<'a> BackupMaster<'a> {
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
         snapshot = snapshot.end_time(Utc::now());
         self.dbase.put_snapshot(&snapshot)?;
-        state::dispatch(Action::FinishBackup(self.dataset.id.clone()));
+        self.state.backup_event(BackupAction::Finish(self.dataset.id.clone()));
         Ok(())
     }
 
-    /// Upload a compressed tarball of the database files to a special bucket.
+    /// Upload an archive of the database files to the pack stores.
     fn backup_database(&self) -> Result<(), Error> {
-        // create a stable copy of the database
-        let backup_path = self.dbase.create_backup(None)?;
-        // use a ULID as the object name so they sort by time
-        let object_name = generate_ulid_string();
-        let mut tarball = self.dataset.workspace.clone();
-        tarball.push(&object_name);
-        super::create_tar(&backup_path, &tarball)?;
-        // use a predictable bucket name so we can find it later
+        let backup_path = self.dbase.create_backup()?;
         let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
-        let bucket_name = super::computer_bucket_name(&computer_id);
-        self.stores
-            .store_pack(&tarball, &bucket_name, &object_name)?;
-        fs::remove_file(tarball)?;
+        self.stores.store_database(&computer_id, &backup_path)?;
         Ok(())
     }
 }

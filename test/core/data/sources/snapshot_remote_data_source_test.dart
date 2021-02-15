@@ -158,6 +158,72 @@ void main() {
     );
   });
 
+  group('restoreDatabase', () {
+    test('should restore database', () async {
+      // arrange
+      final response = {
+        'data': {
+          'restoreDatabase': 'ok',
+        }
+      };
+      when(mockHttpClient.send(any)).thenAnswer((_) async {
+        final bytes = utf8.encode(json.encode(response));
+        final stream = http.ByteStream.fromBytes(bytes);
+        return http.StreamedResponse(stream, 200);
+      });
+      // act
+      final result = await dataSource.restoreDatabase('cafebabe');
+      // assert
+      expect(result, equals('ok'));
+    });
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.restoreDatabase('cafebabe');
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.restoreDatabase('cafebabe');
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test('should return null when response is null', () async {
+      // arrange
+      final response = {
+        'data': {'restoreDatabase': null}
+      };
+      when(mockHttpClient.send(any)).thenAnswer((_) async {
+        final bytes = utf8.encode(json.encode(response));
+        final stream = http.ByteStream.fromBytes(bytes);
+        return http.StreamedResponse(stream, 200);
+      });
+      // act
+      final result = await dataSource.restoreDatabase('cafebabe');
+      // assert
+      expect(result, isNull);
+    });
+  });
+
   group('restoreFile', () {
     test('should restore a file', () async {
       // arrange

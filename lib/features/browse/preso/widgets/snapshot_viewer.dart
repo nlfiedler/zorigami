@@ -51,7 +51,7 @@ class SnapshotViewer extends StatelessWidget {
       children: <Widget>[
         Card(
           child: ListTile(
-            leading: Icon(Icons.history),
+            leading: Icon(Icons.timeline),
             title: Text('Snapshot: ${digest}'),
             subtitle: Text(
               'Files: ${count}, Started: ${started}, Status: ${status}',
@@ -73,7 +73,7 @@ class SnapshotViewer extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: TreeViewer(rootTree: state.snapshot.tree),
+          child: TreeViewer(dataset: dataset, rootTree: state.snapshot.tree),
         ),
       ],
     );

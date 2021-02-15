@@ -5,12 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/core/domain/usecases/providers.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/database_restore_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
 final configurationBlocProvider = Provider.autoDispose<ConfigurationBloc>(
   (ref) => ConfigurationBloc(
     usecase: ref.read(getConfigurationUsecaseProvider),
+  ),
+);
+
+final databaseRestoreBlocProvider = Provider.autoDispose<DatabaseRestoreBloc>(
+  (ref) => DatabaseRestoreBloc(
+    usecase: ref.read(restoreDatabaseUsecaseProvider),
   ),
 );
 

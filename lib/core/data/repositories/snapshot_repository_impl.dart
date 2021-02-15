@@ -30,6 +30,19 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   }
 
   @override
+  Future<Result<String, Failure>> restoreDatabase(String storeId) async {
+    try {
+      final result = await remoteDataSource.restoreDatabase(storeId);
+      if (result == null) {
+        return Err(ServerFailure('got null result for restoreDatabase'));
+      }
+      return Ok(result);
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Result<String, Failure>> restoreFile(
       String checksum, String filepath, String dataset) async {
     try {

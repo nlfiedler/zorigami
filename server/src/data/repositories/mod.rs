@@ -40,7 +40,7 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_excludes(&self) -> Vec<PathBuf> {
         let path = self.datasource.get_db_path();
-        vec![path.to_path_buf()]
+        vec![path]
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
@@ -178,9 +178,43 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_snapshot(digest)
     }
 
-    fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
-        self.datasource.create_backup(path)
+    fn create_backup(&self) -> Result<tempfile::TempPath, Error> {
+        let backup_path = self.datasource.create_backup(None)?;
+        let file = tempfile::NamedTempFile::new()?;
+        let path = file.into_temp_path();
+        create_tar(&backup_path, &path)?;
+        Ok(path)
     }
+
+    fn restore_from_backup(&self, path: &Path) -> Result<(), Error> {
+        let tempdir = tempfile::tempdir()?;
+        let temppath = tempdir.path().to_path_buf();
+        extract_tar(path, &temppath)?;
+        self.datasource.restore_from_backup(Some(temppath))
+    }
+}
+
+///
+/// Create a compressed tar file for the given directory structure.
+///
+fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
+    let file = std::fs::File::create(outfile)?;
+    let encoder = flate2::write::ZlibEncoder::new(file, flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    builder.append_dir_all(".", basepath)?;
+    let _output = builder.into_inner()?;
+    Ok(())
+}
+
+///
+/// Extract the contents of the compressed tar file to the given directory.
+///
+fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
+    let file = std::fs::File::open(infile)?;
+    let decoder = flate2::read::ZlibDecoder::new(file);
+    let mut ar = tar::Archive::new(decoder);
+    ar.unpack(outdir)?;
+    Ok(())
 }
 
 pub struct PackRepositoryImpl {
@@ -280,6 +314,36 @@ impl PackRepository for PackRepositoryImpl {
             }
         }
         Ok(())
+    }
+
+    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<(), Error> {
+        // Use a ULID as the object name so they sort by time which will make
+        // it easier to find the latest database archive later.
+        let object_name = rusty_ulid::generate_ulid_string();
+        // Use a predictable bucket name so we can find it easily later.
+        let bucket_name = crate::domain::computer_bucket_name(computer_id);
+        // discard the pack locations, there is no place to save them
+        self.store_pack(infile, &bucket_name, &object_name)?;
+        Ok(())
+    }
+
+    fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {
+        let bucket_name = crate::domain::computer_bucket_name(computer_id);
+        // use the first store returned by the iterator, probably only one anyway
+        for (store, source) in self.sources.iter() {
+            let mut objects = source.list_objects(&bucket_name)?;
+            objects.sort();
+            if let Some(latest) = objects.last() {
+                let loc = PackLocation::new(&store.id, &bucket_name, latest);
+                source
+                    .retrieve_pack(&loc, &outfile)
+                    .context("database archive retrieval")?;
+                return Ok(());
+            } else {
+                return Err(err_msg("no database archives available"));
+            }
+        }
+        Err(err_msg("no matching store found"))
     }
 }
 
@@ -396,6 +460,25 @@ mod tests {
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.build_pack_repo(&store);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_restore_database() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_create_backup()
+            .returning(|_| Ok(PathBuf::from("../test/features")));
+        mock.expect_restore_from_backup().returning(|_| Ok(()));
+        // act
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let result = repo.create_backup();
+        // assert
+        assert!(result.is_ok());
+        // act
+        let archive_path = result.unwrap();
+        let result = repo.restore_from_backup(&archive_path);
         // assert
         assert!(result.is_ok());
     }
@@ -689,5 +772,169 @@ mod tests {
         let result = repo.test_store("localtmp");
         // assert
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_store_database() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source
+                .expect_store_pack()
+                .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.store_database("hal9000", &input_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_retrieve_latest_database_none() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_objects().returning(|_| Ok(Vec::new()));
+            source.expect_retrieve_pack().returning(|_, _| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        // assert
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no database archives available"));
+    }
+
+    #[test]
+    fn test_retrieve_latest_database_single() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source
+                .expect_list_objects()
+                .returning(|_| Ok(vec!["007".to_owned()]));
+            source
+                .expect_retrieve_pack()
+                .withf(|location, _| location.object == "007")
+                .returning(|_, _| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_retrieve_latest_database_multiple() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_objects().returning(|_| {
+                let objects = vec![
+                    "01arz3ndektsv4rrffq69g5fav".to_owned(),
+                    "01edn29q3m3n7ccpd2sfh4244b".to_owned(),
+                    "01ce0d526z6cyzgm02ap0jv281".to_owned(),
+                ];
+                Ok(objects)
+            });
+            source
+                .expect_retrieve_pack()
+                .withf(|loc, _| loc.object == "01edn29q3m3n7ccpd2sfh4244b")
+                .returning(|_, _| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        // assert
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tar_file() -> Result<(), Error> {
+        let outdir = tempfile::tempdir()?;
+        let packfile = outdir.path().join("filename.tz");
+        create_tar(Path::new("../test/fixtures"), &packfile)?;
+        extract_tar(&packfile, outdir.path())?;
+
+        let file = outdir.path().join("SekienAkashita.jpg");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+        );
+        let file = outdir.path().join("lorem-ipsum.txt");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        #[cfg(target_family = "unix")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
+        // line endings differ
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
+        );
+        let file = outdir.path().join("washington-journal.txt");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        #[cfg(target_family = "unix")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
+        );
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
+        );
+
+        Ok(())
     }
 }

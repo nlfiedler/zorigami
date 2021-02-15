@@ -16,8 +16,11 @@ use database_rocks;
 use failure::Error;
 #[cfg(test)]
 use mockall::automock;
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 mod google;
 mod local;
@@ -122,26 +125,24 @@ pub trait EntityDataSource: Send + Sync {
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 
     /// Retrieve the path to the database files.
-    fn get_db_path(&self) -> &Path;
+    fn get_db_path(&self) -> PathBuf;
 
     /// Create a backup of the database, returning its path.
     fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error>;
-}
 
-/// Restore the database at the given path.
-pub fn restore_database(path: Option<PathBuf>, db_path: &Path) -> Result<(), Error> {
-    database_rocks::Database::restore_from_backup(path, db_path)
+    /// Restore the database from the backup path.
+    fn restore_from_backup(&self, path: Option<PathBuf>) -> Result<(), Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
 pub struct EntityDataSourceImpl {
-    database: database_rocks::Database,
+    database: Mutex<database_rocks::Database>,
 }
 
 impl EntityDataSourceImpl {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
         std::fs::create_dir_all(&db_path)?;
-        let database = database_rocks::Database::new(db_path)?;
+        let database = Mutex::new(database_rocks::Database::new(db_path)?);
         Ok(Self { database })
     }
 }
@@ -149,7 +150,8 @@ impl EntityDataSourceImpl {
 impl EntityDataSource for EntityDataSourceImpl {
     fn get_configuration(&self) -> Result<Option<Configuration>, Error> {
         let key = "configuration";
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -165,18 +167,20 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         ConfigurationDef::serialize(config, &mut ser)?;
-        self.database.put_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &encoded)
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
         let key = format!("computer/{}", dataset);
-        self.database
-            .put_document(key.as_bytes(), computer_id.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), computer_id.as_bytes())
     }
 
     fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
         let key = format!("computer/{}", dataset);
-        let option = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let option = db.get_document(key.as_bytes())?;
         match option {
             Some(value) => {
                 let result = String::from_utf8(value)?;
@@ -188,20 +192,22 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
         let key = format!("computer/{}", dataset);
-        self.database.delete_document(key.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
         let key = format!("latest/{}", dataset);
         // use simple approach as serde can be tricky to compile
         let as_string = latest.to_string();
-        self.database
-            .put_document(key.as_bytes(), as_string.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), as_string.as_bytes())
     }
 
     fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
         let key = format!("latest/{}", dataset);
-        let option = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let option = db.get_document(key.as_bytes())?;
         match option {
             Some(value) => {
                 let as_string = String::from_utf8(value)?;
@@ -214,7 +220,8 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
         let key = format!("latest/{}", dataset);
-        self.database.delete_document(key.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
@@ -222,12 +229,14 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         ChunkDef::serialize(chunk, &mut ser)?;
-        self.database.insert_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), &encoded)
     }
 
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error> {
         let key = format!("chunk/{}", digest);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -244,12 +253,14 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         PackDef::serialize(pack, &mut ser)?;
-        self.database.insert_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), &encoded)
     }
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         let key = format!("pack/{}", digest);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -263,12 +274,14 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
         let key = format!("xattr/{}", digest);
-        self.database.insert_document(key.as_bytes(), xattr)
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), xattr)
     }
 
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
         let key = format!("xattr/{}", digest);
-        let result = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let result = db.get_document(key.as_bytes())?;
         Ok(result.map(|v| v.to_vec()))
     }
 
@@ -277,12 +290,14 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         FileDef::serialize(file, &mut ser)?;
-        self.database.insert_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), &encoded)
     }
 
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error> {
         let key = format!("file/{}", digest);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -297,12 +312,14 @@ impl EntityDataSource for EntityDataSourceImpl {
     fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
         let key = format!("tree/{}", tree.digest);
         let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
-        self.database.insert_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), &encoded)
     }
 
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
         let key = format!("tree/{}", digest);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut result: Tree = serde_cbor::from_slice(&value)?;
@@ -318,11 +335,13 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         StoreDef::serialize(store, &mut ser)?;
-        self.database.put_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &encoded)
     }
 
     fn get_stores(&self) -> Result<Vec<Store>, Error> {
-        let stores = self.database.fetch_prefix("store/")?;
+        let db = self.database.lock().unwrap();
+        let stores = db.fetch_prefix("store/")?;
         let mut results: Vec<Store> = Vec::new();
         for (key, value) in stores {
             let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -335,7 +354,8 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn get_store(&self, id: &str) -> Result<Option<Store>, Error> {
         let key = format!("store/{}", id);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -349,7 +369,8 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn delete_store(&self, id: &str) -> Result<(), Error> {
         let key = format!("store/{}", id);
-        self.database.delete_document(key.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
@@ -357,11 +378,13 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         DatasetDef::serialize(dataset, &mut ser)?;
-        self.database.put_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &encoded)
     }
 
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
-        let datasets = self.database.fetch_prefix("dataset/")?;
+        let db = self.database.lock().unwrap();
+        let datasets = db.fetch_prefix("dataset/")?;
         let mut results: Vec<Dataset> = Vec::new();
         for (key, value) in datasets {
             let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -374,7 +397,8 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error> {
         let key = format!("dataset/{}", id);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -388,7 +412,8 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
         let key = format!("dataset/{}", id);
-        self.database.delete_document(key.as_bytes())
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error> {
@@ -396,12 +421,14 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut encoded: Vec<u8> = Vec::new();
         let mut ser = serde_cbor::Serializer::new(&mut encoded);
         SnapshotDef::serialize(snapshot, &mut ser)?;
-        self.database.put_document(key.as_bytes(), &encoded)
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &encoded)
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
         let key = format!("snapshot/{}", digest);
-        let encoded = self.database.get_document(key.as_bytes())?;
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
                 let mut de = serde_cbor::Deserializer::from_slice(&value);
@@ -413,12 +440,30 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
-    fn get_db_path(&self) -> &Path {
-        self.database.get_path()
+    fn get_db_path(&self) -> PathBuf {
+        let db = self.database.lock().unwrap();
+        db.get_path().to_path_buf()
     }
 
     fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
-        self.database.create_backup(path)
+        let db = self.database.lock().unwrap();
+        db.create_backup(path)
+    }
+
+    fn restore_from_backup(&self, path: Option<PathBuf>) -> Result<(), Error> {
+        // Create a temporary database in order to release the lock on the
+        // current database, then restore from the backup, and finish by
+        // creating a new database instance using the restored data.
+        let outdir = tempfile::tempdir()?;
+        let tmpdb = outdir.path().join("zoritempura");
+        let mut db = self.database.lock().unwrap();
+        let db_path = db.get_path().to_path_buf();
+        *db = database_rocks::Database::new(tmpdb)?;
+        drop(db);
+        database_rocks::Database::restore_from_backup(path, &db_path)?;
+        let mut db = self.database.lock().unwrap();
+        *db = database_rocks::Database::new(db_path)?;
+        Ok(())
     }
 }
 

@@ -15,6 +15,7 @@ import 'package:zorigami/core/domain/usecases/get_data_sets.dart' as gds;
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart' as gs;
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
 import 'package:zorigami/core/domain/usecases/test_pack_store.dart' as tps;
+import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
 import 'package:zorigami/core/domain/usecases/restore_file.dart' as rf;
 
 final getConfigurationUsecaseProvider = Provider<gc.GetConfiguration>(
@@ -86,6 +87,12 @@ final getSnapshotUsecaseProvider = Provider<gs.GetSnapshot>(
 final getTreeUsecaseProvider = Provider<gt.GetTree>(
   (ref) => gt.GetTree(
     ref.read(treeRepositoryProvider),
+  ),
+);
+
+final restoreDatabaseUsecaseProvider = Provider<rd.RestoreDatabase>(
+  (ref) => rd.RestoreDatabase(
+    ref.read(snapshotRepositoryProvider),
   ),
 );
 

@@ -1,16 +1,17 @@
 * Tasks
-** TODO restore database from nothing (simplified version)
-*** only restore the database with a matching computer UUID
-*** user defines a temporary pack configuration to start
-*** retrieve the most recent database archive from the pack store
-*** extract the archive to =.backup= directory
-*** restore the database from =.backup= directory
-**** need to close the current database, rename the directory
-**** call the restore database function
-**** open the newly restored database
-**** delete the old database directory
-*** write a use case and test with mocks
-*** write the flutter interface to invoke this
+** Flutter updates
+*** Set flutter SDK version in docker build for consistent results
+**** c.f. https://github.com/flutter/flutter/issues/64238
+**** use https://pub.dev/packages/fvm
+**** =fvm install 1.26.0-1.0.pre=
+**** update instructions in =README.md=
+*** flutter form build has major updates
+*** look at all of the other dependencies
+** Pack store bucket efficiency
+*** creating too many buckets, after 6 months over 700 buckets on google
+**** there are only 238 buckets in the safe and minio
+*** should use one bucket until it has at least N objects in it
+*** keep the current bucket name in the dataset configuration?
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -50,6 +51,14 @@
 *** consider how one might "pause" a backup in progress
 ** Loose backend issues
 *** TODO testing the minio? pack store showed a tokio runtime error
+*** TODO refine use of =&str= and =String= arguments by using =Into<String>=
+**** note that using =Cow= helps to minimize copying
+#+BEGIN_SRC rust
+pub fn name<T: Into<String>>(mut self, name: T) -> Self {
+    self.name = Cow::Owned(name.into());
+    self
+}
+#+END_SRC
 *** TODO Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
@@ -115,6 +124,8 @@
 ***** configuration panel
 ***** snapshot browser
 ** Initial Configuration
+*** Walk user through pack store and data set creation
+*** Offer path for restoring database from existing pack store
 *** Allow user to set user/host names for computer UUID
 **** They may need to avoid naming conflicts with other local users
 **** Imagine a computer lab all sharing a single cloud storage account
@@ -158,7 +169,10 @@
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
 *** Test Case: Google
-**** there is a bucket (=01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1=) that should be pruned
+**** bucket =01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1= should be pruned
+**** there are 500 additional buckets on google that should not be there
+*** Test Case: minio
+**** bucket =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1= on yubaba has a dead pack
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -172,6 +186,9 @@
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
 ** More Functionality
+*** TODO search snapshots to find a file/directory by a given pattern
+**** the file/dir is not in the latest snapshot but some older one, go find it
+**** might not even know the full path of the file/dir in question
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
 **** merge with the defaults in =backup.rs=
@@ -219,9 +236,11 @@
 **** an automated scan could be run on occasion
 *** TODO support bucket/object checks
 **** make sure all pack stores have all of the expected buckets and objects
-*** TODO prune objects that have no database references
-**** bucket =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1= on yubaba has a dead pack
 ** Architecture Review
+*** Parallel backups
+**** Currently the backup supervisor spawns a single thread (=Arbiter=) to manage backups
+**** This causes all backups to be serialized
+**** For parallel backups, would use the =SyncArbiter= from actix
 *** Database migrations
 **** Use the =serde= crate features (c.f. https://serde.rs)
 **** Use =#[serde(default)]= on struct to fill in blanks for new fields
