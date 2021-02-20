@@ -69,6 +69,9 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
 
+    /// Retrieve all pack records that should be in the given store.
+    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
+
     /// Insert the extended file attributes value into the data source, if one
     /// with the same digest does not already exist. Values with the same digest
     /// are assumed to be identical.
@@ -270,6 +273,27 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+
+    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error> {
+        let db = self.database.lock().unwrap();
+        let packs = db.fetch_prefix("pack/")?;
+        let mut results: Vec<Pack> = Vec::new();
+        for (key, value) in packs {
+            let mut de = serde_cbor::Deserializer::from_slice(&value);
+            let mut result = PackDef::deserialize(&mut de)?;
+            // pack must have at least one pack location whose store identifier
+            // matches the one given
+            if result.locations.iter().any(|l| l.store == store_id) {
+                // strip leading "pack/" from 'key' and convert to a Checksum
+                let digest: Result<Checksum, Error> = FromStr::from_str(&key);
+                if digest.is_ok() {
+                    result.digest = digest.unwrap();
+                    results.push(result);
+                }
+            }
+        }
+        Ok(results)
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {

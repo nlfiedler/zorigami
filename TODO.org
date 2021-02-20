@@ -1,9 +1,22 @@
 * Tasks
+** Repair pack stores
+*** gcloud has many extra buckets/objects
+**** =01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1=
+**** and >500 more
+*** gcloud has some missing buckets/objects
+**** =01eqd5x4321mm2s36wattkk3t8afd73b8b997a5452b94a6b7c564041b1=
+**** and 48 more
+*** minio has some extra buckets/objects
+**** =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1=
+**** maybe more?
+*** TODO remove all dangling objects and prune empty buckets
+*** TODO repair missing objects by copying from another pack store
+*** TODO ensure backup is _not_ in progress during check/repair
 ** Pack store bucket efficiency
 *** creating too many buckets, after 6 months over 700 buckets on google
-**** there are only 238 buckets in the safe and minio
+**** there are 500 fewer buckets in the safe and minio stores
 *** should use one bucket until it has at least N objects in it
-*** keep the current bucket name in the dataset configuration?
+*** keep track of number of objects in current bucket in app state or database
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -165,11 +178,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
-*** Test Case: Google
-**** bucket =01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1= should be pruned
-**** there are 500 additional buckets on google that should not be there
-*** Test Case: minio
-**** bucket =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1= on yubaba has a dead pack
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -225,15 +233,29 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
 **** would have to keep track in the database
-** Data Integrity
-*** TODO support database integrity checks
+** Database Integrity
+*** support database integrity checks
 **** ensure all referenced records actually exist
 **** like git fsck, start at the top and traverse everything
 **** find and report dangling objects
 **** an automated scan could be run on occasion
-*** TODO support bucket/object checks
-**** make sure all pack stores have all of the expected buckets and objects
 ** Architecture Review
+*** Database per dataset directory
+**** Centralized configuration in a known location
+***** would default to something sensible in user home directory
+***** overridden by environment variable
+***** JSON or XML formatted plain text file
+***** Holds paths to the various data sets
+***** Holds pack store configuration
+**** Each data set directory has a database directory (and backup)
+**** Backup process automatically excludes the database and its backup
+**** What would a full restore procedure look like?
+**** What are the benefits?
+***** reduced risk in the event of database corruption
+**** What are the costs?
+***** additional disk usage for database overhead
+**** Drawbacks
+***** forces user to keep database with the dataset
 *** Parallel backups
 **** Currently the backup supervisor spawns a single thread (=Arbiter=) to manage backups
 **** This causes all backups to be serialized

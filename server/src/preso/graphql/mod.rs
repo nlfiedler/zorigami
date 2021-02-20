@@ -605,6 +605,42 @@ impl entities::Configuration {
     }
 }
 
+#[juniper::object(description = "Location within a store of a saved pack.")]
+impl entities::PackLocation {
+    /// ULID of the pack store.
+    fn store(&self) -> String {
+        self.store.clone()
+    }
+
+    /// Remote bucket name.
+    fn bucket(&self) -> String {
+        self.bucket.clone()
+    }
+
+    /// Remote object name.
+    fn object(&self) -> String {
+        self.object.clone()
+    }
+}
+
+#[juniper::object(description = "An archive containing saved files.")]
+impl entities::Pack {
+    /// Unique checksum of the pack contents.
+    fn checksum(&self) -> Checksum {
+        self.digest.clone()
+    }
+
+    /// List of store-specific coordinates where the pack is saved.
+    fn locations(&self) -> Vec<entities::PackLocation> {
+        self.locations.clone()
+    }
+
+    /// Date and time of successful upload.
+    fn upload_time(&self) -> DateTime<Utc> {
+        self.upload_time
+    }
+}
+
 pub struct QueryRoot;
 
 #[juniper::object(Context = GraphContext)]
@@ -628,17 +664,16 @@ impl QueryRoot {
         Ok(datasets)
     }
 
-    /// Find all named store configurations.
-    fn stores(executor: &Executor) -> FieldResult<Vec<Store>> {
-        use crate::domain::usecases::get_stores::GetStores;
-        use crate::domain::usecases::{NoParams, UseCase};
+    /// Find any packs that are missing from the given store.
+    fn missing_packs(executor: &Executor, store_id: String) -> FieldResult<Vec<entities::Pack>> {
+        use crate::domain::usecases::find_missing::{FindMissingPacks, Params};
+        use crate::domain::usecases::UseCase;
         let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = GetStores::new(Box::new(repo));
-        let params: NoParams = NoParams {};
-        let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
-        let stores: Vec<Store> = result.into_iter().map(|s| s.into()).collect();
-        Ok(stores)
+        let usecase = FindMissingPacks::new(Box::new(repo));
+        let params: Params = Params::new(store_id);
+        let result: Vec<entities::Pack> = usecase.call(params)?;
+        Ok(result)
     }
 
     /// Retrieve a specific snapshot.
@@ -651,6 +686,19 @@ impl QueryRoot {
         let params: Params = Params::new(digest);
         let result: Option<entities::Snapshot> = usecase.call(params)?;
         Ok(result)
+    }
+
+    /// Find all named store configurations.
+    fn stores(executor: &Executor) -> FieldResult<Vec<Store>> {
+        use crate::domain::usecases::get_stores::GetStores;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetStores::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
+        let stores: Vec<Store> = result.into_iter().map(|s| s.into()).collect();
+        Ok(stores)
     }
 
     /// Retrieve a specific tree.

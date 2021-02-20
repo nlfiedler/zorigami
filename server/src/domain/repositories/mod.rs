@@ -53,6 +53,9 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
 
+    /// Retrieve all pack records that should be in the given store.
+    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
+
     /// Insert the extended file attributes value into the repository, if one
     /// with the same digest does not already exist. Values with the same digest
     /// are assumed to be identical.
@@ -129,7 +132,7 @@ pub trait RecordRepository: Send + Sync {
 ///
 #[cfg_attr(test, automock)]
 pub trait PackRepository {
-    /// Save the given pack to stores provided in the constructor.
+    /// Save the given pack to the stores provided in the constructor.
     ///
     /// Returns the list of all pack locations, which can be used to retrieve
     /// the pack at a later time.
@@ -163,7 +166,11 @@ pub trait PackRepository {
     /// Uses a random pack store to fetch the database. It is expected that only
     /// one pack store is defined at this point and the user has configured the
     /// most suitable pack store in order to retrieve the database.
-    ///
-    /// Returns the path to the retrieved archive file.
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error>;
+
+    /// Find any packs that are missing from the given pack store.
+    ///
+    /// Returns a new list of the pack digests for those packs that were not
+    /// found on the pack store.
+    fn find_missing(&self, store_id: &str, packs: &[Pack]) -> Result<Vec<Checksum>, Error>;
 }

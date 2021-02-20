@@ -9,7 +9,7 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error, ResultExt};
-use log::warn;
+use log::{info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -81,6 +81,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         self.datasource.get_pack(digest)
+    }
+
+    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error> {
+        self.datasource.get_packs(store_id)
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
@@ -345,6 +349,39 @@ impl PackRepository for PackRepositoryImpl {
         }
         Err(err_msg("no matching store found"))
     }
+
+    fn find_missing(&self, store_id: &str, packs: &[Pack]) -> Result<Vec<Checksum>, Error> {
+        for (store, source) in self.sources.iter() {
+            if store.id == store_id {
+                // Rather than trying to make this fast by using up a lot of
+                // memory (i.e. making sets of store/bucket/object tuples), just
+                // scan through the entire pack list B*O times. In the average
+                // case, the list of packs will not get any smaller so it will
+                // end up being an O(B*O*P) operation, which is regretable.
+                let mut missing_packs = packs.to_owned();
+                let buckets = source.list_buckets()?;
+                for bucket in buckets.iter() {
+                    info!("find_missing scanning bucket {}", bucket);
+                    let objects = source.list_objects(bucket.as_str())?;
+                    for object in objects.iter() {
+                        // remove any packs that have a location that matches
+                        // the current store/bucket/object tuple
+                        let not_yet_missing = missing_packs.into_iter().filter(|p| {
+                            p.locations.iter().all(|l| {
+                                l.store != store_id
+                                    || l.bucket != bucket.as_str()
+                                    || l.object != object.as_str()
+                            })
+                        });
+                        missing_packs = not_yet_missing.collect();
+                    }
+                }
+                let digests = missing_packs.into_iter().map(|p| p.digest).collect();
+                return Ok(digests);
+            }
+        }
+        Err(err_msg("no matching store found"))
+    }
 }
 
 // Try to store the pack file up to three times before giving up.
@@ -372,7 +409,7 @@ fn store_pack_retry(
 mod tests {
     use super::*;
     use crate::data::sources::{MockEntityDataSource, MockPackDataSource, MockPackSourceBuilder};
-    use crate::domain::entities::StoreType;
+    use crate::domain::entities::{PackLocation, StoreType};
     use mockall::predicate::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -894,6 +931,237 @@ mod tests {
         let result = repo.retrieve_latest_database("hal9000", &input_file);
         // assert
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_find_missing_no_store() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let source = MockPackDataSource::new();
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let packs: Vec<Pack> = vec![];
+        let result = repo.find_missing("nostore", &packs);
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("no matching store found"));
+    }
+
+    #[test]
+    fn test_find_missing_no_buckets() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| Ok(Vec::new()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.find_missing("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        let missing_packs = result.unwrap();
+        assert_eq!(missing_packs.len(), 1);
+        assert_eq!(
+            missing_packs[0].to_string(),
+            "sha1-ed841695851abdcfe6a50ce3d01d770eb053356b"
+        );
+    }
+
+    #[test]
+    fn test_find_missing_no_objects() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| Ok(Vec::new()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.find_missing("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        let missing_packs = result.unwrap();
+        assert_eq!(missing_packs.len(), 1);
+        assert_eq!(
+            missing_packs[0].to_string(),
+            "sha1-ed841695851abdcfe6a50ce3d01d770eb053356b"
+        );
+    }
+
+    #[test]
+    fn test_find_missing_empty_pack_list() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".to_owned()];
+                    Ok(objects)
+                });
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let packs: Vec<Pack> = Vec::new();
+        let result = repo.find_missing("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        let missing_packs = result.unwrap();
+        assert_eq!(missing_packs.len(), 0);
+    }
+
+    #[test]
+    fn test_find_missing_no_missing() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".to_owned()];
+                    Ok(objects)
+                });
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.find_missing("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        let missing_packs = result.unwrap();
+        assert_eq!(missing_packs.len(), 0);
+    }
+
+    #[test]
+    fn test_find_missing_some_missing() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".to_owned(), "object3".to_owned()];
+                    Ok(objects)
+                });
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![
+            PackLocation::new("localtmp", "bucket1", "object1"),
+            PackLocation::new("remotely", "bucket1", "object1"),
+        ];
+        let pack1 = Pack::new(digest.clone(), coords);
+        let digest = Checksum::SHA1(String::from("ad9fec27d7e071f5380af0c1499b651e9fadfb48"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object2")];
+        let pack2 = Pack::new(digest.clone(), coords);
+        let digest = Checksum::SHA1(String::from("849e2de5cc0fdd047982f4606840f956c9d1c8a1"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object3")];
+        let pack3 = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack1, pack2, pack3];
+        let result = repo.find_missing("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        let missing_packs = result.unwrap();
+        assert_eq!(missing_packs.len(), 1);
+        assert_eq!(
+            missing_packs[0].to_string(),
+            "sha1-ad9fec27d7e071f5380af0c1499b651e9fadfb48"
+        );
     }
 
     #[test]
