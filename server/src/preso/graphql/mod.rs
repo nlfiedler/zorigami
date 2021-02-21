@@ -1126,6 +1126,22 @@ impl MutationRoot {
         let result = usecase.call(params)?;
         Ok(result.to_string_lossy().into_owned())
     }
+
+    /// Restore any missing packs, copying from the other pack store.
+    fn restore_packs(
+        executor: &Executor,
+        source_id: String,
+        target_id: String,
+    ) -> FieldResult<Vec<entities::Pack>> {
+        use crate::domain::usecases::restore_missing::{Params, RestoreMissingPacks};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = RestoreMissingPacks::new(Box::new(repo));
+        let params: Params = Params::new(source_id, target_id);
+        let result: Vec<entities::Pack> = usecase.call(params)?;
+        Ok(result)
+    }
 }
 
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;

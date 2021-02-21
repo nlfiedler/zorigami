@@ -10,7 +10,6 @@
 **** =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1=
 **** maybe more?
 *** TODO remove all dangling objects and prune empty buckets
-*** TODO repair missing objects by copying from another pack store
 *** TODO ensure backup is _not_ in progress during check/repair
 ** Pack store bucket efficiency
 *** creating too many buckets, after 6 months over 700 buckets on google

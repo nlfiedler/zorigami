@@ -50,6 +50,9 @@ pub trait RecordRepository: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
+    /// Save the given pack to the repository, overwriting any existing entry.
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
+
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
 

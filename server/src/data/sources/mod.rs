@@ -66,6 +66,9 @@ pub trait EntityDataSource: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
+    /// Save the given pack to the data source, overwriting any existing entry.
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
+
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
 
@@ -258,6 +261,15 @@ impl EntityDataSource for EntityDataSourceImpl {
         PackDef::serialize(pack, &mut ser)?;
         let db = self.database.lock().unwrap();
         db.insert_document(key.as_bytes(), &encoded)
+    }
+
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
+        let key = format!("pack/{}", pack.digest);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        PackDef::serialize(pack, &mut ser)?;
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &encoded)
     }
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {

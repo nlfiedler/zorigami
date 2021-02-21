@@ -79,6 +79,10 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.insert_pack(pack)
     }
 
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
+        self.datasource.put_pack(pack)
+    }
+
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         self.datasource.get_pack(digest)
     }
