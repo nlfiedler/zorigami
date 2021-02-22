@@ -176,4 +176,9 @@ pub trait PackRepository {
     /// Returns a new list of the pack digests for those packs that were not
     /// found on the pack store.
     fn find_missing(&self, store_id: &str, packs: &[Pack]) -> Result<Vec<Checksum>, Error>;
+
+    /// Remove any extraneous objects and empty buckets.
+    ///
+    /// Returns the number of objects removed by this operation.
+    fn prune_extra(&self, store_id: &str, packs: &[Pack]) -> Result<u32, Error>;
 }

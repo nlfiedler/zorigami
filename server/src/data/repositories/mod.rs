@@ -10,7 +10,7 @@ use crate::domain::entities::{
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error, ResultExt};
 use log::{info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -386,6 +386,90 @@ impl PackRepository for PackRepositoryImpl {
         }
         Err(err_msg("no matching store found"))
     }
+
+    fn prune_extra(&self, store_id: &str, packs: &[Pack]) -> Result<u32, Error> {
+        for (store, source) in self.sources.iter() {
+            if store.id == store_id {
+                let mut count: u32 = 0;
+                let buckets = source.list_buckets()?;
+                for bucket in buckets.iter() {
+                    info!("prune_extra scanning bucket {}", bucket);
+                    if is_bucket_referenced(store_id, bucket, packs) {
+                        count += remove_objects(store_id, bucket, source, packs)?;
+                    } else {
+                        count += remove_bucket(bucket, source)?;
+                    }
+                }
+                return Ok(count);
+            }
+        }
+        Err(err_msg("no matching store found"))
+    }
+}
+
+// Determine if the named bucket is referenced by any of the packs.
+//
+// Returns `true` if the bucket is referenced by at least one pack, and `false`
+// if none of the packs references the bucket.
+fn is_bucket_referenced(store: &str, bucket: &str, packs: &[Pack]) -> bool {
+    for pack in packs.iter() {
+        for location in pack.locations.iter() {
+            if store == location.store && bucket == location.bucket {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+// Remove all unreferenced objects from the bucket.
+//
+// If the bucket becomes empty, remove it.
+fn remove_objects(
+    store: &str,
+    bucket: &str,
+    source: &Box<dyn PackDataSource>,
+    packs: &[Pack],
+) -> Result<u32, Error> {
+    // build a set of object names associated with store_id+bucket
+    let mut bucket_objects: HashSet<String> = HashSet::new();
+    for pack in packs.iter() {
+        for location in pack.locations.iter() {
+            if store == location.store && bucket == location.bucket {
+                bucket_objects.insert(location.object.clone());
+            }
+        }
+    }
+    // delete all objects not referenced by the set
+    let objects = source.list_objects(bucket)?;
+    let mut deleted: usize = 0;
+    for object in objects.iter() {
+        if !bucket_objects.contains(object) {
+            info!("remove_objects: deleting object {}", object);
+            source.delete_object(bucket, object)?;
+            deleted += 1;
+        }
+    }
+    // delete bucket if all objects within were deleted
+    if deleted == objects.len() {
+        info!("remove_objects: deleting bucket {}", bucket);
+        source.delete_bucket(bucket)?;
+    }
+    Ok(deleted as u32)
+}
+
+// Remove all objects from the bucket, and the bucket itself.
+//
+// Return the number of objects in the bucket that were removed.
+fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, Error> {
+    let objects = source.list_objects(bucket)?;
+    for object in objects.iter() {
+        info!("remove_bucket: deleting object {}", object);
+        source.delete_object(bucket, object)?;
+    }
+    info!("remove_bucket: deleting bucket {}", bucket);
+    source.delete_bucket(bucket)?;
+    Ok(objects.len() as u32)
 }
 
 // Try to store the pack file up to three times before giving up.
@@ -1166,6 +1250,256 @@ mod tests {
             missing_packs[0].to_string(),
             "sha1-ad9fec27d7e071f5380af0c1499b651e9fadfb48"
         );
+    }
+
+    #[test]
+    fn test_prune_extra_no_store() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let source = MockPackDataSource::new();
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let packs: Vec<Pack> = vec![];
+        let result = repo.prune_extra("nostore", &packs);
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("no matching store found"));
+    }
+
+    #[test]
+    fn test_prune_extra_no_buckets() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| Ok(Vec::new()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.prune_extra("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_prune_extra_no_objects() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| Ok(Vec::new()));
+            // empty bucket gets deleted regardless
+            source
+                .expect_delete_bucket()
+                .with(eq("bucket1"))
+                .returning(|_| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.prune_extra("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_prune_extra_empty_pack_list() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".to_owned()];
+                    Ok(objects)
+                });
+            // unreferenced object and now empty bucket are removed
+            source
+                .expect_delete_object()
+                .with(eq("bucket1"), eq("object1"))
+                .returning(|_, _| Ok(()));
+            source
+                .expect_delete_bucket()
+                .with(eq("bucket1"))
+                .returning(|_| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let packs: Vec<Pack> = Vec::new();
+        let result = repo.prune_extra("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_prune_extra_no_extra() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".to_owned()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".to_owned()];
+                    Ok(objects)
+                });
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.prune_extra("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_prune_extra_some_extra() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().with(always()).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_list_buckets().returning(|| {
+                let buckets = vec!["bucket1".into(), "bucket2".into(), "bucket3".into()];
+                Ok(buckets)
+            });
+            source
+                .expect_list_objects()
+                .with(eq("bucket1"))
+                .returning(|_| {
+                    let objects = vec!["object1".into(), "object2".into()];
+                    Ok(objects)
+                });
+            source
+                .expect_list_objects()
+                .with(eq("bucket2"))
+                .returning(|_| Ok(Vec::new()));
+            source
+                .expect_list_objects()
+                .with(eq("bucket3"))
+                .returning(|_| {
+                    let objects = vec!["object1".into(), "object2".into()];
+                    Ok(objects)
+                });
+            source
+                .expect_delete_object()
+                .with(eq("bucket1"), eq("object2"))
+                .returning(|_, _| Ok(()));
+            source
+                .expect_delete_bucket()
+                .with(eq("bucket2"))
+                .returning(|_| Ok(()));
+            source
+                .expect_delete_object()
+                .with(eq("bucket3"), eq("object1"))
+                .returning(|_, _| Ok(()));
+            source
+                .expect_delete_object()
+                .with(eq("bucket3"), eq("object2"))
+                .returning(|_, _| Ok(()));
+            source
+                .expect_delete_bucket()
+                .with(eq("bucket3"))
+                .returning(|_| Ok(()));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let digest = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
+        let coords = vec![PackLocation::new("localtmp", "bucket1", "object1")];
+        let pack = Pack::new(digest.clone(), coords);
+        let packs: Vec<Pack> = vec![pack];
+        let result = repo.prune_extra("localtmp", &packs);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
     }
 
     #[test]

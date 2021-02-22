@@ -14,6 +14,7 @@ pub mod get_stores;
 pub mod get_tree;
 pub mod new_dataset;
 pub mod new_store;
+pub mod prune_extra;
 pub mod put_back;
 pub mod restore_database;
 pub mod restore_missing;

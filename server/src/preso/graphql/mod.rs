@@ -1142,6 +1142,18 @@ impl MutationRoot {
         let result: Vec<entities::Pack> = usecase.call(params)?;
         Ok(result)
     }
+
+    /// Remove extraneous packs from the given pack store.
+    fn prune_extra(executor: &Executor, store_id: String) -> FieldResult<i32> {
+        use crate::domain::usecases::prune_extra::{Params, PruneExtraPacks};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = PruneExtraPacks::new(Box::new(repo));
+        let params: Params = Params::new(store_id);
+        let result: u32 = usecase.call(params)?;
+        Ok(result as i32)
+    }
 }
 
 pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;
