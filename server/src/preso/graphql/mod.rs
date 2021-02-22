@@ -1773,7 +1773,7 @@ mod tests {
     fn test_mutation_define_store_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -1830,9 +1830,7 @@ mod tests {
     fn test_mutation_define_store_err() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_store()
-            .with(always())
-            .returning(|_| Err(err_msg("oh no")));
+        mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -1873,7 +1871,7 @@ mod tests {
     fn test_mutation_update_store_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -1921,7 +1919,7 @@ mod tests {
     fn test_mutation_update_store_id() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -1960,9 +1958,7 @@ mod tests {
     fn test_mutation_update_store_err() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_store()
-            .with(always())
-            .returning(|_| Err(err_msg("oh no")));
+        mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -2001,9 +1997,7 @@ mod tests {
     fn test_mutation_delete_store_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_delete_store()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_delete_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -2035,7 +2029,6 @@ mod tests {
         // arrange
         let mut mock = MockEntityDataSource::new();
         mock.expect_delete_store()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
@@ -2068,9 +2061,7 @@ mod tests {
         let config: entities::Configuration = Default::default();
         mock.expect_get_configuration()
             .returning(move || Ok(Some(config.clone())));
-        mock.expect_put_dataset()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_put_dataset().returning(|_| Ok(()));
         mock.expect_put_computer_id()
             .with(always(), always())
             .returning(|_, _| Ok(()));
@@ -2124,9 +2115,7 @@ mod tests {
         let config: entities::Configuration = Default::default();
         mock.expect_get_configuration()
             .returning(move || Ok(Some(config.clone())));
-        mock.expect_get_store()
-            .with(always())
-            .returning(|_| Ok(None));
+        mock.expect_get_store().returning(|_| Ok(None));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -2171,7 +2160,6 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(Some(config.clone())));
         mock.expect_put_dataset()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
@@ -2210,9 +2198,7 @@ mod tests {
     fn test_mutation_update_dataset_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_put_dataset()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_put_dataset().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -2301,7 +2287,6 @@ mod tests {
         // arrange
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_dataset()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
@@ -2340,15 +2325,9 @@ mod tests {
     fn test_mutation_delete_dataset_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
-        mock.expect_delete_dataset()
-            .with(always())
-            .returning(|_| Ok(()));
-        mock.expect_delete_computer_id()
-            .with(always())
-            .returning(|_| Ok(()));
-        mock.expect_delete_latest_snapshot()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_delete_dataset().returning(|_| Ok(()));
+        mock.expect_delete_computer_id().returning(|_| Ok(()));
+        mock.expect_delete_latest_snapshot().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
@@ -2380,7 +2359,6 @@ mod tests {
         // arrange
         let mut mock = MockEntityDataSource::new();
         mock.expect_delete_dataset()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();

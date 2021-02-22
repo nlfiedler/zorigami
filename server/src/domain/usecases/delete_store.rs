@@ -53,15 +53,12 @@ mod tests {
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
     use failure::err_msg;
-    use mockall::predicate::*;
 
     #[test]
     fn test_delete_store_ok() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_delete_store()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_delete_store().returning(|_| Ok(()));
         // act
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
@@ -77,7 +74,6 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_delete_store()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         // act
         let usecase = DeleteStore::new(Box::new(mock));

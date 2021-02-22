@@ -97,9 +97,7 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
-        mock.expect_put_dataset()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_put_dataset().returning(|_| Ok(()));
         mock.expect_put_computer_id()
             .with(always(), always())
             .returning(|_, _| Ok(()));
@@ -129,7 +127,6 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
         mock.expect_put_dataset()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         mock.expect_put_computer_id()
             .with(always(), always())

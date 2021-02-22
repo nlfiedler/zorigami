@@ -518,7 +518,6 @@ mod tests {
         });
         mock.expect_put_configuration()
             .times(1)
-            .with(always())
             .returning(|_| Ok(()));
         // act & assert
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
@@ -612,7 +611,7 @@ mod tests {
     fn test_store_pack_single_source() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source
                 .expect_store_pack()
@@ -642,7 +641,7 @@ mod tests {
     fn test_store_pack_multiple_sources() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source
                 .expect_store_pack()
@@ -686,32 +685,28 @@ mod tests {
     fn test_retrieve_pack_multiple_local() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder
-            .expect_build_source()
-            .with(always())
-            .times(3)
-            .returning(|store| {
-                if store.store_type == StoreType::LOCAL {
-                    let mut source = MockPackDataSource::new();
-                    source.expect_is_local().returning(|| true);
-                    source
-                        .expect_retrieve_pack()
-                        .withf(|location, _| location.store == "local123")
-                        .returning(|_, _| Ok(()));
-                    Ok(Box::new(source))
-                } else if store.store_type == StoreType::MINIO {
-                    let mut source = MockPackDataSource::new();
-                    source.expect_is_local().times(0..2).returning(|| false);
-                    source.expect_is_slow().times(0..2).returning(|| false);
-                    Ok(Box::new(source))
-                } else {
-                    // lump all other store types into this clause
-                    let mut source = MockPackDataSource::new();
-                    source.expect_is_local().times(0..2).returning(|| false);
-                    source.expect_is_slow().times(0..2).returning(|| true);
-                    Ok(Box::new(source))
-                }
-            });
+        builder.expect_build_source().times(3).returning(|store| {
+            if store.store_type == StoreType::LOCAL {
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().returning(|| true);
+                source
+                    .expect_retrieve_pack()
+                    .withf(|location, _| location.store == "local123")
+                    .returning(|_, _| Ok(()));
+                Ok(Box::new(source))
+            } else if store.store_type == StoreType::MINIO {
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().times(0..2).returning(|| false);
+                source.expect_is_slow().times(0..2).returning(|| false);
+                Ok(Box::new(source))
+            } else {
+                // lump all other store types into this clause
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().times(0..2).returning(|| false);
+                source.expect_is_slow().times(0..2).returning(|| true);
+                Ok(Box::new(source))
+            }
+        });
         let stores = vec![
             Store {
                 id: "local123".to_owned(),
@@ -751,28 +746,24 @@ mod tests {
     fn test_retrieve_pack_multiple_fast() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder
-            .expect_build_source()
-            .with(always())
-            .times(2)
-            .returning(|store| {
-                if store.store_type == StoreType::MINIO {
-                    let mut source = MockPackDataSource::new();
-                    source.expect_is_local().times(0..2).returning(|| false);
-                    source.expect_is_slow().times(0..2).returning(|| false);
-                    source
-                        .expect_retrieve_pack()
-                        .withf(|location, _| location.store == "minio123")
-                        .returning(|_, _| Ok(()));
-                    Ok(Box::new(source))
-                } else {
-                    // lump all other store types into this clause
-                    let mut source = MockPackDataSource::new();
-                    source.expect_is_local().times(0..2).returning(|| false);
-                    source.expect_is_slow().times(0..2).returning(|| true);
-                    Ok(Box::new(source))
-                }
-            });
+        builder.expect_build_source().times(2).returning(|store| {
+            if store.store_type == StoreType::MINIO {
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().times(0..2).returning(|| false);
+                source.expect_is_slow().times(0..2).returning(|| false);
+                source
+                    .expect_retrieve_pack()
+                    .withf(|location, _| location.store == "minio123")
+                    .returning(|_, _| Ok(()));
+                Ok(Box::new(source))
+            } else {
+                // lump all other store types into this clause
+                let mut source = MockPackDataSource::new();
+                source.expect_is_local().times(0..2).returning(|| false);
+                source.expect_is_slow().times(0..2).returning(|| true);
+                Ok(Box::new(source))
+            }
+        });
         let stores = vec![
             Store {
                 id: "minio123".to_owned(),
@@ -807,20 +798,16 @@ mod tests {
     fn test_retrieve_pack_multiple_any() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder
-            .expect_build_source()
-            .with(always())
-            .times(1)
-            .returning(|_| {
-                let mut source = MockPackDataSource::new();
-                source.expect_is_local().times(1).returning(|| false);
-                source.expect_is_slow().times(1).returning(|| true);
-                source
-                    .expect_retrieve_pack()
-                    .withf(|location, _| location.store == "sftp123")
-                    .returning(|_, _| Ok(()));
-                Ok(Box::new(source))
-            });
+        builder.expect_build_source().times(1).returning(|_| {
+            let mut source = MockPackDataSource::new();
+            source.expect_is_local().times(1).returning(|| false);
+            source.expect_is_slow().times(1).returning(|| true);
+            source
+                .expect_retrieve_pack()
+                .withf(|location, _| location.store == "sftp123")
+                .returning(|_, _| Ok(()));
+            Ok(Box::new(source))
+        });
         let stores = vec![Store {
             id: "sftp123".to_owned(),
             store_type: StoreType::SFTP,
@@ -849,7 +836,6 @@ mod tests {
         let mut builder = MockPackSourceBuilder::new();
         builder
             .expect_build_source()
-            .with(always())
             .times(1)
             .returning(|_| Ok(Box::new(MockPackDataSource::new())));
         let stores = vec![Store {
@@ -879,7 +865,7 @@ mod tests {
     fn test_test_store() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| Ok(Vec::new()));
             Ok(Box::new(source))
@@ -1025,7 +1011,7 @@ mod tests {
     fn test_find_missing_no_store() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let source = MockPackDataSource::new();
             Ok(Box::new(source))
         });
@@ -1051,7 +1037,7 @@ mod tests {
     fn test_find_missing_no_buckets() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| Ok(Vec::new()));
             Ok(Box::new(source))
@@ -1085,7 +1071,7 @@ mod tests {
     fn test_find_missing_no_objects() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1126,7 +1112,7 @@ mod tests {
     fn test_find_missing_empty_pack_list() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1163,7 +1149,7 @@ mod tests {
     fn test_find_missing_no_missing() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1203,7 +1189,7 @@ mod tests {
     fn test_find_missing_some_missing() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1256,7 +1242,7 @@ mod tests {
     fn test_prune_extra_no_store() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let source = MockPackDataSource::new();
             Ok(Box::new(source))
         });
@@ -1282,7 +1268,7 @@ mod tests {
     fn test_prune_extra_no_buckets() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| Ok(Vec::new()));
             Ok(Box::new(source))
@@ -1311,7 +1297,7 @@ mod tests {
     fn test_prune_extra_no_objects() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1352,7 +1338,7 @@ mod tests {
     fn test_prune_extra_empty_pack_list() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".to_owned()];
@@ -1436,7 +1422,7 @@ mod tests {
     fn test_prune_extra_some_extra() {
         // arrange
         let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().with(always()).returning(|_| {
+        builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source.expect_list_buckets().returning(|| {
                 let buckets = vec!["bucket1".into(), "bucket2".into(), "bucket3".into()];

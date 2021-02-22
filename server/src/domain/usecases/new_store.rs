@@ -74,13 +74,12 @@ mod tests {
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
     use failure::err_msg;
-    use mockall::predicate::*;
 
     #[test]
     fn test_new_store_ok() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_put_store().with(always()).returning(|_| Ok(()));
+        mock.expect_put_store().returning(|_| Ok(()));
         // act
         let usecase = NewStore::new(Box::new(mock));
         let mut properties: HashMap<String, String> = HashMap::new();
@@ -103,9 +102,7 @@ mod tests {
     fn test_new_store_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_put_store()
-            .with(always())
-            .returning(|_| Err(err_msg("oh no")));
+        mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
         // act
         let usecase = NewStore::new(Box::new(mock));
         let mut properties: HashMap<String, String> = HashMap::new();

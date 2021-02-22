@@ -95,15 +95,12 @@ mod tests {
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
     use failure::err_msg;
-    use mockall::predicate::*;
 
     #[test]
     fn test_update_dataset_ok() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_put_dataset()
-            .with(always())
-            .returning(|_| Ok(()));
+        mock.expect_put_dataset().returning(|_| Ok(()));
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
@@ -126,7 +123,6 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_put_dataset()
-            .with(always())
             .returning(|_| Err(err_msg("oh no")));
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
