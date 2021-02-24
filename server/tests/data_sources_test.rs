@@ -144,6 +144,47 @@ fn test_insert_get_pack() {
 }
 
 #[test]
+fn test_insert_get_database() {
+    let db_path = DBPath::new("_test_insert_get_database");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+    let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
+    let pack = entities::Pack::new(digest1.clone(), coords);
+    datasource.insert_database(&pack).unwrap();
+    datasource.insert_database(&pack).unwrap();
+    datasource.insert_database(&pack).unwrap();
+    let option = datasource.get_database(&pack.digest).unwrap();
+    assert!(option.is_some());
+    let actual = option.unwrap();
+    assert_eq!(actual.digest, pack.digest);
+    assert_eq!(actual.locations.len(), pack.locations.len());
+    assert_eq!(actual.locations.len(), 1);
+    assert_eq!(actual.locations[0], pack.locations[0]);
+    assert_eq!(actual.upload_time, pack.upload_time);
+    assert_eq!(actual.crypto_salt, pack.crypto_salt);
+
+    // insert some more database records to test get_databases()
+    let digest2 = Checksum::SHA1(String::from("4a285c30855fde0a195f3bdbd5e2663338f7510a"));
+    let coords = vec![entities::PackLocation::new("store1", "bucket1", "object2")];
+    let pack = entities::Pack::new(digest2.clone(), coords);
+    datasource.insert_database(&pack).unwrap();
+
+    let digest3 = Checksum::SHA1(String::from("bf24db8ccd274daad5fe73a71b95cd00ffa56a37"));
+    let coords = vec![entities::PackLocation::new("store2", "bucket1", "object3")];
+    let pack = entities::Pack::new(digest3.clone(), coords);
+    datasource.insert_database(&pack).unwrap();
+
+    // test get_databases()
+    let mut packs = datasource.get_databases().unwrap();
+    assert_eq!(packs.len(), 3);
+    packs.sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
+    assert_eq!(packs[0].digest, digest2);
+    assert_eq!(packs[1].digest, digest1);
+    assert_eq!(packs[2].digest, digest3);
+}
+
+#[test]
 fn test_put_get_delete_store() {
     let db_path = DBPath::new("_test_put_get_delete_store");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();

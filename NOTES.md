@@ -197,6 +197,13 @@ what type of record it is, such as `chunk/` for chunk records, and so on.
     - chunks:
         + offset: file position for this chunk
         + digest: chunk SHA256
+* database snapshots (identical to pack records)
+    - key: `dbase/` + SHA256 of pack file (with "sha256-" prefix)
+    - coordinates:
+        + store ULID
+        + remote bucket/vault name
+        + remote object/archive name
+    - upload_time: date/time of successful upload, for conflict resolution
 * extended attribute records
     - key: `xattr/` + SHA1 of the attribute value
     - value: attribute data as a Buffer

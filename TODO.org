@@ -1,22 +1,10 @@
 * Tasks
-** TODO remove =.with(always())= from tests since it is useless
-** Repair pack stores
-*** gcloud has many extra buckets/objects
-**** =01ee37jcp2jg2p86qq39aqj9q8afd73b8b997a5452b94a6b7c564041b1=
-**** and >500 more
-*** gcloud has some missing buckets/objects
-**** =01eqd5x4321mm2s36wattkk3t8afd73b8b997a5452b94a6b7c564041b1=
-**** and 48 more
-*** minio has some extra buckets/objects
-**** =01ee860rg0pfyn7nkqss7ce6q2afd73b8b997a5452b94a6b7c564041b1=
-**** maybe more?
-*** TODO remove all dangling objects and prune empty buckets
-*** TODO ensure backup is _not_ in progress during check/repair
 ** Pack store bucket efficiency
-*** creating too many buckets, after 6 months over 700 buckets on google
-**** there are 500 fewer buckets in the safe and minio stores
+*** current solution results in many buckets with a single pack file
 *** should use one bucket until it has at least N objects in it
 *** keep track of number of objects in current bucket in app state or database
+*** consider how bucket reuse domain logic should interact with pack data sources
+**** some data sources will have their own bucket reuse policy dictated by the provider
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -141,10 +129,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** Imagine a computer lab all sharing a single cloud storage account
 ** Snapshot Pruning
 *** Should probably not run collection while a backup is in progress
+*** Similarly, prevent a backup from starting while pruning is in progress
 *** Need to prune old database snapshots on remote store
 **** there is no deduplication of the database files, so it uses more space
-**** only really need the most recent copy
-**** be mindful of remote storage deletion policies
+**** use the =upload_time= in the =Pack= in the database snapshot record to determine age
+**** use the snapshot age for conformance with remote storage deletion policies
 *** Consider how to prune old snapshots, pack files, etc
 **** Time Machine and Attic both have retention policies
 **** Based on retention policy, delete stale snapshot records
@@ -250,11 +239,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** Each data set directory has a database directory (and backup)
 **** Backup process automatically excludes the database and its backup
 **** What would a full restore procedure look like?
-**** What are the benefits?
+**** Benefits
 ***** reduced risk in the event of database corruption
-**** What are the costs?
-***** additional disk usage for database overhead
 **** Drawbacks
+***** additional disk usage for database overhead
 ***** forces user to keep database with the dataset
 *** Parallel backups
 **** Currently the backup supervisor spawns a single thread (=Arbiter=) to manage backups
@@ -267,12 +255,16 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** New fields will need accessors that convert from old fields as needed
 ***** reset the old field to indicate it is no longer relevant
 **** Removing a field is no problem for serde
+*** Shared pack repository
+**** Current design basically forces each user/install to have a separate pack repo
+**** Otherwise the pack pruning would delete the packs for other users saving to the same repo
 *** Embedded Database
 **** Is the default RocksDB performance sufficient?
 **** Consider https://github.com/spacejam/sled/
 ***** written in Rust, open source
 ***** will need prefix key scanning
 ****** looks like you just use a prefix of the key (sorts before the matching keys)
+***** will need backup/restore functions
 *** Client/Server
 **** Look at ways to secure the server, to allay fears of exploits
 **** A web conferencing tool was exploited via its hidden HTTP server
@@ -338,10 +330,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Hidden
 **** System
 ** More Better
-*** TODO document how the user might change the passphrase over time
-**** user must remember their old passwords in order to decrypt old pack files
-**** the application will never store the actual password anywhere
-**** will need to prompt the user when a different passphrase is needed
 *** TODO Automatically prune backups more then N days old
 **** For Google and Amazon, anything older than 90 days is free to remove
 *** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
@@ -397,6 +385,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
 * Product
+** TODO Define an MVP and work toward release
 ** TODO Evaluate other backup software
 *** TODO Check out some on App Store
 **** Backup Guru LE
@@ -425,9 +414,19 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 ***** also means something in Macedonian
 **** Hawaiian: ~kaukau~
 **** Latin: ~atticae~
+* Documentation
+** TODO document how the user might change the passphrase over time
+*** user must remember their old passwords in order to decrypt old pack files
+*** the application will never store the actual password anywhere
+*** will need to prompt the user when a different passphrase is needed
 * Technical Information
 ** Data Growth
 *** Database backup tgz seems to grow 8mb in 6 months
+** Possible corner cases
+*** Database backup, then restore, then pack prune
+Because the database snapshot is recorded in the database after the snapshot
+has already been uploaded, if the user were to restore the database and then
+perform a pack pruning, the most recent database snapshot would be removed.
 ** JS Build Artifacts
 *** Flutter => main.dart.js
 | State      |    Size |

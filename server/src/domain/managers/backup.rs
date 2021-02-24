@@ -256,10 +256,12 @@ impl<'a> BackupMaster<'a> {
                 self.stores
                     .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
             pack.record_completed_pack(self.dbase, locations)?;
-            self.state.backup_event(BackupAction::UploadPack(self.dataset.id.clone()));
+            self.state
+                .backup_event(BackupAction::UploadPack(self.dataset.id.clone()));
         }
         let count = pack.record_completed_files(self.dbase)? as u64;
-        self.state.backup_event(BackupAction::UploadFiles(self.dataset.id.clone(), count));
+        self.state
+            .backup_event(BackupAction::UploadFiles(self.dataset.id.clone(), count));
         Ok(())
     }
 
@@ -280,15 +282,22 @@ impl<'a> BackupMaster<'a> {
             .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
         snapshot = snapshot.end_time(Utc::now());
         self.dbase.put_snapshot(&snapshot)?;
-        self.state.backup_event(BackupAction::Finish(self.dataset.id.clone()));
+        self.state
+            .backup_event(BackupAction::Finish(self.dataset.id.clone()));
         Ok(())
     }
 
     /// Upload an archive of the database files to the pack stores.
     fn backup_database(&self) -> Result<(), Error> {
+        // Create a stable snapshot of the database as a single file, upload it
+        // to a special place in the pack store, then record the pseudo-pack to
+        // enable accurate pack pruning.
         let backup_path = self.dbase.create_backup()?;
         let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
-        self.stores.store_database(&computer_id, &backup_path)?;
+        let coords = self.stores.store_database(&computer_id, &backup_path)?;
+        let digest = entities::Checksum::sha256_from_file(&backup_path)?;
+        let pack = entities::Pack::new(digest.clone(), coords);
+        self.dbase.insert_database(&pack)?;
         Ok(())
     }
 }

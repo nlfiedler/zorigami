@@ -29,7 +29,10 @@ impl super::UseCase<Vec<Pack>, Params> for RestoreMissingPacks {
             .repo
             .get_store(&params.target_store_id)?
             .ok_or_else(|| err_msg(format!("no such store: {}", params.target_store_id)))?;
-        let all_packs = self.repo.get_packs(&target_store.id)?;
+        // Find all packs and database snapshot packs.
+        let mut all_packs = self.repo.get_packs(&target_store.id)?;
+        let mut databases = self.repo.get_databases()?;
+        all_packs.append(&mut databases);
         info!(
             "RestoreMissing: scanning {} possible packs for store {}",
             all_packs.len(),
@@ -195,6 +198,7 @@ mod tests {
             .with(eq("deadbeef"))
             .returning(move |_| Ok(Some(target_store.clone())));
         mock.expect_get_packs().returning(|_| Ok(Vec::new()));
+        mock.expect_get_databases().returning(|| Ok(Vec::new()));
         mock.expect_build_pack_repo().returning(move |_| {
             let mut mock_store = MockPackRepository::new();
             mock_store
@@ -253,6 +257,16 @@ mod tests {
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
         });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
+        });
         mock.expect_build_pack_repo().returning(move |_| {
             let mut mock_store = MockPackRepository::new();
             mock_store
@@ -310,6 +324,16 @@ mod tests {
             let coords = vec![PackLocation::new("store1", "bucket1", "object3")];
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
+        });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
         });
         mock.expect_build_pack_repo()
             .withf(|s| s.id == "deadbeef")
@@ -382,6 +406,16 @@ mod tests {
             let coords = vec![PackLocation::new("store1", "bucket1", "object3")];
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
+        });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
         });
         mock.expect_build_pack_repo()
             .withf(|s| s.id == "deadbeef")
@@ -464,6 +498,16 @@ mod tests {
             ];
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
+        });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
         });
         mock.expect_build_pack_repo()
             .withf(|s| s.id == "deadbeef")

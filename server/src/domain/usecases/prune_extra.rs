@@ -20,7 +20,12 @@ impl PruneExtraPacks {
 impl super::UseCase<u32, Params> for PruneExtraPacks {
     fn call(&self, params: Params) -> Result<u32, Error> {
         if let Some(store) = self.repo.get_store(&params.store_id)? {
-            let all_packs = self.repo.get_packs(&store.id)?;
+            // Find all packs and database snapshot packs. Pruning the database
+            // packs prematurely leads to possible data loss and may also incur
+            // early deletion fees.
+            let mut all_packs = self.repo.get_packs(&store.id)?;
+            let mut databases = self.repo.get_databases()?;
+            all_packs.append(&mut databases);
             info!(
                 "PruneExtra expecting {} packs in store {}",
                 all_packs.len(),
@@ -86,6 +91,7 @@ mod tests {
             .with(eq("cafebabe"))
             .returning(move |_| Ok(Some(store.clone())));
         mock.expect_get_packs().returning(|_| Ok(Vec::new()));
+        mock.expect_get_databases().returning(|| Ok(Vec::new()));
         mock.expect_build_pack_repo().returning(move |_| {
             let mut mock_store = MockPackRepository::new();
             mock_store.expect_prune_extra().returning(|_, _| Ok(0));
@@ -129,6 +135,16 @@ mod tests {
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
         });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
+        });
         mock.expect_build_pack_repo().returning(move |_| {
             let mut mock_store = MockPackRepository::new();
             mock_store.expect_prune_extra().returning(|_, _| Ok(0));
@@ -171,6 +187,16 @@ mod tests {
             let coords = vec![PackLocation::new("store1", "bucket1", "object3")];
             let pack3 = Pack::new(digest.clone(), coords);
             Ok(vec![pack1, pack2, pack3])
+        });
+        mock.expect_get_databases().returning(|| {
+            let digest = Checksum::SHA1(String::from("e449af1b9c5561b424b8c199be502bbe06b84af9"));
+            let coords = vec![PackLocation::new(
+                "store1",
+                "9819f08f363c5d58ac4a5b54f7a0cc25",
+                "01EE40MSWC12YYVG67GN9XSQEA",
+            )];
+            let pack1 = Pack::new(digest.clone(), coords);
+            Ok(vec![pack1])
         });
         mock.expect_build_pack_repo().returning(move |_| {
             let mut mock_store = MockPackRepository::new();

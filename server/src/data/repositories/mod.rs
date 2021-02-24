@@ -91,6 +91,18 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_packs(store_id)
     }
 
+    fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
+        self.datasource.insert_database(pack)
+    }
+
+    fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
+        self.datasource.get_database(digest)
+    }
+
+    fn get_databases(&self) -> Result<Vec<Pack>, Error> {
+        self.datasource.get_databases()
+    }
+
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
         self.datasource.insert_xattr(digest, xattr)
     }
@@ -324,15 +336,13 @@ impl PackRepository for PackRepositoryImpl {
         Ok(())
     }
 
-    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<(), Error> {
+    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error> {
         // Use a ULID as the object name so they sort by time which will make
         // it easier to find the latest database archive later.
         let object_name = rusty_ulid::generate_ulid_string();
         // Use a predictable bucket name so we can find it easily later.
         let bucket_name = crate::domain::computer_bucket_name(computer_id);
-        // discard the pack locations, there is no place to save them
-        self.store_pack(infile, &bucket_name, &object_name)?;
-        Ok(())
+        self.store_pack(infile, &bucket_name, &object_name)
     }
 
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {

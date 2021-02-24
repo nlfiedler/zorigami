@@ -75,6 +75,18 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve all pack records that should be in the given store.
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
 
+    /// Insert the given psedo-pack for the database snapshot, if one with the
+    /// same digest does not already exist. Packs with the same digest are
+    /// assumed to be identical.
+    fn insert_database(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Retrieve the database pseudo-pack by the given digest, returning `None`
+    /// if not found.
+    fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Retrieve all database pseudo-pack records.
+    fn get_databases(&self) -> Result<Vec<Pack>, Error>;
+
     /// Insert the extended file attributes value into the data source, if one
     /// with the same digest does not already exist. Values with the same digest
     /// are assumed to be identical.
@@ -303,6 +315,46 @@ impl EntityDataSource for EntityDataSourceImpl {
                     result.digest = digest.unwrap();
                     results.push(result);
                 }
+            }
+        }
+        Ok(results)
+    }
+
+    fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
+        let key = format!("dbase/{}", pack.digest);
+        let mut encoded: Vec<u8> = Vec::new();
+        let mut ser = serde_cbor::Serializer::new(&mut encoded);
+        PackDef::serialize(pack, &mut ser)?;
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), &encoded)
+    }
+
+    fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
+        let key = format!("dbase/{}", digest);
+        let db = self.database.lock().unwrap();
+        let encoded = db.get_document(key.as_bytes())?;
+        match encoded {
+            Some(value) => {
+                let mut de = serde_cbor::Deserializer::from_slice(&value);
+                let mut result = PackDef::deserialize(&mut de)?;
+                result.digest = digest.clone();
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn get_databases(&self) -> Result<Vec<Pack>, Error> {
+        let db = self.database.lock().unwrap();
+        let packs = db.fetch_prefix("dbase/")?;
+        let mut results: Vec<Pack> = Vec::new();
+        for (key, value) in packs {
+            let mut de = serde_cbor::Deserializer::from_slice(&value);
+            let mut result = PackDef::deserialize(&mut de)?;
+            let digest: Result<Checksum, Error> = FromStr::from_str(&key);
+            if digest.is_ok() {
+                result.digest = digest.unwrap();
+                results.push(result);
             }
         }
         Ok(results)

@@ -59,6 +59,18 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve all pack records that should be in the given store.
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
 
+    /// Insert the given psedo-pack for the database snapshot, if one with the
+    /// same digest does not already exist. Packs with the same digest are
+    /// assumed to be identical.
+    fn insert_database(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Retrieve the database pseudo-pack by the given digest, returning `None`
+    /// if not found.
+    fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Retrieve all database pseudo-pack records.
+    fn get_databases(&self) -> Result<Vec<Pack>, Error>;
+
     /// Insert the extended file attributes value into the repository, if one
     /// with the same digest does not already exist. Values with the same digest
     /// are assumed to be identical.
@@ -161,8 +173,9 @@ pub trait PackRepository {
     /// Store the compressed database snapshot in the pack stores.
     ///
     /// This archive should be stored in such a manner that it can be retrieved
-    /// using only the computer identifier.
-    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<(), Error>;
+    /// using only the computer identifier. Regardless, the pack locations are
+    /// returned for the purpose of tracking them, to support accurate pruning.
+    fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error>;
 
     /// Retrieve the most recent database snapshot for the given computer.
     ///
