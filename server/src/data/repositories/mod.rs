@@ -9,10 +9,10 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use failure::{err_msg, Error, ResultExt};
-use log::{info, warn};
+use log::{error, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
 // using a `Box` instead, cloning it would involve adding fake clone operations
@@ -239,6 +239,12 @@ fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
 
 pub struct PackRepositoryImpl {
     sources: HashMap<Store, Box<dyn PackDataSource>>,
+    // Name that will be returned by get_bucket_name(), unless of course it is
+    // blank, in which case a new name will be generated.
+    bucket_name: Mutex<String>,
+    // Number of times get_bucket_name() has been called and returned the same
+    // bucket name. Used to produce new bucket names when appropriate.
+    name_count: Mutex<usize>,
 }
 
 impl PackRepositoryImpl {
@@ -251,11 +257,29 @@ impl PackRepositoryImpl {
             let source = builder.build_source(&store)?;
             sources.insert(store, source);
         }
-        Ok(Self { sources })
+        Ok(Self {
+            sources,
+            bucket_name: Mutex::new("".into()),
+            name_count: Mutex::new(0),
+        })
     }
 }
 
 impl PackRepository for PackRepositoryImpl {
+    fn get_bucket_name(&self, computer_id: &str) -> String {
+        let mut count = self.name_count.lock().unwrap();
+        if *count == 0 {
+            let mut name = self.bucket_name.lock().unwrap();
+            *name = generate_bucket_name(computer_id);
+        }
+        *count += 1;
+        if *count > 128 {
+            *count = 0;
+        }
+        let name = self.bucket_name.lock().unwrap();
+        name.clone()
+    }
+
     fn store_pack(
         &self,
         packfile: &Path,
@@ -417,6 +441,29 @@ impl PackRepository for PackRepositoryImpl {
     }
 }
 
+///
+/// Generate a suitable bucket name, using a ULID and the given unique ID.
+///
+/// The unique ID is assumed to be a shorted version of the UUID returned from
+/// `generate_unique_id()`, and will be converted back to a full UUID for the
+/// purposes of generating a bucket name consisting only of lowercase letters.
+///
+pub fn generate_bucket_name(unique_id: &str) -> String {
+    use rusty_ulid::generate_ulid_string;
+    match blob_uuid::to_uuid(unique_id) {
+        Ok(uuid) => {
+            let shorter = uuid.to_simple().to_string();
+            let mut ulid = generate_ulid_string();
+            ulid.push_str(&shorter);
+            ulid.to_lowercase()
+        }
+        Err(err) => {
+            error!("failed to convert unique ID: {:?}", err);
+            generate_ulid_string().to_lowercase()
+        }
+    }
+}
+
 // Determine if the named bucket is referenced by any of the packs.
 //
 // Returns `true` if the bucket is referenced by at least one pack, and `false`
@@ -538,6 +585,22 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_bucket_name() {
+        let uuid = Configuration::generate_unique_id("charlie", "localhost");
+        let bucket = generate_bucket_name(&uuid);
+        // Ensure the generated name is safe for the "cloud", which so far means
+        // Google Cloud Storage and Amazon Glacier. It needs to be reasonably
+        // short, must consist only of lowercase letters or digits.
+        assert_eq!(bucket.len(), 58, "bucket name is 58 characters");
+        for c in bucket.chars() {
+            assert!(c.is_ascii_alphanumeric());
+            if c.is_ascii_alphabetic() {
+                assert!(c.is_ascii_lowercase());
+            }
+        }
+    }
+
+    #[test]
     fn test_load_dataset_stores_ok() {
         // arrange
         let mut local_props: HashMap<String, String> = HashMap::new();
@@ -615,6 +678,36 @@ mod tests {
         let result = repo.restore_from_backup(&archive_path);
         // assert
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_get_bucket_name() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .returning(|_| Ok(Box::new(MockPackDataSource::new())));
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
+        let actual = repo.get_bucket_name(&computer_id);
+        // assert
+        assert!(!actual.is_empty());
+        let again = repo.get_bucket_name(&computer_id);
+        assert_eq!(actual, again);
+        for _ in 1..200 {
+            repo.get_bucket_name(&computer_id);
+        }
+        let last1 = repo.get_bucket_name(&computer_id);
+        assert_ne!(actual, last1);
     }
 
     #[test]

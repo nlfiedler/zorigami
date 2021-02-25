@@ -6,8 +6,6 @@ use failure::{err_msg, Error};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use log::error;
-use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::{self, Salt};
 use sodiumoxide::crypto::secretstream::{self, Stream, Tag};
 use std::fs::{self, File};
@@ -80,28 +78,6 @@ pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
         fs::remove_file(infile)?;
     }
     Ok(())
-}
-
-///
-/// Generate a suitable bucket name, using a ULID and the given unique ID.
-///
-/// The unique ID is assumed to be a shorted version of the UUID returned from
-/// `generate_unique_id()`, and will be converted back to a full UUID for the
-/// purposes of generating a bucket name consisting only of lowercase letters.
-///
-pub fn generate_bucket_name(unique_id: &str) -> String {
-    match blob_uuid::to_uuid(unique_id) {
-        Ok(uuid) => {
-            let shorter = uuid.to_simple().to_string();
-            let mut ulid = generate_ulid_string();
-            ulid.push_str(&shorter);
-            ulid.to_lowercase()
-        }
-        Err(err) => {
-            error!("failed to convert unique ID: {:?}", err);
-            generate_ulid_string().to_lowercase()
-        }
-    }
 }
 
 ///
@@ -416,22 +392,6 @@ mod tests {
         let uuid = Configuration::generate_unique_id("charlie", "localhost");
         // UUIDv5 = 747267d5-6e70-5711-8a9a-a40c24c1730f
         assert_eq!(uuid, "dHJn1W5wVxGKmqQMJMFzDw");
-    }
-
-    #[test]
-    fn test_generate_bucket_name() {
-        let uuid = Configuration::generate_unique_id("charlie", "localhost");
-        let bucket = generate_bucket_name(&uuid);
-        // Ensure the generated name is safe for the "cloud", which so far means
-        // Google Cloud Storage and Amazon Glacier. It needs to be reasonably
-        // short, must consist only of lowercase letters or digits.
-        assert_eq!(bucket.len(), 58, "bucket name is 58 characters");
-        for c in bucket.chars() {
-            assert!(c.is_ascii_alphanumeric());
-            if c.is_ascii_alphabetic() {
-                assert!(c.is_ascii_lowercase());
-            }
-        }
     }
 
     #[test]

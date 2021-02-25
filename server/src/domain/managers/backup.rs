@@ -165,7 +165,6 @@ struct BackupMaster<'a> {
     state: &'a Arc<dyn StateStore>,
     builder: PackBuilder<'a>,
     passphrase: String,
-    bucket_name: String,
     stores: Box<dyn PackRepository>,
     stop_time: Option<DateTime<Utc>>,
 }
@@ -179,9 +178,7 @@ impl<'a> BackupMaster<'a> {
         passphrase: &str,
         stop_time: Option<DateTime<Utc>>,
     ) -> Result<Self, Error> {
-        let computer_id = dbase.get_computer_id(&dataset.id)?.unwrap();
         let stores = dbase.load_dataset_stores(&dataset)?;
-        let bucket_name = super::generate_bucket_name(&computer_id);
         let builder = PackBuilder::new(&dbase, dataset.pack_size);
         Ok(Self {
             dataset,
@@ -189,7 +186,6 @@ impl<'a> BackupMaster<'a> {
             state,
             builder,
             passphrase: passphrase.to_owned(),
-            bucket_name,
             stores,
             stop_time,
         })
@@ -248,13 +244,15 @@ impl<'a> BackupMaster<'a> {
         let pack_rec = self.dbase.get_pack(pack.digest.as_ref().unwrap())?;
         if pack_rec.is_none() {
             // new pack file, need to upload this and record to database
+            let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
+            let bucket_name = self.stores.get_bucket_name(&computer_id);
             let object_name = format!("{}", pack.digest.as_ref().unwrap());
             // capture and record the remote object name, in case it differs from
             // the name we generated ourselves; either value is expected to be
             // sufficiently unique for our purposes
-            let locations =
-                self.stores
-                    .store_pack(outfile.path(), &self.bucket_name, &object_name)?;
+            let locations = self
+                .stores
+                .store_pack(outfile.path(), &bucket_name, &object_name)?;
             pack.record_completed_pack(self.dbase, locations)?;
             self.state
                 .backup_event(BackupAction::UploadPack(self.dataset.id.clone()));

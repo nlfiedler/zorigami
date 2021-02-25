@@ -1,10 +1,4 @@
 * Tasks
-** Pack store bucket efficiency
-*** current solution results in many buckets with a single pack file
-*** should use one bucket until it has at least N objects in it
-*** keep track of number of objects in current bucket in app state or database
-*** consider how bucket reuse domain logic should interact with pack data sources
-**** some data sources will have their own bucket reuse policy dictated by the provider
 ** Better file/tree Restore
 *** this improved UI should replace the put-back button
 **** the put-back feature relies on a quick response which is not guaranteed
@@ -189,6 +183,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content
+**** Optionally prune all existing packs in the process
 *** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store
@@ -209,9 +204,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** use store form to take paths for public and private keys
 **** TODO allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
-*** TODO Repair pack stores that were off-line during a backup
-**** e.g. a pack store was unchecked in the dataset, then later checked again
-**** resolve the missing packs and tranfer from one of the other pack stores
+*** TODO Repair missing pack files in pack stores
+**** expose the GraphQL operation via the graphical interface
 ** More Information
 *** TODO Show details about snapshots and files
 **** show differences between two snapshots
@@ -221,7 +215,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** for a given snapshot
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
-**** would have to keep track in the database
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist

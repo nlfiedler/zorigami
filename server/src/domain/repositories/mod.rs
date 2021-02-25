@@ -147,6 +147,14 @@ pub trait RecordRepository: Send + Sync {
 ///
 #[cfg_attr(test, automock)]
 pub trait PackRepository {
+    /// Generate a unique bucket name for storing pack files.
+    ///
+    /// This function should be called for each call to `store_pack()` in order
+    /// to ensure buckets are reused and yet not overused, as appropriate.
+    ///
+    /// The computer identifier is typically used in generating the bucket name.
+    fn get_bucket_name(&self, computer_id: &str) -> String;
+
     /// Save the given pack to the stores provided in the constructor.
     ///
     /// Returns the list of all pack locations, which can be used to retrieve
