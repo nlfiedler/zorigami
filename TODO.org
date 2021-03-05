@@ -1,21 +1,63 @@
 * Tasks
 ** Better file/tree Restore
-*** this improved UI should replace the put-back button
-**** the put-back feature relies on a quick response which is not guaranteed
+*** current limitations
+**** put-back waits for the result with a modal spinner
+**** put-back only operates on a single file at a time
+*** desired functionality
+**** restore a single file or tree of files per request
+**** show the status of multiple restoration requests
+**** cancel some or all restoration requests
+*** use cases
+**** add file/tree digests to the ~incoming~ queue
+**** query status of files in the ~pending~ queue
+**** cancel some/all requests in ~pending~ queue
 *** backend
-**** receive requests of tree/file digests to be restored
-**** limit the number of digests that can be submitted in one request
-**** return a request ID to the client for querying later
-**** add the requests to a limited size queue to prevent abuse
-**** process the requests in series on another thread (via actix)
-**** need to ensure packs are downloaded only once
-***** collect all of the file/chunk digests, then collect all of the pack digests
-***** cycle through the packs, downloading, extracting, discarding extra chunks
-***** assemble the files at the end (or as the chunks become available?)
-**** use application state to track progress of the requests
-**** client requests status of restore using request ID
-**** requests can be canceled
-**** restore procedure needs to check request status in case canceled
+**** memory constraint: do not queue up _all_ files at one time
+***** process the tree one level at a time
+**** receive request with digests of trees and/or files to be restored
+**** add the request to a queue of requests to be processed
+**** supervised actor wakes up on an interval(?) to process requests
+***** pop a request from the request queue
+***** if file request, add to file queue
+***** if tree request, fetch record, add entries to file/tree queues
+***** process entries on file queue: fetch packs, assemble, etc
+***** process entries on tree queue: files to file queue, trees to tree queue
+***** when there are no more requests queued to process, clean up chunk files
+**** status query handler
+***** any request that cannot be found is assumed to have completed
+**** database restore changes
+***** check if restore has any pending requests, error out if non-empty
+**** eventually could be sensitive to disk usage, prune packs/chunks
+***** may need to download the packs again, but saves space in the mean time
+*** actor-based approach (that is not workable)
+**** receive request with digest of tree or file to be restored
+***** send ~incoming~ message to incoming actor with request object
+***** return a request ID to the client for querying later
+**** incoming actor: process incoming requests
+***** receive ~incoming~ message with request object
+***** if request for a file, fetch record to get chunks
+***** if request for a tree, enqueue file entries and subtrees as new requests
+***** send ~pending~ message to assemble actor with file records
+***** look up the chunk records to get the packs
+***** send ~download~ message to download actor with pack records
+**** recurse actor: convert tree entries into ~incoming~ messages
+***** for each file entry, create file-based request and send to incoming actor
+***** for each tree entry, create tree-based request and send to incoming actor
+**** download actor: process packs on ~download~ queue
+***** receive ~download~ message and consolidate into a hash set
+***** use an interval timer to wake up and check the queue periodically
+***** dequeue pack record, download pack, extract chunks
+***** send ~chunks available~ message to pending actor
+**** assemble actor: consolidate chunks into files
+***** receive ~pending~ message with file records
+****** add file records to ~pending~ queue
+***** receive ~chunks available~ message
+****** scan available chunks to try to assemble files on ~pending~ queue
+****** when a file is completed, move record to ~completed~ list
+**** implement this restore functionality as a kind of ~manager~
+***** define an interface for mocking in unit tests
+***** consider how this design might factor into managing backups
+**** when to completed requests age out of the system?
 *** frontend
 **** write a usecase for submitting the tree/file digests
 **** write a usecase for checking the progress of the request
@@ -36,6 +78,8 @@
 **** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
 **** =handle_file()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
+** Improved interface
+*** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
 *** TODO testing the minio? pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
@@ -112,9 +156,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** snapshot browser
 ** Flutter and form builder
 *** See comments in =pubspec.yaml= regarding =flutter_form_builder=
-*** Need *beta* channel for web platform support
-*** However, any flutter more recent than *stable* breaks =flutter_form_builder=
-*** Someday, when flutter is stable and =flutter_form_builder= works with it, update
+*** Wait for flutter form builder to update to Flutter 2 stable
 ** Initial Configuration
 *** Walk user through pack store and data set creation
 *** Offer path for restoring database from existing pack store
@@ -122,45 +164,34 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** They may need to avoid naming conflicts with other local users
 **** Imagine a computer lab all sharing a single cloud storage account
 ** Snapshot Pruning
-*** Should probably not run collection while a backup is in progress
-*** Similarly, prevent a backup from starting while pruning is in progress
-*** Need to prune old database snapshots on remote store
-**** there is no deduplication of the database files, so it uses more space
-**** use the =upload_time= in the =Pack= in the database snapshot record to determine age
-**** use the snapshot age for conformance with remote storage deletion policies
-*** Consider how to prune old snapshots, pack files, etc
-**** Time Machine and Attic both have retention policies
-**** Based on retention policy, delete stale snapshot records
-***** set the child's parent reference to skip over stale snapshot
-**** Use some form of "mark and sweep" to find dangling records
-***** discover all of the unreachable records (see below)
-***** remove unreachable snapshot, tree, file, and chunk records
-***** mark all unreachable pack records as ready for removal
-**** Find all marked pack records older than N days, delete pack files
-***** that is, many cloud providers charge extra for deleting archives too soon
-***** pack store can suggest a number of days since that is often already known
-****** i.e. Google and Amazon have infrequently changing, published policies
-****** Google has different minimum storage durations for each storage class
-******* https://cloud.google.com/storage/docs/storage-classes
-***** user can specify their own value for each pack store if necessary
-*** Strategies for finding unreachable objects
-**** Mark and Sweep using a separate database instance
-***** use another database instance for tracking reachable objects
-***** scan production database for reachable objects
+*** Use a multi-phased approach with pruning and garbage collection
+*** Must not run collection while a backup is in progress
+*** Must prevent a backup from starting while pruning is in progress
+*** Phase 1: prune snapshots based on a policy
+**** set the child's parent reference to skip over stale snapshot
+**** e.g. remove snapshots more then N days old
+**** e.g. keep N snapshots per day, M per week, and P per month
+*** Phase 2: prune unreachable objects in the database
+**** copy everything reachable to a new database instance
 ****** datasets -> snapshots -> trees -> files -> chunks -> packs
-***** mark every reachable object by putting its key in the other database
-***** prune everything from the production database that was not marked
-***** once the garbage collection is done, delete the temporary database
-**** Build lists of reachable objects in memory
-***** could blow up if there are many database records
-***** avoids writing to the production database
-**** Mark and Sweep but with database records
-***** avoids blowing up memory for very large databases
-***** results in many database writes and level compaction
+**** delete the old database
+*** Phase 3: prune unreferenced packs from pack store
+**** honor cloud data rentetion policies
+***** e.g. typically anything older than 90 days costs nothing to delete
+***** Google has different minimum storage durations for each storage class
+****** https://cloud.google.com/storage/docs/storage-classes
+***** user can specify their own value for each pack store if necessary
+*** Phase 4: prune old database snapshots (no need to keep old copies)
+**** honor cloud data rentetion policies
+**** use the =upload_time= in the =Pack= record to determine age
 *** Implementation should follow Clean Architecture to improve testability
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
+** Error handling
+*** Consider a structured design for error types and handling
+*** Look at https://github.com/dtolnay/thiserror for defining error types
+*** May improve error handling and reporting
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -221,6 +252,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** like git fsck, start at the top and traverse everything
 **** find and report dangling objects
 **** an automated scan could be run on occasion
+** Pack file integrity
+*** Retrieve random pack files and verify integrity
 ** Architecture Review
 *** Database per dataset directory
 **** Centralized configuration in a known location
@@ -318,14 +351,14 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 ** Windows support
+*** TODO Backup files opened by a running process
+**** Normally cannot read files that are opened on Windows
+**** See Volume Shadow Copy Services (VSS) for details
 *** TODO Support Windows file types
 **** ReadOnly
 **** Hidden
 **** System
 ** More Better
-*** TODO Automatically prune backups more then N days old
-**** For Google and Amazon, anything older than 90 days is free to remove
-*** TODO Option to keep N daily, M weekly, and P monthly backups (a la Attic backup)
 *** TODO Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
@@ -345,9 +378,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** At the start of backup, sync with the ~peer~ to get latest chunks/packs
 *** TODO Consider how to deal with partial uploads
 **** e.g. Minio/S3 has a means of handling these
-*** TODO Pack store should recommend pack sizes
-**** e.g. Glacier recommends archives greater than 100mb
-**** can only really make a recommendation, the user has to choose the right size
 *** TODO Permit removing a store from a dataset
 **** would encourage user to clean up the remote files
 **** for local store, could remove the files immediately
@@ -395,9 +425,99 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** What sets this application apart from the other polished products?
 **** Cross-platform (e.g. macOS, Windows)
 **** Linux server ready
+** Application Monitoring
+*** Need something to capture failures for debugging
+**** c.f. https://sentry.io/welcome/
 ** Windows Certified
 *** CloudBerry(?) has bunches of certifications
 *** is that really so meaningful? *I* never cared
+** Alternatives
+*** Commercial
+**** Arq
+***** https://www.arqbackup.com
+***** Windows, Mac
+***** Uses a single master password
+***** Supports numerous backends
+**** Carbonite
+***** https://www.carbonite.com
+***** Consumer and business
+***** Billed monthly
+***** 128-bit encryption for all but most expensive plan
+***** Windows, Mac, and "servers"
+***** Seems to backup to their servers
+**** CloudBerry
+***** https://www.cloudberrylab.com/backup
+***** Consumer and business
+***** Windows, Mac, Linux
+***** Supports Glacier and other services
+***** Freeware version lacks compression, encryption, limited to 200GB
+**** Duplicacy
+***** https://github.com/gilbertchen/duplicacy
+***** Lists other open source tools and compares them
+***** Deduplicates chunks across systems
+***** Does not use a database supposedly
+***** Does not and can not support Glacier
+**** JungleDisk
+***** https://www.jungledisk.com/encrypted-backups/
+***** Primarily business oriented
+***** Seems to rely on their servers
+***** Probably stores data elsewhere
+**** Rebel Backup
+***** https://www.svsware.com/rebelbackup
+***** Encrypted backups to Dropbox or Google Drive
+***** macOS only
+**** qBackup
+***** https://www.qualeed.com/en/qbackup/
+***** Windows, Mac, Linux
+***** Supports numerous backends
+***** Has copious documentation with screen shots
+**** tarsnap
+***** https://www.tarsnap.com
+***** Free client
+***** Uses public key encryption rather than a password
+***** Stores data in Amazon S3
+***** Relies on tarsnap servers
+***** 10x the price of Google Cloud or Amazon Glacier
+***** Command-line interface
+*** Open Source
+**** Attic
+***** https://attic-backup.org
+***** Development stopped in 2015
+***** Only supports SSH remote host
+***** Command-line interface
+**** Borg
+***** https://borgbackup.readthedocs.io/en/stable/
+***** Fork of Attic
+***** Only supports SSH remote host
+***** Command-line interface
+**** bup
+***** https://bup.github.io
+***** Git-like (uses Python and Git) pack file storage
+***** Requires a bup server for remote storage
+***** Command-line interface
+**** Duplicati
+***** https://www.duplicati.com/
+***** Requires .NET or Mono
+***** Web-based interface
+***** Windows and Linux
+***** No Glacier support
+**** duplicity
+***** http://duplicity.nongnu.org
+***** Uses GnuPG, a tar-like format, and rsync
+***** Supports backends with a filesystem-like interface
+***** Command-line interface
+***** No Glacier support
+**** rclone
+***** https://github.com/rclone/rclone
+***** Syncs a directory structure to the cloud
+***** Offers chunking and encryption
+***** Command-line interface
+***** No Glacier support
+**** restic
+***** https://restic.net
+***** Git-like data model
+***** Supports numerous backends (no Glacier)
+***** Command-line interface
 ** Name
 *** Joseph suggests "Attic"
 **** =atticapp.com= is taken
@@ -408,6 +528,12 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Hawaiian: ~kaukau~
 **** Latin: ~atticae~
 * Documentation
+** Duplicati has a fun description of how the backup works
+*** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
+*** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/
+** TODO Third party license attributions
+*** Include any/all third party license attribution somewhere
+*** =cargo lichking bundle= will dump everything to the console
 ** TODO document how the user might change the passphrase over time
 *** user must remember their old passwords in order to decrypt old pack files
 *** the application will never store the actual password anywhere
