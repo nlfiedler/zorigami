@@ -7,7 +7,7 @@ description = "Backup and restore application."
 repository = "https://github.com/nlfiedler/zorigami"
 readme = "README.md"
 keywords = ["backup", "archival"]
-license = "BSD-2-Clause"
+license = "UNLICENSED"
 
 [dependencies]
 actix = "0.10"

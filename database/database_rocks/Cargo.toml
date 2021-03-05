@@ -3,6 +3,7 @@ name = "database_rocks"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2018"
+license = "UNLICENSED"
 
 [dependencies]
 database_core = { path = "../database_core" }
