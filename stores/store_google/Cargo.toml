@@ -6,17 +6,16 @@ edition = "2018"
 license = "UNLICENSED"
 
 [dependencies]
-dotenv = "0.15.0"
-failure = "0.1.6"
-google-storage1 = "1.0.14"
-# This project intentionally uses an old version of hyper. See
-# https://github.com/Byron/google-apis-rs/issues/173 for more information.
-hyper = "^0.10"
-hyper-rustls = "^0.6"
-serde = "1.0.119"
-serde_json = "1.0.61"
+async-google-apis-common = "0.3"
+base64 = "0.13"
+failure = "0.1"
+hyper = { version = "0.14", features = ["stream"] }
+hyper-rustls = { version = "0.22", features = ["rustls-native-certs"] }
+md-5 = "0.9"
+serde = "1.0"
 store_core = { path = "../store_core" }
-tempfile = "3.1.0"
-# This project intentionally uses an old version of yup-oauth2. See
-# https://github.com/Byron/google-apis-rs/issues/173 for more information.
-yup-oauth2 = "^1.0"
+tokio = { version = "1.4", features = ["macros", "io-util", "rt", "rt-multi-thread", "fs"] }
+
+[dev-dependencies]
+dotenv = "0.15"
+tempfile = "3.2"

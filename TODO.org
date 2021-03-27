@@ -7,64 +7,36 @@
 **** restore a single file or tree of files per request
 **** show the status of multiple restoration requests
 **** cancel some or all restoration requests
-*** use cases
-**** add file/tree digests to the ~incoming~ queue
-**** query status of files in the ~pending~ queue
-**** cancel some/all requests in ~pending~ queue
 *** backend
-**** memory constraint: do not queue up _all_ files at one time
-***** process the tree one level at a time
-**** receive request with digests of trees and/or files to be restored
-**** add the request to a queue of requests to be processed
-**** supervised actor wakes up on an interval(?) to process requests
-***** pop a request from the request queue
-***** if file request, add to file queue
-***** if tree request, fetch record, add entries to file/tree queues
-***** process entries on file queue: fetch packs, assemble, etc
-***** process entries on tree queue: files to file queue, trees to tree queue
-***** when there are no more requests queued to process, clean up chunk files
-**** status query handler
-***** any request that cannot be found is assumed to have completed
-**** database restore changes
+**** DONE test restore of a directory with multiple files
+**** DONE fix supervisor to be message-based instead of using intervals
+***** DONE supervisor does _not_ have an interval timer
+***** DONE restorer impl sends a message to supervisor to process pending queue
+***** DONE ensure pending queue processor is efficient when queue is empty
+***** DONE supervisor will process everything on the pending queue at once
+***** DONE supervisor will append completed requests to the completed list
+***** DONE restore impl will report all pending and completed requests
+***** DONE should the files be deleted via a =Drop= implementation in =PackFetcher=?
+***** DONE for testing, add a fn that waits for at least one completed request
+**** TODO use case: enqueue new file/tree restore request
+**** TODO use case: query pending/completed requests
+***** completed requests include error messages, if any
+**** TODO use case: cancel restore requests
+**** TODO database restore use case changes
 ***** check if restore has any pending requests, error out if non-empty
-**** eventually could be sensitive to disk usage, prune packs/chunks
-***** may need to download the packs again, but saves space in the mean time
-*** actor-based approach (that is not workable)
-**** receive request with digest of tree or file to be restored
-***** send ~incoming~ message to incoming actor with request object
-***** return a request ID to the client for querying later
-**** incoming actor: process incoming requests
-***** receive ~incoming~ message with request object
-***** if request for a file, fetch record to get chunks
-***** if request for a tree, enqueue file entries and subtrees as new requests
-***** send ~pending~ message to assemble actor with file records
-***** look up the chunk records to get the packs
-***** send ~download~ message to download actor with pack records
-**** recurse actor: convert tree entries into ~incoming~ messages
-***** for each file entry, create file-based request and send to incoming actor
-***** for each tree entry, create tree-based request and send to incoming actor
-**** download actor: process packs on ~download~ queue
-***** receive ~download~ message and consolidate into a hash set
-***** use an interval timer to wake up and check the queue periodically
-***** dequeue pack record, download pack, extract chunks
-***** send ~chunks available~ message to pending actor
-**** assemble actor: consolidate chunks into files
-***** receive ~pending~ message with file records
-****** add file records to ~pending~ queue
-***** receive ~chunks available~ message
-****** scan available chunks to try to assemble files on ~pending~ queue
-****** when a file is completed, move record to ~completed~ list
-**** implement this restore functionality as a kind of ~manager~
-***** define an interface for mocking in unit tests
-***** consider how this design might factor into managing backups
-**** when to completed requests age out of the system?
+**** TODO remove the =put_back= use case and GraphQL endpoint
+**** TODO remove the =restore_file()= function
 *** frontend
-**** write a usecase for submitting the tree/file digests
-**** write a usecase for checking the progress of the request
-**** direct user to a "restore requests" page that shows progress
-**** write a new bloc for this restore management
-**** consider how to show errors with respect to files
-**** maybe show list of all files being restored, with status/error in a table
+**** TODO write a usecase for submitting the tree/file digests
+**** TODO write a usecase for checking the progress of the request
+**** TODO write a usecase for canceling a pending request
+**** TODO direct user to a "restore requests" page that shows progress
+**** TODO write a new bloc for this restore management
+**** TODO consider how to show errors with respect to files
+**** TODO maybe show list of all files being restored, with status/error in a table
+** Restore to dissimilar hardware
+*** TODO Allow setting the configuration to change the identity
+*** TODO Test by restoring a backup to a different system
 ** Manual Backup controls
 *** write use cases for starting and stopping a backup
 *** add a "backup now" button to datasets listing
@@ -81,6 +53,8 @@
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
+*** TODO consider replacing =DBPath= in tests with =tempfile=
+**** using =DBPath= and async code and =Path::exists()= causes a =SIGILL=
 *** TODO testing the minio? pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** note that using =Cow= helps to minimize copying
@@ -157,12 +131,25 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Flutter and form builder
 *** See comments in =pubspec.yaml= regarding =flutter_form_builder=
 *** Wait for flutter form builder to update to Flutter 2 stable
+** Crates to revisit
+*** replacing =google-storage1= with =google-cloud= which is less than awesome
+**** maintenance has slowed, author suggests using =google-apis-rs= instead
+**** look at https://crates.io/crates/cloud-storage as an alternative
+***** would need a better API for loading credentials and creating the client
+** Improved error handling
+*** Pack store input validation
+**** should validate Google Cloud service account key when defining pack
 ** Initial Configuration
 *** Walk user through pack store and data set creation
 *** Offer path for restoring database from existing pack store
 *** Allow user to set user/host names for computer UUID
 **** They may need to avoid naming conflicts with other local users
 **** Imagine a computer lab all sharing a single cloud storage account
+** Remote pack store interaction
+*** Remote pack storages like Google Cloud have built-in limits for certain operations
+**** need to consider that GCS will limit the number of buckets listed to 1,000
+**** probably minio and/or S3 have similar default limits
+**** the API generally offers a means of paging to get everything in chunks
 ** Snapshot Pruning
 *** Use a multi-phased approach with pruning and garbage collection
 *** Must not run collection while a backup is in progress
@@ -336,6 +323,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Inform user that this pack store configuration is only temporary
 **** Select database to retrieve based on computer UUID
 **** Instruct user to restore as usual from dataset(s)
+*** TODO Restore symbolic links (currently does nothing with =TreeReference::LINK=)
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
@@ -408,6 +396,12 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
 **** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
 * Product
+** Why another backup program?
+*** Original reason in 2014: nothing supported Linux and Glacier
+*** What will set this apart from other offerings?
+**** Easy to use graphical interface (both desktop and web)
+**** Cross-platform (Windows, macOS, Linux)
+**** Support for multiple backends, including Glacier
 ** TODO Define an MVP and work toward release
 ** TODO Evaluate other backup software
 *** TODO Check out some on App Store
