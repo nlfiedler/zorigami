@@ -24,13 +24,8 @@ class TreeViewer extends StatelessWidget {
       child: BlocConsumer<TreeBrowserBloc, TreeBrowserState>(
         listener: (context, state) {
           if (state is Loaded) {
-            if (state.restoreResult != null) {
-              // this is just a temporary solution until the proper (multi-)file
-              // restore screen is developed
-              final content = state.restoreResult.mapOrElse(
-                (success) => Text('File restored: $success'),
-                (failure) => Text('Restore failed: $failure'),
-              );
+            if (state.restoresEnqueued) {
+              final content = Text('File restores enqueued');
               // must show snackbar outside of builder
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: content),
@@ -56,7 +51,7 @@ class TreeViewer extends StatelessWidget {
               ],
             );
           }
-          return CircularProgressIndicator();
+          return Center(child: CircularProgressIndicator());
         },
       ),
     );

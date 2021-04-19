@@ -18,22 +18,23 @@
 ***** DONE restore impl will report all pending and completed requests
 ***** DONE should the files be deleted via a =Drop= implementation in =PackFetcher=?
 ***** DONE for testing, add a fn that waits for at least one completed request
-**** TODO use case: enqueue new file/tree restore request
-**** TODO use case: query pending/completed requests
-***** completed requests include error messages, if any
-**** TODO use case: cancel restore requests
-**** TODO database restore use case changes
-***** check if restore has any pending requests, error out if non-empty
-**** TODO remove the =put_back= use case and GraphQL endpoint
-**** TODO remove the =restore_file()= function
+**** DONE use case: enqueue new file/tree restore request
+**** DONE use case: query pending/completed requests
+**** DONE use case: cancel restore requests
+**** DONE remove the =put_back= use case and GraphQL endpoint
+**** DONE remove the =restore_file()= function
 *** frontend
-**** TODO write a usecase for submitting the tree/file digests
-**** TODO write a usecase for checking the progress of the request
-**** TODO write a usecase for canceling a pending request
-**** TODO direct user to a "restore requests" page that shows progress
-**** TODO write a new bloc for this restore management
-**** TODO consider how to show errors with respect to files
-**** TODO maybe show list of all files being restored, with status/error in a table
+**** DONE write a usecase for submitting the tree/file digests
+**** DONE write a usecase for getting all requests
+**** DONE write a usecase for canceling a pending request
+**** DONE change tree browser bloc to use new file restore API
+**** DONE write a bloc for querying requests, canceling
+**** DONE change tree viewer bloc event listener to indicate enqueue results
+**** DONE add nav for a "restore requests" page that shows progress
+**** DONE write page for displaying restore requests, canceling, refreshing
+***** show file path of restore, file count, errors, spinner
+***** add a "refresh" button to watch progress of restores
+**** DONE remove the =restoreFile()= data source method, repo method, and use case
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -71,6 +72,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** maybe consider a means of countering this error at runtime
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
+*** TODO fix the GraphQL query/mutation names to be snakecase
 *** TODO update juniper to latest release; 0.15 API changes substantially
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code

@@ -6,6 +6,7 @@ import 'package:graphql/client.dart';
 import 'package:http/http.dart' as http;
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
+import 'package:zorigami/core/data/models/request_model.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -224,13 +225,11 @@ void main() {
     });
   });
 
-  group('restoreFile', () {
-    test('should restore a file', () async {
+  group('restoreFiles', () {
+    test('should enqueue restore request', () async {
       // arrange
       final response = {
-        'data': {
-          'restoreFile': '/path/to/file',
-        }
+        'data': {'restoreFiles': true}
       };
       when(mockHttpClient.send(any)).thenAnswer((_) async {
         final bytes = utf8.encode(json.encode(response));
@@ -238,10 +237,13 @@ void main() {
         return http.StreamedResponse(stream, 200);
       });
       // act
-      final result =
-          await dataSource.restoreFile('sha1-cafebabe', 'file', 'homura');
+      final result = await dataSource.restoreFiles(
+        'sha1-cafebabe',
+        'file',
+        'homura',
+      );
       // assert
-      expect(result, equals('/path/to/file'));
+      expect(result, equals(true));
     });
 
     test(
@@ -251,7 +253,7 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.restoreFile('sha1-cafebabe', 'file', 'homura');
+          await dataSource.restoreFiles('sha1-cafebabe', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -266,7 +268,7 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.restoreFile('sha1-cafebabe', 'file', 'homura');
+          await dataSource.restoreFiles('sha1-cafebabe', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -277,7 +279,7 @@ void main() {
     test('should return null when response is null', () async {
       // arrange
       final response = {
-        'data': {'restoreFile': null}
+        'data': {'restoreFiles': null}
       };
       when(mockHttpClient.send(any)).thenAnswer((_) async {
         final bytes = utf8.encode(json.encode(response));
@@ -285,10 +287,236 @@ void main() {
         return http.StreamedResponse(stream, 200);
       });
       // act
-      final result =
-          await dataSource.restoreFile('sha1-cafebabe', 'file', 'homura');
+      final result = await dataSource.restoreFiles(
+        'sha1-cafebabe',
+        'file',
+        'homura',
+      );
       // assert
-      expect(result, isNull);
+      expect(result, null);
+    });
+  });
+
+  group('getAllRestores', () {
+    test(
+      'should return zero restores',
+      () async {
+        // arrange
+        final response = {
+          'data': {'restores': []}
+        };
+        // graphql client uses the 'send' method
+        when(mockHttpClient.send(any)).thenAnswer((_) async {
+          final bytes = utf8.encode(json.encode(response));
+          final stream = http.ByteStream.fromBytes(bytes);
+          return http.StreamedResponse(stream, 200);
+        });
+        // act
+        final result = await dataSource.getAllRestores();
+        // assert
+        expect(result, isList);
+        expect(result, hasLength(equals(0)));
+      },
+    );
+
+    test(
+      'should return one pack store',
+      () async {
+        // arrange
+        final response = {
+          'data': {
+            'restores': [
+              {
+                'digest': 'cafebabe',
+                'filepath': 'dir/file',
+                'dataset': 'data123',
+                'finished': null,
+                'filesRestored': 123,
+                'errorMessage': null,
+              },
+            ]
+          }
+        };
+        // graphql client uses the 'send' method
+        when(mockHttpClient.send(any)).thenAnswer((_) async {
+          final bytes = utf8.encode(json.encode(response));
+          final stream = http.ByteStream.fromBytes(bytes);
+          return http.StreamedResponse(stream, 200);
+        });
+        // act
+        final result = await dataSource.getAllRestores();
+        // assert
+        expect(result, isList);
+        expect(result, hasLength(equals(1)));
+        final store = RequestModel(
+          digest: 'cafebabe',
+          filepath: 'dir/file',
+          dataset: 'data123',
+          finished: None(),
+          filesRestored: 123,
+          errorMessage: None(),
+        );
+        expect(result, contains(store));
+      },
+    );
+
+    test(
+      'should return all restores',
+      () async {
+        // arrange
+        final response = {
+          'data': {
+            'restores': [
+              {
+                'digest': 'cafebabe',
+                'filepath': 'dir/file',
+                'dataset': 'data123',
+                'finished': null,
+                'filesRestored': 123,
+                'errorMessage': null,
+              },
+              {
+                'digest': 'cafed00d',
+                'filepath': 'dir/dir/file',
+                'dataset': 'data123',
+                'finished': null,
+                'filesRestored': 13,
+                'errorMessage': null,
+              },
+              {
+                'digest': 'deadbeef',
+                'filepath': 'folder/xfiles',
+                'dataset': 'data123',
+                'finished': '2021-04-09T06:32:16.786716685+00:00',
+                'filesRestored': 0,
+                'errorMessage': 'oh noes',
+              },
+            ]
+          }
+        };
+        // graphql client uses the 'send' method
+        when(mockHttpClient.send(any)).thenAnswer((_) async {
+          final bytes = utf8.encode(json.encode(response));
+          final stream = http.ByteStream.fromBytes(bytes);
+          return http.StreamedResponse(stream, 200);
+        });
+        // act
+        final result = await dataSource.getAllRestores();
+        // assert
+        expect(result, isList);
+        expect(result, hasLength(equals(3)));
+        final store = RequestModel(
+          digest: 'cafed00d',
+          filepath: 'dir/dir/file',
+          dataset: 'data123',
+          finished: None(),
+          filesRestored: 13,
+          errorMessage: None(),
+        );
+        expect(result, contains(store));
+      },
+    );
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.getAllRestores();
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.getAllRestores();
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+  });
+
+  group('cancelRestore', () {
+    test('should process cancel request', () async {
+      // arrange
+      final response = {
+        'data': {'cancelRestore': true}
+      };
+      when(mockHttpClient.send(any)).thenAnswer((_) async {
+        final bytes = utf8.encode(json.encode(response));
+        final stream = http.ByteStream.fromBytes(bytes);
+        return http.StreamedResponse(stream, 200);
+      });
+      // act
+      final result = await dataSource.cancelRestore(
+        'sha1-cafebabe',
+        'file',
+        'homura',
+      );
+      // assert
+      expect(result, equals(true));
+    });
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.cancelRestore('sha1-cafebabe', 'file', 'homura');
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.cancelRestore('sha1-cafebabe', 'file', 'homura');
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test('should return null when response is null', () async {
+      // arrange
+      final response = {
+        'data': {'cancelRestore': null}
+      };
+      when(mockHttpClient.send(any)).thenAnswer((_) async {
+        final bytes = utf8.encode(json.encode(response));
+        final stream = http.ByteStream.fromBytes(bytes);
+        return http.StreamedResponse(stream, 200);
+      });
+      // act
+      final result = await dataSource.cancelRestore(
+        'sha1-cafebabe',
+        'file',
+        'homura',
+      );
+      // assert
+      expect(result, null);
     });
   });
 }

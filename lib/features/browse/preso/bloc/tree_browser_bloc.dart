@@ -8,8 +8,7 @@ import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
-import 'package:zorigami/core/domain/usecases/restore_file.dart' as rf;
-import 'package:zorigami/core/error/failures.dart';
+import 'package:zorigami/core/domain/usecases/restore_files.dart' as rf;
 
 //
 // events
@@ -68,19 +67,19 @@ class Loaded extends TreeBrowserState {
   final List<String> path;
   // list of selected entries
   final List<TreeEntry> selections;
-  // result of most recently restored file, or null if none
-  final Result<String, Failure> restoreResult;
+  // true if any restore requests have been enqueued
+  final bool restoresEnqueued;
 
   Loaded({
     @required this.tree,
     @required selections,
     @required path,
-    this.restoreResult,
+    this.restoresEnqueued = false,
   })  : selections = List.unmodifiable(selections),
         path = List.unmodifiable(path);
 
   @override
-  List<Object> get props => [tree, selections, restoreResult];
+  List<Object> get props => [tree, selections];
 
   @override
   bool get stringify => true;
@@ -104,7 +103,7 @@ class Error extends TreeBrowserState {
 
 class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   final gt.GetTree getTree;
-  final rf.RestoreFile restoreFile;
+  final rf.RestoreFiles restoreFiles;
   // tree checksums in hierarchy order (added on load)
   final List<String> history = [];
   // entry names in hierarchy order ("root" is not included)
@@ -112,7 +111,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   // selected tree entries
   final List<TreeEntry> selections = [];
 
-  TreeBrowserBloc({this.getTree, this.restoreFile}) : super(Empty());
+  TreeBrowserBloc({this.getTree, this.restoreFiles}) : super(Empty());
 
   @override
   Stream<TreeBrowserState> mapEventToState(
@@ -157,29 +156,27 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
     } else if (event is RestoreSelections) {
       if (state is Loaded) {
         final tree = (state as Loaded).tree;
+        var restoresEnqueued = false;
         while (selections.isNotEmpty) {
           final entry = selections.removeLast();
-          if (entry.reference.type == EntryType.file) {
-            final filepath =
-                path.isEmpty ? entry.name : path.join('/') + '/' + entry.name;
-            final params = rf.Params(
-              digest: entry.reference.value,
-              filepath: filepath,
-              dataset: event.datasetKey,
-            );
-            final result = await restoreFile(params);
-            // This design for reporting the results of each file restore is
-            // temporary, ultimately there will be a dedicated screen for
-            // showing the results of all of the files being restored, including
-            // any errors that each might have along the way.
-            yield Loaded(
-              tree: tree,
-              selections: selections,
-              path: path,
-              restoreResult: result,
-            );
+          final filepath =
+              path.isEmpty ? entry.name : path.join('/') + '/' + entry.name;
+          final params = rf.Params(
+            digest: entry.reference.value,
+            filepath: filepath,
+            dataset: event.datasetKey,
+          );
+          final result = await restoreFiles(params);
+          if (result is Ok) {
+            restoresEnqueued |= result.unwrap();
           }
         }
+        yield Loaded(
+          tree: tree,
+          selections: selections,
+          path: path,
+          restoresEnqueued: restoresEnqueued,
+        );
       }
     }
   }

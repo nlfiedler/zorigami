@@ -7,6 +7,7 @@
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::data::sources::EntityDataSource;
 use crate::domain::entities::{self, Checksum, TreeReference};
+use crate::domain::managers::restore::{self, Restorer};
 use crate::domain::managers::state::StateStore;
 use crate::domain::repositories::RecordRepository;
 use chrono::prelude::*;
@@ -23,13 +24,19 @@ use std::sync::Arc;
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     appstate: Arc<dyn StateStore>,
+    restorer: Arc<dyn Restorer>,
 }
 
 impl GraphContext {
-    pub fn new(datasource: Arc<dyn EntityDataSource>, appstate: Arc<dyn StateStore>) -> Self {
+    pub fn new(
+        datasource: Arc<dyn EntityDataSource>,
+        appstate: Arc<dyn StateStore>,
+        restorer: Arc<dyn Restorer>,
+    ) -> Self {
         Self {
             datasource,
             appstate,
+            restorer,
         }
     }
 }
@@ -641,6 +648,39 @@ impl entities::Pack {
     }
 }
 
+#[juniper::object(description = "A request to restore a file or directory.")]
+impl restore::Request {
+    /// Digest of either a file or a tree to restore.
+    fn digest(&self) -> Checksum {
+        self.digest.clone()
+    }
+
+    /// Relative path where file/tree will be restored.
+    fn filepath(&self) -> String {
+        self.filepath.to_string_lossy().into()
+    }
+
+    /// Identifier of the dataset containing the data.
+    fn dataset(&self) -> String {
+        self.dataset.clone()
+    }
+
+    /// The datetime when the request was completed.
+    fn finished(&self) -> Option<DateTime<Utc>> {
+        self.finished.clone()
+    }
+
+    /// Number of files restored so far during the restoration.
+    fn files_restored(&self) -> i32 {
+        self.files_restored as i32
+    }
+
+    /// Error message if request processing failed.
+    fn error_message(&self) -> Option<String> {
+        self.error_msg.clone()
+    }
+}
+
 pub struct QueryRoot;
 
 #[juniper::object(Context = GraphContext)]
@@ -674,6 +714,17 @@ impl QueryRoot {
         let params: Params = Params::new(store_id);
         let result: Vec<entities::Pack> = usecase.call(params)?;
         Ok(result)
+    }
+
+    /// Query for any pending and recently completed file restore operations.
+    fn restores(executor: &Executor) -> FieldResult<Vec<restore::Request>> {
+        use crate::domain::usecases::query_restores::QueryRestores;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let ctx = executor.context();
+        let usecase = QueryRestores::new(ctx.restorer.clone());
+        let params: NoParams = NoParams {};
+        let requests: Vec<restore::Request> = usecase.call(params)?;
+        Ok(requests)
     }
 
     /// Retrieve a specific snapshot.
@@ -1109,22 +1160,38 @@ impl MutationRoot {
         Ok(result)
     }
 
-    /// Restore the given file, returning the path to the restored file.
-    fn restoreFile(
+    /// Enqueue a request to restore the given file or directory tree.
+    fn restore_files(
         executor: &Executor,
         digest: Checksum,
         filepath: String,
         dataset: String,
-    ) -> FieldResult<String> {
-        use crate::domain::usecases::put_back::{Params, PutBack};
+    ) -> FieldResult<bool> {
+        use crate::domain::usecases::restore_files::{Params, RestoreFiles};
         use crate::domain::usecases::UseCase;
         let ctx = executor.context();
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = PutBack::new(Arc::new(repo));
+        let usecase = RestoreFiles::new(ctx.restorer.clone());
+        let fpath = PathBuf::from(filepath);
+        let params: Params = Params::new(digest.clone(), fpath, dataset);
+        usecase.call(params)?;
+        Ok(true)
+    }
+
+    /// Cancel the pending restore request that matches the given values.
+    fn cancel_restore(
+        executor: &Executor,
+        digest: Checksum,
+        filepath: String,
+        dataset: String,
+    ) -> FieldResult<bool> {
+        use crate::domain::usecases::cancel_restore::{Params, CancelRestore};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let usecase = CancelRestore::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
         let params: Params = Params::new(digest.clone(), fpath, dataset);
         let result = usecase.call(params)?;
-        Ok(result.to_string_lossy().into_owned())
+        Ok(result)
     }
 
     /// Restore any missing packs, copying from the other pack store.
@@ -1167,6 +1234,7 @@ pub fn create_schema() -> Schema {
 mod tests {
     use super::*;
     use crate::data::sources::MockEntityDataSource;
+    use crate::domain::managers::restore::MockRestorer;
     use crate::domain::managers::state::MockStateStore;
     use failure::err_msg;
     use juniper::{FromInputValue, InputValue, ToInputValue, Variables};
@@ -1231,9 +1299,9 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(Some(config.clone())));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1271,9 +1339,9 @@ mod tests {
         mock.expect_get_stores()
             .returning(move || Ok(stores.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1307,9 +1375,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_get_stores().returning(move || Ok(Vec::new()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1337,9 +1405,9 @@ mod tests {
         mock.expect_get_stores()
             .returning(move || Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1372,7 +1440,8 @@ mod tests {
             .expect_get_state()
             .returning(|| state::State::default());
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1412,7 +1481,8 @@ mod tests {
             .returning(move || Ok(datasets.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1454,7 +1524,8 @@ mod tests {
             .returning(move || Ok(datasets.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1493,7 +1564,8 @@ mod tests {
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let stater = MockStateStore::new();
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1521,9 +1593,9 @@ mod tests {
         mock.expect_get_datasets()
             .returning(move || Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let (res, errors) = juniper::execute(
@@ -1554,9 +1626,9 @@ mod tests {
             .withf(move |d| d == &snapshot_sha1)
             .returning(move |_| Ok(Some(snapshot.clone())));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1594,9 +1666,9 @@ mod tests {
             .withf(move |d| d == &snapshot_sha1)
             .returning(move |_| Ok(None));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1628,9 +1700,9 @@ mod tests {
             .withf(move |d| d == &snapshot_sha1)
             .returning(move |_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1669,9 +1741,9 @@ mod tests {
             .withf(move |d| d == &tree_sha1)
             .returning(move |_| Ok(Some(tree.clone())));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1710,9 +1782,9 @@ mod tests {
             .withf(move |d| d == &tree_sha1)
             .returning(move |_| Ok(None));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1744,9 +1816,9 @@ mod tests {
             .withf(move |d| d == &tree_sha1)
             .returning(move |_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1775,9 +1847,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1832,9 +1904,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1873,9 +1945,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1921,9 +1993,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1960,9 +2032,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -1999,9 +2071,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_delete_store().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2031,9 +2103,9 @@ mod tests {
         mock.expect_delete_store()
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2066,9 +2138,9 @@ mod tests {
             .with(always(), always())
             .returning(|_, _| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2117,9 +2189,9 @@ mod tests {
             .returning(move || Ok(Some(config.clone())));
         mock.expect_get_store().returning(|_| Ok(None));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2162,9 +2234,9 @@ mod tests {
         mock.expect_put_dataset()
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2200,9 +2272,9 @@ mod tests {
         let mut mock = MockEntityDataSource::new();
         mock.expect_put_dataset().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2247,9 +2319,9 @@ mod tests {
         // arrange
         let mock = MockEntityDataSource::new();
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2289,9 +2361,9 @@ mod tests {
         mock.expect_put_dataset()
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2329,9 +2401,9 @@ mod tests {
         mock.expect_delete_computer_id().returning(|_| Ok(()));
         mock.expect_delete_latest_snapshot().returning(|_| Ok(()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
@@ -2361,9 +2433,9 @@ mod tests {
         mock.expect_delete_dataset()
             .returning(|_| Err(err_msg("oh no")));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let stater = MockStateStore::new();
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let ctx = Arc::new(GraphContext::new(datasource, appstate));
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
         let mut vars = Variables::new();

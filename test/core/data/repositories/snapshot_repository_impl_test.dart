@@ -7,8 +7,10 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
+import 'package:zorigami/core/data/models/request_model.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/data/repositories/snapshot_repository_impl.dart';
+import 'package:zorigami/core/domain/entities/request.dart';
 
 class MockRemoteDataSource extends Mock implements SnapshotRemoteDataSource {}
 
@@ -33,6 +35,17 @@ void main() {
     fileCount: 125331,
     tree: 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78',
   );
+
+  final tRequestModel = RequestModel(
+    digest: 'cafed00d',
+    filepath: 'dir/dir/file',
+    dataset: 'data123',
+    finished: None(),
+    filesRestored: 13,
+    errorMessage: None(),
+  );
+  final tRequestModelList = [tRequestModel];
+  final List<Request> tRestores = [tRequestModel];
 
   group('getSnapshot', () {
     test(
@@ -78,19 +91,19 @@ void main() {
     );
   });
 
-  group('restoreFile', () {
+  group('restoreFiles', () {
     test(
       'should return remote data when remote data source returns data',
       () async {
         // arrange
-        when(mockRemoteDataSource.restoreFile(any, any, any))
-            .thenAnswer((_) async => '/path/to/file');
+        when(mockRemoteDataSource.restoreFiles(any, any, any))
+            .thenAnswer((_) async => true);
         // act
         final result =
-            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+            await repository.restoreFiles('sha1-cafebabe', 'file', 'homura');
         // assert
-        verify(mockRemoteDataSource.restoreFile(any, any, any));
-        expect(result.unwrap(), equals('/path/to/file'));
+        verify(mockRemoteDataSource.restoreFiles(any, any, any));
+        expect(result.unwrap(), equals(true));
       },
     );
 
@@ -98,13 +111,13 @@ void main() {
       'should return failure when remote data source returns null',
       () async {
         // arrange
-        when(mockRemoteDataSource.restoreFile(any, any, any))
+        when(mockRemoteDataSource.restoreFiles(any, any, any))
             .thenAnswer((_) async => null);
         // act
         final result =
-            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+            await repository.restoreFiles('sha1-cafebabe', 'file', 'homura');
         // assert
-        verify(mockRemoteDataSource.restoreFile(any, any, any));
+        verify(mockRemoteDataSource.restoreFiles(any, any, any));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -113,13 +126,90 @@ void main() {
       'should return server failure when remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.restoreFile(any, any, any))
+        when(mockRemoteDataSource.restoreFiles(any, any, any))
             .thenThrow(ServerException());
         // act
         final result =
-            await repository.restoreFile('sha1-cafebabe', 'file', 'homura');
+            await repository.restoreFiles('sha1-cafebabe', 'file', 'homura');
         // assert
-        verify(mockRemoteDataSource.restoreFile(any, any, any));
+        verify(mockRemoteDataSource.restoreFiles(any, any, any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
+
+  group('getAllRestores', () {
+    test(
+      'should return remote data when the call to remote data source is successful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getAllRestores())
+            .thenAnswer((_) async => tRequestModelList);
+        // act
+        final result = await repository.getAllRestores();
+        // assert
+        verify(mockRemoteDataSource.getAllRestores());
+        expect(result.unwrap(), equals(tRestores));
+      },
+    );
+
+    test(
+      'should return server failure when the call to remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getAllRestores())
+            .thenThrow(ServerException());
+        // act
+        final result = await repository.getAllRestores();
+        // assert
+        verify(mockRemoteDataSource.getAllRestores());
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
+
+  group('cancelRestore', () {
+    test(
+      'should return remote data when remote data source returns data',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.cancelRestore(any, any, any))
+            .thenAnswer((_) async => true);
+        // act
+        final result =
+            await repository.cancelRestore('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.cancelRestore(any, any, any));
+        expect(result.unwrap(), equals(true));
+      },
+    );
+
+    test(
+      'should return failure when remote data source returns null',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.cancelRestore(any, any, any))
+            .thenAnswer((_) async => null);
+        // act
+        final result =
+            await repository.cancelRestore('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.cancelRestore(any, any, any));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+
+    test(
+      'should return server failure when remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.cancelRestore(any, any, any))
+            .thenThrow(ServerException());
+        // act
+        final result =
+            await repository.cancelRestore('sha1-cafebabe', 'file', 'homura');
+        // assert
+        verify(mockRemoteDataSource.cancelRestore(any, any, any));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );

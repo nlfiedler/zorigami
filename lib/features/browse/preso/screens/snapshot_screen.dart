@@ -47,7 +47,7 @@ class SnapshotScreen extends StatelessWidget {
             if (state is Loaded) {
               return SnapshotViewer(state: state, dataset: dataset);
             }
-            return CircularProgressIndicator();
+            return Center(child: CircularProgressIndicator());
           },
         ),
       ),

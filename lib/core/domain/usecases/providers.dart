@@ -1,8 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2021 Nathan Fiedler
 //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/container.dart';
+import 'package:zorigami/core/domain/usecases/cancel_restore.dart' as cr;
 import 'package:zorigami/core/domain/usecases/define_data_set.dart' as cds;
 import 'package:zorigami/core/domain/usecases/define_pack_store.dart' as dps;
 import 'package:zorigami/core/domain/usecases/delete_data_set.dart' as dds;
@@ -12,11 +13,12 @@ import 'package:zorigami/core/domain/usecases/update_pack_store.dart' as ups;
 import 'package:zorigami/core/domain/usecases/get_configuration.dart' as gc;
 import 'package:zorigami/core/domain/usecases/get_pack_stores.dart' as gps;
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart' as gds;
+import 'package:zorigami/core/domain/usecases/get_restores.dart' as gr;
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart' as gs;
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
 import 'package:zorigami/core/domain/usecases/test_pack_store.dart' as tps;
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
-import 'package:zorigami/core/domain/usecases/restore_file.dart' as rf;
+import 'package:zorigami/core/domain/usecases/restore_files.dart' as rf;
 
 final getConfigurationUsecaseProvider = Provider<gc.GetConfiguration>(
   (ref) => gc.GetConfiguration(
@@ -96,8 +98,20 @@ final restoreDatabaseUsecaseProvider = Provider<rd.RestoreDatabase>(
   ),
 );
 
-final restoreFileUsecaseProvider = Provider<rf.RestoreFile>(
-  (ref) => rf.RestoreFile(
+final restoreFilesUsecaseProvider = Provider<rf.RestoreFiles>(
+  (ref) => rf.RestoreFiles(
+    ref.read(snapshotRepositoryProvider),
+  ),
+);
+
+final getRestoresUsecaseProvider = Provider<gr.GetRestores>(
+  (ref) => gr.GetRestores(
+    ref.read(snapshotRepositoryProvider),
+  ),
+);
+
+final cancelRestoreUsecaseProvider = Provider<cr.CancelRestore>(
+  (ref) => cr.CancelRestore(
     ref.read(snapshotRepositoryProvider),
   ),
 );

@@ -9,7 +9,7 @@ import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
-import 'package:zorigami/core/domain/usecases/restore_file.dart';
+import 'package:zorigami/core/domain/usecases/restore_files.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
@@ -21,7 +21,7 @@ void main() {
   MockTreeRepository mockTreeRepository;
   MockSnapshotRepository mockSnapshotRepository;
   GetTree getTree;
-  RestoreFile restoreFile;
+  RestoreFiles restoreFiles;
 
   final tTree1 = Tree(
     entries: [
@@ -260,19 +260,19 @@ void main() {
       mockTreeRepository = MockTreeRepository();
       mockSnapshotRepository = MockSnapshotRepository();
       getTree = GetTree(mockTreeRepository);
-      restoreFile = RestoreFile(mockSnapshotRepository);
+      restoreFiles = RestoreFiles(mockSnapshotRepository);
       when(mockTreeRepository.getTree('sha1-cafebabe'))
           .thenAnswer((_) async => Ok(tTree1));
-      when(mockSnapshotRepository.restoreFile(
+      when(mockSnapshotRepository.restoreFiles(
               'sha256-8c983bd', 'file1', 'dataset1'))
-          .thenAnswer((_) async => Ok('file1'));
+          .thenAnswer((_) async => Ok(true));
     });
 
     blocTest(
       'emits [Loading, Loaded, ...] when RestoreSelections is added',
       build: () => TreeBrowserBloc(
         getTree: getTree,
-        restoreFile: restoreFile,
+        restoreFiles: restoreFiles,
       ),
       act: (bloc) {
         bloc.add(LoadTree(digest: 'sha1-cafebabe'));
@@ -288,7 +288,6 @@ void main() {
           tree: tTree1,
           selections: [],
           path: [],
-          restoreResult: Ok('file1'),
         ),
       ],
     );

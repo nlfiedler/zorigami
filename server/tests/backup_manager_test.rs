@@ -10,14 +10,12 @@ use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
 use server::domain::managers::backup::*;
-use server::domain::managers::restore::*;
 use server::domain::managers::state::{StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tempfile::tempdir;
 
 #[test]
 fn test_basic_snapshots() -> Result<(), Error> {
@@ -678,89 +676,5 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     // it did not blow up, so that counts as passing
     assert!(backup_opt.is_some());
-    Ok(())
-}
-
-#[cfg(target_family = "unix")]
-#[test]
-fn test_backup_recover_errorred_files() -> Result<(), Error> {
-    use std::fs::Permissions;
-    use std::os::unix::fs::PermissionsExt;
-
-    let db_path = DBPath::new("_test_backup_recover_errorred_files");
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-
-    let pack_path = "tmp/test/managers/backup_error/packs";
-    let _ = fs::remove_dir_all(pack_path);
-
-    let mut local_props: HashMap<String, String> = HashMap::new();
-    local_props.insert("basepath".to_owned(), pack_path.to_owned());
-    let store = entities::Store {
-        id: "local123".to_owned(),
-        store_type: entities::StoreType::LOCAL,
-        label: "my local".to_owned(),
-        properties: local_props,
-    };
-    dbase.put_store(&store)?;
-
-    // create a dataset
-    let basepath = "tmp/test/managers/backup_error/fixtures";
-    let _ = fs::remove_dir_all(basepath);
-    fs::create_dir_all(basepath)?;
-    let mut dataset = entities::Dataset::new(Path::new(basepath));
-    dataset = dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
-
-    // perform the first backup
-    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
-    assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
-    assert!(backup_opt.is_some());
-
-    // perform the second backup with a file that is not readable
-    // (add two files so there is something to backup, producing a snapshot)
-    let dest: PathBuf = [basepath, "short-file.txt"].iter().collect();
-    assert!(fs::write(dest, vec![102, 111, 111, 98, 97, 114]).is_ok());
-    let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
-    assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
-    fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
-    assert!(backup_opt.is_some());
-
-    // try to restore the file, it should fail
-    let digest_expected = Checksum::SHA256(String::from(
-        "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
-    ));
-    let outdir = tempdir().unwrap();
-    let restored_file = outdir.path().join("restored.bin");
-    let result = restore_file(
-        &dbase,
-        &dataset,
-        "keyboard cat",
-        digest_expected.clone(),
-        &restored_file,
-    );
-    assert!(result.is_err());
-
-    // fix the file permissions and perform the third backup
-    fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
-    assert!(backup_opt.is_some());
-
-    // restore the file from the third snapshot
-    restore_file(
-        &dbase,
-        &dataset,
-        "keyboard cat",
-        digest_expected.clone(),
-        &restored_file,
-    )?;
-    let digest_actual = Checksum::sha256_from_file(&restored_file)?;
-    assert_eq!(digest_expected, digest_actual);
     Ok(())
 }

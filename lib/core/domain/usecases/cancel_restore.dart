@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2021 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -9,14 +9,14 @@ import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
 import 'package:zorigami/core/error/failures.dart';
 
-class RestoreFile implements UseCase<String, Params> {
+class CancelRestore implements UseCase<bool, Params> {
   final SnapshotRepository repository;
 
-  RestoreFile(this.repository);
+  CancelRestore(this.repository);
 
   @override
-  Future<Result<String, Failure>> call(Params params) async {
-    return await repository.restoreFile(
+  Future<Result<bool, Failure>> call(Params params) async {
+    return await repository.cancelRestore(
         params.digest, params.filepath, params.dataset);
   }
 }
@@ -31,8 +31,11 @@ class Params extends Equatable {
   /// Identifier of the dataset containing the file.
   final String dataset;
 
-  Params(
-      {@required this.digest, @required this.filepath, @required this.dataset});
+  Params({
+    @required this.digest,
+    @required this.filepath,
+    @required this.dataset,
+  });
 
   @override
   List<Object> get props => [digest];

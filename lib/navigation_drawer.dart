@@ -31,6 +31,12 @@ class NavigationDrawer extends StatelessWidget {
                 context, '/stores', ModalRoute.withName('/')),
           ),
           ListTile(
+            leading: Icon(Icons.dns),
+            title: Text('Restore Requests'),
+            onTap: () => Navigator.pushNamedAndRemoveUntil(
+                context, '/requests', ModalRoute.withName('/')),
+          ),
+          ListTile(
             leading: Icon(Icons.restore),
             title: Text('Database Restore'),
             onTap: () => Navigator.pushNamedAndRemoveUntil(

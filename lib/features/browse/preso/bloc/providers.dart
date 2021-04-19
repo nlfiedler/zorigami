@@ -6,6 +6,7 @@ import 'package:zorigami/core/domain/usecases/providers.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/database_restore_bloc.dart';
+import 'package:zorigami/features/browse/preso/bloc/restores_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
 
@@ -27,6 +28,13 @@ final datasetsBlocProvider = Provider.autoDispose<DataSetsBloc>(
   ),
 );
 
+final restoresBlocProvider = Provider.autoDispose<RestoresBloc>(
+  (ref) => RestoresBloc(
+    getRestores: ref.read(getRestoresUsecaseProvider),
+    cancelRestore: ref.read(cancelRestoreUsecaseProvider),
+  ),
+);
+
 final snapshotBrowserBlocProvider = Provider.autoDispose<SnapshotBrowserBloc>(
   (ref) => SnapshotBrowserBloc(
     usecase: ref.read(getSnapshotUsecaseProvider),
@@ -36,6 +44,6 @@ final snapshotBrowserBlocProvider = Provider.autoDispose<SnapshotBrowserBloc>(
 final treeBrowserBlocProvider = Provider.autoDispose<TreeBrowserBloc>(
   (ref) => TreeBrowserBloc(
     getTree: ref.read(getTreeUsecaseProvider),
-    restoreFile: ref.read(restoreFileUsecaseProvider),
+    restoreFiles: ref.read(restoreFilesUsecaseProvider),
   ),
 );

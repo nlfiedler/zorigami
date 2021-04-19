@@ -67,20 +67,6 @@ pub fn unpack_chunks(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
 }
 
 ///
-/// Copy the chunk files to the given output location, deleting the chunks as
-/// each one is copied.
-///
-pub fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
-    let mut file = File::create(outfile)?;
-    for infile in chunks {
-        let mut cfile = File::open(infile)?;
-        io::copy(&mut cfile, &mut file)?;
-        fs::remove_file(infile)?;
-    }
-    Ok(())
-}
-
-///
 /// Compress the file at the given path using zlib.
 ///
 pub fn compress_file(infile: &Path, outfile: &Path) -> Result<(), Error> {
@@ -261,6 +247,16 @@ mod tests {
     use super::*;
     use crate::domain::entities::Configuration;
     use tempfile::tempdir;
+
+    fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> io::Result<()> {
+        let mut file = File::create(outfile)?;
+        for infile in chunks {
+            let mut cfile = File::open(infile)?;
+            io::copy(&mut cfile, &mut file)?;
+            fs::remove_file(infile)?;
+        }
+        Ok(())
+    }
 
     #[test]
     fn test_pack_file_one_chunk() -> io::Result<()> {

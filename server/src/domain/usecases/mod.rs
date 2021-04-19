@@ -5,6 +5,7 @@ use failure::Error;
 use std::cmp;
 use std::fmt;
 
+pub mod cancel_restore;
 pub mod delete_dataset;
 pub mod delete_store;
 pub mod find_missing;
@@ -15,8 +16,9 @@ pub mod get_tree;
 pub mod new_dataset;
 pub mod new_store;
 pub mod prune_extra;
-pub mod put_back;
+pub mod query_restores;
 pub mod restore_database;
+pub mod restore_files;
 pub mod restore_missing;
 pub mod test_store;
 pub mod update_dataset;

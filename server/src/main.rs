@@ -16,6 +16,7 @@ use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::managers::process;
+use server::domain::managers::restore::{Restorer, RestorerImpl};
 use server::domain::managers::state::{self, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use server::preso::graphql;
@@ -43,6 +44,8 @@ static DEFAULT_WEB_PATH: &str = "./web/";
 lazy_static! {
     // Application state store.
     static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    // File restore implementation.
+    static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new());
     // Supervisor for managing the running of backups.
     static ref PROCESSOR: Box<dyn process::Processor> = {
         Box::new(process::ProcessorImpl::new(STATE_STORE.clone()))
@@ -80,7 +83,8 @@ async fn graphql(
     let source = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
     let state = STATE_STORE.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(datasource, state));
+    let restore = FILE_RESTORER.clone();
+    let ctx = Arc::new(graphql::GraphContext::new(datasource, state, restore));
     let res = data.execute(&st, &ctx);
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()

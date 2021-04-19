@@ -7,6 +7,7 @@ import 'package:zorigami/features/backup/preso/screens/data_sets_screen.dart';
 import 'package:zorigami/features/backup/preso/screens/pack_stores_screen.dart';
 import 'package:zorigami/features/browse/preso/screens/home_screen.dart';
 import 'package:zorigami/features/browse/preso/screens/database_restore_screen.dart';
+import 'package:zorigami/features/browse/preso/screens/restore_screen.dart';
 
 void main() {
   runApp(ProviderScope(child: MyApp()));
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => HomeScreen(),
+        '/requests': (context) => RestoreRequestsScreen(),
         '/restore': (context) => DatabaseRestoreScreen(),
         '/sets': (context) => DataSetsScreen(),
         '/stores': (context) => PackStoresScreen(),
