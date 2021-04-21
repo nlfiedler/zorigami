@@ -151,6 +151,12 @@ async fn main() -> io::Result<()> {
     STATE_STORE.subscribe("super-manager", manage_supervisor);
     STATE_STORE.subscribe("backup-logger", log_state_changes);
     STATE_STORE.supervisor_event(state::SupervisorAction::Start);
+    let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+    if let Err(err) = FILE_RESTORER.start(dbase) {
+        error!("error starting file restorer: {}", err);
+    }
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
     let addr = format!("{}:{}", host, port);

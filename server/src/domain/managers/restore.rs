@@ -154,6 +154,7 @@ impl Restorer for RestorerImpl {
     }
 
     fn enqueue(&self, request: Request) -> Result<(), Error> {
+        debug!("restore: enqueuing request {}", request.digest);
         let mut queue = self.pending.lock().unwrap();
         queue.push_back(request);
         let su_addr = self.super_addr.lock().unwrap();
@@ -163,6 +164,7 @@ impl Restorer for RestorerImpl {
             }
             addr.try_send(Restore()).map_err(err_convert)
         } else {
+            error!("restore: must call start() first");
             Err(err_msg("must call start() first"))
         }
     }
@@ -237,6 +239,7 @@ impl RestoreSupervisor {
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
+            debug!("restore: processing request {}", request.digest);
             let mut req = request.clone();
             if let Err(error) = fetcher.load_dataset(&request.dataset) {
                 self.set_error(error, &mut req);
@@ -254,7 +257,7 @@ impl RestoreSupervisor {
                     if let Err(error) = self.process_tree(
                         &mut req,
                         request.digest.clone(),
-                        PathBuf::new(),
+                        request.filepath.clone(),
                         &mut fetcher,
                     ) {
                         self.set_error(error, &mut req);
@@ -337,13 +340,13 @@ impl Actor for RestoreSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Self::Context) {
-        debug!("restore supervisor started");
+        debug!("restore: supervisor started");
     }
 }
 
 impl Supervised for RestoreSupervisor {
     fn restarting(&mut self, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore supervisor restarting");
+        debug!("restore: supervisor restarting");
     }
 }
 
@@ -355,7 +358,7 @@ impl Handler<Stop> for RestoreSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Stop, ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore supervisor received stop message");
+        debug!("restore: supervisor received stop message");
         ctx.stop();
     }
 }
@@ -368,7 +371,7 @@ impl Handler<Restore> for RestoreSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Restore, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore supervisor received restore message");
+        debug!("restore: supervisor received restore message");
         if let Err(err) = self.process_queue() {
             error!("supervisor error processing queue: {}", err);
         }
@@ -455,6 +458,7 @@ impl PackFetcher {
                 let mut encrypted = PathBuf::new();
                 encrypted.push(workspace);
                 encrypted.push(pack_digest.to_string());
+                debug!("restore: fetching pack {}", pack_digest);
                 stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
                 // decrypt, decompress, and then unpack the contents
                 let mut zipped = encrypted.clone();
@@ -515,13 +519,17 @@ fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
 
 // Copy the chunk files to the given output location. The chunk files are left
 // in place and must be removed by the caller.
-fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> std::io::Result<()> {
-    let mut file = fs::File::create(outfile)?;
-    for infile in chunks {
-        let mut cfile = fs::File::open(infile)?;
-        std::io::copy(&mut cfile, &mut file)?;
+fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
+    if let Some(parent) = outfile.parent() {
+        fs::create_dir_all(parent)?;
+        let mut file = fs::File::create(outfile)?;
+        for infile in chunks {
+            let mut cfile = fs::File::open(infile)?;
+            std::io::copy(&mut cfile, &mut file)?;
+        }
+        return Ok(());
     }
-    Ok(())
+    Err(err_msg(format!("no parent for: {:?}", outfile)))
 }
 
 #[cfg(test)]
@@ -531,6 +539,20 @@ mod tests {
     use crate::domain::managers;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use std::io;
+
+    #[test]
+    fn test_assemble_chunks() -> Result<(), Error> {
+        let tmpdir = tempfile::tempdir()?;
+        let mut outfile = PathBuf::from(tmpdir.path());
+        outfile.push("foo");
+        outfile.push("bar");
+        outfile.push("file.txt");
+        assert!(!outfile.exists());
+        let chunk = Path::new("../test/fixtures/lorem-ipsum.txt");
+        assemble_chunks(&[chunk], &outfile)?;
+        assert!(outfile.exists());
+        Ok(())
+    }
 
     #[actix_rt::test]
     async fn test_restorer_enqueue_then_fail() -> io::Result<()> {

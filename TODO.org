@@ -1,40 +1,6 @@
 * Tasks
-** Better file/tree Restore
-*** current limitations
-**** put-back waits for the result with a modal spinner
-**** put-back only operates on a single file at a time
-*** desired functionality
-**** restore a single file or tree of files per request
-**** show the status of multiple restoration requests
-**** cancel some or all restoration requests
-*** backend
-**** DONE test restore of a directory with multiple files
-**** DONE fix supervisor to be message-based instead of using intervals
-***** DONE supervisor does _not_ have an interval timer
-***** DONE restorer impl sends a message to supervisor to process pending queue
-***** DONE ensure pending queue processor is efficient when queue is empty
-***** DONE supervisor will process everything on the pending queue at once
-***** DONE supervisor will append completed requests to the completed list
-***** DONE restore impl will report all pending and completed requests
-***** DONE should the files be deleted via a =Drop= implementation in =PackFetcher=?
-***** DONE for testing, add a fn that waits for at least one completed request
-**** DONE use case: enqueue new file/tree restore request
-**** DONE use case: query pending/completed requests
-**** DONE use case: cancel restore requests
-**** DONE remove the =put_back= use case and GraphQL endpoint
-**** DONE remove the =restore_file()= function
-*** frontend
-**** DONE write a usecase for submitting the tree/file digests
-**** DONE write a usecase for getting all requests
-**** DONE write a usecase for canceling a pending request
-**** DONE change tree browser bloc to use new file restore API
-**** DONE write a bloc for querying requests, canceling
-**** DONE change tree viewer bloc event listener to indicate enqueue results
-**** DONE add nav for a "restore requests" page that shows progress
-**** DONE write page for displaying restore requests, canceling, refreshing
-***** show file path of restore, file count, errors, spinner
-***** add a "refresh" button to watch progress of restores
-**** DONE remove the =restoreFile()= data source method, repo method, and use case
+** TODO Upgrade cargo dependencies
+** TODO Upgrade dart/flutter dependencies
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -200,6 +166,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO support excluding certain file patterns from backup
 **** part of dataset configuration
 **** merge with the defaults in =backup.rs=
+*** TODO store restore requests in database to tolerate application restart
+**** currently restore requests are queued in memory only, so a crash means everything is forgotten
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content

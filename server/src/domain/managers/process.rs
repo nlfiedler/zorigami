@@ -146,7 +146,7 @@ impl Actor for BackupSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        debug!("supervisor started");
+        debug!("backup: supervisor started");
         self.state.supervisor_event(SupervisorAction::Started);
         ctx.run_interval(Duration::from_millis(SUPERVISOR_INTERVAL), |this, _ctx| {
             trace!("supervisor interval fired");
@@ -159,7 +159,7 @@ impl Actor for BackupSupervisor {
 
 impl Supervised for BackupSupervisor {
     fn restarting(&mut self, _ctx: &mut Context<BackupSupervisor>) {
-        debug!("supervisor restarting");
+        debug!("backup: supervisor restarting");
     }
 }
 
@@ -167,7 +167,7 @@ impl Handler<Stop> for BackupSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Stop, ctx: &mut Context<BackupSupervisor>) {
-        debug!("supervisor received stop message");
+        debug!("backup: supervisor received stop message");
         self.state.supervisor_event(SupervisorAction::Stopped);
         ctx.stop();
     }
@@ -195,7 +195,7 @@ impl Handler<StartBackup> for BackupRunner {
     type Result = ();
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<BackupRunner>) {
-        debug!("runner received start backup message");
+        debug!("backup: runner received start backup message");
         thread::spawn(|| {
             // Allow the backup process to run an async runtime of its own, if
             // necessary, possibly with a threaded future executor, by spawning
@@ -208,7 +208,7 @@ impl Handler<StartBackup> for BackupRunner {
                 msg.schedule.clone(),
             );
         });
-        debug!("runner spawned backup process");
+        debug!("backup: runner spawned backup process");
         ctx.stop();
     }
 }
@@ -254,12 +254,12 @@ fn should_run(
                     } else if !backup.is_paused() {
                         // not error and not paused means it is still running
                         maybe_run = false;
-                        debug!("dataset {} backup already in progress", &set.id);
+                        debug!("backup: dataset {} already in progress", &set.id);
                     }
                 }
             } else if maybe_run {
                 // maybe the application restarted after a crash
-                debug!("reset missing backup state to start");
+                debug!("backup: reset missing state to start");
                 state.backup_event(BackupAction::Start(set.id.clone()));
             }
             if maybe_run {

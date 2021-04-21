@@ -127,26 +127,37 @@ class _TreeTableState extends State<TreeTable> {
   Widget build(BuildContext context) {
     final mono = TextStyle(fontFamily: 'RobotoMono');
     final List<DataRow> rows = List.of(widget.state.tree.entries.map((e) {
-      final icon = DataCell(
-        Icon(e.reference.type == EntryType.tree
-            ? Icons.folder_open
-            : Icons.insert_drive_file),
+      final name = DataCell(
+        Row(
+          children: [
+            Icon(e.reference.type == EntryType.tree
+                ? Icons.folder_open
+                : Icons.insert_drive_file),
+            SizedBox(width: 8.0),
+            Text(e.name, style: mono),
+          ],
+        ),
+        onTap: e.reference.type == EntryType.tree
+            ? () {
+                if (e.reference.type == EntryType.tree) {
+                  BlocProvider.of<TreeBrowserBloc>(context).add(
+                    LoadEntry(entry: e),
+                  );
+                }
+              }
+            : null,
       );
-      final name = DataCell(Text(e.name, style: mono));
       final date = DataCell(Text(
         DateFormat.yMd().add_jm().format(e.modTime.toLocal()),
       ));
       final ref = DataCell(Text(e.reference.value, style: mono));
-      final onSelectChanged = e.reference.type == EntryType.file
-          ? (selected) => BlocProvider.of<TreeBrowserBloc>(context).add(
+      final onSelectChanged =
+          (selected) => BlocProvider.of<TreeBrowserBloc>(context).add(
                 SetSelection(entry: e, selected: selected),
-              )
-          : (_) => BlocProvider.of<TreeBrowserBloc>(context).add(
-                LoadEntry(entry: e),
               );
       final selected = widget.state.selections.contains(e);
       return DataRow(
-        cells: [icon, name, date, ref],
+        cells: [name, date, ref],
         selected: selected,
         onSelectChanged: onSelectChanged,
       );
@@ -154,7 +165,6 @@ class _TreeTableState extends State<TreeTable> {
 
     // the sort is modifying the tree nested within the bloc state
     final List<DataColumn> columns = [
-      DataColumn(label: Text('Type')),
       DataColumn(
         label: Text('Name'),
         onSort: (columnIndex, sortAscending) {
