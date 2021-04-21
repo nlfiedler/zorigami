@@ -54,4 +54,4 @@ xattr = "0.2.2"
 
 [dev-dependencies]
 mockall = "0.9"
-rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb.git" }
+rocksdb = "0.16.0"
