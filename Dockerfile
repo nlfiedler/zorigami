@@ -50,7 +50,11 @@ RUN fvm flutter build web
 #
 # build the final image
 #
+# rustls needs the CA certs which are not installed by default
+#
 FROM debian:latest
+RUN apt-get -q update && \
+    apt-get -q -y install ca-certificates
 WORKDIR /zorigami
 COPY --from=builder /build/target/release/server zorigami
 COPY --from=healthy /health/target/release/healthcheck .
