@@ -1,6 +1,5 @@
 * Tasks
-** TODO Upgrade cargo dependencies
-** TODO Upgrade dart/flutter dependencies
+** TODO Try to upgrade dart/flutter dependencies
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system

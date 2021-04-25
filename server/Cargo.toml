@@ -10,10 +10,10 @@ keywords = ["backup", "archival"]
 license = "UNLICENSED"
 
 [dependencies]
-actix = "0.10"
+actix = "0.11"
 actix-cors = "0.5"
 actix-files = "0.5"
-actix-rt = "1.1"
+actix-rt = "2.2"
 actix-web = "3.0"
 base64 = "0.13"
 blob-uuid = "0.4.0"
