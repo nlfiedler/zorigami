@@ -148,10 +148,10 @@ class PackStoreListDetails extends StatelessWidget {
             FormBuilder(
               key: formKey,
               initialValue: storeForm.initialValuesFrom(store),
-              autovalidate: true,
+              autovalidateMode: AutovalidateMode.always,
+              // not convinced this enabled is effective
+              enabled: !(state is epsb.Submitting),
               child: storeForm,
-              // not convinced this readOnly is effective
-              readOnly: (state is epsb.Submitting),
             ),
             ButtonBar(
               children: <Widget>[

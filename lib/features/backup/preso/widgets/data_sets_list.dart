@@ -202,10 +202,10 @@ class DataSetListDetails extends StatelessWidget {
             FormBuilder(
               key: formKey,
               initialValue: DataSetForm.initialValuesFrom(dataset, stores),
-              autovalidate: true,
+              autovalidateMode: AutovalidateMode.always,
+              // not convinced this enabled is effective
+              enabled: !(state is edsb.Submitting),
               child: datasetForm,
-              // not convinced this readOnly is effective
-              readOnly: (state is edsb.Submitting),
             ),
             ButtonBar(
               children: <Widget>[

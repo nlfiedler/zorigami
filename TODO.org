@@ -1,5 +1,16 @@
 * Tasks
+** TODO flutter SDK API changes
+*** =child= should be the last argument to widget constructors
+*** widget type names have changed
+| Old Name     | New Name       |
+|--------------+----------------|
+| FlatButton   | TextButton     |
+| RaisedButton | ElevatedButton |
+** TODO Fix internal API changes
+*** =DataSet= constructor needs a =status=
 ** TODO Try to upgrade dart/flutter dependencies
+** TODO Try to fix the null safety compiler warning
+*** c.f. https://dart.dev/null-safety/unsound-null-safety
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system

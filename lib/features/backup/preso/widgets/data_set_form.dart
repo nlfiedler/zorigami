@@ -110,7 +110,7 @@ class _DataSetFormState extends State<DataSetForm> {
     return Column(
       children: <Widget>[
         FormBuilderTextField(
-          attribute: 'key',
+          name: 'key',
           decoration: InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Dataset Key',
@@ -118,7 +118,7 @@ class _DataSetFormState extends State<DataSetForm> {
           readOnly: true,
         ),
         FormBuilderTextField(
-          attribute: 'computerId',
+          name: 'computerId',
           decoration: const InputDecoration(
             icon: Icon(Icons.computer),
             labelText: 'Computer ID',
@@ -126,39 +126,39 @@ class _DataSetFormState extends State<DataSetForm> {
           readOnly: true,
         ),
         FormBuilderTextField(
-          attribute: 'basepath',
+          name: 'basepath',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Base Path',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'packSize',
+          name: 'packSize',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Pack Size (MB)',
           ),
-          validators: [
-            FormBuilderValidators.numeric(),
-            FormBuilderValidators.min(16),
-            FormBuilderValidators.max(256),
-          ],
+          validator: FormBuilderValidators.compose([
+            FormBuilderValidators.numeric(context),
+            FormBuilderValidators.min(context, 16),
+            FormBuilderValidators.max(context, 256),
+          ]),
         ),
-        FormBuilderCheckboxGroup(
-          attribute: 'stores',
+        FormBuilderCheckboxGroup<String>(
+          name: 'stores',
           options: packStoreOptions,
-          // bug? https://github.com/danvick/flutter_form_builder/issues/657
+          // bug https://github.com/danvick/flutter_form_builder/issues/657
           initialValue: formState.initialValue['stores'],
           decoration: InputDecoration(
             icon: Icon(Icons.archive),
             labelText: 'Pack Store(s)',
           ),
           // require at least one pack store is selected
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderRadioGroup(
-          attribute: 'frequency',
+          name: 'frequency',
           options: frequencies.map((item) {
             return FormBuilderFieldOption(
               value: item,
@@ -174,40 +174,36 @@ class _DataSetFormState extends State<DataSetForm> {
           },
         ),
         FormBuilderDateTimePicker(
-          attribute: 'start',
-          readOnly: !timePickersEnabled,
+          name: 'start',
+          enabled: timePickersEnabled,
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
             labelText: 'Start Time (UTC)',
           ),
-          validators: [
-            (val) {
-              final stop = widget.formKey.currentState.fields['stop'];
-              if (stop.currentState.value == null && val != null) {
-                return 'Please set stop time';
-              }
-              return null;
-            },
-          ],
+          validator: (val) {
+            final stop = widget.formKey.currentState.fields['stop'];
+            if (stop.value == null && val != null) {
+              return 'Please set stop time';
+            }
+            return null;
+          },
         ),
         FormBuilderDateTimePicker(
-          attribute: 'stop',
-          readOnly: !timePickersEnabled,
+          name: 'stop',
+          enabled: timePickersEnabled,
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
             labelText: 'Stop Time (UTC)',
           ),
-          validators: [
-            (val) {
-              final start = widget.formKey.currentState.fields['start'];
-              if (start.currentState.value == null && val != null) {
-                return 'Please set start time';
-              }
-              return null;
-            },
-          ],
+          validator: (val) {
+            final start = widget.formKey.currentState.fields['start'];
+            if (start.value == null && val != null) {
+              return 'Please set start time';
+            }
+            return null;
+          },
         ),
       ],
     );
@@ -221,15 +217,15 @@ class FrequencyOption {
 }
 
 // The key of the option is used to determine if it is checked.
-List<FormBuilderFieldOption> buildStoreOptions(
+List<FormBuilderFieldOption<String>> buildStoreOptions(
   DataSet dataset,
   List<PackStore> stores,
 ) {
-  final List<FormBuilderFieldOption> options = List.from(
+  final List<FormBuilderFieldOption<String>> options = List.from(
     stores.map((e) {
-      return FormBuilderFieldOption(
-        child: Text(e.label),
+      return FormBuilderFieldOption<String>(
         value: e.key,
+        child: Text(e.label),
       );
     }),
   );

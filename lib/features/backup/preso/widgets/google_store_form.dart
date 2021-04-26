@@ -47,7 +47,7 @@ class GoogleStoreForm extends PackStoreForm {
     return Column(
       children: <Widget>[
         FormBuilderTextField(
-          attribute: 'key',
+          name: 'key',
           decoration: InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
@@ -55,38 +55,38 @@ class GoogleStoreForm extends PackStoreForm {
           readOnly: true,
         ),
         FormBuilderTextField(
-          attribute: 'label',
+          name: 'label',
           decoration: const InputDecoration(
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'credentials',
+          name: 'credentials',
           decoration: const InputDecoration(
             icon: Icon(Icons.attachment),
             labelText: 'Credentials File',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'project',
+          name: 'project',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder),
             labelText: 'Project ID',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'region',
+          name: 'region',
           decoration: const InputDecoration(
             icon: Icon(Icons.location_on),
             labelText: 'Region',
           ),
         ),
         FormBuilderDropdown(
-          attribute: 'storage',
+          name: 'storage',
           decoration: const InputDecoration(
             icon: Icon(Icons.storage),
             labelText: 'Storage Class',

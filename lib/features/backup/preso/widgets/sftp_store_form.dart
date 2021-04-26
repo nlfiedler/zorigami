@@ -47,7 +47,7 @@ class SftpStoreForm extends PackStoreForm {
     return Column(
       children: <Widget>[
         FormBuilderTextField(
-          attribute: 'key',
+          name: 'key',
           decoration: InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
@@ -55,31 +55,31 @@ class SftpStoreForm extends PackStoreForm {
           readOnly: true,
         ),
         FormBuilderTextField(
-          attribute: 'label',
+          name: 'label',
           decoration: const InputDecoration(
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'remote_addr',
+          name: 'remote_addr',
           decoration: const InputDecoration(
             icon: Icon(Icons.cloud),
             labelText: 'Address',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'username',
+          name: 'username',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Username',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'password',
+          name: 'password',
           obscureText: true,
           maxLines: 1,
           decoration: const InputDecoration(
@@ -88,7 +88,7 @@ class SftpStoreForm extends PackStoreForm {
           ),
         ),
         FormBuilderTextField(
-          attribute: 'basepath',
+          name: 'basepath',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Base Path',

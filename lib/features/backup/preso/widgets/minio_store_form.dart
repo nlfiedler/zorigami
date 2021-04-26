@@ -43,7 +43,7 @@ class MinioStoreForm extends PackStoreForm {
     return Column(
       children: <Widget>[
         FormBuilderTextField(
-          attribute: 'key',
+          name: 'key',
           decoration: InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
@@ -51,46 +51,46 @@ class MinioStoreForm extends PackStoreForm {
           readOnly: true,
         ),
         FormBuilderTextField(
-          attribute: 'label',
+          name: 'label',
           decoration: const InputDecoration(
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'region',
+          name: 'region',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Region',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'endpoint',
+          name: 'endpoint',
           decoration: const InputDecoration(
             icon: Icon(Icons.cloud),
             labelText: 'Endpoint',
           ),
-          validators: [FormBuilderValidators.url()],
+          validator: FormBuilderValidators.url(context),
         ),
         FormBuilderTextField(
-          attribute: 'access_key',
+          name: 'access_key',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Access Key',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
         FormBuilderTextField(
-          attribute: 'secret_key',
+          name: 'secret_key',
           obscureText: true,
           maxLines: 1,
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Secret Key',
           ),
-          validators: [FormBuilderValidators.required()],
+          validator: FormBuilderValidators.required(context),
         ),
       ],
     );

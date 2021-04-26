@@ -3,5 +3,4 @@
 //
 import 'dart:io';
 
-// Seems the tests are run from within the test directory.
-String fixture(String name) => File('fixtures/$name').readAsStringSync();
+String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
