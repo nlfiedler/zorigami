@@ -64,7 +64,7 @@ impl Processor for ProcessorImpl {
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
-            let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
+            let addr = actix::Supervisor::start_in_arbiter(&self.runner, move |_| {
                 BackupSupervisor::new(repo, state)
             });
             *su_addr = Some(addr);
@@ -127,7 +127,7 @@ impl BackupSupervisor {
                     dataset: set,
                     schedule,
                 };
-                let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
+                let addr = Actor::start_in_arbiter(&self.runner, |_| BackupRunner {});
                 if let Err(err) = addr.try_send(msg) {
                     return Err(err_msg(format!("error sending message to runner: {}", err)));
                 }
