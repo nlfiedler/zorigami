@@ -59,7 +59,7 @@ StoreKind decodeKind(String kind) {
   } else if (kind == 'sftp') {
     return StoreKind.sftp;
   } else {
-    throw ArgumentError('kind "${kind}" is not recognized');
+    throw ArgumentError('kind "$kind" is not recognized');
   }
 }
 

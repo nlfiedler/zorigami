@@ -146,11 +146,11 @@ class RestoreListEntry extends StatelessWidget {
 
 String requestSubtitle(Request request) {
   return request.errorMessage.mapOrElse(
-    (err) => 'Restore error: ${err}',
+    (err) => 'Restore error: $err',
     () => request.finished.mapOrElse(
       (e) {
         var fin = DateFormat.yMd().add_jm().format(e.toLocal());
-        return 'finished at ${fin}';
+        return 'finished at $fin';
       },
       () => '${request.filesRestored} files restored so far...',
     ),

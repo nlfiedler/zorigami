@@ -52,9 +52,9 @@ class SnapshotViewer extends StatelessWidget {
         Card(
           child: ListTile(
             leading: Icon(Icons.timeline),
-            title: Text('Snapshot: ${digest}'),
+            title: Text('Snapshot: $digest'),
             subtitle: Text(
-              'Files: ${count}, Started: ${started}, Status: ${status}',
+              'Files: $count, Started: $started, Status: $status',
             ),
             isThreeLine: true,
             trailing: Row(

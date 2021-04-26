@@ -245,7 +245,7 @@ String formatTime(int seconds) {
   }
   final hour = (seconds / 3600).truncate().toString().padLeft(2, '0');
   final minute = ((seconds % 3600) / 60).truncate().toString().padLeft(2, '0');
-  return '${hour}:${minute}';
+  return '$hour:$minute';
 }
 
 String prettyFrequency(Frequency frequency) {

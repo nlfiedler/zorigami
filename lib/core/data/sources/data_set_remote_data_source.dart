@@ -52,7 +52,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final getAllDatasets = '''
       query {
         datasets {
-          ${dataSetFields}
+          $dataSetFields
         }
       }
     ''';
@@ -99,7 +99,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final defineStore = '''
       mutation DefineDataset(\$input: DatasetInput!) {
         defineDataset(input: \$input) {
-          ${dataSetFields}
+          $dataSetFields
         }
       }
     ''';
@@ -123,7 +123,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     final updateStore = '''
       mutation UpdateDataset(\$input: DatasetInput!) {
         updateDataset(input: \$input) {
-          ${dataSetFields}
+          $dataSetFields
         }
       }
     ''';

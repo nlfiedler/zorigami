@@ -23,7 +23,6 @@ class DataSetsScreen extends StatelessWidget {
             ),
             body: buildBody(context, state),
             floatingActionButton: FloatingActionButton(
-              child: Icon(Icons.add),
               onPressed: () async {
                 final result = await Navigator.push(
                   context,
@@ -35,6 +34,7 @@ class DataSetsScreen extends StatelessWidget {
                   BlocProvider.of<DataSetsBloc>(context).add(ReloadDataSets());
                 }
               },
+              child: Icon(Icons.add),
             ),
             drawer: NavigationDrawer(),
           );

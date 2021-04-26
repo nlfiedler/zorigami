@@ -87,6 +87,7 @@ class DataSetForm extends StatefulWidget {
       schedules: schedules,
       stores: state.value['stores'],
       errorMsg: None(),
+      status: Status.none,
     );
   }
 
