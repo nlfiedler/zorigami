@@ -16,7 +16,7 @@ dependencies:
   equatable: ^1.2.5
   flutter_bloc: ^6.1.1
   flutter_form_builder: ^6.0.0
-  flutter_riverpod: ^0.12.3+1
+  flutter_riverpod: ^0.14.0+2
   graphql: ^3.1.0
   intl: ^0.17.0
   oxidized: ^3.1.0

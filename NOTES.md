@@ -1,20 +1,5 @@
 # NOTES
 
-## Features
-
-* Unlimited backup: all files of any size
-* Maintains multiple versions, not just the most recent
-* Efficiency (compression, de-duplication, block-level incremental backup)
-* Encryption (all remotely stored data is encrypted with libsodium)
-* Service agnostic (SFTP, Amazon, Google, etc)
-* Full restore or file-level restore
-* Restore to dissimilar hardware
-* Local and Cloud storage
-* Scheduled backups (to better manage resources)
-* Cross Platform (macOS, Windows, Linux)
-* Amazon Glacier support (this seems to be uncommon at best)
-* Fault tolerant (automatically recovers from crashes)
-
 ### Ransomware protection
 
 > CloudBerry Backup detects encryption changes in files and prevents existing

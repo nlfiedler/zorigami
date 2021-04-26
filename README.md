@@ -1,15 +1,28 @@
 # zorigami
 
-An application for archiving files and uploading them to cloud storage. Provides
-a simple web interface with facilities for controlling what gets backed up and
-where it should go.
+A backup and restore application.
+
+## Features
+
+* Unlimited backup: all files of any size
+* Maintains multiple versions, not just the most recent
+* Efficiency: compression, de-duplication, block-level incremental backup
+* Encryption: all remotely stored data is encrypted with libsodium
+* Service agnostic: SFTP, Amazon, Google
+* Full restore or file-level restore
+* Restore to dissimilar hardware
+* Local and Cloud storage
+* Scheduled backups
+* Cross Platform: macOS, Windows, Linux
+* Amazon Glacier support
+* Fault tolerant
 
 ## Building and Testing
 
 ### Prerequisites
 
 * [Rust](https://www.rust-lang.org) stable (2018 edition)
-* [Flutter](https://flutter.dev) **dev** channel
+* [Flutter](https://flutter.dev) **stable** channel
 
 ### Initial Setup
 
@@ -20,7 +33,7 @@ and produces consistent results when building the application.
 ```shell
 $ brew install dart
 $ pub global activate fvm
-$ fvm install 1.26.0-1.0.pre
+$ fvm install stable
 $ fvm flutter config --enable-macos-desktop
 $ fvm flutter config --enable-web
 ```
@@ -49,8 +62,8 @@ above, _and_ it will likely fail to compile on 32-bit Windows.
 
 ```shell
 $ cargo update
-$ cargo build --workspace
-$ cargo test --workspace
+$ cargo build
+$ cargo test
 $ RUST_LOG=info cargo run
 ```
 
