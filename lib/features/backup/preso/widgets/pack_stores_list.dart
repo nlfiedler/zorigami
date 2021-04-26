@@ -155,21 +155,21 @@ class PackStoreListDetails extends StatelessWidget {
             ),
             ButtonBar(
               children: <Widget>[
-                FlatButton.icon(
+                TextButton.icon(
                   icon: Icon(Icons.analytics_outlined),
                   label: const Text('TEST'),
                   onPressed: (state is epsb.Submitting)
                       ? null
                       : () => testPack(context, storeForm),
                 ),
-                RaisedButton.icon(
+                ElevatedButton.icon(
                   icon: Icon(Icons.save),
                   label: const Text('SAVE'),
                   onPressed: (state is epsb.Submitting)
                       ? null
                       : () => savePack(context, storeForm),
                 ),
-                FlatButton.icon(
+                TextButton.icon(
                   icon: Icon(Icons.delete),
                   label: const Text('DELETE'),
                   onPressed: (state is epsb.Submitting)

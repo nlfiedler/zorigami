@@ -76,8 +76,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
             );
           }).toList(),
         ),
-        FlatButton(
-          child: Text('CREATE'),
+        TextButton(
           onPressed: selectedItem.kind == null
               ? null
               : () {
@@ -88,6 +87,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
                     ),
                   );
                 },
+          child: Text('CREATE'),
         ),
       ],
     );

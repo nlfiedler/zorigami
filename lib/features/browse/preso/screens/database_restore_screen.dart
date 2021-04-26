@@ -127,11 +127,11 @@ class PackStoreListEntry extends StatelessWidget {
           title: Text('Restore Database?'),
           content: Text('This will overwrite the current database.'),
           actions: [
-            FlatButton(
+            TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text('Cancel'),
             ),
-            RaisedButton(
+            ElevatedButton(
               onPressed: () {
                 BlocProvider.of<rdb.DatabaseRestoreBloc>(contextO).add(
                   rdb.RestoreDatabase(storeId: store.key),

@@ -120,7 +120,7 @@ class RestoreListEntry extends StatelessWidget {
           title: Text('Cancel request?'),
           content: Text('Do you wish to cancel the restore request?'),
           actions: [
-            FlatButton(
+            TextButton(
               onPressed: () {
                 BlocProvider.of<RestoresBloc>(contextO).add(
                   CancelRequest(
@@ -133,7 +133,7 @@ class RestoreListEntry extends StatelessWidget {
               },
               child: Text('Yes'),
             ),
-            RaisedButton(
+            ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text('No'),
             ),

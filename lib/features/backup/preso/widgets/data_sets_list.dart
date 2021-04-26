@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
@@ -209,14 +208,14 @@ class DataSetListDetails extends StatelessWidget {
             ),
             ButtonBar(
               children: <Widget>[
-                RaisedButton.icon(
+                ElevatedButton.icon(
                   icon: Icon(Icons.save),
                   label: const Text('SAVE'),
                   onPressed: (state is edsb.Submitting)
                       ? null
                       : () => saveDataSet(context, datasetForm),
                 ),
-                FlatButton.icon(
+                TextButton.icon(
                   icon: Icon(Icons.delete),
                   label: const Text('DELETE'),
                   onPressed: (state is edsb.Submitting)
