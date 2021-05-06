@@ -40,7 +40,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
 *** TODO fix the GraphQL query/mutation names to be snakecase
-*** TODO update juniper to latest release; 0.15 API changes substantially
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
 *** TODO probably should use a better client cache
@@ -533,103 +532,6 @@ perform a pack pruning, the most recent database snapshot would be removed.
 ***** lots of useful tools (e.g. clippy)
 **** Disadvantages
 ***** fewer libraries compared to Go
-**** DONE GraphQL server
-***** Make sure it can generate a schema.json
-***** Should be able to parse schema definition (for docs)
-***** https://github.com/graphql-rust/juniper (BSD)
-****** supports entire GraphQL specification
-****** does /not/ read GraphQL schema language
-****** supports GraphiQL and Playground
-****** is not the HTTP server, but integrates with them
-****** uses macros for schema documentation
-***** tutorial at [[http://alex.amiran.it/post/2018-08-16-rust-graphql-webserver-with-warp-juniper-and-mongodb.html][alex.amiran.it]] that uses warp web framework
-***** old https://github.com/nrc/graphql (MIT/Apache)
-**** DONE Web framework
-***** our needs are simple, so a simple framework is best
-***** Actix https://actix.rs (Apache 2.0)
-****** works with stable Rust
-****** powerful and easy to use
-****** testing library
-****** integrates with juniper
-****** offers state management for web code
-****** lot more actively used than warp
-***** warp https://github.com/seanmonstar/warp (MIT)
-****** works with stable Rust
-****** powerful and easy to use
-****** testing library
-****** integrates with juniper
-***** Rocket https://rocket.rs (Apache 2.0)
-****** requires Rust nightly because of fancy macros
-****** routing using macros
-****** streams input and output
-****** cookies
-****** json
-****** environment configuration
-****** testing library
-****** integrates with juniper
-***** Gotham https://gotham.rs (MIT/Apache 2.0)
-****** targets stable Rust
-****** routing
-****** middleware
-****** sessions
-****** cookies
-****** templates
-****** testing library
-****** how to integrate with juniper is unknown
-***** Iron http://ironframework.io (MIT)
-****** crate has not been updated since 2017
-****** everything is middleware that must be added in
-****** integrates with juniper
-***** Nickel http://nickel-org.github.io (Express.js like) (MIT)
-****** pretty basic compared to Rocket
-***** tower-web https://github.com/carllerche/tower-web (MIT)
-****** competing with warp? hyper?
-**** DONE Database
-***** ideally want something well maintained, reliable
-***** schema is pretty simple, could use key/value store
-***** RocksDB https://github.com/rust-rocksdb/rust-rocksdb (Apache)
-****** statically links everything, including compression support
-***** SQLite https://github.com/jgallagher/rusqlite (MIT)
-***** Rust wrapper to LevelDB https://github.com/skade/leveldb
-***** LevelDB in Rust (active?) https://bitbucket.org/dermesser/leveldb-rs/overview
-**** DONE dotenv
-***** https://github.com/dotenv-rs/dotenv (MIT)
-**** DONE Configuration
-***** https://github.com/mehcode/config-rs (MIT/Apache)
-**** DONE =getpwuid= and =getgrgid= support
-***** libc: https://crates.io/crates/libc (MIT/Apache 2.0)
-**** DONE test library
-***** https://github.com/rust-rspec/rspec (MPL-2.0)
-****** appears to be dead
-***** https://github.com/utkarshkukreti/speculate.rs (MIT)
-****** works well for integration tests
-**** DONE UUID support
-***** https://github.com/uuid-rs/uuid (MIT/Apache 2.0)
-**** DONE xattr support
-***** Unix only: https://github.com/Stebalien/xattr (MIT/Apache 2.0)
-**** DONE CDC
-***** https://github.com/jrobhoward/quickcdc (MIT/Apache 2.0)
-****** not quite FastCDC, given dates of paper, but should be close enough
-****** use a constant salt value for predictable results
-****** example uses =memmap= crate to read large files
-**** DONE Tar file
-***** https://github.com/alexcrichton/tar-rs (MIT/Apache 2.0)
-**** DONE PGP/Encryption
-***** https://github.com/gpg-rs/gpgme (LGPL)
-****** will need to bundle the =gpgme= library (unless statically linked)
-***** cryptostream https://github.com/neosmart/cryptostream (MIT)
-***** basic packets [[https://github.com/csssuf/pretty-good][csssuf/pretty-good]]
-***** read only [[https://nest.pijul.com/pmeunier/openpgp][pijul]] openpgp
-**** DONE ULID
-***** https://crates.io/crates/rusty_ulid (MIT)
-**** DONE SFTP client
-***** https://github.com/alexcrichton/ssh2-rs (MIT/Apache 2.0)
-**** DONE AWS client
-***** Rusoto https://www.rusoto.org (MIT)
-**** DONE Google Cloud client
-***** https://github.com/Byron/google-apis-rs (MIT/Apache 2.0)
-**** DONE Minio client
-***** Rusoto supports Minio https://github.com/rusoto/rusoto (MIT)
 *** Go vs Rust
 **** Go: first class support for cloud services
 **** Go: statically linked OpenPGP readily available

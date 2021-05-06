@@ -12,8 +12,8 @@ use crate::domain::managers::state::StateStore;
 use crate::domain::repositories::RecordRepository;
 use chrono::prelude::*;
 use juniper::{
-    graphql_scalar, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
-    ParseScalarResult, ParseScalarValue, RootNode, Value,
+    graphql_scalar, EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
+    GraphQLObject, ParseScalarResult, ParseScalarValue, RootNode, Value,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -75,80 +75,75 @@ impl From<u32> for BigInt {
     }
 }
 
-// need `where Scalar = <S>` parameterization to use this with objects
-// c.f. https://github.com/graphql-rust/juniper/issues/358 for details
-graphql_scalar!(BigInt where Scalar = <S> {
-    description: "An integer type larger than the standard signed 32-bit."
-
-    resolve(&self) -> Value {
+#[graphql_scalar(description = "An integer type larger than the standard signed 32-bit.")]
+impl<S> GraphQLScalar for BigInt
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
         Value::scalar(format!("{}", self.0))
     }
 
-    from_input_value(v: &InputValue) -> Option<BigInt> {
-        v.as_scalar_value::<String>().filter(|s| {
-            // make sure the input value parses as an integer
-            i64::from_str_radix(s, 10).is_ok()
-        }).map(|s| BigInt(i64::from_str_radix(s, 10).unwrap()))
+    fn from_input_value(v: &InputValue) -> Option<BigInt> {
+        v.as_scalar_value()
+            .and_then(|v| v.as_str())
+            .and_then(|s| i64::from_str_radix(s, 10).ok())
+            .map(|i| BigInt(i))
     }
 
-    from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
         <String as ParseScalarValue<S>>::from_str(value)
     }
-});
+}
 
-// Using the graphql_scalar macro here because it is tedious to implement all of
-// the juniper interfaces. However, the macro requires having a `from_str` where
-// our type already has that method, so using `from_str` is just a little more
-// complicated than it would be normally.
-//
-// need `where Scalar = <S>` parameterization to use this with objects c.f.
-// https://github.com/graphql-rust/juniper/issues/358 for details
-graphql_scalar!(Checksum where Scalar = <S> {
-    description: "A SHA1 or SHA256 checksum, with algorithm prefix."
+#[graphql_scalar(description = "A SHA1 or SHA256 checksum, with algorithm prefix.")]
+impl<S> GraphQLScalar for Checksum
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(format!("{}", self))
+    }
 
-    resolve(&self) -> Value {
+    fn from_input_value(v: &InputValue) -> Option<Checksum> {
+        v.as_scalar_value()
+            .and_then(|v| v.as_str())
+            .filter(|s| {
+                // make sure the input value actually looks like a digest
+                s.starts_with("sha1-") || s.starts_with("sha256-")
+            })
+            .map(|s| FromStr::from_str(s).unwrap())
+    }
+
+    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+#[graphql_scalar(description = "Reference for a tree entry, such as a file or tree.")]
+impl<S> GraphQLScalar for TreeReference
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
         let value = format!("{}", self);
         Value::scalar(value)
     }
 
-    from_input_value(v: &InputValue) -> Option<Checksum> {
-        v.as_scalar_value::<String>().filter(|s| {
-            // make sure the input value actually looks like a digest
-            s.starts_with("sha1-") || s.starts_with("sha256-")
-        }).map(|s| FromStr::from_str(s).unwrap())
+    fn from_input_value(v: &InputValue) -> Option<TreeReference> {
+        v.as_scalar_value()
+            .and_then(|v| v.as_str())
+            .filter(|s| {
+                // make sure the input value actually looks like a digest
+                s.starts_with("file-") || s.starts_with("link-") || s.starts_with("tree-")
+            })
+            .map(|s| FromStr::from_str(s).unwrap())
     }
 
-    from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
         <String as ParseScalarValue<S>>::from_str(value)
     }
-});
-
-// Using the graphql_scalar macro here because it is tedious to implement all of
-// the juniper interfaces. However, the macro requires having a `from_str` where
-// our type already has that method, so using `from_str` is just a little more
-// complicated than it would be normally.
-//
-// need `where Scalar = <S>` parameterization to use this with objects c.f.
-// https://github.com/graphql-rust/juniper/issues/358 for details
-graphql_scalar!(TreeReference where Scalar = <S> {
-    description: "Reference for a tree entry, such as a file or tree."
-
-    resolve(&self) -> Value {
-        let value = format!("{}", self);
-        Value::scalar(value)
-    }
-
-    from_input_value(v: &InputValue) -> Option<TreeReference> {
-        v.as_scalar_value::<String>().filter(|s| {
-            // make sure the input value actually looks like a digest
-            s.starts_with("file-") || s.starts_with("link-") || s.starts_with("tree-")
-        }).map(|s| FromStr::from_str(s).unwrap())
-    }
-
-    from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
-        <String as ParseScalarValue<S>>::from_str(value)
-    }
-});
+}
 
 /// Tree entry type, such as a file or directory.
 #[derive(Copy, Clone, GraphQLEnum)]
@@ -185,7 +180,7 @@ impl Into<entities::EntryType> for EntryType {
     }
 }
 
-#[juniper::object(description = "A file, directory, or symbolic link within a tree.")]
+#[juniper::graphql_object(description = "A file, directory, or symbolic link within a tree.")]
 impl entities::TreeEntry {
     /// Name of the file, directory, or symbolic link.
     fn name(&self) -> String {
@@ -208,7 +203,7 @@ impl entities::TreeEntry {
     }
 }
 
-#[juniper::object(description = "A set of file system entries in a directory.")]
+#[juniper::graphql_object(description = "A set of file system entries in a directory.")]
 impl entities::Tree {
     /// Set of entries making up this tree.
     fn entries(&self) -> Vec<entities::TreeEntry> {
@@ -216,7 +211,7 @@ impl entities::Tree {
     }
 }
 
-#[juniper::object(description = "A single backup, either in progress or completed.")]
+#[juniper::graphql_object(description = "A single backup, either in progress or completed.")]
 impl entities::Snapshot {
     /// Original computed checksum of the snapshot.
     fn checksum(&self) -> Checksum {
@@ -264,7 +259,7 @@ pub enum Status {
     FAILED,
 }
 
-#[juniper::object(
+#[juniper::graphql_object(
     Context = GraphContext,
     description = "Location, schedule, and pack store for a backup data set.")
 ]
@@ -347,7 +342,7 @@ impl entities::Dataset {
     }
 }
 
-#[juniper::object(description = "Range of time in which to run backup.")]
+#[juniper::graphql_object(description = "Range of time in which to run backup.")]
 impl entities::schedule::TimeRange {
     /// Seconds from midnight at which to start.
     fn start_time(&self) -> i32 {
@@ -471,7 +466,7 @@ pub enum Frequency {
     Monthly,
 }
 
-#[juniper::object(description = "A schedule for when to run the backup.")]
+#[juniper::graphql_object(description = "A schedule for when to run the backup.")]
 impl entities::schedule::Schedule {
     /// How often the backup will be run. Combines with other elements to
     /// control exactly when the backup is performed.
@@ -596,7 +591,7 @@ impl From<entities::Store> for Store {
     }
 }
 
-#[juniper::object(description = "Configuration of the application.")]
+#[juniper::graphql_object(description = "Configuration of the application.")]
 impl entities::Configuration {
     /// Name of the computer on which this application is running.
     fn hostname(&self) -> String {
@@ -612,7 +607,7 @@ impl entities::Configuration {
     }
 }
 
-#[juniper::object(description = "Location within a store of a saved pack.")]
+#[juniper::graphql_object(description = "Location within a store of a saved pack.")]
 impl entities::PackLocation {
     /// ULID of the pack store.
     fn store(&self) -> String {
@@ -630,7 +625,7 @@ impl entities::PackLocation {
     }
 }
 
-#[juniper::object(description = "An archive containing saved files.")]
+#[juniper::graphql_object(description = "An archive containing saved files.")]
 impl entities::Pack {
     /// Unique checksum of the pack contents.
     fn checksum(&self) -> Checksum {
@@ -648,7 +643,7 @@ impl entities::Pack {
     }
 }
 
-#[juniper::object(description = "A request to restore a file or directory.")]
+#[juniper::graphql_object(description = "A request to restore a file or directory.")]
 impl restore::Request {
     /// Digest of either a file or a tree to restore.
     fn digest(&self) -> Checksum {
@@ -683,7 +678,7 @@ impl restore::Request {
 
 pub struct QueryRoot;
 
-#[juniper::object(Context = GraphContext)]
+#[juniper::graphql_object(Context = GraphContext)]
 impl QueryRoot {
     /// Retrieve the configuration record.
     fn configuration(executor: &Executor) -> FieldResult<entities::Configuration> {
@@ -1040,7 +1035,7 @@ impl Into<entities::schedule::Schedule> for ScheduleInput {
 
 pub struct MutationRoot;
 
-#[juniper::object(Context = GraphContext)]
+#[juniper::graphql_object(Context = GraphContext)]
 impl MutationRoot {
     /// Define a new store with the given configuration.
     fn defineStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
@@ -1184,7 +1179,7 @@ impl MutationRoot {
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
-        use crate::domain::usecases::cancel_restore::{Params, CancelRestore};
+        use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
         use crate::domain::usecases::UseCase;
         let ctx = executor.context();
         let usecase = CancelRestore::new(ctx.restorer.clone());
@@ -1223,11 +1218,11 @@ impl MutationRoot {
     }
 }
 
-pub type Schema = RootNode<'static, QueryRoot, MutationRoot>;
+pub type Schema = RootNode<'static, QueryRoot, MutationRoot, EmptySubscription<GraphContext>>;
 
 /// Create the GraphQL schema.
 pub fn create_schema() -> Schema {
-    Schema::new(QueryRoot {}, MutationRoot {})
+    Schema::new(QueryRoot {}, MutationRoot {}, EmptySubscription::new())
 }
 
 #[cfg(test)]
@@ -1304,7 +1299,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query { configuration { computerId } }"#,
             None,
             &schema,
@@ -1344,7 +1339,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 stores { storeType label }
             }"#,
@@ -1380,7 +1375,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 stores { storeType label }
             }"#,
@@ -1410,7 +1405,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 stores { storeType label }
             }"#,
@@ -1444,7 +1439,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { basepath status }
             }"#,
@@ -1485,7 +1480,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { basepath status }
             }"#,
@@ -1528,7 +1523,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { basepath status errorMessage }
             }"#,
@@ -1568,7 +1563,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { basepath }
             }"#,
@@ -1598,7 +1593,7 @@ mod tests {
         let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
         // act
         let schema = create_schema();
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { computerId }
             }"#,
@@ -1633,7 +1628,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
             }"#,
@@ -1673,7 +1668,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
             }"#,
@@ -1707,7 +1702,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
             }"#,
@@ -1748,7 +1743,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), tree_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }
             }"#,
@@ -1789,7 +1784,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), tree_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }
             }"#,
@@ -1823,7 +1818,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("digest".to_owned(), tree_sha2.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }
             }"#,
@@ -1864,7 +1859,7 @@ mod tests {
             properties,
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: StoreInput!) {
                 defineStore(input: $input) {
                     id storeType label properties { name value }
@@ -1921,7 +1916,7 @@ mod tests {
             properties,
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: StoreInput!) {
                 defineStore(input: $input) {
                     id storeType label properties { name value }
@@ -1962,7 +1957,7 @@ mod tests {
             properties,
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: StoreInput!) {
                 updateStore(input: $input) {
                     id storeType label
@@ -2007,7 +2002,7 @@ mod tests {
             properties,
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: StoreInput!) {
                 updateStore(input: $input) { id }
             }"#,
@@ -2049,7 +2044,7 @@ mod tests {
             properties,
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: StoreInput!) {
                 defineStore(input: $input) { id }
             }"#,
@@ -2078,7 +2073,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("input".to_owned(), InputValue::scalar("abc123"));
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Delete($input: String!) {
                 deleteStore(id: $input)
             }"#,
@@ -2110,7 +2105,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("input".to_owned(), InputValue::scalar("abc123"));
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Delete($input: String!) {
                 deleteStore(id: $input)
             }"#,
@@ -2154,7 +2149,7 @@ mod tests {
             stores: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: DatasetInput!) {
                 defineDataset(input: $input) {
                     basepath packSize
@@ -2205,7 +2200,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: DatasetInput!) {
                 defineDataset(input: $input) {
                     basepath packSize
@@ -2250,7 +2245,7 @@ mod tests {
             stores: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: DatasetInput!) {
                 defineDataset(input: $input) { id }
             }"#,
@@ -2288,7 +2283,7 @@ mod tests {
             stores: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: DatasetInput!) {
                 updateDataset(input: $input) {
                     basepath packSize
@@ -2335,7 +2330,7 @@ mod tests {
             stores: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: DatasetInput!) {
                 updateDataset(input: $input) {
                     basepath packSize
@@ -2377,7 +2372,7 @@ mod tests {
             stores: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: DatasetInput!) {
                 updateDataset(input: $input) { id }
             }"#,
@@ -2408,7 +2403,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("input".to_owned(), InputValue::scalar("abc123"));
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Delete($input: String!) {
                 deleteDataset(id: $input)
             }"#,
@@ -2440,7 +2435,7 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         vars.insert("input".to_owned(), InputValue::scalar("abc123"));
-        let (res, errors) = juniper::execute(
+        let (res, errors) = juniper::execute_sync(
             r#"mutation Delete($input: String!) {
                 deleteDataset(id: $input)
             }"#,

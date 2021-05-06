@@ -70,7 +70,7 @@ lazy_static! {
 }
 
 fn graphiql() -> HttpResponse {
-    let html = graphiql_source("/graphql");
+    let html = graphiql_source("/graphql", None);
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(html)
@@ -85,7 +85,7 @@ async fn graphql(
     let state = STATE_STORE.clone();
     let restore = FILE_RESTORER.clone();
     let ctx = Arc::new(graphql::GraphContext::new(datasource, state, restore));
-    let res = data.execute(&st, &ctx);
+    let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
         .content_type("application/json")
