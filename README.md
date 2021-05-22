@@ -83,6 +83,7 @@ $ cargo test -p store_minio
 ```shell
 $ fvm flutter pub get
 $ fvm flutter pub run environment_config:generate
+$ fvm flutter pub run build_runner build
 $ fvm flutter test
 $ fvm flutter run -d chrome
 ```

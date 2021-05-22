@@ -121,7 +121,7 @@ class _TreeTableState extends State<TreeTable> {
   bool _sortDateAsc = true;
   bool _sortRefAsc = true;
   bool _sortAscending = true;
-  late int _sortColumnIndex;
+  int? _sortColumnIndex;
 
   @override
   Widget build(BuildContext context) {
