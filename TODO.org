@@ -1,7 +1,4 @@
 * Tasks
-** TODO Try to upgrade dart/flutter dependencies
-** TODO Try to fix the null safety compiler warning
-*** c.f. https://dart.dev/null-safety/unsound-null-safety
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system

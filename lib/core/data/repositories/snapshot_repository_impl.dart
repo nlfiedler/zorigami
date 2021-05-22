@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
@@ -14,7 +13,7 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   final SnapshotRemoteDataSource remoteDataSource;
 
   SnapshotRepositoryImpl({
-    @required this.remoteDataSource,
+    required this.remoteDataSource,
   });
 
   @override
@@ -33,11 +32,7 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   @override
   Future<Result<String, Failure>> restoreDatabase(String storeId) async {
     try {
-      final result = await remoteDataSource.restoreDatabase(storeId);
-      if (result == null) {
-        return Err(ServerFailure('got null result for restoreDatabase'));
-      }
-      return Ok(result);
+      return Ok(await remoteDataSource.restoreDatabase(storeId));
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
     }
@@ -47,12 +42,9 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   Future<Result<bool, Failure>> restoreFiles(
       String checksum, String filepath, String dataset) async {
     try {
-      final result =
-          await remoteDataSource.restoreFiles(checksum, filepath, dataset);
-      if (result == null) {
-        return Err(ServerFailure('got null result for restoreFiles'));
-      }
-      return Ok(result);
+      return Ok(
+        await remoteDataSource.restoreFiles(checksum, filepath, dataset),
+      );
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
     }
@@ -61,11 +53,7 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   @override
   Future<Result<List<Request>, Failure>> getAllRestores() async {
     try {
-      final result = await remoteDataSource.getAllRestores();
-      if (result == null) {
-        return Err(ServerFailure('got null result for getAllRestores'));
-      }
-      return Ok(result);
+      return Ok(await remoteDataSource.getAllRestores());
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
     }
@@ -75,12 +63,9 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
   Future<Result<bool, Failure>> cancelRestore(
       String checksum, String filepath, String dataset) async {
     try {
-      final result =
-          await remoteDataSource.cancelRestore(checksum, filepath, dataset);
-      if (result == null) {
-        return Err(ServerFailure('got null result for cancelRestore'));
-      }
-      return Ok(result);
+      return Ok(
+        await remoteDataSource.cancelRestore(checksum, filepath, dataset),
+      );
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
     }

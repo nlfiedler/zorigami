@@ -2,7 +2,6 @@
 // Copyright (c) 2021 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
@@ -26,7 +25,7 @@ class TestPackStore implements UseCase<String, Params> {
 class Params extends Equatable {
   final PackStore store;
 
-  Params({@required this.store});
+  Params({required this.store});
 
   @override
   List<Object> get props => [store];

@@ -1,18 +1,17 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
 
 class RequestModel extends Request {
   RequestModel({
-    @required String digest,
-    @required String filepath,
-    @required String dataset,
-    @required Option<DateTime> finished,
-    @required int filesRestored,
-    @required Option<String> errorMessage,
+    required String digest,
+    required String filepath,
+    required String dataset,
+    required Option<DateTime> finished,
+    required int filesRestored,
+    required Option<String> errorMessage,
   }) : super(
           digest: digest,
           filepath: filepath,
@@ -34,8 +33,9 @@ class RequestModel extends Request {
   }
 
   factory RequestModel.fromJson(Map<String, dynamic> json) {
-    final finished =
-        Option.some(json['finished']).map((v) => DateTime.parse(v));
+    final finished = Option.from(json['finished']).map(
+      (v) => DateTime.parse(v as String),
+    );
     return RequestModel(
       digest: json['digest'],
       filepath: json['filepath'],
@@ -43,7 +43,7 @@ class RequestModel extends Request {
       finished: finished,
       // limiting file count to 2^53 (in JavaScript) is acceptable
       filesRestored: json['filesRestored'],
-      errorMessage: Option.some(json['errorMessage']),
+      errorMessage: Option.from(json['errorMessage']),
     );
   }
 
@@ -54,7 +54,7 @@ class RequestModel extends Request {
       'dataset': dataset,
       'finished': finished.mapOr((v) => v.toIso8601String(), null),
       'filesRestored': filesRestored,
-      'errorMessage': errorMessage.unwrapOr(null),
+      'errorMessage': errorMessage.toNullable(),
     };
   }
 }

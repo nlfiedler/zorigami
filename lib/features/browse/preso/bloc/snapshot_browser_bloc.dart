@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
@@ -21,7 +20,7 @@ abstract class SnapshotBrowserEvent extends Equatable {
 class LoadSnapshot extends SnapshotBrowserEvent {
   final String digest;
 
-  LoadSnapshot({@required this.digest});
+  LoadSnapshot({required this.digest});
 }
 
 class LoadParent extends SnapshotBrowserEvent {}
@@ -45,7 +44,7 @@ class Loaded extends SnapshotBrowserState {
   final Snapshot snapshot;
   final bool hasSubsequent;
 
-  Loaded({@required this.snapshot, this.hasSubsequent = false});
+  Loaded({required this.snapshot, this.hasSubsequent = false});
 
   @override
   List<Object> get props => [snapshot, hasSubsequent];
@@ -57,7 +56,7 @@ class Loaded extends SnapshotBrowserState {
 class Error extends SnapshotBrowserState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -75,7 +74,7 @@ class SnapshotBrowserBloc
   final GetSnapshot usecase;
   final List<String> history = [];
 
-  SnapshotBrowserBloc({this.usecase}) : super(Empty());
+  SnapshotBrowserBloc({required this.usecase}) : super(Empty());
 
   @override
   Stream<SnapshotBrowserState> mapEventToState(

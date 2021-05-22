@@ -2,18 +2,19 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
+import './get_data_sets_test.mocks.dart';
 
-class MockDataSetRepository extends Mock implements DataSetRepository {}
-
+@GenerateMocks([DataSetRepository])
 void main() {
-  GetDataSets usecase;
-  MockDataSetRepository mockDataSetRepository;
+  late GetDataSets usecase;
+  late MockDataSetRepository mockDataSetRepository;
 
   setUp(() {
     mockDataSetRepository = MockDataSetRepository();
@@ -28,6 +29,7 @@ void main() {
     packSize: 0,
     stores: [],
     snapshot: None(),
+    status: Status.none,
     errorMsg: None(),
   );
   // annotate the type to assist with matching

@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/data_set_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -13,14 +12,13 @@ class DataSetRepositoryImpl extends DataSetRepository {
   final DataSetRemoteDataSource remoteDataSource;
 
   DataSetRepositoryImpl({
-    @required this.remoteDataSource,
+    required this.remoteDataSource,
   });
 
   @override
   Future<Result<List<DataSet>, Failure>> getAllDataSets() async {
     try {
-      final dataset = await remoteDataSource.getAllDataSets();
-      return Ok(dataset);
+      return Ok(await remoteDataSource.getAllDataSets());
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
     }
@@ -30,6 +28,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<DataSet, Failure>> defineDataSet(DataSet input) async {
     try {
       final dataset = await remoteDataSource.defineDataSet(input);
+      if (dataset == null) {
+        return Err(ServerFailure('got null result for data set'));
+      }
       return Ok(dataset);
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
@@ -40,6 +41,9 @@ class DataSetRepositoryImpl extends DataSetRepository {
   Future<Result<DataSet, Failure>> updateDataSet(DataSet input) async {
     try {
       final dataset = await remoteDataSource.updateDataSet(input);
+      if (dataset == null) {
+        return Err(ServerFailure('got null result for data set'));
+      }
       return Ok(dataset);
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));

@@ -15,7 +15,7 @@ class SnapshotScreen extends StatelessWidget {
   // the data set under inspection
   final DataSet dataset;
 
-  SnapshotScreen({Key key, @required this.dataset}) : super(key: key);
+  SnapshotScreen({Key? key, required this.dataset}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

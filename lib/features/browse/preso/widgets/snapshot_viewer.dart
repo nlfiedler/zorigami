@@ -16,12 +16,12 @@ class SnapshotViewer extends StatelessWidget {
   final DataSet dataset;
 
   SnapshotViewer({
-    Key key,
-    @required this.state,
-    @required this.dataset,
+    Key? key,
+    required this.state,
+    required this.dataset,
   }) : super(key: key);
 
-  Function loadSubsequent(Loaded state, BuildContext context) {
+  VoidCallback? loadSubsequent(Loaded state, BuildContext context) {
     return state.hasSubsequent
         ? () {
             BlocProvider.of<SnapshotBrowserBloc>(context).add(LoadSubsequent());
@@ -30,7 +30,7 @@ class SnapshotViewer extends StatelessWidget {
         : null;
   }
 
-  Function loadParent(Loaded state, BuildContext context) {
+  VoidCallback? loadParent(Loaded state, BuildContext context) {
     return state.snapshot.parent is Some
         ? () {
             BlocProvider.of<SnapshotBrowserBloc>(context).add(LoadParent());
@@ -60,13 +60,13 @@ class SnapshotViewer extends StatelessWidget {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                RaisedButton(
-                  child: Icon(Icons.chevron_left),
+                ElevatedButton(
                   onPressed: loadSubsequent(state, context),
+                  child: Icon(Icons.chevron_left),
                 ),
-                RaisedButton(
-                  child: Icon(Icons.chevron_right),
+                ElevatedButton(
                   onPressed: loadParent(state, context),
+                  child: Icon(Icons.chevron_right),
                 ),
               ],
             ),

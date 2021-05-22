@@ -66,9 +66,9 @@ class NewDataSetScreen extends StatelessWidget {
 
 class NewDataSetWidget extends StatelessWidget {
   NewDataSetWidget({
-    Key key,
-    @required this.dataset,
-    @required this.stores,
+    Key? key,
+    required this.dataset,
+    required this.stores,
   }) : super(key: key);
 
   final formKey = GlobalKey<FormBuilderState>();
@@ -76,9 +76,9 @@ class NewDataSetWidget extends StatelessWidget {
   final List<PackStore> stores;
 
   void addDataSet(BuildContext context, DataSetForm setForm) {
-    if (formKey.currentState.saveAndValidate()) {
+    if (formKey.currentState!.saveAndValidate()) {
       final dataset = DataSetForm.datasetFromState(
-        formKey.currentState,
+        formKey.currentState!,
         stores,
       );
       BlocProvider.of<CreateDataSetsBloc>(context).add(
@@ -119,7 +119,7 @@ class NewDataSetWidget extends StatelessWidget {
               ),
               ButtonBar(
                 children: <Widget>[
-                  RaisedButton.icon(
+                  ElevatedButton.icon(
                     icon: Icon(Icons.save),
                     label: const Text('ADD'),
                     onPressed: (state is Submitting)

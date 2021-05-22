@@ -3,7 +3,6 @@
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
-import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
@@ -38,7 +37,7 @@ class Loading extends DataSetsState {}
 class Loaded extends DataSetsState {
   final List<DataSet> sets;
 
-  Loaded({@required this.sets});
+  Loaded({required this.sets});
 
   @override
   List<Object> get props => [sets];
@@ -47,7 +46,7 @@ class Loaded extends DataSetsState {
 class Error extends DataSetsState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -60,7 +59,7 @@ class Error extends DataSetsState {
 class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
   final GetDataSets usecase;
 
-  DataSetsBloc({this.usecase}) : super(Empty());
+  DataSetsBloc({required this.usecase}) : super(Empty());
 
   @override
   Stream<DataSetsState> mapEventToState(

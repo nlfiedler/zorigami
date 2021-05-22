@@ -81,7 +81,7 @@ Widget buildNoStoresHelp(BuildContext context) {
 class PackStoreListEntry extends StatelessWidget {
   final PackStore store;
 
-  PackStoreListEntry({Key key, @required this.store}) : super(key: key);
+  PackStoreListEntry({Key? key, required this.store}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +146,7 @@ class PackStoreListEntry extends StatelessWidget {
     );
   }
 
-  String _loadedResult(rdb.DatabaseRestoreState state) {
+  String? _loadedResult(rdb.DatabaseRestoreState state) {
     if (state is rdb.Loaded) {
       if (state.result == 'ok') {
         return 'Database restore successful.';

@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
@@ -10,12 +11,12 @@ import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
+import './snapshot_browser_bloc_test.mocks.dart';
 
-class MockSnapshotRepository extends Mock implements SnapshotRepository {}
-
+@GenerateMocks([SnapshotRepository])
 void main() {
-  MockSnapshotRepository mockSnapshotRepository;
-  GetSnapshot usecase;
+  late MockSnapshotRepository mockSnapshotRepository;
+  late GetSnapshot usecase;
 
   final tSubsequent = Snapshot(
     checksum: 'cafebabe',
@@ -59,20 +60,21 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => SnapshotBrowserBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadSnapshot is added',
       build: () => SnapshotBrowserBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
-      expect: [Loading(), Loaded(snapshot: tSubsequent)],
+      act: (SnapshotBrowserBloc bloc) =>
+          bloc.add(LoadSnapshot(digest: 'cafebabe')),
+      expect: () => [Loading(), Loaded(snapshot: tSubsequent)],
     );
 
     blocTest(
       'should support moving forward and backward',
       build: () => SnapshotBrowserBloc(usecase: usecase),
-      act: (bloc) {
+      act: (SnapshotBrowserBloc bloc) {
         bloc.add(LoadSnapshot(digest: 'cafebabe'));
         bloc.add(LoadParent());
         // will not move past the end
@@ -84,7 +86,7 @@ void main() {
         bloc.add(LoadSubsequent());
         return;
       },
-      expect: [
+      expect: () => [
         Loading(),
         Loaded(snapshot: tSubsequent),
         Loading(),
@@ -92,7 +94,7 @@ void main() {
         Loading(),
         Loaded(snapshot: tSubsequent),
       ],
-      verify: (bloc) async {
+      verify: (SnapshotBrowserBloc bloc) async {
         expect(bloc.history.length, equals(0));
       },
     );
@@ -109,8 +111,9 @@ void main() {
     blocTest(
       'emits [Loading, Error] when LoadSnapshot is added',
       build: () => SnapshotBrowserBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadSnapshot(digest: 'cafebabe')),
-      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
+      act: (SnapshotBrowserBloc bloc) =>
+          bloc.add(LoadSnapshot(digest: 'cafebabe')),
+      expect: () => [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

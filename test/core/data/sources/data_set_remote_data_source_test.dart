@@ -2,8 +2,9 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'dart:convert';
-import 'package:graphql/client.dart';
+import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
@@ -12,22 +13,22 @@ import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
+import './data_set_remote_data_source_test.mocks.dart';
 
-class MockHttpClient extends Mock implements http.Client {}
-
+@GenerateMocks([http.Client])
 void main() {
-  DataSetRemoteDataSourceImpl dataSource;
-  MockHttpClient mockHttpClient;
+  late DataSetRemoteDataSourceImpl dataSource;
+  late MockClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockHttpClient();
-    final link = HttpLink(
-      uri: 'http://example.com',
+    mockHttpClient = MockClient();
+    final link = gql.HttpLink(
+      'http://example.com',
       httpClient: mockHttpClient,
     );
-    final graphQLCient = GraphQLClient(
+    final graphQLCient = gql.GraphQLClient(
       link: link,
-      cache: InMemoryCache(),
+      cache: gql.GraphQLCache(),
     );
     dataSource = DataSetRemoteDataSourceImpl(client: graphQLCient);
   });
@@ -79,22 +80,30 @@ void main() {
   void setUpMockHttpClientGraphQLResponse(String operation) {
     final response = {
       'data': {
+        '__typename': 'Dataset',
         operation: {
+          '__typename': 'Dataset',
           'id': 'setkey1',
           'computerId': 'cray-11',
           'basepath': '/home/planet',
           'schedules': [
             {
+              '__typename': 'Schedule',
               'frequency': 'WEEKLY',
-              'timeRange': null,
+              'timeRange': {
+                '__typename': 'TimeRange',
+                'startTime': null,
+                'stopTime': null
+              },
               'weekOfMonth': null,
               'dayOfWeek': 'THU',
               'dayOfMonth': null
             }
           ],
-          'packSize': '67108864',
-          'stores': ['store/local/setkey1'],
+          'status': null,
+          'errorMessage': null,
           'latestSnapshot': {
+            '__typename': 'Snapshot',
             'checksum': 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
             'parent': 'sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634',
             'startTime': '2020-03-15T05:36:04.960782134+00:00',
@@ -102,6 +111,8 @@ void main() {
             'fileCount': '125331',
             'tree': 'sha1-698058583b2283b8c02ea5e40272c8364a0d6e78'
           },
+          'packSize': '67108864',
+          'stores': ['store/local/setkey1'],
         }
       }
     };
@@ -168,8 +179,10 @@ void main() {
         // arrange
         final response = {
           'data': {
+            '__typename': 'Dataset',
             'datasets': [
               {
+                '__typename': 'Dataset',
                 'id': 'a1',
                 'computerId': 's1',
                 'basepath': '/home/planet',
@@ -212,8 +225,10 @@ void main() {
         // arrange
         final response = {
           'data': {
+            '__typename': 'Dataset',
             'datasets': [
               {
+                '__typename': 'Dataset',
                 'id': 'a1',
                 'computerId': 's1',
                 'basepath': '/home/planet',
@@ -223,6 +238,7 @@ void main() {
                 'latestSnapshot': null,
               },
               {
+                '__typename': 'Dataset',
                 'id': 'a2',
                 'computerId': 's2',
                 'basepath': '/home/town',
@@ -232,6 +248,7 @@ void main() {
                 'latestSnapshot': null,
               },
               {
+                '__typename': 'Dataset',
                 'id': 'a3',
                 'computerId': 's3',
                 'basepath': '/home/sweet/home',

@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:graphql/client.dart';
+import 'package:graphql/client.dart' as gql;
 import 'package:zorigami/core/data/repositories/configuration_repository_impl.dart';
 import 'package:zorigami/core/data/repositories/data_set_repository_impl.dart';
 import 'package:zorigami/core/data/repositories/pack_store_repository_impl.dart';
@@ -20,11 +20,11 @@ import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/environment_config.dart';
 
-final graphqlProvider = Provider<GraphQLClient>((ref) {
+final graphqlProvider = Provider<gql.GraphQLClient>((ref) {
   final uri = '${EnvironmentConfig.base_url}/graphql';
-  return GraphQLClient(
-    link: HttpLink(uri: uri),
-    cache: InMemoryCache(),
+  return gql.GraphQLClient(
+    link: gql.HttpLink(uri),
+    cache: gql.GraphQLCache(),
   );
 });
 

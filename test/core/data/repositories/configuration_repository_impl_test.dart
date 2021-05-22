@@ -2,22 +2,22 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/core/data/sources/configuration_remote_data_source.dart';
 import 'package:zorigami/core/data/models/configuration_model.dart';
 import 'package:zorigami/core/data/repositories/configuration_repository_impl.dart';
+import './configuration_repository_impl_test.mocks.dart';
 
-class MockRemoteDataSource extends Mock
-    implements ConfigurationRemoteDataSource {}
-
+@GenerateMocks([ConfigurationRemoteDataSource])
 void main() {
-  ConfigurationRepositoryImpl repository;
-  MockRemoteDataSource mockRemoteDataSource;
+  late ConfigurationRepositoryImpl repository;
+  late MockConfigurationRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockRemoteDataSource();
+    mockRemoteDataSource = MockConfigurationRemoteDataSource();
     repository = ConfigurationRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );

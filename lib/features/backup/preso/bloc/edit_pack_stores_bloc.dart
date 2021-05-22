@@ -3,7 +3,6 @@
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
-import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/delete_pack_store.dart' as dps;
@@ -22,19 +21,19 @@ abstract class EditPackStoresEvent extends Equatable {
 class UpdatePackStore extends EditPackStoresEvent {
   final PackStore store;
 
-  UpdatePackStore({@required this.store});
+  UpdatePackStore({required this.store});
 }
 
 class TestPackStore extends EditPackStoresEvent {
   final PackStore store;
 
-  TestPackStore({@required this.store});
+  TestPackStore({required this.store});
 }
 
 class DeletePackStore extends EditPackStoresEvent {
   final PackStore store;
 
-  DeletePackStore({@required this.store});
+  DeletePackStore({required this.store});
 }
 
 //
@@ -55,7 +54,7 @@ class Submitted extends EditPackStoresState {}
 class Tested extends EditPackStoresState {
   final String result;
 
-  Tested({@required this.result});
+  Tested({required this.result});
 
   @override
   List<Object> get props => [result];
@@ -64,7 +63,7 @@ class Tested extends EditPackStoresState {
 class Error extends EditPackStoresState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -81,9 +80,9 @@ class EditPackStoresBloc
   final dps.DeletePackStore deletePackStore;
 
   EditPackStoresBloc({
-    this.updatePackStore,
-    this.testPackStore,
-    this.deletePackStore,
+    required this.updatePackStore,
+    required this.testPackStore,
+    required this.deletePackStore,
   }) : super(Editing());
 
   @override

@@ -240,7 +240,7 @@ void main() {
         // arrange (with minimal data)
         final model = DataSetModel(
           key: '',
-          computerId: null,
+          computerId: '',
           basepath: '',
           schedules: [],
           packSize: 0,

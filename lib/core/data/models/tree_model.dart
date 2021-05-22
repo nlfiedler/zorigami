@@ -1,13 +1,12 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 
 class TreeReferenceModel extends TreeReference {
   TreeReferenceModel({
-    @required EntryType type,
-    @required String value,
+    required EntryType type,
+    required String value,
   }) : super(
           type: type,
           value: value,
@@ -28,26 +27,21 @@ class TreeReferenceModel extends TreeReference {
     switch (type) {
       case EntryType.file:
         return 'file-' + value;
-        break;
       case EntryType.tree:
         return 'tree-' + value;
-        break;
       case EntryType.link:
         return 'link-' + value;
-        break;
       case EntryType.error:
         return 'error-' + value;
-        break;
     }
-    throw ArgumentError('unrecognized type: ' + type.toString());
   }
 }
 
 class TreeEntryModel extends TreeEntry {
   TreeEntryModel({
-    @required String name,
-    @required DateTime modTime,
-    @required TreeReference reference,
+    required String name,
+    required DateTime modTime,
+    required TreeReference reference,
   }) : super(
           name: name,
           modTime: modTime,
@@ -84,7 +78,7 @@ class TreeEntryModel extends TreeEntry {
 
 class TreeModel extends Tree {
   TreeModel({
-    @required List<TreeEntry> entries,
+    required List<TreeEntry> entries,
   }) : super(entries: entries);
 
   factory TreeModel.fromJson(Map<String, dynamic> json) {
@@ -106,16 +100,12 @@ EntryType decodeEntryType(String fstype) {
   switch (fstype) {
     case 'FILE':
       return EntryType.file;
-      break;
     case 'DIR':
       return EntryType.tree;
-      break;
     case 'LINK':
       return EntryType.link;
-      break;
     case 'ERROR':
       return EntryType.error;
-      break;
   }
   throw ArgumentError('unrecognized type: ' + fstype);
 }
@@ -124,18 +114,13 @@ String encodeEntryType(EntryType type) {
   switch (type) {
     case EntryType.file:
       return 'FILE';
-      break;
     case EntryType.tree:
       return 'DIR';
-      break;
     case EntryType.link:
       return 'LINK';
-      break;
     case EntryType.error:
       return 'ERROR';
-      break;
   }
-  throw ArgumentError('unrecognized type: ' + type.toString());
 }
 
 String decodeReference(String reference) {

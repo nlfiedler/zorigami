@@ -3,7 +3,6 @@
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
-import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/usecases/get_pack_stores.dart';
@@ -38,7 +37,7 @@ class Loading extends PackStoresState {}
 class Loaded extends PackStoresState {
   final List<PackStore> stores;
 
-  Loaded({@required this.stores});
+  Loaded({required this.stores});
 
   @override
   List<Object> get props => [stores];
@@ -47,7 +46,7 @@ class Loaded extends PackStoresState {
 class Error extends PackStoresState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -60,7 +59,7 @@ class Error extends PackStoresState {
 class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
   final GetPackStores usecase;
 
-  PackStoresBloc({this.usecase}) : super(Empty());
+  PackStoresBloc({required this.usecase}) : super(Empty());
 
   @override
   Stream<PackStoresState> mapEventToState(

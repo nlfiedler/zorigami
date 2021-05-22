@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -10,12 +11,12 @@ import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/define_data_set.dart' as dds;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_data_sets_bloc.dart';
+import './create_data_sets_bloc_test.mocks.dart';
 
-class MockDataSetRepository extends Mock implements DataSetRepository {}
-
+@GenerateMocks([DataSetRepository])
 void main() {
-  MockDataSetRepository mockDataSetRepository;
-  dds.DefineDataSet usecase;
+  late MockDataSetRepository mockDataSetRepository;
+  late dds.DefineDataSet usecase;
 
   final tDataSet = DataSet(
     key: 'dataset1',
@@ -25,6 +26,7 @@ void main() {
     packSize: 1048576,
     stores: ['store/local/abc'],
     snapshot: None(),
+    status: Status.none,
     errorMsg: None(),
   );
 
@@ -39,14 +41,15 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => CreateDataSetsBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Submitting, Submitted] when DefineDataSet is added',
       build: () => CreateDataSetsBloc(usecase: usecase),
-      act: (bloc) => bloc.add(DefineDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Submitted()],
+      act: (CreateDataSetsBloc bloc) =>
+          bloc.add(DefineDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Submitted()],
     );
   });
 
@@ -61,8 +64,9 @@ void main() {
     blocTest(
       'emits [Submitting, Error] when DefineDataSet is added',
       build: () => CreateDataSetsBloc(usecase: usecase),
-      act: (bloc) => bloc.add(DefineDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
+      act: (CreateDataSetsBloc bloc) =>
+          bloc.add(DefineDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

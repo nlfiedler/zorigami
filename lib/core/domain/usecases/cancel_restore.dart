@@ -2,8 +2,6 @@
 // Copyright (c) 2021 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
@@ -32,9 +30,9 @@ class Params extends Equatable {
   final String dataset;
 
   Params({
-    @required this.digest,
-    @required this.filepath,
-    @required this.dataset,
+    required this.digest,
+    required this.filepath,
+    required this.dataset,
   });
 
   @override

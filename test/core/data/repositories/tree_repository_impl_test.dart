@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
@@ -9,15 +10,15 @@ import 'package:zorigami/core/data/sources/tree_remote_data_source.dart';
 import 'package:zorigami/core/data/models/tree_model.dart';
 import 'package:zorigami/core/data/repositories/tree_repository_impl.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
+import './tree_repository_impl_test.mocks.dart';
 
-class MockRemoteDataSource extends Mock implements TreeRemoteDataSource {}
-
+@GenerateMocks([TreeRemoteDataSource])
 void main() {
-  TreeRepositoryImpl repository;
-  MockRemoteDataSource mockRemoteDataSource;
+  late TreeRepositoryImpl repository;
+  late MockTreeRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockRemoteDataSource();
+    mockRemoteDataSource = MockTreeRemoteDataSource();
     repository = TreeRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );

@@ -26,6 +26,7 @@ tmp
 /build/
 *.lock
 flutter_sdk
+test/**/*.mocks.dart
 
 # Web related
 lib/generated_plugin_registrant.dart

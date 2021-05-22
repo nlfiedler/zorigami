@@ -13,9 +13,9 @@ class TreeViewer extends StatelessWidget {
   final DataSet dataset;
 
   TreeViewer({
-    Key key,
-    @required this.dataset,
-    @required this.rootTree,
+    Key? key,
+    required this.dataset,
+    required this.rootTree,
   }) : super(key: key);
 
   @override
@@ -63,8 +63,8 @@ class TreePath extends StatelessWidget {
   final Loaded state;
 
   TreePath({
-    @required this.dataset,
-    @required this.state,
+    required this.dataset,
+    required this.state,
   });
 
   @override
@@ -73,7 +73,7 @@ class TreePath extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       child: Row(
         children: <Widget>[
-          RaisedButton.icon(
+          ElevatedButton.icon(
             icon: Icon(Icons.arrow_upward),
             label: const Text('Up'),
             onPressed: state.path.isNotEmpty
@@ -83,7 +83,7 @@ class TreePath extends StatelessWidget {
                 : null,
           ),
           SizedBox(width: 16.0),
-          RaisedButton.icon(
+          ElevatedButton.icon(
             icon: Icon(Icons.restore),
             label: const Text('Put Back'),
             onPressed: state.selections.isNotEmpty
@@ -110,7 +110,7 @@ class TreePath extends StatelessWidget {
 class TreeTable extends StatefulWidget {
   final Loaded state;
 
-  TreeTable({Key key, @required this.state}) : super(key: key);
+  TreeTable({Key? key, required this.state}) : super(key: key);
 
   @override
   _TreeTableState createState() => _TreeTableState();
@@ -121,7 +121,7 @@ class _TreeTableState extends State<TreeTable> {
   bool _sortDateAsc = true;
   bool _sortRefAsc = true;
   bool _sortAscending = true;
-  int _sortColumnIndex;
+  late int _sortColumnIndex;
 
   @override
   Widget build(BuildContext context) {

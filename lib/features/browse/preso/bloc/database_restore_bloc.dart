@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
 
 //
@@ -19,7 +18,7 @@ abstract class DatabaseRestoreEvent extends Equatable {
 class RestoreDatabase extends DatabaseRestoreEvent {
   final String storeId;
 
-  RestoreDatabase({@required this.storeId});
+  RestoreDatabase({required this.storeId});
 }
 
 //
@@ -38,7 +37,7 @@ class Loading extends DatabaseRestoreState {}
 class Loaded extends DatabaseRestoreState {
   final String result;
 
-  Loaded({@required this.result});
+  Loaded({required this.result});
 
   @override
   List<Object> get props => [result];
@@ -50,7 +49,7 @@ class Loaded extends DatabaseRestoreState {
 class Error extends DatabaseRestoreState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -67,7 +66,7 @@ class DatabaseRestoreBloc
     extends Bloc<DatabaseRestoreEvent, DatabaseRestoreState> {
   final rd.RestoreDatabase usecase;
 
-  DatabaseRestoreBloc({this.usecase}) : super(Empty());
+  DatabaseRestoreBloc({required this.usecase}) : super(Empty());
 
   @override
   Stream<DatabaseRestoreState> mapEventToState(

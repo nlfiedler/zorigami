@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
 import 'package:zorigami/core/domain/usecases/cancel_restore.dart' as cr;
 import 'package:zorigami/core/domain/usecases/get_restores.dart' as gr;
@@ -27,9 +26,9 @@ class CancelRequest extends RestoresEvent {
   final String dataset;
 
   CancelRequest({
-    @required this.digest,
-    @required this.filepath,
-    @required this.dataset,
+    required this.digest,
+    required this.filepath,
+    required this.dataset,
   });
 }
 
@@ -53,8 +52,8 @@ class Loaded extends RestoresState {
   final bool requestCancelled;
 
   Loaded({
-    @required requests,
-    @required this.requestCancelled,
+    required requests,
+    required this.requestCancelled,
   }) : requests = List.unmodifiable(requests);
 
   @override
@@ -67,7 +66,7 @@ class Loaded extends RestoresState {
 class Error extends RestoresState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -84,7 +83,8 @@ class RestoresBloc extends Bloc<RestoresEvent, RestoresState> {
   final gr.GetRestores getRestores;
   final cr.CancelRestore cancelRestore;
 
-  RestoresBloc({this.getRestores, this.cancelRestore}) : super(Empty());
+  RestoresBloc({required this.getRestores, required this.cancelRestore})
+      : super(Empty());
 
   @override
   Stream<RestoresState> mapEventToState(

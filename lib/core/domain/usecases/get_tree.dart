@@ -2,7 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
@@ -23,7 +22,7 @@ class GetTree implements UseCase<Tree, Params> {
 class Params extends Equatable {
   final String checksum;
 
-  Params({@required this.checksum});
+  Params({required this.checksum});
 
   @override
   List<Object> get props => [checksum];

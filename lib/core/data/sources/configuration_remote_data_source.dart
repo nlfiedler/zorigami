@@ -1,22 +1,41 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:graphql/client.dart';
-import 'package:meta/meta.dart';
+import 'package:graphql/client.dart' as gql;
+import 'package:gql/language.dart' as lang;
+import 'package:gql/ast.dart' as ast;
+import 'package:normalize/utils.dart';
 import 'package:zorigami/core/data/models/configuration_model.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class ConfigurationRemoteDataSource {
-  Future<ConfigurationModel> getConfiguration();
+  Future<ConfigurationModel?> getConfiguration();
 }
 
-class ConfigurationRemoteDataSourceImpl extends ConfigurationRemoteDataSource {
-  final GraphQLClient client;
+// Work around bug in juniper in which it fails to implement __typename for the
+// root query, which is in violation of the GraphQL spec.
+//
+// c.f. https://github.com/graphql-rust/juniper/issues/372
+class AddNestedTypenameVisitor extends AddTypenameVisitor {
+  @override
+  ast.OperationDefinitionNode visitOperationDefinitionNode(
+    ast.OperationDefinitionNode node,
+  ) =>
+      node;
+}
 
-  ConfigurationRemoteDataSourceImpl({@required this.client});
+ast.DocumentNode gqlNoTypename(String document) => ast.transform(
+      lang.parseString(document),
+      [AddNestedTypenameVisitor()],
+    );
+
+class ConfigurationRemoteDataSourceImpl extends ConfigurationRemoteDataSource {
+  final gql.GraphQLClient client;
+
+  ConfigurationRemoteDataSourceImpl({required this.client});
 
   @override
-  Future<ConfigurationModel> getConfiguration() async {
+  Future<ConfigurationModel?> getConfiguration() async {
     final query = r'''
       query {
         configuration {
@@ -26,16 +45,19 @@ class ConfigurationRemoteDataSourceImpl extends ConfigurationRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = QueryOptions(
-      documentNode: gql(query),
-      fetchPolicy: FetchPolicy.noCache,
+    final queryOptions = gql.QueryOptions(
+      document: gqlNoTypename(query),
+      fetchPolicy: gql.FetchPolicy.noCache,
     );
-    final QueryResult result = await client.query(queryOptions);
+    final gql.QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> object =
-        result.data['configuration'] as Map<String, dynamic>;
-    return object == null ? null : ConfigurationModel.fromJson(object);
+    if (result.data?['configuration'] == null) {
+      return null;
+    }
+    return ConfigurationModel.fromJson(
+      result.data?['configuration'] as Map<String, dynamic>,
+    );
   }
 }

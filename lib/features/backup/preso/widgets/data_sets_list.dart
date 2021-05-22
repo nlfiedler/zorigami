@@ -18,7 +18,7 @@ import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 class DataSetsList extends StatelessWidget {
   final List<DataSet> sets;
 
-  DataSetsList({Key key, @required this.sets}) : super(key: key);
+  DataSetsList({Key? key, required this.sets}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -86,9 +86,9 @@ class DataSetsListInner extends StatefulWidget {
   final List<PackStore> stores;
 
   DataSetsListInner({
-    Key key,
-    @required this.sets,
-    @required this.stores,
+    Key? key,
+    required this.sets,
+    required this.stores,
   }) : super(key: key);
 
   @override
@@ -96,7 +96,7 @@ class DataSetsListInner extends StatefulWidget {
 }
 
 class _DataSetsListState extends State<DataSetsListInner> {
-  List<ExpansionItem> items;
+  late List<ExpansionItem> items;
 
   @override
   void initState() {
@@ -156,9 +156,9 @@ class _DataSetsListState extends State<DataSetsListInner> {
 
 class DataSetListDetails extends StatelessWidget {
   DataSetListDetails({
-    Key key,
-    @required this.dataset,
-    @required this.stores,
+    Key? key,
+    required this.dataset,
+    required this.stores,
   }) : super(key: key);
 
   final formKey = GlobalKey<FormBuilderState>();
@@ -166,9 +166,9 @@ class DataSetListDetails extends StatelessWidget {
   final List<PackStore> stores;
 
   void saveDataSet(BuildContext context, DataSetForm setForm) {
-    if (formKey.currentState.saveAndValidate()) {
+    if (formKey.currentState!.saveAndValidate()) {
       final dataset = DataSetForm.datasetFromState(
-        formKey.currentState,
+        formKey.currentState!,
         stores,
       );
       BlocProvider.of<edsb.EditDataSetsBloc>(context).add(
@@ -247,8 +247,8 @@ String getSchedule(DataSet dataset) {
 
 class ExpansionItem {
   ExpansionItem({
-    this.expandedValue,
-    this.headerValue,
+    required this.expandedValue,
+    required this.headerValue,
     this.isExpanded = false,
   });
   Widget expandedValue;

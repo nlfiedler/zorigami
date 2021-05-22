@@ -3,18 +3,19 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/database_restore_bloc.dart';
+import './database_restore_bloc_test.mocks.dart';
 
-class MockSnapshotRepository extends Mock implements SnapshotRepository {}
-
+@GenerateMocks([SnapshotRepository])
 void main() {
-  MockSnapshotRepository mockSnapshotRepository;
-  rd.RestoreDatabase usecase;
+  late MockSnapshotRepository mockSnapshotRepository;
+  late rd.RestoreDatabase usecase;
 
   group('normal cases', () {
     setUp(() {
@@ -38,14 +39,15 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => DatabaseRestoreBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadSnapshot is added',
       build: () => DatabaseRestoreBloc(usecase: usecase),
-      act: (bloc) => bloc.add(RestoreDatabase(storeId: 'local123')),
-      expect: [Loading(), Loaded(result: 'ok')],
+      act: (DatabaseRestoreBloc bloc) =>
+          bloc.add(RestoreDatabase(storeId: 'local123')),
+      expect: () => [Loading(), Loaded(result: 'ok')],
     );
   });
 
@@ -60,8 +62,9 @@ void main() {
     blocTest(
       'emits [Loading, Error] when LoadSnapshot is added',
       build: () => DatabaseRestoreBloc(usecase: usecase),
-      act: (bloc) => bloc.add(RestoreDatabase(storeId: 'local123')),
-      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
+      act: (DatabaseRestoreBloc bloc) =>
+          bloc.add(RestoreDatabase(storeId: 'local123')),
+      expect: () => [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

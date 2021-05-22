@@ -1,14 +1,13 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 
 class ConfigurationModel extends Configuration {
   ConfigurationModel({
-    @required String hostname,
-    @required String username,
-    @required String computerId,
+    required String hostname,
+    required String username,
+    required String computerId,
   }) : super(
           hostname: hostname,
           username: username,

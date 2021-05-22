@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/tree_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
@@ -13,7 +12,7 @@ class TreeRepositoryImpl extends TreeRepository {
   final TreeRemoteDataSource remoteDataSource;
 
   TreeRepositoryImpl({
-    @required this.remoteDataSource,
+    required this.remoteDataSource,
   });
 
   @override

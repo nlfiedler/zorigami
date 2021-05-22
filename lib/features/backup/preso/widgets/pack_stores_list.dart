@@ -19,14 +19,14 @@ import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 class PackStoresList extends StatefulWidget {
   final List<PackStore> stores;
 
-  PackStoresList({Key key, @required this.stores}) : super(key: key);
+  PackStoresList({Key? key, required this.stores}) : super(key: key);
 
   @override
   _PackStoresListState createState() => _PackStoresListState();
 }
 
 class _PackStoresListState extends State<PackStoresList> {
-  List<ExpansionItem> items;
+  late List<ExpansionItem> items;
 
   @override
   void initState() {
@@ -91,17 +91,17 @@ class _PackStoresListState extends State<PackStoresList> {
 
 class PackStoreListDetails extends StatelessWidget {
   PackStoreListDetails({
-    Key key,
-    @required this.store,
+    Key? key,
+    required this.store,
   }) : super(key: key);
 
   final formKey = GlobalKey<FormBuilderState>();
   final PackStore store;
 
   void testPack(BuildContext context, PackStoreForm storeForm) {
-    if (formKey.currentState.saveAndValidate()) {
+    if (formKey.currentState!.saveAndValidate()) {
       final store = storeForm.storeFromState(
-        formKey.currentState,
+        formKey.currentState!,
       );
       BlocProvider.of<epsb.EditPackStoresBloc>(context).add(
         epsb.TestPackStore(store: store),
@@ -110,9 +110,9 @@ class PackStoreListDetails extends StatelessWidget {
   }
 
   void savePack(BuildContext context, PackStoreForm storeForm) {
-    if (formKey.currentState.saveAndValidate()) {
+    if (formKey.currentState!.saveAndValidate()) {
       final store = storeForm.storeFromState(
-        formKey.currentState,
+        formKey.currentState!,
       );
       BlocProvider.of<epsb.EditPackStoresBloc>(context).add(
         epsb.UpdatePackStore(store: store),
@@ -122,7 +122,7 @@ class PackStoreListDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final storeForm = buildStoreForm(store);
+    final storeForm = buildStoreForm(store)!;
     return BlocConsumer<epsb.EditPackStoresBloc, epsb.EditPackStoresState>(
       listener: (context, state) {
         if (state is epsb.Submitted) {
@@ -191,8 +191,8 @@ class PackStoreListDetails extends StatelessWidget {
 
 class ExpansionItem {
   ExpansionItem({
-    this.expandedValue,
-    this.headerValue,
+    required this.expandedValue,
+    required this.headerValue,
     this.isExpanded = false,
   });
   Widget expandedValue;
@@ -201,7 +201,7 @@ class ExpansionItem {
 }
 
 /// Factory to build form widgets for pack store details.
-PackStoreForm buildStoreForm(PackStore store) {
+PackStoreForm? buildStoreForm(PackStore store) {
   if (store.kind == StoreKind.local) {
     return LocalStoreForm(store: store);
   }

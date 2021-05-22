@@ -2,7 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 
 enum StoreKind { google, local, minio, sftp }
 
@@ -20,10 +19,10 @@ class PackStore extends Equatable {
   final Map<String, dynamic> options;
 
   PackStore({
-    @required this.key,
-    @required this.label,
-    @required this.kind,
-    @required this.options,
+    required this.key,
+    required this.label,
+    required this.kind,
+    required this.options,
   });
 
   @override

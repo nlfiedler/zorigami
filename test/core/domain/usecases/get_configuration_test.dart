@@ -2,19 +2,19 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/repositories/configuration_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
+import './get_configuration_test.mocks.dart';
 
-class MockConfigurationRepository extends Mock
-    implements ConfigurationRepository {}
-
+@GenerateMocks([ConfigurationRepository])
 void main() {
-  GetConfiguration usecase;
-  MockConfigurationRepository mockConfigurationRepository;
+  late GetConfiguration usecase;
+  late MockConfigurationRepository mockConfigurationRepository;
 
   setUp(() {
     mockConfigurationRepository = MockConfigurationRepository();

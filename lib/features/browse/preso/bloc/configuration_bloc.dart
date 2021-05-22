@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
@@ -36,7 +35,7 @@ class Loading extends ConfigurationState {}
 class Loaded extends ConfigurationState {
   final Configuration config;
 
-  Loaded({@required this.config});
+  Loaded({required this.config});
 
   @override
   List<Object> get props => [config];
@@ -45,7 +44,7 @@ class Loaded extends ConfigurationState {
 class Error extends ConfigurationState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -58,7 +57,7 @@ class Error extends ConfigurationState {
 class ConfigurationBloc extends Bloc<ConfigurationEvent, ConfigurationState> {
   final GetConfiguration usecase;
 
-  ConfigurationBloc({this.usecase}) : super(Empty());
+  ConfigurationBloc({required this.usecase}) : super(Empty());
 
   @override
   Stream<ConfigurationState> mapEventToState(

@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -10,12 +11,12 @@ import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/define_pack_store.dart' as dps;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
+import './create_pack_stores_bloc_test.mocks.dart';
 
-class MockPackStoreRepository extends Mock implements PackStoreRepository {}
-
+@GenerateMocks([PackStoreRepository])
 void main() {
-  MockPackStoreRepository mockPackStoreRepository;
-  dps.DefinePackStore usecase;
+  late MockPackStoreRepository mockPackStoreRepository;
+  late dps.DefinePackStore usecase;
 
   final tPackStore = PackStore(
     key: 'PackStore1',
@@ -35,14 +36,15 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => CreatePackStoresBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Submitting, Submitted] when DefinePackStore is added',
       build: () => CreatePackStoresBloc(usecase: usecase),
-      act: (bloc) => bloc.add(DefinePackStore(store: tPackStore)),
-      expect: [Submitting(), Submitted()],
+      act: (CreatePackStoresBloc bloc) =>
+          bloc.add(DefinePackStore(store: tPackStore)),
+      expect: () => [Submitting(), Submitted()],
     );
   });
 
@@ -57,8 +59,9 @@ void main() {
     blocTest(
       'emits [Submitting, Error] when DefinePackStore is added',
       build: () => CreatePackStoresBloc(usecase: usecase),
-      act: (bloc) => bloc.add(DefinePackStore(store: tPackStore)),
-      expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
+      act: (CreatePackStoresBloc bloc) =>
+          bloc.add(DefinePackStore(store: tPackStore)),
+      expect: () => [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

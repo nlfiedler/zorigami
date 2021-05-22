@@ -2,17 +2,18 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/update_pack_store.dart';
+import './update_pack_store_test.mocks.dart';
 
-class MockPackStoreRepository extends Mock implements PackStoreRepository {}
-
+@GenerateMocks([PackStoreRepository])
 void main() {
-  UpdatePackStore usecase;
-  MockPackStoreRepository mockPackStoreRepository;
+  late UpdatePackStore usecase;
+  late MockPackStoreRepository mockPackStoreRepository;
 
   setUp(() {
     mockPackStoreRepository = MockPackStoreRepository();

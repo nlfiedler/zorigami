@@ -3,7 +3,6 @@
 //
 import 'package:equatable/equatable.dart';
 import 'package:intl/intl.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/error/failures.dart';
@@ -15,7 +14,7 @@ class TimeRange extends Equatable {
   final int start;
   final int stop;
 
-  TimeRange({@required this.start, @required this.stop});
+  TimeRange({required this.start, required this.stop});
 
   @override
   List<Object> get props => [start, stop];
@@ -56,11 +55,11 @@ class Schedule extends Equatable {
   final Option<int> dayOfMonth;
 
   Schedule({
-    @required this.frequency,
-    @required this.timeRange,
-    @required this.weekOfMonth,
-    @required this.dayOfWeek,
-    @required this.dayOfMonth,
+    required this.frequency,
+    required this.timeRange,
+    required this.weekOfMonth,
+    required this.dayOfWeek,
+    required this.dayOfMonth,
   });
 
   @override
@@ -171,15 +170,15 @@ class DataSet extends Equatable {
   final Option<String> errorMsg;
 
   DataSet({
-    @required this.key,
-    @required this.computerId,
-    @required this.basepath,
-    @required this.schedules,
-    @required this.packSize,
-    @required this.stores,
-    @required this.snapshot,
-    @required this.status,
-    @required this.errorMsg,
+    required this.key,
+    required this.computerId,
+    required this.basepath,
+    required this.schedules,
+    required this.packSize,
+    required this.stores,
+    required this.snapshot,
+    required this.status,
+    required this.errorMsg,
   });
 
   @override
@@ -216,7 +215,7 @@ class DataSet extends Equatable {
       case Status.running:
         return 'still running';
       case Status.finished:
-        return 'finished at ' + finishedTime();
+        return 'finished at ' + (finishedTime() ?? '<null>');
       case Status.paused:
         return 'paused';
       case Status.failed:
@@ -226,7 +225,7 @@ class DataSet extends Equatable {
     }
   }
 
-  String finishedTime() {
+  String? finishedTime() {
     return snapshot.mapOrElse(
       (s) => s.endTime.mapOrElse(
         (e) => DateFormat.yMd().add_jm().format(e.toLocal()),

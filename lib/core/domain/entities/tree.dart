@@ -2,7 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 
 enum EntryType { tree, error, file, link }
 
@@ -16,8 +15,8 @@ class TreeReference extends Equatable {
   final String value;
 
   TreeReference({
-    @required this.type,
-    @required this.value,
+    required this.type,
+    required this.value,
   });
 
   @override
@@ -35,9 +34,9 @@ class TreeEntry extends Equatable {
   final TreeReference reference;
 
   TreeEntry({
-    @required this.name,
-    @required this.modTime,
-    @required this.reference,
+    required this.name,
+    required this.modTime,
+    required this.reference,
   });
 
   @override
@@ -51,7 +50,7 @@ class TreeEntry extends Equatable {
 class Tree extends Equatable {
   final List<TreeEntry> entries;
 
-  Tree({@required this.entries});
+  Tree({required this.entries});
 
   @override
   List<Object> get props => [entries];

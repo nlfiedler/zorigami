@@ -2,8 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
@@ -24,7 +22,7 @@ class Params extends Equatable {
   /// Identifier of pack store from which to restore database.
   final String storeId;
 
-  Params({@required this.storeId});
+  Params({required this.storeId});
 
   @override
   List<Object> get props => [storeId];

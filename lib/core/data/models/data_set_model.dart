@@ -1,15 +1,14 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 
 class TimeRangeModel extends TimeRange {
   TimeRangeModel({
-    @required int start,
-    @required int stop,
+    required int start,
+    required int stop,
   }) : super(
           start: start,
           stop: stop,
@@ -39,11 +38,11 @@ class TimeRangeModel extends TimeRange {
 
 class ScheduleModel extends Schedule {
   ScheduleModel({
-    @required Frequency frequency,
-    @required Option<TimeRange> timeRange,
-    @required Option<WeekOfMonth> weekOfMonth,
-    @required Option<DayOfWeek> dayOfWeek,
-    @required Option<int> dayOfMonth,
+    required Frequency frequency,
+    required Option<TimeRange> timeRange,
+    required Option<WeekOfMonth> weekOfMonth,
+    required Option<DayOfWeek> dayOfWeek,
+    required Option<int> dayOfMonth,
   }) : super(
           frequency: frequency,
           timeRange: timeRange,
@@ -95,15 +94,15 @@ class ScheduleModel extends Schedule {
 
 class DataSetModel extends DataSet {
   DataSetModel({
-    @required String key,
-    @required String computerId,
-    @required String basepath,
-    @required List<ScheduleModel> schedules,
-    @required int packSize,
-    @required List<String> stores,
-    @required Option<SnapshotModel> snapshot,
-    @required Status status,
-    @required Option<String> errorMsg,
+    required String key,
+    required String computerId,
+    required String basepath,
+    required List<ScheduleModel> schedules,
+    required int packSize,
+    required List<String> stores,
+    required Option<SnapshotModel> snapshot,
+    required Status status,
+    required Option<String> errorMsg,
   }) : super(
           key: key,
           computerId: computerId,
@@ -138,8 +137,8 @@ class DataSetModel extends DataSet {
     final List<ScheduleModel> schedules = List.from(
       json['schedules'].map((s) => ScheduleModel.fromJson(s)),
     );
-    final snapshot = Option.some(json['latestSnapshot']).map(
-      (v) => SnapshotModel.fromJson(v),
+    final snapshot = Option.from(json['latestSnapshot']).map(
+      (v) => SnapshotModel.fromJson(v as Map<String, dynamic>),
     );
     // ensure the stores are of type String (they ought to be)
     final List<String> stores = List.from(
@@ -156,7 +155,7 @@ class DataSetModel extends DataSet {
       stores: stores,
       snapshot: snapshot,
       status: decodeStatus(json['status']),
-      errorMsg: Option.some(json['errorMessage']),
+      errorMsg: Option.from(json['errorMessage']),
     );
   }
 
@@ -179,7 +178,7 @@ class DataSetModel extends DataSet {
   }
 }
 
-Status decodeStatus(String status) {
+Status decodeStatus(String? status) {
   if (status == 'NONE' || status == null) {
     return Status.none;
   } else if (status == 'RUNNING') {
@@ -212,14 +211,16 @@ String encodeStatus(Status status) {
   }
 }
 
-Option<TimeRange> decodeTimeRange(Map<String, dynamic> timeRange) {
-  if (timeRange == null) {
+Option<TimeRange> decodeTimeRange(Map<String, dynamic>? timeRange) {
+  // Will get a non-null timeRange with unit tests that need to have a full
+  // GraphQL structure to make the graphql package happy.
+  if (timeRange == null || timeRange['startTime'] == null) {
     return None();
   }
   return Option.some(TimeRangeModel.fromJson(timeRange));
 }
 
-Map<String, dynamic> encodeTimeRange(Option<TimeRange> timeRange) {
+Map<String, dynamic>? encodeTimeRange(Option<TimeRange> timeRange) {
   return timeRange.mapOr((TimeRange tr) {
     return TimeRangeModel.from(tr).toJson();
   }, null);
@@ -254,7 +255,7 @@ String encodeFrequency(Frequency frequency) {
   }
 }
 
-Option<WeekOfMonth> decodeWeekOfMonth(String weekOfMonth) {
+Option<WeekOfMonth> decodeWeekOfMonth(String? weekOfMonth) {
   if (weekOfMonth == null) {
     return None();
   } else if (weekOfMonth == 'FIRST') {
@@ -272,7 +273,7 @@ Option<WeekOfMonth> decodeWeekOfMonth(String weekOfMonth) {
   }
 }
 
-String encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
+String? encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
   return weekOfMonth.mapOr((WeekOfMonth wom) {
     switch (wom) {
       case WeekOfMonth.first:
@@ -291,7 +292,7 @@ String encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
   }, null);
 }
 
-Option<DayOfWeek> decodeDayOfWeek(String dayOfWeek) {
+Option<DayOfWeek> decodeDayOfWeek(String? dayOfWeek) {
   if (dayOfWeek == null) {
     return None();
   } else if (dayOfWeek == 'SUN') {
@@ -313,7 +314,7 @@ Option<DayOfWeek> decodeDayOfWeek(String dayOfWeek) {
   }
 }
 
-String encodeDayOfWeek(Option<DayOfWeek> dayOfWeek) {
+String? encodeDayOfWeek(Option<DayOfWeek> dayOfWeek) {
   return dayOfWeek.mapOr((DayOfWeek dow) {
     switch (dow) {
       case DayOfWeek.sun:
@@ -343,6 +344,6 @@ Option<int> decodeDayOfMonth(dynamic dayOfMonth) {
   return Option.some((dayOfMonth as num).toInt());
 }
 
-int encodeDayOfMonth(Option<int> dayOfMonth) {
-  return dayOfMonth.unwrapOr(null);
+int? encodeDayOfMonth(Option<int> dayOfMonth) {
+  return dayOfMonth.toNullable();
 }

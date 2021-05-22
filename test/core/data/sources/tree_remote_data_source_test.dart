@@ -2,30 +2,31 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'dart:convert';
-import 'package:graphql/client.dart';
+import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zorigami/core/data/models/tree_model.dart';
 import 'package:zorigami/core/data/sources/tree_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
+import './tree_remote_data_source_test.mocks.dart';
 
-class MockHttpClient extends Mock implements http.Client {}
-
+@GenerateMocks([http.Client])
 void main() {
-  TreeRemoteDataSourceImpl dataSource;
-  MockHttpClient mockHttpClient;
+  late TreeRemoteDataSourceImpl dataSource;
+  late MockClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockHttpClient();
-    final link = HttpLink(
-      uri: 'http://example.com',
+    mockHttpClient = MockClient();
+    final link = gql.HttpLink(
+      'http://example.com',
       httpClient: mockHttpClient,
     );
-    final graphQLCient = GraphQLClient(
+    final graphQLCient = gql.GraphQLClient(
       link: link,
-      cache: InMemoryCache(),
+      cache: gql.GraphQLCache(),
     );
     dataSource = TreeRemoteDataSourceImpl(client: graphQLCient);
   });

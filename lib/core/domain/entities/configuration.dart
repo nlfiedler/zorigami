@@ -2,7 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 
 /// A `Configuration` holds information about the system.
 class Configuration extends Equatable {
@@ -14,9 +13,9 @@ class Configuration extends Equatable {
   final String computerId;
 
   Configuration({
-    @required this.hostname,
-    @required this.username,
-    @required this.computerId,
+    required this.hostname,
+    required this.username,
+    required this.computerId,
   });
 
   @override

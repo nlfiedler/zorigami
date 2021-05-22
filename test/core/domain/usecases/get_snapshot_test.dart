@@ -2,17 +2,18 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
+import './get_snapshot_test.mocks.dart';
 
-class MockSnapshotRepository extends Mock implements SnapshotRepository {}
-
+@GenerateMocks([SnapshotRepository])
 void main() {
-  GetSnapshot usecase;
-  MockSnapshotRepository mockSnapshotRepository;
+  late GetSnapshot usecase;
+  late MockSnapshotRepository mockSnapshotRepository;
 
   setUp(() {
     mockSnapshotRepository = MockSnapshotRepository();

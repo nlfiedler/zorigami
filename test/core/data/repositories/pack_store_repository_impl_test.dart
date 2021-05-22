@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
@@ -9,15 +10,15 @@ import 'package:zorigami/core/data/sources/pack_store_remote_data_source.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/repositories/pack_store_repository_impl.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
+import './pack_store_repository_impl_test.mocks.dart';
 
-class MockRemoteDataSource extends Mock implements PackStoreRemoteDataSource {}
-
+@GenerateMocks([PackStoreRemoteDataSource])
 void main() {
-  PackStoreRepositoryImpl repository;
-  MockRemoteDataSource mockRemoteDataSource;
+  late PackStoreRepositoryImpl repository;
+  late MockPackStoreRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockRemoteDataSource();
+    mockRemoteDataSource = MockPackStoreRemoteDataSource();
     repository = PackStoreRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );

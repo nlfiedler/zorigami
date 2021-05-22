@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -10,12 +11,12 @@ import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_pack_stores.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
+import './pack_stores_bloc_test.mocks.dart';
 
-class MockPackStoreRepository extends Mock implements PackStoreRepository {}
-
+@GenerateMocks([PackStoreRepository])
 void main() {
-  MockPackStoreRepository mockPackStoreRepository;
-  GetPackStores usecase;
+  late MockPackStoreRepository mockPackStoreRepository;
+  late GetPackStores usecase;
 
   final tPackStore = PackStore(
     key: 'PackStore1',
@@ -35,14 +36,14 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => PackStoresBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadAllPackStores is added',
       build: () => PackStoresBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadAllPackStores()),
-      expect: [
+      act: (PackStoresBloc bloc) => bloc.add(LoadAllPackStores()),
+      expect: () => [
         Loading(),
         Loaded(stores: [tPackStore])
       ],
@@ -51,12 +52,12 @@ void main() {
     blocTest(
       'emits [Loading, Loaded, Empty] when ReloadDataSets is added',
       build: () => PackStoresBloc(usecase: usecase),
-      act: (bloc) {
+      act: (PackStoresBloc bloc) {
         bloc.add(LoadAllPackStores());
         bloc.add(ReloadPackStores());
         return;
       },
-      expect: [
+      expect: () => [
         Loading(),
         Loaded(stores: [tPackStore]),
         Empty()
@@ -75,8 +76,8 @@ void main() {
     blocTest(
       'emits [Loading, Loaded] when LoadAllPackStores is added',
       build: () => PackStoresBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadAllPackStores()),
-      expect: [
+      act: (PackStoresBloc bloc) => bloc.add(LoadAllPackStores()),
+      expect: () => [
         Loading(),
         Error(message: 'ServerFailure(oh no!)'),
       ],

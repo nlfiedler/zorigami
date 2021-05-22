@@ -1,22 +1,41 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:graphql/client.dart';
-import 'package:meta/meta.dart';
+import 'package:graphql/client.dart' as gql;
+import 'package:gql/language.dart' as lang;
+import 'package:gql/ast.dart' as ast;
+import 'package:normalize/utils.dart';
 import 'package:zorigami/core/data/models/tree_model.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 
 abstract class TreeRemoteDataSource {
-  Future<TreeModel> getTree(String checksum);
+  Future<TreeModel?> getTree(String checksum);
 }
 
-class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
-  final GraphQLClient client;
+// Work around bug in juniper in which it fails to implement __typename for the
+// root query, which is in violation of the GraphQL spec.
+//
+// c.f. https://github.com/graphql-rust/juniper/issues/372
+class AddNestedTypenameVisitor extends AddTypenameVisitor {
+  @override
+  ast.OperationDefinitionNode visitOperationDefinitionNode(
+    ast.OperationDefinitionNode node,
+  ) =>
+      node;
+}
 
-  TreeRemoteDataSourceImpl({@required this.client});
+ast.DocumentNode gqlNoTypename(String document) => ast.transform(
+      lang.parseString(document),
+      [AddNestedTypenameVisitor()],
+    );
+
+class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
+  final gql.GraphQLClient client;
+
+  TreeRemoteDataSourceImpl({required this.client});
 
   @override
-  Future<TreeModel> getTree(String checksum) async {
+  Future<TreeModel?> getTree(String checksum) async {
     final query = r'''
       query Fetch($checksum: Checksum!) {
         tree(digest: $checksum) {
@@ -29,19 +48,22 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = QueryOptions(
-      documentNode: gql(query),
+    final queryOptions = gql.QueryOptions(
+      document: gqlNoTypename(query),
       variables: <String, dynamic>{
         'checksum': checksum,
       },
-      fetchPolicy: FetchPolicy.noCache,
+      fetchPolicy: gql.FetchPolicy.noCache,
     );
-    final QueryResult result = await client.query(queryOptions);
+    final gql.QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
       throw ServerException(result.exception.toString());
     }
-    final Map<String, dynamic> object =
-        result.data['tree'] as Map<String, dynamic>;
-    return object == null ? null : TreeModel.fromJson(object);
+    if (result.data?['tree'] == null) {
+      return null;
+    }
+    return TreeModel.fromJson(
+      result.data?['tree'] as Map<String, dynamic>,
+    );
   }
 }

@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
@@ -10,13 +11,12 @@ import 'package:zorigami/core/domain/repositories/configuration_repository.dart'
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
+import './configuration_bloc_test.mocks.dart';
 
-class MockConfigurationRepository extends Mock
-    implements ConfigurationRepository {}
-
+@GenerateMocks([ConfigurationRepository])
 void main() {
-  MockConfigurationRepository mockConfigurationRepository;
-  GetConfiguration usecase;
+  late MockConfigurationRepository mockConfigurationRepository;
+  late GetConfiguration usecase;
 
   final tConfiguration = Configuration(
     hostname: 'localhost',
@@ -35,14 +35,14 @@ void main() {
     blocTest(
       'emits [] when nothing is added',
       build: () => ConfigurationBloc(usecase: usecase),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
       'emits [Loading, Loaded] when LoadConfiguration is added',
       build: () => ConfigurationBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadConfiguration()),
-      expect: [Loading(), Loaded(config: tConfiguration)],
+      act: (ConfigurationBloc bloc) => bloc.add(LoadConfiguration()),
+      expect: () => [Loading(), Loaded(config: tConfiguration)],
     );
   });
 
@@ -57,8 +57,8 @@ void main() {
     blocTest(
       'emits [Loading, Error] when LoadConfiguration is added',
       build: () => ConfigurationBloc(usecase: usecase),
-      act: (bloc) => bloc.add(LoadConfiguration()),
-      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
+      act: (ConfigurationBloc bloc) => bloc.add(LoadConfiguration()),
+      expect: () => [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

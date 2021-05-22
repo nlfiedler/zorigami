@@ -2,30 +2,31 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'dart:convert';
-import 'package:graphql/client.dart';
+import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/sources/pack_store_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
+import './pack_store_remote_data_source_test.mocks.dart';
 
-class MockHttpClient extends Mock implements http.Client {}
-
+@GenerateMocks([http.Client])
 void main() {
-  PackStoreRemoteDataSourceImpl dataSource;
-  MockHttpClient mockHttpClient;
+  late PackStoreRemoteDataSourceImpl dataSource;
+  late MockClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockHttpClient();
-    final link = HttpLink(
-      uri: 'http://example.com',
+    mockHttpClient = MockClient();
+    final link = gql.HttpLink(
+      'http://example.com',
       httpClient: mockHttpClient,
     );
-    final graphQLCient = GraphQLClient(
+    final graphQLCient = gql.GraphQLClient(
       link: link,
-      cache: InMemoryCache(),
+      cache: gql.GraphQLCache(),
     );
     dataSource = PackStoreRemoteDataSourceImpl(client: graphQLCient);
   });
@@ -62,14 +63,18 @@ void main() {
   }
 
   void setUpMockHttpClientGraphQLResponse(
-      String operation, List<dynamic> options) {
+    String operation,
+    List<dynamic> options,
+  ) {
     final response = {
       'data': {
+        '__typename': 'Store',
         operation: {
+          '__typename': 'Store',
           'id': 'abc123',
           'label': 'lstore',
           'storeType': 'local',
-          'properties': options
+          'properties': options,
         }
       }
     };
@@ -340,7 +345,7 @@ void main() {
       'should define a new pack store',
       () async {
         // arrange
-        final encodedOptions = encodeOptions(tPackStoreModel.options);
+        final encodedOptions = encodeQLOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse('defineStore', encodedOptions);
         // act
         final result = await dataSource.definePackStore(tPackStoreModel);
@@ -385,7 +390,7 @@ void main() {
       'should update an existing pack store',
       () async {
         // arrange
-        final encodedOptions = encodeOptions(tPackStoreModel.options);
+        final encodedOptions = encodeQLOptions(tPackStoreModel.options);
         setUpMockHttpClientGraphQLResponse('updateStore', encodedOptions);
         // act
         final result = await dataSource.updatePackStore(tPackStoreModel);

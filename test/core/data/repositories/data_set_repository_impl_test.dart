@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/error/exceptions.dart';
@@ -10,15 +11,15 @@ import 'package:zorigami/core/data/sources/data_set_remote_data_source.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
 import 'package:zorigami/core/data/repositories/data_set_repository_impl.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
+import './data_set_repository_impl_test.mocks.dart';
 
-class MockRemoteDataSource extends Mock implements DataSetRemoteDataSource {}
-
+@GenerateMocks([DataSetRemoteDataSource])
 void main() {
-  DataSetRepositoryImpl repository;
-  MockRemoteDataSource mockRemoteDataSource;
+  late DataSetRepositoryImpl repository;
+  late MockDataSetRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockRemoteDataSource();
+    mockRemoteDataSource = MockDataSetRemoteDataSource();
     repository = DataSetRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );

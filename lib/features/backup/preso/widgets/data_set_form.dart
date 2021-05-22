@@ -43,10 +43,10 @@ class DataSetForm extends StatefulWidget {
   final GlobalKey<FormBuilderState> formKey;
 
   DataSetForm({
-    Key key,
-    @required this.dataset,
-    @required this.stores,
-    @required this.formKey,
+    Key? key,
+    required this.dataset,
+    required this.stores,
+    required this.formKey,
   }) : super(key: key);
 
   static Map<String, dynamic> initialValuesFrom(
@@ -102,12 +102,12 @@ class DataSetForm extends StatefulWidget {
 class _DataSetFormState extends State<DataSetForm> {
   bool timePickersEnabled;
 
-  _DataSetFormState({@required this.timePickersEnabled});
+  _DataSetFormState({required this.timePickersEnabled});
 
   @override
   Widget build(BuildContext context) {
     final packStoreOptions = buildStoreOptions(widget.dataset, widget.stores);
-    FormBuilderState formState = FormBuilder.of(context);
+    FormBuilderState formState = FormBuilder.of(context)!;
     return Column(
       children: <Widget>[
         FormBuilderTextField(
@@ -171,7 +171,8 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Frequency',
           ),
           onChanged: (val) {
-            setState(() => timePickersEnabled = allowTimeRange(val));
+            setState(() =>
+                timePickersEnabled = allowTimeRange(val as FrequencyOption));
           },
         ),
         FormBuilderDateTimePicker(
@@ -183,8 +184,8 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Start Time (UTC)',
           ),
           validator: (val) {
-            final stop = widget.formKey.currentState.fields['stop'];
-            if (stop.value == null && val != null) {
+            final stop = widget.formKey.currentState!.fields['stop'];
+            if (stop?.value == null && val != null) {
               return 'Please set stop time';
             }
             return null;
@@ -199,8 +200,8 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Stop Time (UTC)',
           ),
           validator: (val) {
-            final start = widget.formKey.currentState.fields['start'];
-            if (start.value == null && val != null) {
+            final start = widget.formKey.currentState!.fields['start'];
+            if (start?.value == null && val != null) {
               return 'Please set start time';
             }
             return null;
@@ -212,9 +213,9 @@ class _DataSetFormState extends State<DataSetForm> {
 }
 
 class FrequencyOption {
-  FrequencyOption({@required this.label, @required this.frequency});
+  FrequencyOption({required this.label, required this.frequency});
   final String label;
-  final Frequency frequency;
+  final Frequency? frequency;
 }
 
 // The key of the option is used to determine if it is checked.
@@ -265,22 +266,22 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
   }
 }
 
-DateTime startTimeFromDataSet(DataSet dataset) {
+DateTime? startTimeFromDataSet(DataSet dataset) {
   final option = getTimeFromDataSet(dataset, (Schedule schedule) {
     return schedule.timeRange.map((v) {
       return timeFromInt(v.start);
     });
   });
-  return option.unwrapOr(null);
+  return option.toNullable();
 }
 
-DateTime stopTimeFromDataSet(DataSet dataset) {
+DateTime? stopTimeFromDataSet(DataSet dataset) {
   final option = getTimeFromDataSet(dataset, (Schedule schedule) {
     return schedule.timeRange.map((v) {
       return timeFromInt(v.stop);
     });
   });
-  return option.unwrapOr(null);
+  return option.toNullable();
 }
 
 Option<DateTime> getTimeFromDataSet(
@@ -332,7 +333,7 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
       allowTimeRange(option) ? timeRangeFromState(state) : None();
   return [
     Schedule(
-      frequency: option.frequency,
+      frequency: option.frequency!,
       timeRange: timeRange,
       weekOfMonth: None(),
       dayOfWeek: None(),

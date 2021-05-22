@@ -2,17 +2,18 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/delete_data_set.dart';
+import './delete_data_set_test.mocks.dart';
 
-class MockDataSetRepository extends Mock implements DataSetRepository {}
-
+@GenerateMocks([DataSetRepository])
 void main() {
-  DeleteDataSet usecase;
-  MockDataSetRepository mockDataSetRepository;
+  late DeleteDataSet usecase;
+  late MockDataSetRepository mockDataSetRepository;
 
   setUp(() {
     mockDataSetRepository = MockDataSetRepository();
@@ -27,6 +28,7 @@ void main() {
     stores: ['storytime'],
     packSize: 65536,
     snapshot: None(),
+    status: Status.none,
     errorMsg: None(),
   );
 

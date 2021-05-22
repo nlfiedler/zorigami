@@ -2,6 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/error/exceptions.dart';
@@ -11,15 +12,15 @@ import 'package:zorigami/core/data/models/request_model.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/data/repositories/snapshot_repository_impl.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
+import './snapshot_repository_impl_test.mocks.dart';
 
-class MockRemoteDataSource extends Mock implements SnapshotRemoteDataSource {}
-
+@GenerateMocks([SnapshotRemoteDataSource])
 void main() {
-  SnapshotRepositoryImpl repository;
-  MockRemoteDataSource mockRemoteDataSource;
+  late SnapshotRepositoryImpl repository;
+  late MockSnapshotRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockRemoteDataSource();
+    mockRemoteDataSource = MockSnapshotRemoteDataSource();
     repository = SnapshotRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );
@@ -108,21 +109,6 @@ void main() {
     );
 
     test(
-      'should return failure when remote data source returns null',
-      () async {
-        // arrange
-        when(mockRemoteDataSource.restoreFiles(any, any, any))
-            .thenAnswer((_) async => null);
-        // act
-        final result =
-            await repository.restoreFiles('sha1-cafebabe', 'file', 'homura');
-        // assert
-        verify(mockRemoteDataSource.restoreFiles(any, any, any));
-        expect(result.err().unwrap(), isA<ServerFailure>());
-      },
-    );
-
-    test(
       'should return server failure when remote data source is unsuccessful',
       () async {
         // arrange
@@ -181,21 +167,6 @@ void main() {
         // assert
         verify(mockRemoteDataSource.cancelRestore(any, any, any));
         expect(result.unwrap(), equals(true));
-      },
-    );
-
-    test(
-      'should return failure when remote data source returns null',
-      () async {
-        // arrange
-        when(mockRemoteDataSource.cancelRestore(any, any, any))
-            .thenAnswer((_) async => null);
-        // act
-        final result =
-            await repository.cancelRestore('sha1-cafebabe', 'file', 'homura');
-        // assert
-        verify(mockRemoteDataSource.cancelRestore(any, any, any));
-        expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
 

@@ -66,7 +66,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
         DropdownButton<NewStoreItem>(
           value: selectedItem,
           onChanged: (item) {
-            setState(() => selectedItem = item);
+            setState(() => selectedItem = item as NewStoreItem);
           },
           items: storeItems
               .map<DropdownMenuItem<NewStoreItem>>((NewStoreItem value) {
@@ -80,7 +80,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
           onPressed: selectedItem.kind == null
               ? null
               : () {
-                  final packStore = defaultPackStore(selectedItem.kind);
+                  final packStore = defaultPackStore(selectedItem.kind!);
                   BlocProvider.of<CreatePackStoresBloc>(context).add(
                     DefinePackStore(
                       store: packStore,
@@ -96,11 +96,11 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
 
 class NewStoreItem {
   NewStoreItem({
-    @required this.title,
-    @required this.kind,
+    required this.title,
+    required this.kind,
   });
   final String title;
-  final StoreKind kind;
+  final StoreKind? kind;
 }
 
 /// Factory to create a generic pack store for the given kind.

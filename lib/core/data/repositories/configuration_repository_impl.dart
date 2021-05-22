@@ -1,7 +1,6 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/configuration_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
@@ -13,7 +12,7 @@ class ConfigurationRepositoryImpl extends ConfigurationRepository {
   final ConfigurationRemoteDataSource remoteDataSource;
 
   ConfigurationRepositoryImpl({
-    @required this.remoteDataSource,
+    required this.remoteDataSource,
   });
 
   @override

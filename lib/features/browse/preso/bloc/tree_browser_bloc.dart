@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
@@ -22,26 +21,26 @@ abstract class TreeBrowserEvent extends Equatable {
 class LoadTree extends TreeBrowserEvent {
   final String digest;
 
-  LoadTree({@required this.digest});
+  LoadTree({required this.digest});
 }
 
 class LoadEntry extends TreeBrowserEvent {
   final TreeEntry entry;
 
-  LoadEntry({@required this.entry});
+  LoadEntry({required this.entry});
 }
 
 class SetSelection extends TreeBrowserEvent {
   final TreeEntry entry;
   final bool selected;
 
-  SetSelection({@required this.entry, @required this.selected});
+  SetSelection({required this.entry, required this.selected});
 }
 
 class RestoreSelections extends TreeBrowserEvent {
   final String datasetKey;
 
-  RestoreSelections({@required this.datasetKey});
+  RestoreSelections({required this.datasetKey});
 }
 
 class NavigateUpward extends TreeBrowserEvent {}
@@ -71,9 +70,9 @@ class Loaded extends TreeBrowserState {
   final bool restoresEnqueued;
 
   Loaded({
-    @required this.tree,
-    @required selections,
-    @required path,
+    required this.tree,
+    required selections,
+    required path,
     this.restoresEnqueued = false,
   })  : selections = List.unmodifiable(selections),
         path = List.unmodifiable(path);
@@ -88,7 +87,7 @@ class Loaded extends TreeBrowserState {
 class Error extends TreeBrowserState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -111,7 +110,8 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   // selected tree entries
   final List<TreeEntry> selections = [];
 
-  TreeBrowserBloc({this.getTree, this.restoreFiles}) : super(Empty());
+  TreeBrowserBloc({required this.getTree, required this.restoreFiles})
+      : super(Empty());
 
   @override
   Stream<TreeBrowserState> mapEventToState(

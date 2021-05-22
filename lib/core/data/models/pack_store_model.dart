@@ -1,15 +1,14 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-import 'package:meta/meta.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 
 class PackStoreModel extends PackStore {
   PackStoreModel({
-    @required String key,
-    @required String label,
-    @required StoreKind kind,
-    @required Map<String, dynamic> options,
+    required String key,
+    required String label,
+    required StoreKind kind,
+    required Map<String, dynamic> options,
   }) : super(
           key: key,
           label: label,
@@ -93,5 +92,18 @@ List<Map<String, dynamic>> encodeOptions(Map<String, dynamic> options) {
   }
   final List<Map<String, dynamic>> results = [];
   options.forEach((key, value) => results.add({'name': key, 'value': value}));
+  return results;
+}
+
+List<Map<String, dynamic>> encodeQLOptions(Map<String, dynamic> options) {
+  if (options.isEmpty) {
+    return [];
+  }
+  final List<Map<String, dynamic>> results = [];
+  options.forEach((key, value) => results.add({
+        '__typename': 'Property',
+        'name': key,
+        'value': value,
+      }));
   return results;
 }

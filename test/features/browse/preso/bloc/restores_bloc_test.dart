@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/request_model.dart';
@@ -12,13 +13,13 @@ import 'package:zorigami/core/domain/usecases/cancel_restore.dart';
 import 'package:zorigami/core/domain/usecases/get_restores.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/restores_bloc.dart';
+import './restores_bloc_test.mocks.dart';
 
-class MockSnapshotRepository extends Mock implements SnapshotRepository {}
-
+@GenerateMocks([SnapshotRepository])
 void main() {
-  MockSnapshotRepository mockSnapshotRepository;
-  CancelRestore cancelRestore;
-  GetRestores getRestores;
+  late MockSnapshotRepository mockSnapshotRepository;
+  late CancelRestore cancelRestore;
+  late GetRestores getRestores;
 
   final tRequestModel = RequestModel(
     digest: 'cafebabe',
@@ -58,7 +59,7 @@ void main() {
         getRestores: getRestores,
         cancelRestore: cancelRestore,
       ),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
@@ -67,8 +68,9 @@ void main() {
         getRestores: getRestores,
         cancelRestore: cancelRestore,
       ),
-      act: (bloc) => bloc.add(LoadRequests()),
-      expect: [Loading(), Loaded(requests: tRequests, requestCancelled: false)],
+      act: (RestoresBloc bloc) => bloc.add(LoadRequests()),
+      expect: () =>
+          [Loading(), Loaded(requests: tRequests, requestCancelled: false)],
     );
 
     blocTest(
@@ -77,7 +79,7 @@ void main() {
         getRestores: getRestores,
         cancelRestore: cancelRestore,
       ),
-      act: (bloc) {
+      act: (RestoresBloc bloc) {
         bloc.add(LoadRequests());
         bloc.add(CancelRequest(
           digest: 'cafebabe',
@@ -86,7 +88,7 @@ void main() {
         ));
         return;
       },
-      expect: [
+      expect: () => [
         Loading(),
         Loaded(requests: tRequests, requestCancelled: false),
         Loaded(requests: [], requestCancelled: true),
@@ -108,8 +110,8 @@ void main() {
         getRestores: getRestores,
         cancelRestore: cancelRestore,
       ),
-      act: (bloc) => bloc.add(LoadRequests()),
-      expect: [Loading(), Error(message: 'ServerFailure(oh no!)')],
+      act: (RestoresBloc bloc) => bloc.add(LoadRequests()),
+      expect: () => [Loading(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

@@ -2,7 +2,6 @@
 // Copyright (c) 2021 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 
 /// A `Request` holds details regarding a file restore.
@@ -21,12 +20,12 @@ class Request extends Equatable {
   final Option<String> errorMessage;
 
   Request({
-    @required this.digest,
-    @required this.filepath,
-    @required this.dataset,
-    @required this.finished,
-    @required this.filesRestored,
-    @required this.errorMessage,
+    required this.digest,
+    required this.filepath,
+    required this.dataset,
+    required this.finished,
+    required this.filesRestored,
+    required this.errorMessage,
   });
 
   @override

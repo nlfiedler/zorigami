@@ -3,6 +3,7 @@
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -11,13 +12,13 @@ import 'package:zorigami/core/domain/usecases/delete_data_set.dart' as dds;
 import 'package:zorigami/core/domain/usecases/update_data_set.dart' as uds;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/edit_data_sets_bloc.dart';
+import './edit_data_sets_bloc_test.mocks.dart';
 
-class MockDataSetRepository extends Mock implements DataSetRepository {}
-
+@GenerateMocks([DataSetRepository])
 void main() {
-  MockDataSetRepository mockDataSetRepository;
-  dds.DeleteDataSet deleteUsecase;
-  uds.UpdateDataSet updateUsecase;
+  late MockDataSetRepository mockDataSetRepository;
+  late dds.DeleteDataSet deleteUsecase;
+  late uds.UpdateDataSet updateUsecase;
 
   final tDataSet = DataSet(
     key: 'dataset1',
@@ -27,6 +28,7 @@ void main() {
     packSize: 1048576,
     stores: ['store/local/abc'],
     snapshot: None(),
+    status: Status.none,
     errorMsg: None(),
   );
 
@@ -47,7 +49,7 @@ void main() {
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
-      expect: [],
+      expect: () => [],
     );
 
     blocTest(
@@ -56,8 +58,9 @@ void main() {
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
-      act: (bloc) => bloc.add(DeleteDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Submitted()],
+      act: (EditDataSetsBloc bloc) =>
+          bloc.add(DeleteDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Submitted()],
     );
 
     blocTest(
@@ -66,8 +69,9 @@ void main() {
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
-      act: (bloc) => bloc.add(UpdateDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Submitted()],
+      act: (EditDataSetsBloc bloc) =>
+          bloc.add(UpdateDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Submitted()],
     );
   });
 
@@ -88,8 +92,9 @@ void main() {
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
-      act: (bloc) => bloc.add(DeleteDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
+      act: (EditDataSetsBloc bloc) =>
+          bloc.add(DeleteDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );
 
     blocTest(
@@ -98,8 +103,9 @@ void main() {
         updateDataSet: updateUsecase,
         deleteDataSet: deleteUsecase,
       ),
-      act: (bloc) => bloc.add(UpdateDataSet(dataset: tDataSet)),
-      expect: [Submitting(), Error(message: 'ServerFailure(oh no!)')],
+      act: (EditDataSetsBloc bloc) =>
+          bloc.add(UpdateDataSet(dataset: tDataSet)),
+      expect: () => [Submitting(), Error(message: 'ServerFailure(oh no!)')],
     );
   });
 }

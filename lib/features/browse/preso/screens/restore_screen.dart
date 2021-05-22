@@ -81,7 +81,7 @@ Widget buildBody(BuildContext context, RestoresState state) {
 class RestoreListEntry extends StatelessWidget {
   final Request request;
 
-  RestoreListEntry({Key key, @required this.request}) : super(key: key);
+  RestoreListEntry({Key? key, required this.request}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

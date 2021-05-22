@@ -2,7 +2,6 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 import 'package:oxidized/oxidized.dart';
 
 /// A `Snapshot` holds details about a specific backup.
@@ -21,12 +20,12 @@ class Snapshot extends Equatable {
   final String tree;
 
   Snapshot({
-    @required this.checksum,
-    @required this.parent,
-    @required this.startTime,
-    @required this.endTime,
-    @required this.fileCount,
-    @required this.tree,
+    required this.checksum,
+    required this.parent,
+    required this.startTime,
+    required this.endTime,
+    required this.fileCount,
+    required this.tree,
   });
 
   @override

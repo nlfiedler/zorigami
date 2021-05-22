@@ -3,7 +3,6 @@
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
-import 'package:meta/meta.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/usecases/define_data_set.dart' as dps;
@@ -20,7 +19,7 @@ abstract class CreateDataSetsEvent extends Equatable {
 class DefineDataSet extends CreateDataSetsEvent {
   final DataSet dataset;
 
-  DefineDataSet({@required this.dataset});
+  DefineDataSet({required this.dataset});
 }
 
 //
@@ -41,7 +40,7 @@ class Submitted extends CreateDataSetsState {}
 class Error extends CreateDataSetsState {
   final String message;
 
-  Error({@required this.message});
+  Error({required this.message});
 
   @override
   List<Object> get props => [message];
@@ -55,7 +54,7 @@ class CreateDataSetsBloc
     extends Bloc<CreateDataSetsEvent, CreateDataSetsState> {
   final dps.DefineDataSet usecase;
 
-  CreateDataSetsBloc({this.usecase}) : super(Editing());
+  CreateDataSetsBloc({required this.usecase}) : super(Editing());
 
   @override
   Stream<CreateDataSetsState> mapEventToState(

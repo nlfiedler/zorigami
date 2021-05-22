@@ -2,8 +2,9 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 import 'dart:convert';
-import 'package:graphql/client.dart';
+import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/request_model.dart';
@@ -11,22 +12,22 @@ import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
+import './snapshot_remote_data_source_test.mocks.dart';
 
-class MockHttpClient extends Mock implements http.Client {}
-
+@GenerateMocks([http.Client])
 void main() {
-  SnapshotRemoteDataSourceImpl dataSource;
-  MockHttpClient mockHttpClient;
+  late SnapshotRemoteDataSourceImpl dataSource;
+  late MockClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockHttpClient();
-    final link = HttpLink(
-      uri: 'http://example.com',
+    mockHttpClient = MockClient();
+    final link = gql.HttpLink(
+      'http://example.com',
       httpClient: mockHttpClient,
     );
-    final graphQLCient = GraphQLClient(
+    final graphQLCient = gql.GraphQLClient(
       link: link,
-      cache: InMemoryCache(),
+      cache: gql.GraphQLCache(),
     );
     dataSource = SnapshotRemoteDataSourceImpl(client: graphQLCient);
   });
@@ -221,7 +222,7 @@ void main() {
       // act
       final result = await dataSource.restoreDatabase('cafebabe');
       // assert
-      expect(result, isNull);
+      expect(result, equals('ng'));
     });
   });
 
@@ -293,7 +294,7 @@ void main() {
         'homura',
       );
       // assert
-      expect(result, null);
+      expect(result, equals(false));
     });
   });
 
@@ -516,7 +517,7 @@ void main() {
         'homura',
       );
       // assert
-      expect(result, null);
+      expect(result, equals(false));
     });
   });
 }
