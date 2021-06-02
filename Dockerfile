@@ -62,9 +62,10 @@ COPY --from=flutter /flutter/build/web web/
 VOLUME /database
 VOLUME /datasets
 VOLUME /packstore
+ENV DB_PATH "/database/dbase"
 ENV HOST "0.0.0.0"
 ENV PORT 8080
+ENV RUST_LOG info
 EXPOSE ${PORT}
 HEALTHCHECK CMD ./healthcheck
-ENV RUST_LOG info
 ENTRYPOINT ["./zorigami"]
