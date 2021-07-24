@@ -24,7 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenv = "0.15.0"
-env_logger = "0.8"
+env_logger = "0.9"
 failure = "0.1.6"
 failure_derive = "0.1.6"
 fastcdc = "1.0.1"
@@ -35,7 +35,7 @@ libc = "0.2.60"
 log = "0.4.7"
 memmap = "0.7.0"
 reducer = "2.0"
-rusty_ulid = "0.10.0"
+rusty_ulid = "0.11"
 serde = { version = "1.0.119", features = ["derive"] }
 serde_cbor = "0.11"
 serde_json = "1.0.61"
@@ -56,5 +56,5 @@ whoami = "1.0"
 xattr = "0.2.2"
 
 [dev-dependencies]
-mockall = "0.9"
-rocksdb = "0.16.0"
+mockall = "0.10"
+rocksdb = "0.17.0"
