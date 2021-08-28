@@ -10,9 +10,9 @@ bytes = "1.0"
 dotenv = "0.15.0"
 failure = "0.1.6"
 futures = "0.3"
-rusoto_core = "0.46"
-rusoto_credential = "0.46"
-rusoto_s3 = "0.46"
+rusoto_core = "0.47"
+rusoto_credential = "0.47"
+rusoto_s3 = "0.47"
 store_core = { path = "../store_core" }
 tempfile = "3.2"
 tokio = { version = "1.0", features = ["fs", "rt-multi-thread", "time"] }
