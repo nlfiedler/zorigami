@@ -224,6 +224,8 @@ pub struct Dataset {
     pub pack_size: u64,
     /// Identifiers of the stores to contain pack files.
     pub stores: Vec<String>,
+    /// List of file/directory exclusion patterns.
+    pub excludes: Vec<String>,
 }
 
 // Default pack size is 64mb just because. With a typical ADSL home broadband
@@ -244,6 +246,7 @@ impl Dataset {
             workspace,
             pack_size: DEFAULT_PACK_SIZE,
             stores: vec![],
+            excludes: vec![],
         }
     }
 
@@ -275,6 +278,7 @@ impl Default for Dataset {
             workspace: PathBuf::new(),
             pack_size: 0,
             stores: vec![],
+            excludes: vec![],
         }
     }
 }

@@ -1,4 +1,63 @@
 * Tasks
+** Replace Time Machine
+*** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
+*** DONE Update GraphQL to support returning and changing the excludes
+*** DONE Provide GUI for managing multiple exclusions for each data set
+*** TODO Use =launchd= to manage the process, have it start automatically
+**** launchd property list
+#+begin_src xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>zorigami</string>
+        <key>Program</key>
+        <string>/Users/nfiedler/Applications/Zorigami/server</string>
+        <key>WorkingDirectory</key>
+        <string>/Users/nfiedler/Applications/Zorigami</string>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>EnvironmentVariables</key>
+        <dict>
+            <key>DB_PATH</key>
+            <string>/Users/nfiedler/Library/Application Support/Zorigami/dbase</string>
+            <key>HOST</key>
+            <string>0.0.0.0</string>
+            <key>PORT</key>
+            <string>8000</string>
+            <key>RUST_LOG</key>
+            <string>info</string>
+        </dict>
+        <key>StandardErrorPath</key>
+        <string>/Users/nfiedler/Library/Application Support/Zorigami/error.log</string>
+        <key>StandardOutPath</key>
+        <string>/Users/nfiedler/Library/Application Support/Zorigami/output.log</string>
+    </dict>
+</plist>
+#+end_src
+**** starting
+#+begin_src shell
+launchctl load ~/Library/LaunchAgents/zorigami.plist
+#+end_src
+*** TODO figure out how to give it permission to access files on macOS
+*** TODO pack prune tries to remove OS folders, results in IO error
+#+begin_src
+[server::domain::usecases::prune_extra] PruneExtra expecting 336 packs in store 01fea6tb4jxqar59s02va72p4t
+[server::data::repositories] prune_extra scanning bucket 01fecd410dtgfyq5aj6khvxqfz769d0a5d984c5eb98906c73ae3132ff8
+[server::data::repositories] prune_extra scanning bucket 01fec72w725a7399f7n9x08ssc769d0a5d984c5eb98906c73ae3132ff8
+[server::data::repositories] prune_extra scanning bucket 769d0a5d984c5eb98906c73ae3132ff8
+[server::data::repositories] prune_extra scanning bucket .fseventsd
+[server::data::repositories] remove_bucket: deleting object fseventsd-uuid
+[server::data::repositories] remove_bucket: deleting bucket .fseventsd
+[server::data::repositories] prune_extra scanning bucket .Spotlight-V100
+#+end_src
+** Dataset start/stop time options
+*** Using UTC for the start/stop time is hard to visualize
+*** Maybe show the local time along with the UTC time as a guide
+*** Maybe have a timezone selector
+*** Maybe always assume local time
+**** Trouble will be knowing when to switch from ~standard~ to ~daylight~ time
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -20,7 +79,7 @@
 ** Loose backend issues
 *** TODO consider replacing =DBPath= in tests with =tempfile=
 **** using =DBPath= and async code and =Path::exists()= causes a =SIGILL=
-*** TODO testing the minio? pack store showed a tokio runtime error
+*** TODO testing the minio(?) pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** note that using =Cow= helps to minimize copying
 #+BEGIN_SRC rust
@@ -264,13 +323,11 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** look for clipboard plugin for flutter (for macOS)
 **** c.f. https://flutter.dev/docs/development/packages-and-plugins/developing-packages
 ** macOS support
-*** TODO Use =launchd= to manage the process, have it start automatically
 *** TODO optional Time Machine style backup and retention policy
 **** hourly backups for 24 hours
 **** daily backups for 30 days
 **** weekly backups for everything else
 **** prune backups to maintain a certain size
-*** TODO Use this to replace Time Machine (store on server using minio)
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application

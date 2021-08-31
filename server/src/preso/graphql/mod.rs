@@ -340,6 +340,11 @@ impl entities::Dataset {
     fn stores(&self) -> Vec<String> {
         self.stores.clone()
     }
+
+    /// List of paths to be excluded from backups.
+    fn excludes(&self) -> Vec<String> {
+        self.excludes.clone()
+    }
 }
 
 #[juniper::graphql_object(description = "Range of time in which to run backup.")]
@@ -834,6 +839,8 @@ pub struct DatasetInput {
     pub pack_size: BigInt,
     /// Identifiers of stores used for saving packs.
     pub stores: Vec<String>,
+    /// List of paths to be excluded from backups. Can include * and ** wildcards.
+    pub excludes: Vec<String>,
 }
 
 impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
@@ -843,6 +850,7 @@ impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
             self.schedules.into_iter().map(|s| s.into()).collect(),
             self.pack_size.into(),
             self.stores,
+            self.excludes,
         )
     }
 }
@@ -856,6 +864,7 @@ impl Into<crate::domain::usecases::update_dataset::Params> for DatasetInput {
             self.workspace.map(|s| PathBuf::from(s)),
             self.pack_size.into(),
             self.stores,
+            self.excludes,
         )
     }
 }
@@ -2147,6 +2156,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2198,6 +2208,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2243,6 +2254,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2281,6 +2293,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2328,6 +2341,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2370,6 +2384,7 @@ mod tests {
             workspace: None,
             pack_size: BigInt(1048576),
             stores: vec![],
+            excludes: vec![],
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(

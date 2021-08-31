@@ -27,6 +27,7 @@ void main() {
     schedules: [],
     packSize: 1048576,
     stores: ['store/local/abc'],
+    excludes: [],
     snapshot: None(),
     status: Status.none,
     errorMsg: None(),

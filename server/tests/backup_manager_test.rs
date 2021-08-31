@@ -75,6 +75,41 @@ fn test_basic_snapshots() -> Result<(), Error> {
 }
 
 #[test]
+fn test_basic_excludes() -> Result<(), Error> {
+    let db_path = DBPath::new("_test_basic_excludes");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    let mut excludes: Vec<PathBuf> = Vec::new();
+    // individual files
+    excludes.push(PathBuf::from("*.exe"));
+    // entire directory structure by name (while technically different than the
+    // pattern that ends with /**, it has the same effect for our purposes since
+    // we ignore directories)
+    excludes.push(PathBuf::from("**/node_modules"));
+    // entire directory structure by wildcard
+    excludes.push(PathBuf::from("**/workspace/**"));
+    let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert!(snapshot1.parent.is_none());
+    assert_eq!(snapshot1.file_count, 3);
+    // walk the snapshot and ensure excluded files are excluded
+    let tree = snapshot1.tree;
+    let iter = TreeWalker::new(&dbase, &basepath, tree);
+    for result in iter {
+        let path = result.unwrap().path;
+        let path_str = path.to_str().unwrap();
+        assert!(!path_str.ends_with(".exe"));
+        assert!(!path_str.contains("node_modules"));
+        assert!(!path_str.contains("workspace"));
+    }
+    Ok(())
+}
+
+#[test]
 fn test_snapshots_xattrs() -> Result<(), Error> {
     let db_path = DBPath::new("_test_snapshots_xattrs");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();

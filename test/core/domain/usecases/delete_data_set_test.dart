@@ -26,6 +26,7 @@ void main() {
     basepath: '/home/planet',
     schedules: [],
     stores: ['storytime'],
+    excludes: [],
     packSize: 65536,
     snapshot: None(),
     status: Status.none,

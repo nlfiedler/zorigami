@@ -165,6 +165,7 @@ class DataSet extends Equatable {
   final List<Schedule> schedules;
   final int packSize;
   final List<String> stores;
+  final List<String> excludes;
   final Option<Snapshot> snapshot;
   final Status status;
   final Option<String> errorMsg;
@@ -176,6 +177,7 @@ class DataSet extends Equatable {
     required this.schedules,
     required this.packSize,
     required this.stores,
+    required this.excludes,
     required this.snapshot,
     required this.status,
     required this.errorMsg,

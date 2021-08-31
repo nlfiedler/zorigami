@@ -145,6 +145,7 @@ DataSet defaultDataSet() {
     basepath: '/',
     schedules: [],
     stores: [],
+    excludes: [],
     errorMsg: None(),
     status: Status.none,
   );

@@ -24,6 +24,7 @@ impl super::UseCase<Dataset, Params> for NewDataset {
         // use the constructor to generate a new identifier and then copy
         // everything over
         let mut dataset = Dataset::new(&params.basepath);
+        dataset.excludes = params.excludes;
         for schedule in params.schedules {
             dataset = dataset.add_schedule(schedule);
         }
@@ -49,6 +50,8 @@ pub struct Params {
     pack_size: u64,
     /// Identifiers of the stores to contain pack files.
     stores: Vec<String>,
+    /// List of file/directory exclusion patterns.
+    excludes: Vec<String>,
 }
 
 impl Params {
@@ -57,12 +60,14 @@ impl Params {
         schedules: Vec<Schedule>,
         pack_size: u64,
         stores: Vec<String>,
+        excludes: Vec<String>,
     ) -> Self {
         Self {
             basepath,
             schedules,
             pack_size,
             stores,
+            excludes,
         }
     }
 }
@@ -108,6 +113,7 @@ mod tests {
             schedules: vec![],
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
         };
         let result = usecase.call(params);
         // assert
@@ -138,6 +144,7 @@ mod tests {
             schedules: vec![],
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
         };
         let result = usecase.call(params);
         // assert

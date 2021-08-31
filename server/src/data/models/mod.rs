@@ -176,6 +176,8 @@ pub struct DatasetDef {
     pub pack_size: u64,
     #[serde(rename = "st")]
     pub stores: Vec<String>,
+    #[serde(rename = "ex")]
+    pub excludes: Vec<String>,
 }
 
 impl Default for DatasetDef {
@@ -187,6 +189,7 @@ impl Default for DatasetDef {
             workspace: PathBuf::new(),
             pack_size: 0,
             stores: vec![],
+            excludes: vec![],
         }
     }
 }

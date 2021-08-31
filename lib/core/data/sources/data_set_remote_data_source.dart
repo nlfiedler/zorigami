@@ -59,6 +59,7 @@ const String dataSetFields = '''
   }
   packSize
   stores
+  excludes
 ''';
 
 class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {

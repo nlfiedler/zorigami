@@ -48,6 +48,7 @@ void main() {
     ],
     packSize: 67108864,
     stores: ['store/local/setkey1'],
+    excludes: [],
     snapshot: Some(
       Snapshot(
         checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
@@ -113,6 +114,7 @@ void main() {
           },
           'packSize': '67108864',
           'stores': ['store/local/setkey1'],
+          'excludes': [],
         }
       }
     };
@@ -189,6 +191,7 @@ void main() {
                 'schedules': [],
                 'packSize': '67108864',
                 'stores': ['foo'],
+                'excludes': [],
                 'latestSnapshot': null,
               },
             ]
@@ -211,6 +214,7 @@ void main() {
           schedules: [],
           packSize: 67108864,
           stores: ['foo'],
+          excludes: [],
           snapshot: None(),
           status: Status.none,
           errorMsg: None(),
@@ -235,6 +239,7 @@ void main() {
                 'schedules': [],
                 'packSize': '67108864',
                 'stores': ['foo'],
+                'excludes': [],
                 'latestSnapshot': null,
               },
               {
@@ -245,6 +250,7 @@ void main() {
                 'schedules': [],
                 'packSize': '1024',
                 'stores': ['store/local/foo'],
+                'excludes': [],
                 'latestSnapshot': null,
               },
               {
@@ -255,6 +261,7 @@ void main() {
                 'schedules': [],
                 'packSize': '113',
                 'stores': ['store/minio/minnie'],
+                'excludes': [],
                 'latestSnapshot': null,
               },
             ]
@@ -277,6 +284,7 @@ void main() {
           schedules: [],
           packSize: 67108864,
           stores: ['foo'],
+          excludes: [],
           snapshot: None(),
           status: Status.none,
           errorMsg: None(),

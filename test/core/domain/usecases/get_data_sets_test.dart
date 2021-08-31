@@ -28,6 +28,7 @@ void main() {
     schedules: [],
     packSize: 0,
     stores: [],
+    excludes: [],
     snapshot: None(),
     status: Status.none,
     errorMsg: None(),

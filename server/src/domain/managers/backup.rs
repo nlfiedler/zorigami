@@ -11,7 +11,8 @@ use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use chrono::{DateTime, Utc};
 use failure::{err_msg, Error};
-use log::{debug, error, info, trace};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use log::{debug, error, info, trace, warn};
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt;
@@ -60,19 +61,21 @@ pub fn perform_backup(
             }
         }
     }
-    // The start of a _new_ backup is at the moment that a snapshot is to be
-    // taken. The snapshot can take a very long time to build, and another
-    // thread may spawn in the mean time and start taking another snapshot, and
-    // again, and again until the system runs out of resources.
+    // The start time of a new backup is at the moment that a snapshot is to be
+    // taken. The snapshot can take a long time to build, and another thread may
+    // spawn in the mean time and start taking another snapshot, and again, and
+    // again until the system runs out of resources.
     state.backup_event(BackupAction::Start(dataset.id.clone()));
+    // In addition to the exclusions defined in the dataset, we exclude the
+    // temporary workspace and repository database files.
+    let mut excludes = repo.get_excludes();
+    excludes.push(dataset.workspace.clone());
+    for exclusion in dataset.excludes.iter() {
+        excludes.push(PathBuf::from(exclusion));
+    }
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
-    //
-    // For now, build a set of excludes for files we do not want to have in the
-    // backup set, such as the database and temporary files.
-    let mut excludes = repo.get_excludes();
-    excludes.push(dataset.workspace.clone());
     let snap_opt = take_snapshot(&dataset.basepath, latest_snapshot.clone(), &repo, excludes)?;
     match snap_opt {
         None => {
@@ -313,7 +316,8 @@ pub fn take_snapshot(
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
     let actual_start_time = Utc::now();
-    let tree = scan_tree(basepath, dbase, &excludes)?;
+    let exclusions = build_exclusions(&excludes);
+    let tree = scan_tree(basepath, dbase, &exclusions)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
@@ -663,6 +667,29 @@ impl<'a> Iterator for TreeWalker<'a> {
     }
 }
 
+//
+// Build the glob set used to match file/directory exclusions.
+//
+fn build_exclusions(excludes: &[PathBuf]) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    for exclusion in excludes {
+        if let Some(path_str) = exclusion.to_str() {
+            if let Ok(glob) = Glob::new(path_str) {
+                builder.add(glob);
+            } else {
+                warn!("could not build glob for {:?}", exclusion);
+            }
+        } else {
+            warn!("PathBuf::to_str() failed for {:?}", exclusion);
+        }
+    }
+    if let Ok(set) = builder.build() {
+        set
+    } else {
+        GlobSet::empty()
+    }
+}
+
 ///
 /// Read the symbolic link value.
 ///
@@ -690,7 +717,7 @@ fn read_link(path: &Path) -> String {
 fn scan_tree(
     basepath: &Path,
     dbase: &Arc<dyn RecordRepository>,
-    excludes: &[PathBuf],
+    excludes: &GlobSet,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
@@ -700,7 +727,7 @@ fn scan_tree(
                 match entry_result {
                     Ok(entry) => {
                         let path = entry.path();
-                        if is_excluded(&path, excludes) {
+                        if excludes.is_match(&path) {
                             continue;
                         }
                         // DirEntry.metadata() does not follow symlinks
@@ -745,18 +772,6 @@ fn scan_tree(
     let tree = entities::Tree::new(entries, file_count);
     dbase.insert_tree(&tree)?;
     Ok(tree)
-}
-
-///
-/// Indicate if the given path is excluded or not.
-///
-fn is_excluded(fullpath: &Path, excludes: &[PathBuf]) -> bool {
-    for exclusion in excludes {
-        if fullpath.starts_with(exclusion) {
-            return true;
-        }
-    }
-    false
 }
 
 ///
@@ -1236,23 +1251,5 @@ mod tests {
         let actual = read_link(&link);
         assert_eq!(actual, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
         Ok(())
-    }
-
-    #[test]
-    fn test_is_excluded() {
-        let path1 = PathBuf::from("/Users/susan/database");
-        let path2 = PathBuf::from("/Users/susan/dataset/.tmp");
-        let path3 = PathBuf::from("/Users/susan/private");
-        let excludes = vec![path1, path2, path3];
-        assert!(!is_excluded(Path::new("/not/excluded"), &excludes));
-        assert!(!is_excluded(Path::new("/Users/susan/public"), &excludes));
-        assert!(is_excluded(
-            Path::new("/Users/susan/database/LOCK"),
-            &excludes
-        ));
-        assert!(is_excluded(
-            Path::new("/Users/susan/dataset/.tmp/foobar"),
-            &excludes
-        ));
     }
 }

@@ -59,6 +59,7 @@ class DataSetForm extends StatefulWidget {
     final start = startTimeFromDataSet(dataset);
     final stop = stopTimeFromDataSet(dataset);
     final initialStores = buildInitialStores(dataset, stores);
+    final initialExcludes = dataset.excludes.join(', ');
     return {
       'key': dataset.key,
       'computerId': dataset.computerId,
@@ -68,6 +69,7 @@ class DataSetForm extends StatefulWidget {
       'start': start,
       'stop': stop,
       'stores': initialStores,
+      'excludes': initialExcludes,
     };
   }
 
@@ -78,6 +80,7 @@ class DataSetForm extends StatefulWidget {
     // convert pack size string of megabytes to int of bytes
     final packSize = int.parse(state.value['packSize']) * 1048576;
     final schedules = schedulesFromState(state);
+    final excludes = excludesFromState(state);
     return DataSet(
       key: state.value['key'],
       computerId: state.value['computerId'],
@@ -86,6 +89,7 @@ class DataSetForm extends StatefulWidget {
       snapshot: None(),
       schedules: schedules,
       stores: state.value['stores'],
+      excludes: excludes,
       errorMsg: None(),
       status: Status.none,
     );
@@ -133,6 +137,13 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Base Path',
           ),
           validator: FormBuilderValidators.required(context),
+        ),
+        FormBuilderTextField(
+          name: 'excludes',
+          decoration: const InputDecoration(
+            icon: Icon(Icons.filter_list),
+            labelText: 'Excludes',
+          ),
         ),
         FormBuilderTextField(
           name: 'packSize',
@@ -340,6 +351,11 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
       dayOfMonth: None(),
     )
   ];
+}
+
+List<String> excludesFromState(FormBuilderState state) {
+  final String value = state.value['excludes'];
+  return List.from(value.split(',').map((e) => e.trim()));
 }
 
 Option<TimeRange> timeRangeFromState(FormBuilderState state) {

@@ -100,6 +100,7 @@ class DataSetModel extends DataSet {
     required List<ScheduleModel> schedules,
     required int packSize,
     required List<String> stores,
+    required List<String> excludes,
     required Option<SnapshotModel> snapshot,
     required Status status,
     required Option<String> errorMsg,
@@ -110,6 +111,7 @@ class DataSetModel extends DataSet {
           schedules: schedules,
           packSize: packSize,
           stores: stores,
+          excludes: excludes,
           snapshot: snapshot,
           status: status,
           errorMsg: errorMsg,
@@ -127,6 +129,7 @@ class DataSetModel extends DataSet {
       schedules: schedules,
       packSize: dataset.packSize,
       stores: dataset.stores,
+      excludes: dataset.excludes,
       snapshot: snapshot,
       status: dataset.status,
       errorMsg: dataset.errorMsg,
@@ -144,6 +147,12 @@ class DataSetModel extends DataSet {
     final List<String> stores = List.from(
       json['stores'].map((e) => e.toString()),
     );
+    // ensure the excludes are of type String (they ought to be)
+    final List<String> excludes = json['excludes'] == null
+        ? []
+        : List.from(
+            json['excludes'].map((e) => e.toString()),
+          );
     // note that computerId is optional, but we will ignore that for now
     return DataSetModel(
       key: json['id'],
@@ -153,6 +162,7 @@ class DataSetModel extends DataSet {
       // limiting pack size to 2^53 (in JavaScript) is acceptable
       packSize: int.parse(json['packSize']),
       stores: stores,
+      excludes: excludes,
       snapshot: snapshot,
       status: decodeStatus(json['status']),
       errorMsg: Option.from(json['errorMessage']),
@@ -169,6 +179,7 @@ class DataSetModel extends DataSet {
       'schedules': schedules,
       'packSize': packSize.toString(),
       'stores': stores,
+      'excludes': excludes,
     };
     if (!input) {
       result['computerId'] = computerId;

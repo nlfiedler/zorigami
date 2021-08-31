@@ -202,6 +202,7 @@ void main() {
       ],
       packSize: 67108864,
       stores: ['store/local/storey'],
+      excludes: [],
       snapshot: Some(
         SnapshotModel(
           checksum: 'cafebabe',
@@ -245,6 +246,7 @@ void main() {
           schedules: [],
           packSize: 0,
           stores: ['store/local/storey'],
+          excludes: [],
           snapshot: None(),
           status: Status.none,
           errorMsg: None(),
@@ -274,6 +276,7 @@ void main() {
         ],
         packSize: 67108864,
         stores: ['store/local/setkey1'],
+        excludes: [],
         snapshot: Some(
           Snapshot(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
@@ -304,6 +307,7 @@ void main() {
         ],
         packSize: 67108864,
         stores: ['store/local/setkey1'],
+        excludes: [],
         snapshot: Some(
           SnapshotModel(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
