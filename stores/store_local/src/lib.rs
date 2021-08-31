@@ -66,7 +66,10 @@ impl LocalStore {
             let path = entry.path();
             if path.is_dir() {
                 if let Some(name) = store_core::get_file_name(&path) {
-                    results.push(name);
+                    // ignore folders that are definitely not our buckets
+                    if !name.starts_with(".") {
+                        results.push(name);
+                    }
                 }
             }
         }
@@ -81,7 +84,10 @@ impl LocalStore {
             let path = entry.path();
             if path.is_file() {
                 if let Some(name) = store_core::get_file_name(&path) {
-                    results.push(name);
+                    // ignore files that are definitely not our buckets
+                    if !name.starts_with(".") {
+                        results.push(name);
+                    }
                 }
             }
         }
