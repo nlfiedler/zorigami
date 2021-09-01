@@ -273,7 +273,7 @@ impl PackRepository for PackRepositoryImpl {
             *name = generate_bucket_name(computer_id);
         }
         *count += 1;
-        if *count > 128 {
+        if *count > 127 {
             *count = 0;
         }
         let name = self.bucket_name.lock().unwrap();
