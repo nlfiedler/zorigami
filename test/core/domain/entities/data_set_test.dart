@@ -62,19 +62,27 @@ void main() {
       () {
         expect(
           TimeRange(start: 0, stop: 0).toPrettyString(),
-          equals('from 12:00 to 12:00'),
+          equals('from 12:00 AM to 12:00 AM'),
+        );
+        expect(
+          TimeRange(start: 0, stop: 43200).toPrettyString(),
+          equals('from 12:00 AM to 12:00 PM'),
+        );
+        expect(
+          TimeRange(start: 43200, stop: 0).toPrettyString(),
+          equals('from 12:00 PM to 12:00 AM'),
         );
         expect(
           TimeRange(start: 86400, stop: 86400).toPrettyString(),
-          equals('from 12:00 to 12:00'),
+          equals('from 12:00 AM to 12:00 AM'),
         );
         expect(
           TimeRange(start: 72000, stop: 14400).toPrettyString(),
-          equals('from 20:00 to 04:00'),
+          equals('from 8:00 PM to 4:00 AM'),
         );
         expect(
           TimeRange(start: 12660, stop: 54060).toPrettyString(),
-          equals('from 03:31 to 15:01'),
+          equals('from 3:31 AM to 3:01 PM'),
         );
       },
     );
@@ -296,7 +304,7 @@ void main() {
             dayOfMonth: None(),
             timeRange: Some(TimeRange(start: 79200, stop: 16200)),
           ).toPrettyString(),
-          equals('monthly on the second Thursday from 22:00 to 04:30'),
+          equals('monthly on the second Thursday from 10:00 PM to 4:30 AM'),
         );
       },
     );

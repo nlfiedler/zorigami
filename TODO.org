@@ -41,23 +41,7 @@
 launchctl load ~/Library/LaunchAgents/zorigami.plist
 #+end_src
 *** TODO figure out how to give it permission to access files on macOS
-*** TODO pack prune tries to remove OS folders, results in IO error
-#+begin_src
-[server::domain::usecases::prune_extra] PruneExtra expecting 336 packs in store 01fea6tb4jxqar59s02va72p4t
-[server::data::repositories] prune_extra scanning bucket 01fecd410dtgfyq5aj6khvxqfz769d0a5d984c5eb98906c73ae3132ff8
-[server::data::repositories] prune_extra scanning bucket 01fec72w725a7399f7n9x08ssc769d0a5d984c5eb98906c73ae3132ff8
-[server::data::repositories] prune_extra scanning bucket 769d0a5d984c5eb98906c73ae3132ff8
-[server::data::repositories] prune_extra scanning bucket .fseventsd
-[server::data::repositories] remove_bucket: deleting object fseventsd-uuid
-[server::data::repositories] remove_bucket: deleting bucket .fseventsd
-[server::data::repositories] prune_extra scanning bucket .Spotlight-V100
-#+end_src
-** Dataset start/stop time options
-*** Using UTC for the start/stop time is hard to visualize
-*** Maybe show the local time along with the UTC time as a guide
-*** Maybe have a timezone selector
-*** Maybe always assume local time
-**** Trouble will be knowing when to switch from ~standard~ to ~daylight~ time
+*** DONE pack prune tries to remove OS folders, results in IO error
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -174,6 +158,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** need to consider that GCS will limit the number of buckets listed to 1,000
 **** probably minio and/or S3 have similar default limits
 **** the API generally offers a means of paging to get everything in chunks
+** Remove files/folders from backup
+*** Allow removing files from existing backups
+**** e.g. accidentally saved large binaries
 ** Snapshot Pruning
 *** Use a multi-phased approach with pruning and garbage collection
 *** Must not run collection while a backup is in progress

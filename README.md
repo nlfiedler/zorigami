@@ -88,6 +88,19 @@ $ fvm flutter test
 $ fvm flutter run -d chrome
 ```
 
+### Producing a Local Test Build
+
+```shell
+fvm flutter clean
+fvm flutter pub get
+env BASE_URL=http://localhost:8000 fvm flutter pub run environment_config:generate
+fvm flutter pub run build_runner build
+fvm flutter build web
+cargo build --release
+```
+
+Server binary is `target/release/server` and web contents are in `build/web`
+
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the

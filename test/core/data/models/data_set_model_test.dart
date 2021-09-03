@@ -10,12 +10,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('TimeRangeModel', () {
-    final tTimeRangeModel = TimeRangeModel(start: 1, stop: 2);
+    // pathological case that amounts to only mere seconds
+    final tTimeRangeOneTwo = TimeRangeModel(start: 1, stop: 2);
+    // special case, midnight to noon
+    final tTimeRangeMidnight = TimeRangeModel(start: 0, stop: 43200);
+    // range with hours and minutes: 10:30am to 6:30pm
+    final tTimeRangeMinutes = TimeRangeModel(start: 37800, stop: 66600);
+    // range with hours, minutes, and seconds: 8:45:25am to 12:30:36pm
+    final tTimeRangeSeconds = TimeRangeModel(start: 31525, stop: 45036);
+    // start time is greater than stop time
+    final tTimeRangeOvernight = TimeRangeModel(start: 79200, stop: 21600);
     test(
       'should be a subclass of TimeRange entity',
       () {
         // assert
-        expect(tTimeRangeModel, isA<TimeRange>());
+        expect(tTimeRangeOneTwo, isA<TimeRange>());
       },
     );
 
@@ -23,8 +32,24 @@ void main() {
       'should convert to and from JSON',
       () {
         expect(
-          TimeRangeModel.fromJson(tTimeRangeModel.toJson()),
-          equals(tTimeRangeModel),
+          TimeRangeModel.fromJson(tTimeRangeOneTwo.toJson()),
+          equals(tTimeRangeOneTwo),
+        );
+        expect(
+          TimeRangeModel.fromJson(tTimeRangeMidnight.toJson()),
+          equals(tTimeRangeMidnight),
+        );
+        expect(
+          TimeRangeModel.fromJson(tTimeRangeMinutes.toJson()),
+          equals(tTimeRangeMinutes),
+        );
+        expect(
+          TimeRangeModel.fromJson(tTimeRangeSeconds.toJson()),
+          equals(tTimeRangeSeconds),
+        );
+        expect(
+          TimeRangeModel.fromJson(tTimeRangeOvernight.toJson()),
+          equals(tTimeRangeOvernight),
         );
       },
     );

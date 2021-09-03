@@ -3,6 +3,7 @@
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -192,8 +193,9 @@ class _DataSetFormState extends State<DataSetForm> {
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
-            labelText: 'Start Time (UTC)',
+            labelText: 'Start Time',
           ),
+          format: DateFormat.jm(),
           validator: (val) {
             final stop = widget.formKey.currentState!.fields['stop'];
             if (stop?.value == null && val != null) {
@@ -208,8 +210,9 @@ class _DataSetFormState extends State<DataSetForm> {
           inputType: InputType.time,
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
-            labelText: 'Stop Time (UTC)',
+            labelText: 'Stop Time',
           ),
+          format: DateFormat.jm(),
           validator: (val) {
             final start = widget.formKey.currentState!.fields['start'];
             if (start?.value == null && val != null) {

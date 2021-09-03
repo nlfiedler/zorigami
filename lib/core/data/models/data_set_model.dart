@@ -22,18 +22,58 @@ class TimeRangeModel extends TimeRange {
   }
 
   factory TimeRangeModel.fromJson(Map<String, dynamic> json) {
+    final localStart = convertToLocal(json['startTime'] as int);
+    final localStop = convertToLocal(json['stopTime'] as int);
     return TimeRangeModel(
-      start: json['startTime'],
-      stop: json['stopTime'],
+      start: localStart,
+      stop: localStop,
     );
   }
 
   Map<String, dynamic> toJson() {
+    final utcStart = convertToUtc(start);
+    final utcStop = convertToUtc(stop);
     return {
-      'startTime': start,
-      'stopTime': stop,
+      'startTime': utcStart,
+      'stopTime': utcStop,
     };
   }
+}
+
+int convertToLocal(int inputSeconds) {
+  // create a local time to get the year/month/day
+  final nowLocal = DateTime.now();
+  final hour = (inputSeconds / 3600).truncate();
+  final minute = ((inputSeconds % 3600) / 60).truncate();
+  final seconds = (inputSeconds % 60).truncate();
+  final timeUtc = DateTime.utc(
+    nowLocal.year,
+    nowLocal.month,
+    nowLocal.day,
+    hour,
+    minute,
+    seconds,
+  );
+  final timeLocal = timeUtc.toLocal();
+  return timeLocal.hour * 3600 + timeLocal.minute * 60 + timeLocal.second;
+}
+
+int convertToUtc(int inputSeconds) {
+  // create a local time to get the year/month/day
+  final nowLocal = DateTime.now();
+  final hour = (inputSeconds / 3600).truncate();
+  final minute = ((inputSeconds % 3600) / 60).truncate();
+  final seconds = (inputSeconds % 60).truncate();
+  final timeLocal = DateTime(
+    nowLocal.year,
+    nowLocal.month,
+    nowLocal.day,
+    hour,
+    minute,
+    seconds,
+  );
+  final timeUtc = timeLocal.toUtc();
+  return timeUtc.hour * 3600 + timeUtc.minute * 60 + timeUtc.second;
 }
 
 class ScheduleModel extends Schedule {

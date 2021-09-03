@@ -242,11 +242,13 @@ class DataSet extends Equatable {
 // zeros (e.g. 12:01, 04:30).
 String formatTime(int seconds) {
   if (seconds == 0 || seconds == 86400) {
-    return '12:00';
+    return '12:00 AM';
   }
-  final hour = (seconds / 3600).truncate().toString().padLeft(2, '0');
+  final hours = (seconds / 3600).truncate();
+  final suffix = hours >= 12 ? 'PM' : 'AM';
+  final hour = (hours > 12 ? hours % 12 : hours).toString();
   final minute = ((seconds % 3600) / 60).truncate().toString().padLeft(2, '0');
-  return '$hour:$minute';
+  return '$hour:$minute $suffix';
 }
 
 String prettyFrequency(Frequency frequency) {
