@@ -42,6 +42,19 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 #+end_src
 *** TODO figure out how to give it permission to access files on macOS
 *** DONE pack prune tries to remove OS folders, results in IO error
+*** TODO why are the backups so large? each snapshot is hundreds of MB
+**** about 500,000 files are backed up
+**** why is the database backup over 600 MB in size?
+***** kohaku backup is much smaller, only 40 MB with 146,000 files
+***** probably the number of tree records
+**** need a query that shows the counts for all record types
+***** show number of files in latest snapshot
+***** show number of trees in latest snapshot
+***** show number of file records, trees, snapshots, chunks, packs, etc
+**** need a way to show differences between any two snapshots
+***** collect the paths and sizes of all new/changed files
+***** somehow show all of that information in a scalable fashion
+*** TODO change default pack size to 64mb instead of 16
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -147,6 +160,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Improved error handling
 *** Pack store input validation
 **** should validate Google Cloud service account key when defining pack
+*** Consider a structured design for error types and handling
+**** c.f. https://fettblog.eu/rust-enums-wrapping-errors/
+*** Look at https://github.com/dtolnay/thiserror for defining error types
+*** May improve error handling and reporting
 ** Initial Configuration
 *** Walk user through pack store and data set creation
 *** Offer path for restoring database from existing pack store
@@ -154,7 +171,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** They may need to avoid naming conflicts with other local users
 **** Imagine a computer lab all sharing a single cloud storage account
 ** Remote pack store interaction
-*** Remote pack storages like Google Cloud have built-in limits for certain operations
+*** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
 **** probably minio and/or S3 have similar default limits
 **** the API generally offers a means of paging to get everything in chunks
@@ -174,22 +191,18 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ****** datasets -> snapshots -> trees -> files -> chunks -> packs
 **** delete the old database
 *** Phase 3: prune unreferenced packs from pack store
-**** honor cloud data rentetion policies
+**** honor cloud data retention policies
 ***** e.g. typically anything older than 90 days costs nothing to delete
 ***** Google has different minimum storage durations for each storage class
 ****** https://cloud.google.com/storage/docs/storage-classes
 ***** user can specify their own value for each pack store if necessary
 *** Phase 4: prune old database snapshots (no need to keep old copies)
-**** honor cloud data rentetion policies
+**** honor cloud data retention policies
 **** use the =upload_time= in the =Pack= record to determine age
 *** Implementation should follow Clean Architecture to improve testability
 **** entities and use case separated from data sources via repositories
 **** this allows for easily mocking up data to feed the pruning use case
 ***** i.e. when the use case asks for trees and such, give it mock data structures
-** Error handling
-*** Consider a structured design for error types and handling
-*** Look at https://github.com/dtolnay/thiserror for defining error types
-*** May improve error handling and reporting
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -206,9 +219,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
-*** TODO support excluding certain file patterns from backup
-**** part of dataset configuration
-**** merge with the defaults in =backup.rs=
 *** TODO store restore requests in database to tolerate application restart
 **** currently restore requests are queued in memory only, so a crash means everything is forgotten
 *** TODO Perform a full backup on demand, discard all previous backups
@@ -350,6 +360,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 ** Windows support
+*** TODO Does Microsoft's ~Windows Package Manager~ (=winget=) provide an easier dev setup path?
 *** TODO Backup files opened by a running process
 **** Normally cannot read files that are opened on Windows
 **** See Volume Shadow Copy Services (VSS) for details
