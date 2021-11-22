@@ -1,4 +1,4 @@
-# Use Application State Management
+# Use riverpod for dependency injection
 
 * Status: accepted
 * Deciders: Nathan Fiedler
