@@ -42,19 +42,17 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 #+end_src
 *** TODO figure out how to give it permission to access files on macOS
 *** DONE pack prune tries to remove OS folders, results in IO error
-*** TODO why are the backups so large? each snapshot is hundreds of MB
-**** about 500,000 files are backed up
-**** why is the database backup over 600 MB in size?
-***** kohaku backup is much smaller, only 40 MB with 146,000 files
-***** probably the number of tree records
-**** need a query that shows the counts for all record types
-***** show number of files in latest snapshot
-***** show number of trees in latest snapshot
-***** show number of file records, trees, snapshots, chunks, packs, etc
-**** need a way to show differences between any two snapshots
-***** collect the paths and sizes of all new/changed files
-***** somehow show all of that information in a scalable fashion
+*** TODO need a query that shows the counts for all record types
+**** show number of files in latest snapshot
+**** show number of trees in latest snapshot
+**** show number of file records, trees, snapshots, chunks, packs, etc
+*** TODO need a way to show differences between any two snapshots
+**** collect the paths and sizes of all new/changed files
+**** somehow show all of that information in a scalable fashion
 *** TODO change default pack size to 64mb instead of 16
+*** TODO database backup procedure should prune old snapshots
+**** for local disk case, retain only a few snapshots
+**** for cloud case, honor the least expensive retention plan
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
