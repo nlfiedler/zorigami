@@ -3,6 +3,7 @@ version: '3.7'
 services:
   sftp:
     image: atmoz/sftp
+    container_name: zorigami_sftp
     ports:
       - "2222:22"
     command: foo:pass:::upload
@@ -11,6 +12,7 @@ services:
     # run the image to get help output:
     # $ docker run -p 9000:9000 --name minio1 minio/minio server
     image: minio/minio
+    container_name: zorigami_minio
     ports:
       - "9000:9000"
     environment:
