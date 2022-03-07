@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! The main application binary that starts the web server and spawns the
@@ -69,11 +69,11 @@ lazy_static! {
     };
 }
 
-fn graphiql() -> HttpResponse {
+async fn graphiql() -> Result<HttpResponse> {
     let html = graphiql_source("/graphql", None);
-    HttpResponse::Ok()
+    Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
-        .body(html)
+        .body(html))
 }
 
 async fn graphql(
@@ -162,9 +162,9 @@ async fn main() -> io::Result<()> {
     let addr = format!("{}:{}", host, port);
     info!("listening on http://{}/...", addr);
     HttpServer::new(move || {
-        let schema = std::sync::Arc::new(graphql::create_schema());
+        let schema = web::Data::new(std::sync::Arc::new(graphql::create_schema()));
         App::new()
-            .data(schema)
+            .app_data(schema)
             .wrap(middleware::Logger::default())
             .wrap(
                 // Respond to OPTIONS requests for CORS support, which is common
@@ -191,7 +191,7 @@ mod tests {
     use super::*;
     use actix_web::{test, web, App};
 
-    #[actix_rt::test]
+    #[actix_web::test]
     async fn test_index_get() {
         // arrange
         let mut app =

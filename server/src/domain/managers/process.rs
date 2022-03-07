@@ -64,7 +64,7 @@ impl Processor for ProcessorImpl {
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
-            let addr = actix::Supervisor::start_in_arbiter(&self.runner, move |_| {
+            let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
                 BackupSupervisor::new(repo, state)
             });
             *su_addr = Some(addr);
@@ -127,7 +127,7 @@ impl BackupSupervisor {
                     dataset: set,
                     schedule,
                 };
-                let addr = Actor::start_in_arbiter(&self.runner, |_| BackupRunner {});
+                let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
                 if let Err(err) = addr.try_send(msg) {
                     return Err(err_msg(format!("error sending message to runner: {}", err)));
                 }
@@ -196,7 +196,7 @@ impl Handler<StartBackup> for BackupRunner {
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<BackupRunner>) {
         debug!("backup: runner received start backup message");
-        thread::spawn(|| {
+        thread::spawn(move || {
             // Allow the backup process to run an async runtime of its own, if
             // necessary, possibly with a threaded future executor, by spawning
             // it to a separate thread. This helps with some pack stores that

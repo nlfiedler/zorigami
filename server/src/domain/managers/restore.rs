@@ -146,7 +146,7 @@ impl Restorer for RestorerImpl {
             let pending = self.pending.clone();
             let completed = self.completed.clone();
             let addr = actix::Supervisor::start_in_arbiter(
-                runner.as_ref().unwrap(),
+                &runner.as_ref().unwrap().handle(),
                 move |_| RestoreSupervisor::new(repo, pending, completed),
             );
             *su_addr = Some(addr);

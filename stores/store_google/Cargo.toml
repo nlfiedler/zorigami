@@ -2,7 +2,7 @@
 name = "store_google"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
-edition = "2018"
+edition = "2021"
 license = "UNLICENSED"
 
 [dependencies]
@@ -10,8 +10,9 @@ async-google-apis-common = "0.3"
 base64 = "0.13"
 failure = "0.1"
 hyper = { version = "0.14", features = ["stream"] }
-hyper-rustls = { version = "0.22", features = ["rustls-native-certs"] }
-md-5 = "0.9"
+# async-google-apis-common requires hyper-rustls version 0.22
+hyper-rustls = { version = "0.22.1", features = ["rustls-native-certs"] }
+md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }
 tokio = { version = "1.4", features = ["macros", "io-util", "rt", "rt-multi-thread", "fs"] }

@@ -1,8 +1,16 @@
 * Tasks
+** Replace unmaintained =failure= crate with =anyhow=
+** Update Dart/Flutter packages
+** Replace unmaintained Google API crate
+*** replacing =google-storage1= with =google-cloud= which is less than awesome
+**** maintenance has slowed, author suggests using =google-apis-rs= instead
+**** look at https://crates.io/crates/cloud-storage as an alternative
+***** would need a better API for loading credentials and creating the client
 ** Replace Time Machine
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
 *** DONE Provide GUI for managing multiple exclusions for each data set
+*** TODO Create a local deployment script to automate desktop updates
 *** TODO Use =launchd= to manage the process, have it start automatically
 **** launchd property list
 #+begin_src xml
@@ -150,11 +158,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Flutter and form builder
 *** See comments in =pubspec.yaml= regarding =flutter_form_builder=
 *** Wait for flutter form builder to update to Flutter 2 stable
-** Crates to revisit
-*** replacing =google-storage1= with =google-cloud= which is less than awesome
-**** maintenance has slowed, author suggests using =google-apis-rs= instead
-**** look at https://crates.io/crates/cloud-storage as an alternative
-***** would need a better API for loading credentials and creating the client
 ** Improved error handling
 *** Pack store input validation
 **** should validate Google Cloud service account key when defining pack

@@ -2,12 +2,12 @@
 name = "store_core"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
-edition = "2018"
+edition = "2021"
 license = "UNLICENSED"
 
 [dependencies]
 failure = "0.1.6"
-md-5 = "0.9.0"
+md-5 = "0.10.1"
 
 [dev-dependencies]
-mockall = "0.10"
+mockall = "0.11.0"

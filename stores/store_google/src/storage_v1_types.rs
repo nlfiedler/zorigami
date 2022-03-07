@@ -7322,7 +7322,6 @@ impl ObjectsService {
         let (_resp, headers): (EmptyResponse, hyper::HeaderMap) =
             do_request_with_headers(&self.client, &full_uri, &headers, "POST", opt_request).await?;
         if let Some(dest) = headers.get(hyper::header::LOCATION) {
-            use std::convert::TryFrom;
             Ok(ResumableUpload::new(
                 hyper::Uri::try_from(dest.to_str()?)?,
                 &self.client,

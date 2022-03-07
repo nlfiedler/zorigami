@@ -21,7 +21,7 @@ A backup and restore application.
 
 ### Prerequisites
 
-* [Rust](https://www.rust-lang.org) stable (2018 edition)
+* [Rust](https://www.rust-lang.org) stable (2021 edition)
 * [Flutter](https://flutter.dev) **stable** channel
 
 ### Initial Setup
