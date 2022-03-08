@@ -1,5 +1,4 @@
 * Tasks
-** Replace unmaintained =failure= crate with =anyhow=
 ** Update Dart/Flutter packages
 ** Replace unmaintained Google API crate
 *** replacing =google-storage1= with =google-cloud= which is less than awesome

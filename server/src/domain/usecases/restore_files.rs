@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::Checksum;
 use crate::domain::managers::restore::{Request, Restorer};
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;

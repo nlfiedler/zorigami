@@ -4,7 +4,7 @@
 use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
 use crate::domain::usecases::NoParams;
-use failure::Error;
+use anyhow::Error;
 
 pub struct GetDatasets {
     repo: Box<dyn RecordRepository>,
@@ -27,7 +27,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
     use std::path::Path;
 
     #[test]
@@ -53,7 +53,7 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
-            .returning(|| Err(err_msg("oh no")));
+            .returning(|| Err(anyhow!("oh no")));
         // act
         let usecase = GetDatasets::new(Box::new(mock));
         let params = NoParams {};

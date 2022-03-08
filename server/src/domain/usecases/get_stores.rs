@@ -4,7 +4,7 @@
 use crate::domain::entities::Store;
 use crate::domain::repositories::RecordRepository;
 use crate::domain::usecases::NoParams;
-use failure::Error;
+use anyhow::Error;
 
 pub struct GetStores {
     repo: Box<dyn RecordRepository>,
@@ -28,7 +28,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::StoreType;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
     use std::collections::HashMap;
 
     #[test]
@@ -60,7 +60,7 @@ mod tests {
     fn test_get_stores_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_stores().returning(|| Err(err_msg("oh no")));
+        mock.expect_get_stores().returning(|| Err(anyhow!("oh no")));
         // act
         let usecase = GetStores::new(Box::new(mock));
         let params = NoParams {};

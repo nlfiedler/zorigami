@@ -2,7 +2,7 @@
 // Copyright (c) 2021 Nathan Fiedler
 //
 use crate::domain::repositories::RecordRepository;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use log::info;
 use std::cmp;
 use std::fmt;
@@ -36,7 +36,7 @@ impl super::UseCase<u32, Params> for PruneExtraPacks {
             info!("PruneExtra removed {} packs from store {}", count, store.id);
             Ok(count)
         } else {
-            Err(err_msg(format!("no such store: {}", params.store_id)))
+            Err(anyhow!(format!("no such store: {}", params.store_id)))
         }
     }
 }

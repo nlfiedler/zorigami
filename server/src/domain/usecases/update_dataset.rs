@@ -4,7 +4,7 @@
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;
@@ -99,7 +99,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
 
     #[test]
     fn test_update_dataset_ok() {
@@ -129,7 +129,7 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_put_dataset()
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {

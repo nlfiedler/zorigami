@@ -11,7 +11,7 @@ use async_google_apis_common::{
     yup_oauth2::{self, authenticator::Authenticator},
     ApiError, DownloadResult,
 };
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use hyper::client::HttpConnector;
 use hyper::Client;
 use hyper_rustls::HttpsConnector;
@@ -38,10 +38,10 @@ impl GoogleStore {
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
         let credentials = props
             .get("credentials")
-            .ok_or_else(|| err_msg("missing credentials property"))?;
+            .ok_or_else(|| anyhow!("missing credentials property"))?;
         let project = props
             .get("project")
-            .ok_or_else(|| err_msg("missing project property"))?;
+            .ok_or_else(|| anyhow!("missing project property"))?;
         let region = props.get("region").map(|s| s.to_owned());
         let storage = props.get("storage").map(|s| s.to_owned());
         Ok(Self {
@@ -100,13 +100,13 @@ impl GoogleStore {
         };
         // storing the same object twice is not treated as an error
         match result {
-            Err(error) => return Err(err_msg(format!("{:?}", error))),
+            Err(error) => return Err(anyhow!(format!("{:?}", error))),
             Ok(object) => {
                 if let Some(hash) = object.md5_hash.as_ref() {
                     let decoded = base64::decode(hash)?;
                     let md5 = md5sum_file(packfile)?;
                     if !md5.eq(&decoded) {
-                        return Err(err_msg("returned md5_hash does not match MD5 of pack file"));
+                        return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
                     }
                 }
             }
@@ -138,12 +138,12 @@ impl GoogleStore {
                 Ok(result) => match result {
                     DownloadResult::Downloaded => Ok(()),
                     DownloadResult::Response(foo) => {
-                        Err(err_msg(format!("download response: {:?}", foo)))
+                        Err(anyhow!(format!("download response: {:?}", foo)))
                     }
                 },
-                Err(err) => Err(err_msg(format!("{:?}", err))),
+                Err(err) => Err(anyhow!(format!("{:?}", err))),
             },
-            Err(err) => Err(err_msg(format!("{:?}", err))),
+            Err(err) => Err(anyhow!(format!("{:?}", err))),
         }
     }
 
@@ -179,7 +179,7 @@ impl GoogleStore {
                     }
                     page_token = buckets.next_page_token;
                 }
-                Err(err) => return Err(err_msg(format!("{:?}", err))),
+                Err(err) => return Err(anyhow!(format!("{:?}", err))),
             }
         }
         Ok(results)
@@ -217,7 +217,7 @@ impl GoogleStore {
                     }
                     page_token = objects.next_page_token;
                 }
-                Err(err) => return Err(err_msg(format!("{:?}", err))),
+                Err(err) => return Err(anyhow!(format!("{:?}", err))),
             }
         }
         Ok(results)
@@ -234,7 +234,7 @@ impl GoogleStore {
         params.bucket = bucket.into();
         params.object = object.into();
         if let Err(err) = svc.delete(&params).await {
-            return Err(err_msg(format!("{:?}", err)));
+            return Err(anyhow!(format!("{:?}", err)));
         }
         Ok(())
     }
@@ -249,7 +249,7 @@ impl GoogleStore {
         let mut params = storage_v1_types::BucketsDeleteParams::default();
         params.bucket = bucket.into();
         if let Err(err) = svc.delete(&params).await {
-            return Err(err_msg(format!("{:?}", err)));
+            return Err(anyhow!(format!("{:?}", err)));
         }
         Ok(())
     }
@@ -278,12 +278,12 @@ async fn create_bucket(
                     ApiError::HTTPResponseError(code, _) => match code {
                         // bucket with the same name already exists
                         hyper::StatusCode::CONFLICT => return Ok(()),
-                        _ => return Err(err_msg(format!("unhandled response {:?}", err))),
+                        _ => return Err(anyhow!(format!("unhandled response {:?}", err))),
                     },
                     _ => return Err(err.into()),
                 }
             }
-            Err(err) => return Err(err_msg(format!("{:?}", err))),
+            Err(err) => return Err(anyhow!(format!("{:?}", err))),
         }
     }
     Ok(())

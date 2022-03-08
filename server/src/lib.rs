@@ -1,8 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-#[macro_use]
-extern crate failure_derive;
+extern crate thiserror;
 
 pub mod data;
 pub mod domain;

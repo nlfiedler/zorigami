@@ -15,6 +15,7 @@ actix-cors = "0.6.0"
 actix-files = "0.6.0"
 actix-rt = "2.6.0"
 actix-web = "4.0.1"
+anyhow = "1.0.55"
 base64 = "0.13"
 blob-uuid = "0.4.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -22,8 +23,6 @@ database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenv = "0.15.0"
 env_logger = "0.9"
-failure = "0.1.6"
-failure_derive = "0.1.6"
 fastcdc = "1.0.6"
 flate2 = "1.0"
 globset = "0.4.8"
@@ -47,6 +46,7 @@ store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
 tar = "0.4.38"
 tempfile = "3.2.0"
+thiserror = "1.0.30"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 whoami = "1.0"
 

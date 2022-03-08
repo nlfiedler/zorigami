@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Store, StoreType};
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
@@ -79,7 +79,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
-    use failure::err_msg;
+    use anyhow::anyhow;
 
     #[test]
     fn test_test_store_ok() {
@@ -113,7 +113,7 @@ mod tests {
             let mut mock_store = MockPackRepository::new();
             mock_store
                 .expect_test_store()
-                .returning(move |_| Err(err_msg("oh no")));
+                .returning(move |_| Err(anyhow!("oh no")));
             Ok(Box::new(mock_store))
         });
         // act

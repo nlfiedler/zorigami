@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use ssh2::{FileStat, Session};
 use std::collections::HashMap;
 use std::fs::File;
@@ -30,10 +30,10 @@ impl SftpStore {
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
         let remote_addr = props
             .get("remote_addr")
-            .ok_or_else(|| err_msg("missing remote_addr property"))?;
+            .ok_or_else(|| anyhow!("missing remote_addr property"))?;
         let username = props
             .get("username")
-            .ok_or_else(|| err_msg("missing username property"))?;
+            .ok_or_else(|| anyhow!("missing username property"))?;
         let password = props.get("password").map(|s| s.to_owned());
         let basepath = props.get("basepath").map(|s| s.to_owned());
         Ok(Self {

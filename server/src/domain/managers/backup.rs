@@ -9,8 +9,8 @@
 use crate::domain::entities;
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
-use failure::{err_msg, Error};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, info, trace, warn};
 use sodiumoxide::crypto::pwhash::Salt;
@@ -119,7 +119,7 @@ fn continue_backup(
         None => {
             let snapshot = repo
                 .get_snapshot(&current_sha1)?
-                .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", current_sha1)))?;
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", current_sha1)))?;
             let tree = snapshot.tree;
             let iter = TreeWalker::new(repo, &dataset.basepath, tree);
             for result in iter {
@@ -150,7 +150,7 @@ fn continue_backup(
 /// Raised when the backup has run out of time and must stop temporarily,
 /// resuming at a later time.
 ///
-#[derive(Fail, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub struct OutOfTimeFailure;
 
 impl fmt::Display for OutOfTimeFailure {
@@ -280,7 +280,7 @@ impl<'a> BackupMaster<'a> {
         let mut snapshot = self
             .dbase
             .get_snapshot(snap_sha1)?
-            .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snap_sha1)))?;
+            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snap_sha1)))?;
         snapshot = snapshot.end_time(Utc::now());
         self.dbase.put_snapshot(&snapshot)?;
         self.state
@@ -321,7 +321,7 @@ pub fn take_snapshot(
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
-            .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", parent_sha1)))?;
+            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", parent_sha1)))?;
         if parent_doc.tree == tree.digest {
             // nothing new at all with this snapshot
             return Ok(None);
@@ -529,21 +529,21 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                 // dequeue the next entry, fetch the tree
                 let result = self.dbase.get_tree(&left_sum);
                 if result.is_err() {
-                    return Some(Err(err_msg(format!("failed to get tree: {:?}", left_sum))));
+                    return Some(Err(anyhow!(format!("failed to get tree: {:?}", left_sum))));
                 }
                 let opt = result.unwrap();
                 if opt.is_none() {
-                    return Some(Err(err_msg(format!("missing tree: {:?}", left_sum))));
+                    return Some(Err(anyhow!(format!("missing tree: {:?}", left_sum))));
                 }
                 self.left_tree = opt;
                 self.left_idx = 0;
                 let result = self.dbase.get_tree(&right_sum);
                 if result.is_err() {
-                    return Some(Err(err_msg(format!("failed to get tree: {:?}", right_sum))));
+                    return Some(Err(anyhow!(format!("failed to get tree: {:?}", right_sum))));
                 }
                 let opt = result.unwrap();
                 if opt.is_none() {
-                    return Some(Err(err_msg(format!("missing tree: {:?}", right_sum))));
+                    return Some(Err(anyhow!(format!("missing tree: {:?}", right_sum))));
                 }
                 self.right_tree = opt;
                 self.right_idx = 0;
@@ -572,10 +572,10 @@ pub fn find_changed_files(
 ) -> Result<ChangedFilesIter, Error> {
     let snap1doc = dbase
         .get_snapshot(&snapshot1)?
-        .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snapshot1)))?;
+        .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snapshot1)))?;
     let snap2doc = dbase
         .get_snapshot(&snapshot2)?
-        .ok_or_else(|| err_msg(format!("missing snapshot: {:?}", snapshot2)))?;
+        .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snapshot2)))?;
     Ok(ChangedFilesIter::new(
         dbase,
         basepath,
@@ -649,11 +649,11 @@ impl<'a> Iterator for TreeWalker<'a> {
                 // dequeue the next entry, fetch the tree
                 let result = self.dbase.get_tree(&sum);
                 if result.is_err() {
-                    return Some(Err(err_msg(format!("failed to get tree: {:?}", sum))));
+                    return Some(Err(anyhow!(format!("failed to get tree: {:?}", sum))));
                 }
                 let opt = result.unwrap();
                 if opt.is_none() {
-                    return Some(Err(err_msg(format!("missing tree: {:?}", sum))));
+                    return Some(Err(anyhow!(format!("missing tree: {:?}", sum))));
                 }
                 // update the tree, index, and path fields
                 self.tree = opt;

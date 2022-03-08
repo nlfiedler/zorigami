@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Store, StoreType};
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
@@ -79,7 +79,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
 
     #[test]
     fn test_update_store_ok() {
@@ -109,7 +109,7 @@ mod tests {
     fn test_update_store_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_put_store().returning(|_| Err(err_msg("oh no")));
+        mock.expect_put_store().returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = UpdateStore::new(Box::new(mock));
         let mut properties: HashMap<String, String> = HashMap::new();

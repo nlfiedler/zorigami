@@ -3,7 +3,7 @@
 //
 use crate::domain::managers::restore::{Request, Restorer};
 use crate::domain::usecases::NoParams;
-use failure::Error;
+use anyhow::Error;
 use std::sync::Arc;
 
 pub struct QueryRestores {

@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,7 +22,7 @@ impl LocalStore {
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
         let basepath = props
             .get("basepath")
-            .ok_or_else(|| err_msg("missing basepath property"))?;
+            .ok_or_else(|| anyhow!("missing basepath property"))?;
         Ok(Self {
             store_id: store_id.to_owned(),
             basepath: basepath.to_owned(),

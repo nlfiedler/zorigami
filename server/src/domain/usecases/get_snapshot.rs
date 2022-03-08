@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, Snapshot};
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 
@@ -53,7 +53,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
 
     #[test]
     fn test_get_snapshot_some() {
@@ -110,7 +110,7 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_get_snapshot()
             .withf(move |d| d == &snapshot_sha1)
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = GetSnapshot::new(Box::new(mock));
         let params = Params::new(snapshot_sha2);

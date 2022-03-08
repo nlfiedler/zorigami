@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Chunk};
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -120,7 +120,7 @@ fn hash_password(passphrase: &str, salt: &Salt) -> Result<secretstream::Key, Err
         pwhash::MEMLIMIT_INTERACTIVE,
     ) {
         Ok(_) => Ok(k),
-        Err(()) => Err(err_msg("pwhash::derive_key() failed mysteriously")),
+        Err(()) => Err(anyhow!("pwhash::derive_key() failed mysteriously")),
     }
 }
 
@@ -143,7 +143,7 @@ pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<S
     let mut total_bytes_read: u64 = 0;
     let mut buffer = vec![0; CRYPTO_BUFLEN];
     let (mut enc_stream, header) =
-        Stream::init_push(&key).map_err(|_| err_msg("stream init failed"))?;
+        Stream::init_push(&key).map_err(|_| anyhow!("stream init failed"))?;
     let mut input = File::open(infile)?;
     let mut cipher = File::create(outfile)?;
     // Write out a magic/version number for backward compatibility. The magic
@@ -163,7 +163,7 @@ pub fn encrypt_file(passphrase: &str, infile: &Path, outfile: &Path) -> Result<S
         };
         let cipher_text = enc_stream
             .push(&buffer[0..bytes_read], None, tag)
-            .map_err(|_| err_msg("stream push failed"))?;
+            .map_err(|_| anyhow!("stream push failed"))?;
         cipher.write_all(cipher_text.as_ref())?;
     }
     Ok(salt)
@@ -185,19 +185,19 @@ pub fn decrypt_file(
     let mut version_bytes = [0; 8];
     input.read_exact(&mut version_bytes)?;
     if version_bytes[0..4] != [b'Z', b'R', b'G', b'M'] {
-        return Err(err_msg("pack file missing magic number"));
+        return Err(anyhow!("pack file missing magic number"));
     }
     if version_bytes[4..8] != [0, 0, 0, 1] {
-        return Err(err_msg("pack file unsupported version"));
+        return Err(anyhow!("pack file unsupported version"));
     }
     // create a vector with sufficient space to read the header
     let mut header_vec = vec![0; secretstream::HEADERBYTES];
     input.read_exact(&mut header_vec)?;
     let header = secretstream::Header::from_slice(&header_vec)
-        .ok_or_else(|| err_msg("invalid secretstream header"))?;
+        .ok_or_else(|| anyhow!("invalid secretstream header"))?;
     // initialize the pull stream
     let mut dec_stream =
-        Stream::init_pull(&header, &key).map_err(|_| err_msg("stream init failed"))?;
+        Stream::init_pull(&header, &key).map_err(|_| anyhow!("stream init failed"))?;
     let mut plain = File::create(outfile)?;
     // buffer must be large enough for reading an entire message
     let mut buffer = vec![0; CRYPTO_BUFLEN + secretstream::ABYTES];
@@ -208,7 +208,7 @@ pub fn decrypt_file(
         // that is unlikely when reading local files
         let (decrypted, _tag) = dec_stream
             .pull(&buffer[0..bytes_read], None)
-            .map_err(|_| err_msg("stream pull failed"))?;
+            .map_err(|_| anyhow!("stream pull failed"))?;
         plain.write_all(decrypted.as_ref())?;
     }
     Ok(())

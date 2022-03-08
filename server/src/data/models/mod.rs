@@ -251,7 +251,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::schedule::TimeRange;
     use crate::domain::entities::{Tree, TreeEntry, TreeReference};
-    use failure::Error;
+    use anyhow::Error;
     use sodiumoxide::crypto::pwhash;
     use std::path::Path;
 

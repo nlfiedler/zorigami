@@ -4,7 +4,7 @@
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;
@@ -92,7 +92,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::Configuration;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
     use mockall::predicate::*;
 
     #[test]
@@ -133,7 +133,7 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
         mock.expect_put_dataset()
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         mock.expect_put_computer_id()
             .with(always(), always())
             .returning(|_, _| Ok(()));

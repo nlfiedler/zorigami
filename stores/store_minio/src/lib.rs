@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use bytes::Bytes;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use futures::{FutureExt, TryStreamExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
@@ -33,16 +33,16 @@ impl MinioStore {
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
         let region = props
             .get("region")
-            .ok_or_else(|| err_msg("missing region property"))?;
+            .ok_or_else(|| anyhow!("missing region property"))?;
         let endpoint = props
             .get("endpoint")
-            .ok_or_else(|| err_msg("missing endpoint property"))?;
+            .ok_or_else(|| anyhow!("missing endpoint property"))?;
         let access_key = props
             .get("access_key")
-            .ok_or_else(|| err_msg("missing access_key property"))?;
+            .ok_or_else(|| anyhow!("missing access_key property"))?;
         let secret_key = props
             .get("secret_key")
-            .ok_or_else(|| err_msg("missing secret_key property"))?;
+            .ok_or_else(|| anyhow!("missing secret_key property"))?;
         Ok(Self {
             store_id: store_id.to_owned(),
             region: region.to_owned(),
@@ -103,7 +103,7 @@ impl MinioStore {
             // AWS S3 quotes the etag values for some reason
             let stripped_etag = etag.trim_matches('"');
             if !md5.eq(stripped_etag) {
-                return Err(err_msg("returned e_tag does not match MD5 of pack file"));
+                return Err(anyhow!("returned e_tag does not match MD5 of pack file"));
             }
         }
         let loc = Coordinates::new(&self.store_id, bucket, object);
@@ -120,7 +120,7 @@ impl MinioStore {
         // wait for the future(s) to complete
         let result = block_on(client.get_object(request))??;
         let stream = result.body.ok_or_else(|| {
-            err_msg(format!(
+            anyhow!(format!(
                 "failed to retrieve object {} from bucket {}",
                 location.object.clone(),
                 location.bucket.clone()
@@ -199,7 +199,7 @@ impl MinioStore {
         match result {
             Err(e) => match e {
                 RusotoError::Unknown(_) => Ok(()),
-                _ => Err(Error::from_boxed_compat(Box::new(e))),
+                _ => Err(anyhow!(format!("{}", e))),
             },
             Ok(_) => Ok(()),
         }
@@ -221,7 +221,7 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
                 CreateBucketError::BucketAlreadyExists(_) => Ok(()),
                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
             },
-            _ => Err(Error::from_boxed_compat(Box::new(e))),
+            _ => Err(anyhow!(format!("{}", e))),
         },
         Ok(_) => Ok(()),
     }
@@ -238,7 +238,7 @@ fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
         // * c.f. https://github.com/tokio-rs/tokio/issues/2603
         // * c.f. https://github.com/tokio-rs/tokio/issues/2376
         // * c.f. https://github.com/tokio-rs/tokio/discussions/2653
-        Err(err_msg("running in tokio not permitted"))
+        Err(anyhow!("running in tokio not permitted"))
     } else {
         // Build the simplest and lightest runtime we can, while still enabling
         // us to wait for this future (and everything it spawns) to complete

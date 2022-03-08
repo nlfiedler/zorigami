@@ -3,7 +3,7 @@
 //
 use crate::data::sources::PackDataSource;
 use crate::domain::entities::{PackLocation, Store};
-use failure::Error;
+use anyhow::Error;
 use std::path::Path;
 use store_core::Coordinates;
 use store_sftp::SftpStore;

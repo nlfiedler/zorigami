@@ -5,7 +5,7 @@ mod common;
 
 use common::DBPath;
 
-use failure::Error;
+use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};

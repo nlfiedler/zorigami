@@ -8,7 +8,7 @@ license = "UNLICENSED"
 [dependencies]
 async-google-apis-common = "0.3"
 base64 = "0.13"
-failure = "0.1"
+anyhow = "1.0.55"
 hyper = { version = "0.14", features = ["stream"] }
 # async-google-apis-common requires hyper-rustls version 0.22
 hyper-rustls = { version = "0.22.1", features = ["rustls-native-certs"] }

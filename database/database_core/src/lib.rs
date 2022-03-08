@@ -1,10 +1,10 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! Define traits and types for all database implementations.
 
-use failure::Error;
+use anyhow::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

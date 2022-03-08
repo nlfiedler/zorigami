@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, Pack};
 use crate::domain::repositories::RecordRepository;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use log::info;
 use std::cmp;
 use std::collections::HashSet;
@@ -50,7 +50,7 @@ impl super::UseCase<Vec<Pack>, Params> for FindMissingPacks {
             );
             Ok(missing_packs)
         } else {
-            Err(err_msg(format!("no such store: {}", params.store_id)))
+            Err(anyhow!(format!("no such store: {}", params.store_id)))
         }
     }
 }

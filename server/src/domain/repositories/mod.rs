@@ -4,7 +4,7 @@
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
-use failure::Error;
+use anyhow::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::path::{Path, PathBuf};

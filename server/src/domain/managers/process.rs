@@ -11,7 +11,7 @@ use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use chrono::prelude::*;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use log::{debug, error, info, trace};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -74,7 +74,7 @@ impl Processor for ProcessorImpl {
 
     fn stop(&self) -> Result<(), Error> {
         fn err_convert(err: SendError<Stop>) -> Error {
-            err_msg(format!("ProcessorImpl.stop(): {:?}", err))
+            anyhow!(format!("ProcessorImpl.stop(): {:?}", err))
         }
         let mut su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.take() {
@@ -129,7 +129,7 @@ impl BackupSupervisor {
                 };
                 let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
                 if let Err(err) = addr.try_send(msg) {
-                    return Err(err_msg(format!("error sending message to runner: {}", err)));
+                    return Err(anyhow!(format!("error sending message to runner: {}", err)));
                 }
             }
         }
@@ -228,7 +228,7 @@ fn should_run(
         let end_time: Option<DateTime<Utc>> = if let Some(checksum) = latest_snapshot {
             let snapshot = dbase
                 .get_snapshot(&checksum)?
-                .ok_or_else(|| err_msg(format!("snapshot {} missing from database", &checksum)))?;
+                .ok_or_else(|| anyhow!(format!("snapshot {} missing from database", &checksum)))?;
             snapshot.end_time
         } else {
             None
@@ -345,7 +345,7 @@ mod tests {
         // know that the supervisor and runner have done their part, so give an
         // error to cause the backup to stop.
         mock.expect_insert_tree()
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         let repo = Arc::new(mock);
         // act (start)
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());

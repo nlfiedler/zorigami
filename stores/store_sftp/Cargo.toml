@@ -7,7 +7,7 @@ license = "UNLICENSED"
 
 [dependencies]
 dotenv = "0.15.0"
-failure = "0.1.6"
+anyhow = "1.0.55"
 ssh2 = "0.9"
 store_core = { path = "../store_core" }
 tempfile = "3.1.0"

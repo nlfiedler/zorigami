@@ -6,7 +6,7 @@ edition = "2021"
 license = "UNLICENSED"
 
 [dependencies]
-failure = "0.1.6"
+anyhow = "1.0.55"
 md-5 = "0.10.1"
 
 [dev-dependencies]

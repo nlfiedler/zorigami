@@ -4,7 +4,7 @@
 
 //! Defines the traits and types for all pack stores.
 
-use failure::Error;
+use anyhow::Error;
 use std::fs::File;
 use std::io;
 use std::path::Path;

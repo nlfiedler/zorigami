@@ -8,7 +8,7 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use failure::{err_msg, Error, ResultExt};
+use anyhow::{anyhow, Context, Error, Result};
 use log::{error, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -155,7 +155,7 @@ impl RecordRepository for RecordRepositoryImpl {
             .filter_map(|s| s)
             .collect();
         if stores.is_empty() {
-            return Err(err_msg(format!(
+            return Err(anyhow!(format!(
                 "no stores found for dataset {}",
                 dataset.id
             )));
@@ -347,7 +347,7 @@ impl PackRepository for PackRepositoryImpl {
             }
         }
 
-        Err(err_msg("unable to retrieve pack file"))
+        Err(anyhow!("unable to retrieve pack file"))
     }
 
     fn test_store(&self, store_id: &str) -> Result<(), Error> {
@@ -382,10 +382,10 @@ impl PackRepository for PackRepositoryImpl {
                     .context("database archive retrieval")?;
                 return Ok(());
             } else {
-                return Err(err_msg("no database archives available"));
+                return Err(anyhow!("no database archives available"));
             }
         }
-        Err(err_msg("no matching store found"))
+        Err(anyhow!("no matching store found"))
     }
 
     fn find_missing(&self, store_id: &str, packs: &[Pack]) -> Result<Vec<Checksum>, Error> {
@@ -418,7 +418,7 @@ impl PackRepository for PackRepositoryImpl {
                 return Ok(digests);
             }
         }
-        Err(err_msg("no matching store found"))
+        Err(anyhow!("no matching store found"))
     }
 
     fn prune_extra(&self, store_id: &str, packs: &[Pack]) -> Result<u32, Error> {
@@ -437,7 +437,7 @@ impl PackRepository for PackRepositoryImpl {
                 return Ok(count);
             }
         }
-        Err(err_msg("no matching store found"))
+        Err(anyhow!("no matching store found"))
     }
 }
 
@@ -535,7 +535,7 @@ fn store_pack_retry(
     packfile: &Path,
     bucket: &str,
     object: &str,
-) -> Result<PackLocation, Error> {
+) -> anyhow::Result<PackLocation, Error> {
     let mut retries = 0;
     loop {
         let result = source.store_pack(packfile, bucket, object);

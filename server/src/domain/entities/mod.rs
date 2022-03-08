@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use failure::{err_msg, Error};
 use log::error;
 use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
@@ -110,7 +110,7 @@ impl FromStr for Checksum {
         } else if s.starts_with("sha256-") {
             Ok(Checksum::SHA256(s[7..].to_owned()))
         } else {
-            Err(err_msg(format!("not a recognized algorithm: {}", s)))
+            Err(anyhow!(format!("not a recognized algorithm: {}", s)))
         }
     }
 }
@@ -184,7 +184,7 @@ impl FromStr for StoreType {
             "local" => Ok(StoreType::LOCAL),
             "minio" => Ok(StoreType::MINIO),
             "sftp" => Ok(StoreType::SFTP),
-            _ => Err(err_msg(format!("not a recognized store type: {}", s))),
+            _ => Err(anyhow!(format!("not a recognized store type: {}", s))),
         }
     }
 }
@@ -402,7 +402,7 @@ impl FromStr for TreeReference {
             let digest: Result<Checksum, Error> = FromStr::from_str(&s[7..]);
             Ok(TreeReference::FILE(digest.expect("invalid file SHA256")))
         } else {
-            Err(err_msg(format!("not a recognized reference: {}", s)))
+            Err(anyhow!(format!("not a recognized reference: {}", s)))
         }
     }
 }

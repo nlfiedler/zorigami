@@ -3,7 +3,7 @@
 //
 use crate::domain::managers::state::{StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
@@ -38,7 +38,7 @@ impl super::UseCase<String, Params> for RestoreDatabase {
             // would be unlikely given the use case scenario.
             self.repo.restore_from_backup(&archive_path)
         } else {
-            Err(err_msg("no pack stores defined"))
+            Err(anyhow!("no pack stores defined"))
         };
         // Signal the processor to start a new backup supervisor.
         params.state.supervisor_event(SupervisorAction::Start);
@@ -162,7 +162,7 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
         mock.expect_restore_from_backup()
-            .returning(|_| Err(err_msg("no database archives available")));
+            .returning(|_| Err(anyhow!("no database archives available")));
         let mut stater = MockStateStore::new();
         stater
             .expect_supervisor_event()

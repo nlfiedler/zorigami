@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 
@@ -57,7 +57,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
 
     #[test]
     fn test_delete_dataset_ok() {
@@ -81,7 +81,7 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_delete_dataset()
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {

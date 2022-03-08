@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, Pack, PackLocation};
 use crate::domain::repositories::RecordRepository;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use log::{error, info};
 use std::cmp;
 use std::collections::HashSet;
@@ -24,11 +24,11 @@ impl super::UseCase<Vec<Pack>, Params> for RestoreMissingPacks {
         let source_store = self
             .repo
             .get_store(&params.source_store_id)?
-            .ok_or_else(|| err_msg(format!("no such store: {}", params.source_store_id)))?;
+            .ok_or_else(|| anyhow!(format!("no such store: {}", params.source_store_id)))?;
         let target_store = self
             .repo
             .get_store(&params.target_store_id)?
-            .ok_or_else(|| err_msg(format!("no such store: {}", params.target_store_id)))?;
+            .ok_or_else(|| anyhow!(format!("no such store: {}", params.target_store_id)))?;
         // Find all packs and database snapshot packs.
         let mut all_packs = self.repo.get_packs(&target_store.id)?;
         let mut databases = self.repo.get_databases()?;
@@ -352,7 +352,7 @@ mod tests {
                 let mut mock_store = MockPackRepository::new();
                 mock_store
                     .expect_retrieve_pack()
-                    .returning(|_, _| Err(err_msg("oh no")));
+                    .returning(|_, _| Err(anyhow!("oh no")));
                 Ok(Box::new(mock_store))
             });
         // act
@@ -429,7 +429,7 @@ mod tests {
                 mock_store
                     .expect_store_pack()
                     .with(always(), eq("bucket1"), eq("object2"))
-                    .returning(|_, _, _| Err(err_msg("oh no")));
+                    .returning(|_, _, _| Err(anyhow!("oh no")));
                 Ok(Box::new(mock_store))
             });
         mock.expect_build_pack_repo()

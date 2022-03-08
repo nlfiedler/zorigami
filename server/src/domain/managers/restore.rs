@@ -5,7 +5,7 @@ use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
 use chrono::prelude::*;
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use log::{debug, error};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -161,12 +161,12 @@ impl Restorer for RestorerImpl {
         let su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.as_ref() {
             fn err_convert(err: SendError<Restore>) -> Error {
-                err_msg(format!("RestorerImpl::enqueue(): {:?}", err))
+                anyhow!(format!("RestorerImpl::enqueue(): {:?}", err))
             }
             addr.try_send(Restore()).map_err(err_convert)
         } else {
             error!("restore: must call start() first");
-            Err(err_msg("must call start() first"))
+            Err(anyhow!("must call start() first"))
         }
     }
 
@@ -197,7 +197,7 @@ impl Restorer for RestorerImpl {
 
     fn stop(&self) -> Result<(), Error> {
         fn err_convert(err: SendError<Stop>) -> Error {
-            err_msg(format!("RestorerImpl::stop(): {:?}", err))
+            anyhow!(format!("RestorerImpl::stop(): {:?}", err))
         }
         let mut su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.take() {
@@ -294,7 +294,7 @@ impl RestoreSupervisor {
         let tree = self
             .dbase
             .get_tree(&digest)?
-            .ok_or_else(|| err_msg(format!("missing tree: {:?}", digest)))?;
+            .ok_or_else(|| anyhow!(format!("missing tree: {:?}", digest)))?;
         for entry in tree.entries.iter() {
             match &entry.reference {
                 TreeReference::LINK(_) => (),
@@ -415,7 +415,7 @@ impl PackFetcher {
         let dataset = self
             .dbase
             .get_dataset(dataset_id)?
-            .ok_or_else(|| err_msg(format!("missing dataset: {:?}", dataset_id)))?;
+            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", dataset_id)))?;
         self.dataset = Some(dataset_id.to_owned());
         self.stores = Some(self.dbase.load_dataset_stores(&dataset)?);
         fs::create_dir_all(&dataset.workspace)?;
@@ -437,24 +437,24 @@ impl PackFetcher {
         let saved_file = self
             .dbase
             .get_file(checksum)?
-            .ok_or_else(|| err_msg(format!("missing file: {:?}", checksum)))?;
+            .ok_or_else(|| anyhow!(format!("missing file: {:?}", checksum)))?;
         // look up chunk records to get pack record(s)
         for (_offset, chunk) in &saved_file.chunks {
             let chunk_rec = self
                 .dbase
                 .get_chunk(&chunk)?
-                .ok_or_else(|| err_msg(format!("missing chunk: {:?}", chunk)))?;
+                .ok_or_else(|| anyhow!(format!("missing chunk: {:?}", chunk)))?;
             let pack_digest = chunk_rec.packfile.as_ref().unwrap();
             if !self.downloaded.contains(pack_digest) {
                 let saved_pack = self
                     .dbase
                     .get_pack(pack_digest)?
-                    .ok_or_else(|| err_msg(format!("missing pack record: {:?}", pack_digest)))?;
+                    .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
                 // check the salt before downloading the pack, otherwise we waste
                 // time fetching it when we would not be able to decrypt it
                 let salt = saved_pack
                     .crypto_salt
-                    .ok_or_else(|| err_msg(format!("missing pack salt: {:?}", pack_digest)))?;
+                    .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
                 // retrieve the pack file
                 let mut encrypted = PathBuf::new();
                 encrypted.push(workspace);
@@ -509,7 +509,7 @@ impl Drop for PackFetcher {
 fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
     let actual = Checksum::sha256_from_file(path)?;
     if &actual != digest {
-        Err(err_msg(format!(
+        Err(anyhow!(format!(
             "pack digest does not match: {} != {}",
             &actual, digest
         )))
@@ -530,7 +530,7 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
         }
         return Ok(());
     }
-    Err(err_msg(format!("no parent for: {:?}", outfile)))
+    Err(anyhow!(format!("no parent for: {:?}", outfile)))
 }
 
 #[cfg(test)]
@@ -560,7 +560,7 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
-            .returning(|_| Err(err_msg("oh no!")));
+            .returning(|_| Err(anyhow!("oh no!")));
         let repo = Arc::new(mock);
         let sut = RestorerImpl::new();
         // act
@@ -643,7 +643,7 @@ mod tests {
             .returning(move |_| Ok(Some(dataset.clone())));
         mock.expect_get_file()
             .withf(|digest| digest.to_string() == "sha256-deadbeef")
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
 
         // create a realistic pack file but mock database records
         let passphrase = managers::get_passphrase();

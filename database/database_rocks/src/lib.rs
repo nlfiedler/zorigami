@@ -4,7 +4,7 @@
 
 //! Manages instances of RocksDB associated with file paths.
 
-use failure::{err_msg, Error};
+use anyhow::{anyhow, Error};
 use lazy_static::lazy_static;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::{Options, DB};
@@ -97,7 +97,7 @@ impl database_core::Database for Database {
             // exclusive lock.
             let strong_count = reph.strong_count();
             if strong_count != 0 {
-                return Err(err_msg(format!("non-zero strong count: {}", strong_count)));
+                return Err(anyhow!(format!("non-zero strong count: {}", strong_count)));
             }
         }
         drop(db_refs);

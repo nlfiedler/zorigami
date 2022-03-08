@@ -4,6 +4,7 @@
 
 //! Performs serde on entities and stores them in a database.
 
+use anyhow::Error;
 use crate::data::models::{
     ChunkDef, ConfigurationDef, DatasetDef, FileDef, PackDef, SnapshotDef, StoreDef,
 };
@@ -13,7 +14,6 @@ use crate::domain::entities::{
 };
 use database_core::Database;
 use database_rocks;
-use failure::Error;
 #[cfg(test)]
 use mockall::automock;
 use std::str::FromStr;

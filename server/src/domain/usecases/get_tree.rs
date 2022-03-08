@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, Tree};
 use crate::domain::repositories::RecordRepository;
-use failure::Error;
+use anyhow::Error;
 use std::cmp;
 use std::fmt;
 
@@ -54,7 +54,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::{TreeEntry, TreeReference};
     use crate::domain::repositories::MockRecordRepository;
-    use failure::err_msg;
+    use anyhow::anyhow;
     use std::path::Path;
 
     #[test]
@@ -111,7 +111,7 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_get_tree()
             .withf(move |d| d == &tree_sha1)
-            .returning(|_| Err(err_msg("oh no")));
+            .returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = GetTree::new(Box::new(mock));
         let params = Params::new(tree_sha2);
