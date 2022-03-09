@@ -15,15 +15,15 @@ import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
 import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 
-class DataSetsList extends StatelessWidget {
+class DataSetsList extends ConsumerWidget {
   final List<DataSet> sets;
 
   DataSetsList({Key? key, required this.sets}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<psb.PackStoresBloc>(
-      create: (_) => BuildContextX(context).read(packStoresBlocProvider),
+      create: (_) => ref.read(packStoresBlocProvider),
       child: BlocBuilder<psb.PackStoresBloc, psb.PackStoresState>(
         builder: (context, state) {
           if (state is psb.Empty) {
@@ -81,7 +81,7 @@ Widget buildSetsHelp(BuildContext context) {
   );
 }
 
-class DataSetsListInner extends StatefulWidget {
+class DataSetsListInner extends ConsumerStatefulWidget {
   final List<DataSet> sets;
   final List<PackStore> stores;
 
@@ -95,7 +95,7 @@ class DataSetsListInner extends StatefulWidget {
   _DataSetsListState createState() => _DataSetsListState();
 }
 
-class _DataSetsListState extends State<DataSetsListInner> {
+class _DataSetsListState extends ConsumerState<DataSetsListInner> {
   late List<ExpansionItem> items;
 
   @override
@@ -130,7 +130,7 @@ class _DataSetsListState extends State<DataSetsListInner> {
     return SingleChildScrollView(
       child: Container(
         child: BlocProvider<edsb.EditDataSetsBloc>(
-          create: (_) => BuildContextX(context).read(editDataSetsBlocProvider),
+          create: (_) => ref.read(editDataSetsBlocProvider),
           child: ExpansionPanelList(
             expansionCallback: (int index, bool isExpanded) {
               setState(() {

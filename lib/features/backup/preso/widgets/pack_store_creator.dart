@@ -20,11 +20,11 @@ final List<NewStoreItem> storeItems = [
   NewStoreItem(title: 'SFTP', kind: StoreKind.sftp),
 ];
 
-class PackStoreHeader extends StatelessWidget {
+class PackStoreHeader extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<CreatePackStoresBloc>(
-      create: (_) => BuildContextX(context).read(createPackStoresBlocProvider),
+      create: (_) => ref.read(createPackStoresBlocProvider),
       child: BlocListener<CreatePackStoresBloc, CreatePackStoresState>(
         listener: (context, state) {
           if (state is Submitted) {

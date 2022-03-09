@@ -11,11 +11,11 @@ import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/features/browse/preso/screens/snapshot_screen.dart';
 
-class DataSetsList extends StatelessWidget {
+class DataSetsList extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<DataSetsBloc>(
-      create: (_) => BuildContextX(context).read(datasetsBlocProvider),
+      create: (_) => ref.read(datasetsBlocProvider),
       child: BlocBuilder<DataSetsBloc, DataSetsState>(
         builder: (context, state) {
           if (state is Empty) {

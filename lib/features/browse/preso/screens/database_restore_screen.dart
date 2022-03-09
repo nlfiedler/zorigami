@@ -12,15 +12,15 @@ import 'package:zorigami/features/browse/preso/bloc/database_restore_bloc.dart'
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
-class DatabaseRestoreScreen extends StatelessWidget {
+class DatabaseRestoreScreen extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text('RESTORE'),
       ),
       body: BlocProvider<PackStoresBloc>(
-        create: (_) => BuildContextX(context).read(packStoresBlocProvider),
+        create: (_) => ref.read(packStoresBlocProvider),
         child: BlocBuilder<PackStoresBloc, PackStoresState>(
           builder: (context, state) {
             if (state is Empty) {
@@ -78,17 +78,17 @@ Widget buildNoStoresHelp(BuildContext context) {
   );
 }
 
-class PackStoreListEntry extends StatelessWidget {
+class PackStoreListEntry extends ConsumerWidget {
   final PackStore store;
 
   PackStoreListEntry({Key? key, required this.store}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = packStoreTitle(store);
     final subtitle = packStoreSubtitle(store);
     return BlocProvider<rdb.DatabaseRestoreBloc>(
-      create: (_) => BuildContextX(context).read(databaseRestoreBlocProvider),
+      create: (_) => ref.read(databaseRestoreBlocProvider),
       child: BlocConsumer<rdb.DatabaseRestoreBloc, rdb.DatabaseRestoreState>(
         listener: (context, state) {
           final resultStatus = _loadedResult(state);

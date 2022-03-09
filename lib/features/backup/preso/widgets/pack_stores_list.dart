@@ -16,7 +16,7 @@ import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 
-class PackStoresList extends StatefulWidget {
+class PackStoresList extends ConsumerStatefulWidget {
   final List<PackStore> stores;
 
   PackStoresList({Key? key, required this.stores}) : super(key: key);
@@ -25,7 +25,7 @@ class PackStoresList extends StatefulWidget {
   _PackStoresListState createState() => _PackStoresListState();
 }
 
-class _PackStoresListState extends State<PackStoresList> {
+class _PackStoresListState extends ConsumerState<PackStoresList> {
   late List<ExpansionItem> items;
 
   @override
@@ -65,7 +65,7 @@ class _PackStoresListState extends State<PackStoresList> {
       child: Container(
         child: BlocProvider<epsb.EditPackStoresBloc>(
           create: (_) =>
-              BuildContextX(context).read(editPackStoresBlocProvider),
+              ref.read(editPackStoresBlocProvider),
           child: ExpansionPanelList(
             expansionCallback: (int index, bool isExpanded) {
               setState(() {

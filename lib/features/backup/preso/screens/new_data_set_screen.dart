@@ -14,9 +14,9 @@ import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
     as psb;
 import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 
-class NewDataSetScreen extends StatelessWidget {
+class NewDataSetScreen extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text('ADD DATASET'),
@@ -25,10 +25,10 @@ class NewDataSetScreen extends StatelessWidget {
         providers: [
           BlocProvider<CreateDataSetsBloc>(
             create: (_) =>
-                BuildContextX(context).read(createDatasetsBlocProvider),
+                ref.read(createDatasetsBlocProvider),
           ),
           BlocProvider<psb.PackStoresBloc>(
-            create: (_) => BuildContextX(context).read(packStoresBlocProvider),
+            create: (_) => ref.read(packStoresBlocProvider),
           ),
         ],
         child: BlocBuilder<psb.PackStoresBloc, psb.PackStoresState>(

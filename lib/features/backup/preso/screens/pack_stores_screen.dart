@@ -10,15 +10,15 @@ import 'package:zorigami/features/backup/preso/widgets/pack_store_creator.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_stores_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
-class PackStoresScreen extends StatelessWidget {
+class PackStoresScreen extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text('PACK STORES'),
       ),
       body: BlocProvider<PackStoresBloc>(
-        create: (_) => BuildContextX(context).read(packStoresBlocProvider),
+        create: (_) => ref.read(packStoresBlocProvider),
         child: BlocBuilder<PackStoresBloc, PackStoresState>(
           builder: (context, state) {
             if (state is Empty) {

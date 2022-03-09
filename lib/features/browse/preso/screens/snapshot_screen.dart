@@ -11,14 +11,14 @@ import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart'
     as tbb;
 import 'package:zorigami/features/browse/preso/widgets/snapshot_viewer.dart';
 
-class SnapshotScreen extends StatelessWidget {
+class SnapshotScreen extends ConsumerWidget {
   // the data set under inspection
   final DataSet dataset;
 
   SnapshotScreen({Key? key, required this.dataset}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text('SNAPSHOTS'),
@@ -27,10 +27,10 @@ class SnapshotScreen extends StatelessWidget {
         providers: [
           BlocProvider<SnapshotBrowserBloc>(
             create: (_) =>
-                BuildContextX(context).read(snapshotBrowserBlocProvider),
+                ref.read(snapshotBrowserBlocProvider),
           ),
           BlocProvider<tbb.TreeBrowserBloc>(
-            create: (_) => BuildContextX(context).read(treeBrowserBlocProvider),
+            create: (_) => ref.read(treeBrowserBlocProvider),
           ),
         ],
         child: BlocBuilder<SnapshotBrowserBloc, SnapshotBrowserState>(

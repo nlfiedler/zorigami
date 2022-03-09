@@ -10,11 +10,11 @@ import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
-class DataSetsScreen extends StatelessWidget {
+class DataSetsScreen extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<DataSetsBloc>(
-      create: (_) => BuildContextX(context).read(datasetsBlocProvider),
+      create: (_) => ref.read(datasetsBlocProvider),
       child: BlocBuilder<DataSetsBloc, DataSetsState>(
         builder: (context, state) {
           return Scaffold(

@@ -7,11 +7,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 
-class Configuration extends StatelessWidget {
+class Configuration extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<ConfigurationBloc>(
-      create: (_) => BuildContextX(context).read(configurationBlocProvider),
+      create: (_) => ref.read(configurationBlocProvider),
       child: BlocBuilder<ConfigurationBloc, ConfigurationState>(
         builder: (context, state) {
           if (state is Empty) {

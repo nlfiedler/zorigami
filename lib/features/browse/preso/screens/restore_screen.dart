@@ -11,11 +11,11 @@ import 'package:zorigami/features/browse/preso/bloc/restores_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
-class RestoreRequestsScreen extends StatelessWidget {
+class RestoreRequestsScreen extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<RestoresBloc>(
-      create: (_) => BuildContextX(context).read(restoresBlocProvider),
+      create: (_) => ref.read(restoresBlocProvider),
       child: BlocConsumer<RestoresBloc, RestoresState>(
         listener: (context, state) {
           if (state is Loaded && state.requestCancelled) {
