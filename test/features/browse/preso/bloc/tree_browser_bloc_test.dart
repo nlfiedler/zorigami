@@ -1,10 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
@@ -13,9 +12,11 @@ import 'package:zorigami/core/domain/usecases/get_tree.dart';
 import 'package:zorigami/core/domain/usecases/restore_files.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/tree_browser_bloc.dart';
-import './tree_browser_bloc_test.mocks.dart';
 
-@GenerateMocks([SnapshotRepository, TreeRepository])
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
+
+class MockTreeRepository extends Mock implements TreeRepository {}
+
 void main() {
   late MockTreeRepository mockTreeRepository;
   late MockSnapshotRepository mockSnapshotRepository;
@@ -91,11 +92,11 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       getTree = GetTree(mockTreeRepository);
       restoreFiles = RestoreFiles(mockSnapshotRepository);
-      when(mockTreeRepository.getTree('sha1-cafebabe'))
+      when(() => mockTreeRepository.getTree('sha1-cafebabe'))
           .thenAnswer((_) async => Ok(tTree1));
-      when(mockTreeRepository.getTree('sha1-cafed00d'))
+      when(() => mockTreeRepository.getTree('sha1-cafed00d'))
           .thenAnswer((_) async => Ok(tTree2));
-      when(mockTreeRepository.getTree('sha1-deadbeef'))
+      when(() => mockTreeRepository.getTree('sha1-deadbeef'))
           .thenAnswer((_) async => Ok(tTree3));
     });
 
@@ -297,9 +298,9 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       getTree = GetTree(mockTreeRepository);
       restoreFiles = RestoreFiles(mockSnapshotRepository);
-      when(mockTreeRepository.getTree('sha1-cafebabe'))
+      when(() => mockTreeRepository.getTree('sha1-cafebabe'))
           .thenAnswer((_) async => Ok(tTree1));
-      when(mockSnapshotRepository.restoreFiles(
+      when(() => mockSnapshotRepository.restoreFiles(
               'sha256-8c983bd', 'file1', 'dataset1'))
           .thenAnswer((_) async => Ok(true));
     });
@@ -335,7 +336,7 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       getTree = GetTree(mockTreeRepository);
       restoreFiles = RestoreFiles(mockSnapshotRepository);
-      when(mockTreeRepository.getTree(any))
+      when(() => mockTreeRepository.getTree(any()))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

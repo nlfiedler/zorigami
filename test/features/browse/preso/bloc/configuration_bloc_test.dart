@@ -1,19 +1,19 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/repositories/configuration_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
-import './configuration_bloc_test.mocks.dart';
 
-@GenerateMocks([ConfigurationRepository])
+class MockConfigurationRepository extends Mock
+    implements ConfigurationRepository {}
+
 void main() {
   late MockConfigurationRepository mockConfigurationRepository;
   late GetConfiguration usecase;
@@ -28,7 +28,7 @@ void main() {
     setUp(() {
       mockConfigurationRepository = MockConfigurationRepository();
       usecase = GetConfiguration(mockConfigurationRepository);
-      when(mockConfigurationRepository.getConfiguration())
+      when(() => mockConfigurationRepository.getConfiguration())
           .thenAnswer((_) async => Ok(tConfiguration));
     });
 
@@ -50,7 +50,7 @@ void main() {
     setUp(() {
       mockConfigurationRepository = MockConfigurationRepository();
       usecase = GetConfiguration(mockConfigurationRepository);
-      when(mockConfigurationRepository.getConfiguration())
+      when(() => mockConfigurationRepository.getConfiguration())
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

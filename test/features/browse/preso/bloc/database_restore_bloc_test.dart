@@ -1,18 +1,17 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/database_restore_bloc.dart';
-import './database_restore_bloc_test.mocks.dart';
 
-@GenerateMocks([SnapshotRepository])
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
+
 void main() {
   late MockSnapshotRepository mockSnapshotRepository;
   late rd.RestoreDatabase usecase;
@@ -21,7 +20,7 @@ void main() {
     setUp(() {
       mockSnapshotRepository = MockSnapshotRepository();
       usecase = rd.RestoreDatabase(mockSnapshotRepository);
-      when(mockSnapshotRepository.restoreDatabase('local123'))
+      when(() => mockSnapshotRepository.restoreDatabase('local123'))
           .thenAnswer((_) async => Ok('ok'));
     });
 
@@ -55,7 +54,7 @@ void main() {
     setUp(() {
       mockSnapshotRepository = MockSnapshotRepository();
       usecase = rd.RestoreDatabase(mockSnapshotRepository);
-      when(mockSnapshotRepository.restoreDatabase(any))
+      when(() => mockSnapshotRepository.restoreDatabase(any()))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

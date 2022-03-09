@@ -1,7 +1,6 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -59,22 +58,18 @@ class Error extends DataSetsState {
 class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
   final GetDataSets usecase;
 
-  DataSetsBloc({required this.usecase}) : super(Empty());
-
-  @override
-  Stream<DataSetsState> mapEventToState(
-    DataSetsEvent event,
-  ) async* {
-    if (event is LoadAllDataSets) {
-      yield Loading();
+  DataSetsBloc({required this.usecase}) : super(Empty()) {
+    on<LoadAllDataSets>((event, emit) async {
+      emit(Loading());
       final result = await usecase(NoParams());
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (sets) => Loaded(sets: sets),
         (failure) => Error(message: failure.toString()),
-      );
-    } else if (event is ReloadDataSets) {
+      ));
+    });
+    on<ReloadDataSets>((event, emit) {
       // force an update as something changed elsewhere
-      yield Empty();
-    }
+      emit(Empty());
+    });
   }
 }

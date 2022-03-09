@@ -1,7 +1,6 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -64,30 +63,26 @@ class EditDataSetsBloc extends Bloc<EditDataSetsEvent, EditDataSetsState> {
   EditDataSetsBloc({
     required this.updateDataSet,
     required this.deleteDataSet,
-  }) : super(Editing());
-
-  @override
-  Stream<EditDataSetsState> mapEventToState(
-    EditDataSetsEvent event,
-  ) async* {
-    if (event is UpdateDataSet) {
-      yield Submitting();
+  }) : super(Editing()) {
+    on<UpdateDataSet>((event, emit) async {
+      emit(Submitting());
       final result = await updateDataSet(uds.Params(
         dataset: event.dataset,
       ));
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (dataset) => Submitted(),
         (failure) => Error(message: failure.toString()),
-      );
-    } else if (event is DeleteDataSet) {
-      yield Submitting();
+      ));
+    });
+    on<DeleteDataSet>((event, emit) async {
+      emit(Submitting());
       final result = await deleteDataSet(dds.Params(
         dataset: event.dataset,
       ));
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (dataset) => Submitted(),
         (failure) => Error(message: failure.toString()),
-      );
-    }
+      ));
+    });
   }
 }

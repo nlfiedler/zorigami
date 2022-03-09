@@ -1,19 +1,18 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/snapshot_browser_bloc.dart';
-import './snapshot_browser_bloc_test.mocks.dart';
 
-@GenerateMocks([SnapshotRepository])
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
+
 void main() {
   late MockSnapshotRepository mockSnapshotRepository;
   late GetSnapshot usecase;
@@ -40,9 +39,9 @@ void main() {
     setUp(() {
       mockSnapshotRepository = MockSnapshotRepository();
       usecase = GetSnapshot(mockSnapshotRepository);
-      when(mockSnapshotRepository.getSnapshot('cafebabe'))
+      when(() => mockSnapshotRepository.getSnapshot('cafebabe'))
           .thenAnswer((_) async => Ok(tSubsequent));
-      when(mockSnapshotRepository.getSnapshot('cafed00d'))
+      when(() => mockSnapshotRepository.getSnapshot('cafed00d'))
           .thenAnswer((_) async => Ok(tParent));
     });
 
@@ -104,7 +103,7 @@ void main() {
     setUp(() {
       mockSnapshotRepository = MockSnapshotRepository();
       usecase = GetSnapshot(mockSnapshotRepository);
-      when(mockSnapshotRepository.getSnapshot(any))
+      when(() => mockSnapshotRepository.getSnapshot(any()))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

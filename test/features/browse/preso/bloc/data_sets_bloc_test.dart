@@ -1,19 +1,18 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/data_sets_bloc.dart';
-import './data_sets_bloc_test.mocks.dart';
 
-@GenerateMocks([DataSetRepository])
+class MockDataSetRepository extends Mock implements DataSetRepository {}
+
 void main() {
   late MockDataSetRepository mockDataSetRepository;
   late GetDataSets usecase;
@@ -35,7 +34,7 @@ void main() {
     setUp(() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = GetDataSets(mockDataSetRepository);
-      when(mockDataSetRepository.getAllDataSets())
+      when(() => mockDataSetRepository.getAllDataSets())
           .thenAnswer((_) async => Ok([tDataSet]));
     });
 
@@ -75,7 +74,7 @@ void main() {
     setUp(() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = GetDataSets(mockDataSetRepository);
-      when(mockDataSetRepository.getAllDataSets())
+      when(() => mockDataSetRepository.getAllDataSets())
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

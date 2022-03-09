@@ -1,16 +1,15 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/test_pack_store.dart';
-import './test_pack_store_test.mocks.dart';
 
-@GenerateMocks([PackStoreRepository])
+class MockPackStoreRepository extends Mock implements PackStoreRepository {}
+
 void main() {
   late TestPackStore usecase;
   late MockPackStoreRepository mockPackStoreRepository;
@@ -28,17 +27,22 @@ void main() {
     options: {},
   );
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tPackStore);
+  });
+
   test(
     'should delete a pack store within the repository',
     () async {
       // arrange
-      when(mockPackStoreRepository.testPackStore(any))
+      when(() => mockPackStoreRepository.testPackStore(any()))
           .thenAnswer((_) async => Ok('ok'));
       // act
       final result = await usecase(Params(store: tPackStore));
       // assert
       expect(result.unwrap(), equals('ok'));
-      verify(mockPackStoreRepository.testPackStore(any));
+      verify(() => mockPackStoreRepository.testPackStore(any()));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },
   );

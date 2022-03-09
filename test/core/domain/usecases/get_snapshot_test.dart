@@ -1,16 +1,15 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/domain/repositories/snapshot_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart';
-import './get_snapshot_test.mocks.dart';
 
-@GenerateMocks([SnapshotRepository])
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
+
 void main() {
   late GetSnapshot usecase;
   late MockSnapshotRepository mockSnapshotRepository;
@@ -33,13 +32,13 @@ void main() {
     'should get a snapshot from the repository',
     () async {
       // arrange
-      when(mockSnapshotRepository.getSnapshot(any))
+      when(() => mockSnapshotRepository.getSnapshot(any()))
           .thenAnswer((_) async => Ok(tSnapshot));
       // act
       final result = await usecase(Params(checksum: 'deadbeef'));
       // assert
       expect(result, Ok(tSnapshot));
-      verify(mockSnapshotRepository.getSnapshot(any));
+      verify(() => mockSnapshotRepository.getSnapshot(any()));
       verifyNoMoreInteractions(mockSnapshotRepository);
     },
   );

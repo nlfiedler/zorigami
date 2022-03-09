@@ -1,7 +1,6 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
@@ -66,19 +65,14 @@ class DatabaseRestoreBloc
     extends Bloc<DatabaseRestoreEvent, DatabaseRestoreState> {
   final rd.RestoreDatabase usecase;
 
-  DatabaseRestoreBloc({required this.usecase}) : super(Empty());
-
-  @override
-  Stream<DatabaseRestoreState> mapEventToState(
-    DatabaseRestoreEvent event,
-  ) async* {
-    if (event is RestoreDatabase) {
-      yield Loading();
+  DatabaseRestoreBloc({required this.usecase}) : super(Empty()) {
+    on<RestoreDatabase>((event, emit) async {
+      emit(Loading());
       final result = await usecase(rd.Params(storeId: event.storeId));
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (result) => Loaded(result: result),
         (failure) => Error(message: failure.toString()),
-      );
-    }
+      ));
+    });
   }
 }

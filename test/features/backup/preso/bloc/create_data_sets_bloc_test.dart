@@ -1,19 +1,18 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/define_data_set.dart' as dds;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_data_sets_bloc.dart';
-import './create_data_sets_bloc_test.mocks.dart';
 
-@GenerateMocks([DataSetRepository])
+class MockDataSetRepository extends Mock implements DataSetRepository {}
+
 void main() {
   late MockDataSetRepository mockDataSetRepository;
   late dds.DefineDataSet usecase;
@@ -31,11 +30,16 @@ void main() {
     errorMsg: None(),
   );
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tDataSet);
+  });
+
   group('normal cases', () {
     setUp(() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = dds.DefineDataSet(mockDataSetRepository);
-      when(mockDataSetRepository.defineDataSet(any))
+      when(() => mockDataSetRepository.defineDataSet(any()))
           .thenAnswer((_) async => Ok(tDataSet));
     });
 
@@ -58,7 +62,7 @@ void main() {
     setUp(() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = dds.DefineDataSet(mockDataSetRepository);
-      when(mockDataSetRepository.defineDataSet(any))
+      when(() => mockDataSetRepository.defineDataSet(any()))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

@@ -1,16 +1,15 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
-import './get_tree_test.mocks.dart';
 
-@GenerateMocks([TreeRepository])
+class MockTreeRepository extends Mock implements TreeRepository {}
+
 void main() {
   late GetTree usecase;
   late MockTreeRepository mockTreeRepository;
@@ -32,12 +31,13 @@ void main() {
     'should get a tree from the repository',
     () async {
       // arrange
-      when(mockTreeRepository.getTree(any)).thenAnswer((_) async => Ok(tTree));
+      when(() => mockTreeRepository.getTree(any()))
+          .thenAnswer((_) async => Ok(tTree));
       // act
       final result = await usecase(Params(checksum: 'deadbeef'));
       // assert
       expect(result, Ok(tTree));
-      verify(mockTreeRepository.getTree(any));
+      verify(() => mockTreeRepository.getTree(any()));
       verifyNoMoreInteractions(mockTreeRepository);
     },
   );

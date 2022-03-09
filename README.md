@@ -31,11 +31,11 @@ to be installed and used by the application. This is the most reliable method
 and produces consistent results when building the application.
 
 ```shell
-$ brew install dart
-$ pub global activate fvm
-$ fvm install stable
-$ fvm flutter config --enable-macos-desktop
-$ fvm flutter config --enable-web
+brew install dart
+pub global activate fvm
+fvm install stable
+fvm flutter config --enable-macos-desktop
+fvm flutter config --enable-web
 ```
 
 #### Windows
@@ -61,10 +61,10 @@ above, _and_ it will likely fail to compile on 32-bit Windows.
 ### Building, Testing, Starting the Backend
 
 ```shell
-$ cargo update
-$ cargo build
-$ cargo test
-$ RUST_LOG=info cargo run
+cargo update
+cargo build
+cargo test
+RUST_LOG=info cargo run
 ```
 
 For more verbose debugging output, use `RUST_LOG=debug` in the command above.
@@ -74,18 +74,17 @@ volumes of output.
 To build or run tests for a single package, use the `-p` option, like so:
 
 ```shell
-$ cargo build -p store_minio
-$ cargo test -p store_minio
+cargo build -p store_minio
+cargo test -p store_minio
 ```
 
 ### Building, Testing, Starting the Frontend
 
 ```shell
-$ fvm flutter pub get
-$ fvm flutter pub run environment_config:generate
-$ fvm flutter pub run build_runner build
-$ fvm flutter test
-$ fvm flutter run -d chrome
+fvm flutter pub get
+fvm flutter pub run environment_config:generate
+fvm flutter test
+fvm flutter run -d chrome
 ```
 
 ### Producing a Local Test Build
@@ -94,7 +93,6 @@ $ fvm flutter run -d chrome
 fvm flutter clean
 fvm flutter pub get
 env BASE_URL=http://localhost:8000 fvm flutter pub run environment_config:generate
-fvm flutter pub run build_runner build
 fvm flutter build web
 cargo build --release
 ```
@@ -134,17 +132,17 @@ the application in stages and produce a relatively small final image.
 On the build host:
 
 ```shell
-$ docker compose build --pull --build-arg BASE_URL=http://192.168.1.1:8080
-$ docker image rm 192.168.1.1:5000/zorigami
-$ docker image tag zorigami_app 192.168.1.1:5000/zorigami
-$ docker push 192.168.1.1:5000/zorigami
+docker compose build --pull --build-arg BASE_URL=http://192.168.1.1:8080
+docker image rm 192.168.1.1:5000/zorigami
+docker image tag zorigami_app 192.168.1.1:5000/zorigami
+docker push 192.168.1.1:5000/zorigami
 ```
 
 On the server, with a production version of the `docker-compose.yml` file:
 
 ```shell
-$ docker compose down
-$ docker compose up --build -d
+docker compose down
+docker compose up --build -d
 ```
 
 ## Google Cloud Setup
@@ -195,17 +193,17 @@ Use https://github.com/kbknapp/cargo-outdated and run `cargo outdated`
 Use the https://github.com/Nemo157/cargo-lichking `cargo` utility. To install:
 
 ```shell
-$ OPENSSL_ROOT_DIR=`brew --prefix openssl` \
-  OPENSSL_LIB_DIR=`brew --prefix openssl`/lib \
-  OPENSSL_INCLUDE_DIR=`brew --prefix openssl`/include \
-  cargo install cargo-lichking
+OPENSSL_ROOT_DIR=`brew --prefix openssl` \
+    OPENSSL_LIB_DIR=`brew --prefix openssl`/lib \
+    OPENSSL_INCLUDE_DIR=`brew --prefix openssl`/include \
+    cargo install cargo-lichking
 ```
 
 To get the list of licenses, and check for incompatibility:
 
 ```shell
-$ cargo lichking list
-$ cargo lichking check
+cargo lichking list
+cargo lichking check
 ```
 
 However, need to look for "gpl" manually in the `list` output, as most licenses

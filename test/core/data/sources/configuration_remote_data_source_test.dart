@@ -1,24 +1,23 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:zorigami/core/data/models/configuration_model.dart';
 import 'package:zorigami/core/data/sources/configuration_remote_data_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
-import './configuration_remote_data_source_test.mocks.dart';
 
-@GenerateMocks([http.Client])
+class MockHttpClient extends Mock implements http.Client {}
+
 void main() {
   late ConfigurationRemoteDataSourceImpl dataSource;
-  late MockClient mockHttpClient;
+  late MockHttpClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockClient();
+    mockHttpClient = MockHttpClient();
     final link = gql.HttpLink(
       'http://example.com',
       httpClient: mockHttpClient,
@@ -28,6 +27,15 @@ void main() {
       cache: gql.GraphQLCache(),
     );
     dataSource = ConfigurationRemoteDataSourceImpl(client: graphQLCient);
+  });
+
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    http.BaseRequest dummyRequest = http.Request(
+      'GET',
+      Uri(scheme: 'http', host: 'example.com', path: '/'),
+    );
+    registerFallbackValue(dummyRequest);
   });
 
   final tConfigurationModel = ConfigurationModel(
@@ -47,7 +55,7 @@ void main() {
       }
     };
     // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = utf8.encode(json.encode(response));
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 200);
@@ -59,7 +67,7 @@ void main() {
       'data': {'configuration': null}
     };
     // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = utf8.encode(json.encode(response));
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 200);
@@ -67,7 +75,7 @@ void main() {
   }
 
   void setUpMockHttpClientGraphQLError() {
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final response = {
         'data': null,
         'errors': [
@@ -87,7 +95,7 @@ void main() {
   }
 
   void setUpMockHttpClientFailure403() {
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = <int>[];
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 403);

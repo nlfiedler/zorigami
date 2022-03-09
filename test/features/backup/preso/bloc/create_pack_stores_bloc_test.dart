@@ -1,19 +1,18 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/define_pack_store.dart' as dps;
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/backup/preso/bloc/create_pack_stores_bloc.dart';
-import './create_pack_stores_bloc_test.mocks.dart';
 
-@GenerateMocks([PackStoreRepository])
+class MockPackStoreRepository extends Mock implements PackStoreRepository {}
+
 void main() {
   late MockPackStoreRepository mockPackStoreRepository;
   late dps.DefinePackStore usecase;
@@ -25,11 +24,16 @@ void main() {
     options: {'basepath': '/home/planet'},
   );
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tPackStore);
+  });
+
   group('normal cases', () {
     setUp(() {
       mockPackStoreRepository = MockPackStoreRepository();
       usecase = dps.DefinePackStore(mockPackStoreRepository);
-      when(mockPackStoreRepository.definePackStore(any))
+      when(() => mockPackStoreRepository.definePackStore(any()))
           .thenAnswer((_) async => Ok(tPackStore));
     });
 
@@ -52,7 +56,7 @@ void main() {
     setUp(() {
       mockPackStoreRepository = MockPackStoreRepository();
       usecase = dps.DefinePackStore(mockPackStoreRepository);
-      when(mockPackStoreRepository.definePackStore(any))
+      when(() => mockPackStoreRepository.definePackStore(any()))
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

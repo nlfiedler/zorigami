@@ -1,17 +1,16 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_pack_stores.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
-import './get_pack_stores_test.mocks.dart';
 
-@GenerateMocks([PackStoreRepository])
+class MockPackStoreRepository extends Mock implements PackStoreRepository {}
+
 void main() {
   late GetPackStores usecase;
   late MockPackStoreRepository mockPackStoreRepository;
@@ -34,13 +33,13 @@ void main() {
     'should get all pack stores from the repository',
     () async {
       // arrange
-      when(mockPackStoreRepository.getAllPackStores())
+      when(() => mockPackStoreRepository.getAllPackStores())
           .thenAnswer((_) async => Ok(tPackStores));
       // act
       final result = await usecase(NoParams());
       // assert
       expect(result, Ok(tPackStores));
-      verify(mockPackStoreRepository.getAllPackStores());
+      verify(() => mockPackStoreRepository.getAllPackStores());
       verifyNoMoreInteractions(mockPackStoreRepository);
     },
   );

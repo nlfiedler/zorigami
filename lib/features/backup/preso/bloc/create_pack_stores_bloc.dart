@@ -1,7 +1,6 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -54,21 +53,16 @@ class CreatePackStoresBloc
     extends Bloc<CreatePackStoresEvent, CreatePackStoresState> {
   final dps.DefinePackStore usecase;
 
-  CreatePackStoresBloc({required this.usecase}) : super(Editing());
-
-  @override
-  Stream<CreatePackStoresState> mapEventToState(
-    CreatePackStoresEvent event,
-  ) async* {
-    if (event is DefinePackStore) {
-      yield Submitting();
+  CreatePackStoresBloc({required this.usecase}) : super(Editing()) {
+    on<DefinePackStore>((event, emit) async {
+      emit(Submitting());
       final result = await usecase(dps.Params(
         store: event.store,
       ));
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (store) => Submitted(),
         (failure) => Error(message: failure.toString()),
-      );
-    }
+      ));
+    });
   }
 }

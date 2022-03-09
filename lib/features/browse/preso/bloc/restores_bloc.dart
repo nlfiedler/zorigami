@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2021 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
@@ -84,15 +84,11 @@ class RestoresBloc extends Bloc<RestoresEvent, RestoresState> {
   final cr.CancelRestore cancelRestore;
 
   RestoresBloc({required this.getRestores, required this.cancelRestore})
-      : super(Empty());
-
-  @override
-  Stream<RestoresState> mapEventToState(
-    RestoresEvent event,
-  ) async* {
-    if (event is LoadRequests) {
-      yield* _loadRequests();
-    } else if (event is CancelRequest) {
+      : super(Empty()) {
+    on<LoadRequests>((event, emit) async {
+      return _loadRequests(emit);
+    });
+    on<CancelRequest>((event, emit) async {
       if (state is Loaded) {
         final List<Request> requests = List.from((state as Loaded).requests);
         final params = cr.Params(
@@ -105,22 +101,22 @@ class RestoresBloc extends Bloc<RestoresEvent, RestoresState> {
         if (cancelled) {
           requests.removeWhere((Request r) => r.digest == event.digest);
         }
-        yield Loaded(
+        emit(Loaded(
           requests: requests,
           requestCancelled: cancelled,
-        );
+        ));
       }
-    }
+    });
   }
 
-  Stream<RestoresState> _loadRequests() async* {
-    yield Loading();
+  Future<void> _loadRequests(Emitter<RestoresState> emit) async {
+    emit(Loading());
     final result = await getRestores(NoParams());
-    yield result.mapOrElse(
+    emit(result.mapOrElse(
       (requests) {
         return Loaded(requests: requests, requestCancelled: false);
       },
       (failure) => Error(message: failure.toString()),
-    );
+    ));
   }
 }

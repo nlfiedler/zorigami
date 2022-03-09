@@ -1,16 +1,15 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/update_data_set.dart';
-import './update_data_set_test.mocks.dart';
 
-@GenerateMocks([DataSetRepository])
+class MockDataSetRepository extends Mock implements DataSetRepository {}
+
 void main() {
   late UpdateDataSet usecase;
   late MockDataSetRepository mockDataSetRepository;
@@ -33,17 +32,22 @@ void main() {
     errorMsg: None(),
   );
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tDataSet);
+  });
+
   test(
     'should update an existing pack store within the repository',
     () async {
       // arrange
-      when(mockDataSetRepository.updateDataSet(any))
+      when(() => mockDataSetRepository.updateDataSet(any()))
           .thenAnswer((_) async => Ok(tDataSet));
       // act
       final result = await usecase(Params(dataset: tDataSet));
       // assert
       expect(result, Ok(tDataSet));
-      verify(mockDataSetRepository.updateDataSet(any));
+      verify(() => mockDataSetRepository.updateDataSet(any()));
       verifyNoMoreInteractions(mockDataSetRepository);
     },
   );

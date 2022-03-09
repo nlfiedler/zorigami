@@ -1,16 +1,15 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/delete_data_set.dart';
-import './delete_data_set_test.mocks.dart';
 
-@GenerateMocks([DataSetRepository])
+class MockDataSetRepository extends Mock implements DataSetRepository {}
+
 void main() {
   late DeleteDataSet usecase;
   late MockDataSetRepository mockDataSetRepository;
@@ -33,17 +32,22 @@ void main() {
     errorMsg: None(),
   );
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tDataSet);
+  });
+
   test(
     'should delete a pack store within the repository',
     () async {
       // arrange
-      when(mockDataSetRepository.deleteDataSet(any))
+      when(() => mockDataSetRepository.deleteDataSet(any()))
           .thenAnswer((_) async => Ok(tDataSet));
       // act
       final result = await usecase(Params(dataset: tDataSet));
       // assert
       expect(result, Ok(tDataSet));
-      verify(mockDataSetRepository.deleteDataSet(any));
+      verify(() => mockDataSetRepository.deleteDataSet(any()));
       verifyNoMoreInteractions(mockDataSetRepository);
     },
   );

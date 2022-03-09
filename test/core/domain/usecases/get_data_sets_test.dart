@@ -1,17 +1,16 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
-import './get_data_sets_test.mocks.dart';
 
-@GenerateMocks([DataSetRepository])
+class MockDataSetRepository extends Mock implements DataSetRepository {}
+
 void main() {
   late GetDataSets usecase;
   late MockDataSetRepository mockDataSetRepository;
@@ -40,13 +39,13 @@ void main() {
     'should get all data sets from the repository',
     () async {
       // arrange
-      when(mockDataSetRepository.getAllDataSets())
+      when(() => mockDataSetRepository.getAllDataSets())
           .thenAnswer((_) async => Ok(tDataSets));
       // act
       final result = await usecase(NoParams());
       // assert
       expect(result, Ok(tDataSets));
-      verify(mockDataSetRepository.getAllDataSets());
+      verify(() => mockDataSetRepository.getAllDataSets());
       verifyNoMoreInteractions(mockDataSetRepository);
     },
   );

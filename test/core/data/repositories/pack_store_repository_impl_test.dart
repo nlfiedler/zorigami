@@ -1,24 +1,23 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/core/data/sources/pack_store_remote_data_source.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/repositories/pack_store_repository_impl.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
-import './pack_store_repository_impl_test.mocks.dart';
 
-@GenerateMocks([PackStoreRemoteDataSource])
+class MockRemoteDataSource extends Mock implements PackStoreRemoteDataSource {}
+
 void main() {
   late PackStoreRepositoryImpl repository;
-  late MockPackStoreRemoteDataSource mockRemoteDataSource;
+  late MockRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockPackStoreRemoteDataSource();
+    mockRemoteDataSource = MockRemoteDataSource();
     repository = PackStoreRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );
@@ -34,17 +33,22 @@ void main() {
   final List<PackStore> tPackStores = [tPackStoreModel];
   final PackStore tPackStore = tPackStoreModel;
 
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    registerFallbackValue(tPackStore);
+  });
+
   group('getAllPackStores', () {
     test(
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.getAllPackStores())
+        when(() => mockRemoteDataSource.getAllPackStores())
             .thenAnswer((_) async => tPackModelList);
         // act
         final result = await repository.getAllPackStores();
         // assert
-        verify(mockRemoteDataSource.getAllPackStores());
+        verify(() => mockRemoteDataSource.getAllPackStores());
         expect(result.unwrap(), equals(tPackStores));
       },
     );
@@ -53,12 +57,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.getAllPackStores())
+        when(() => mockRemoteDataSource.getAllPackStores())
             .thenThrow(ServerException());
         // act
         final result = await repository.getAllPackStores();
         // assert
-        verify(mockRemoteDataSource.getAllPackStores());
+        verify(() => mockRemoteDataSource.getAllPackStores());
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -69,12 +73,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.definePackStore(any))
+        when(() => mockRemoteDataSource.definePackStore(any()))
             .thenAnswer((_) async => tPackStoreModel);
         // act
         final result = await repository.definePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.definePackStore(any));
+        verify(() => mockRemoteDataSource.definePackStore(any()));
         expect(result.unwrap(), equals(tPackStore));
       },
     );
@@ -83,12 +87,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.definePackStore(any))
+        when(() => mockRemoteDataSource.definePackStore(any()))
             .thenThrow(ServerException());
         // act
         final result = await repository.definePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.definePackStore(any));
+        verify(() => mockRemoteDataSource.definePackStore(any()));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -99,12 +103,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.updatePackStore(any))
+        when(() => mockRemoteDataSource.updatePackStore(any()))
             .thenAnswer((_) async => tPackStoreModel);
         // act
         final result = await repository.updatePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.updatePackStore(any));
+        verify(() => mockRemoteDataSource.updatePackStore(any()));
         expect(result.unwrap(), equals(tPackStore));
       },
     );
@@ -113,12 +117,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.updatePackStore(any))
+        when(() => mockRemoteDataSource.updatePackStore(any()))
             .thenThrow(ServerException());
         // act
         final result = await repository.updatePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.updatePackStore(any));
+        verify(() => mockRemoteDataSource.updatePackStore(any()));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -129,12 +133,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.testPackStore(any))
+        when(() => mockRemoteDataSource.testPackStore(any()))
             .thenAnswer((_) async => 'ok');
         // act
         final result = await repository.testPackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.testPackStore(any));
+        verify(() => mockRemoteDataSource.testPackStore(any()));
         expect(result.unwrap(), equals('ok'));
       },
     );
@@ -143,12 +147,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.testPackStore(any))
+        when(() => mockRemoteDataSource.testPackStore(any()))
             .thenThrow(ServerException());
         // act
         final result = await repository.testPackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.testPackStore(any));
+        verify(() => mockRemoteDataSource.testPackStore(any()));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -159,12 +163,12 @@ void main() {
       'should return remote data when the call to remote data source is successful',
       () async {
         // arrange
-        when(mockRemoteDataSource.deletePackStore(any))
+        when(() => mockRemoteDataSource.deletePackStore(any()))
             .thenAnswer((_) async => tPackStoreModel.key);
         // act
         await repository.deletePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.deletePackStore(any));
+        verify(() => mockRemoteDataSource.deletePackStore(any()));
       },
     );
 
@@ -172,12 +176,12 @@ void main() {
       'should return server failure when the call to remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.deletePackStore(any))
+        when(() => mockRemoteDataSource.deletePackStore(any()))
             .thenThrow(ServerException());
         // act
         final result = await repository.deletePackStore(tPackStore);
         // assert
-        verify(mockRemoteDataSource.deletePackStore(any));
+        verify(() => mockRemoteDataSource.deletePackStore(any()));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );

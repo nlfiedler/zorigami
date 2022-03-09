@@ -1,25 +1,24 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:graphql/client.dart' as gql;
 import 'package:http/http.dart' as http;
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/data/sources/pack_store_remote_data_source.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zorigami/core/error/exceptions.dart';
-import './pack_store_remote_data_source_test.mocks.dart';
 
-@GenerateMocks([http.Client])
+class MockHttpClient extends Mock implements http.Client {}
+
 void main() {
   late PackStoreRemoteDataSourceImpl dataSource;
-  late MockClient mockHttpClient;
+  late MockHttpClient mockHttpClient;
 
   setUp(() {
-    mockHttpClient = MockClient();
+    mockHttpClient = MockHttpClient();
     final link = gql.HttpLink(
       'http://example.com',
       httpClient: mockHttpClient,
@@ -29,6 +28,15 @@ void main() {
       cache: gql.GraphQLCache(),
     );
     dataSource = PackStoreRemoteDataSourceImpl(client: graphQLCient);
+  });
+
+  setUpAll(() {
+    // mocktail needs a fallback for any() that involves custom types
+    http.BaseRequest dummyRequest = http.Request(
+      'GET',
+      Uri(scheme: 'http', host: 'example.com', path: '/'),
+    );
+    registerFallbackValue(dummyRequest);
   });
 
   final tPackStoreModel = PackStoreModel(
@@ -43,7 +51,7 @@ void main() {
       'data': {'deleteStore': 'abc123'}
     };
     // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = utf8.encode(json.encode(response));
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 200);
@@ -55,7 +63,7 @@ void main() {
       'data': {'testStore': 'ok'}
     };
     // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = utf8.encode(json.encode(response));
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 200);
@@ -79,7 +87,7 @@ void main() {
       }
     };
     // graphql client uses the 'send' method
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = utf8.encode(json.encode(response));
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 200);
@@ -87,7 +95,7 @@ void main() {
   }
 
   void setUpMockHttpClientGraphQLError() {
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final response = {
         'data': null,
         'errors': [
@@ -107,7 +115,7 @@ void main() {
   }
 
   void setUpMockHttpClientFailure403() {
-    when(mockHttpClient.send(any)).thenAnswer((_) async {
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
       final bytes = <int>[];
       final stream = http.ByteStream.fromBytes(bytes);
       return http.StreamedResponse(stream, 403);
@@ -123,7 +131,7 @@ void main() {
           'data': {'stores': []}
         };
         // graphql client uses the 'send' method
-        when(mockHttpClient.send(any)).thenAnswer((_) async {
+        when(() => mockHttpClient.send(any())).thenAnswer((_) async {
           final bytes = utf8.encode(json.encode(response));
           final stream = http.ByteStream.fromBytes(bytes);
           return http.StreamedResponse(stream, 200);
@@ -153,7 +161,7 @@ void main() {
           }
         };
         // graphql client uses the 'send' method
-        when(mockHttpClient.send(any)).thenAnswer((_) async {
+        when(() => mockHttpClient.send(any())).thenAnswer((_) async {
           final bytes = utf8.encode(json.encode(response));
           final stream = http.ByteStream.fromBytes(bytes);
           return http.StreamedResponse(stream, 200);
@@ -202,7 +210,7 @@ void main() {
           }
         };
         // graphql client uses the 'send' method
-        when(mockHttpClient.send(any)).thenAnswer((_) async {
+        when(() => mockHttpClient.send(any())).thenAnswer((_) async {
           final bytes = utf8.encode(json.encode(response));
           final stream = http.ByteStream.fromBytes(bytes);
           return http.StreamedResponse(stream, 200);

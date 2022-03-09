@@ -1,10 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/request_model.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
@@ -13,9 +12,9 @@ import 'package:zorigami/core/domain/usecases/cancel_restore.dart';
 import 'package:zorigami/core/domain/usecases/get_restores.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/features/browse/preso/bloc/restores_bloc.dart';
-import './restores_bloc_test.mocks.dart';
 
-@GenerateMocks([SnapshotRepository])
+class MockSnapshotRepository extends Mock implements SnapshotRepository {}
+
 void main() {
   late MockSnapshotRepository mockSnapshotRepository;
   late CancelRestore cancelRestore;
@@ -36,9 +35,9 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       cancelRestore = CancelRestore(mockSnapshotRepository);
       getRestores = GetRestores(mockSnapshotRepository);
-      when(mockSnapshotRepository.getAllRestores())
+      when(() => mockSnapshotRepository.getAllRestores())
           .thenAnswer((_) async => Ok(tRequests));
-      when(mockSnapshotRepository.cancelRestore(any, any, any))
+      when(() => mockSnapshotRepository.cancelRestore(any(), any(), any()))
           .thenAnswer((_) async => Ok(true));
     });
 
@@ -100,7 +99,7 @@ void main() {
     setUp(() {
       mockSnapshotRepository = MockSnapshotRepository();
       getRestores = GetRestores(mockSnapshotRepository);
-      when(mockSnapshotRepository.getAllRestores())
+      when(() => mockSnapshotRepository.getAllRestores())
           .thenAnswer((_) async => Err(ServerFailure('oh no!')));
     });
 

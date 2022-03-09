@@ -1,8 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
@@ -111,16 +112,20 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
   final List<TreeEntry> selections = [];
 
   TreeBrowserBloc({required this.getTree, required this.restoreFiles})
-      : super(Empty());
+      : super(Empty()) {
+    // enforce sequential ordering of event mapping due to the asynchronous
+    // nature of this particular bloc
+    on<TreeBrowserEvent>(_onEvent, transformer: sequential());
+  }
 
-  @override
-  Stream<TreeBrowserState> mapEventToState(
+  FutureOr<void> _onEvent(
     TreeBrowserEvent event,
-  ) async* {
+    Emitter<TreeBrowserState> emit,
+  ) async {
     if (event is LoadEntry) {
       if (state is Loaded) {
         path.add(event.entry.name);
-        yield* _loadTree(event.entry.reference.value);
+        return _loadTree(event.entry.reference.value, emit);
       }
     } else if (event is SetSelection) {
       if (state is Loaded) {
@@ -131,7 +136,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
         if (event.selected) {
           selections.add(event.entry);
         }
-        yield Loaded(tree: tree, selections: selections, path: path);
+        emit(Loaded(tree: tree, selections: selections, path: path));
       }
     } else if (event is NavigateUpward) {
       // The path list has one less entry than the history, as it does not
@@ -143,16 +148,16 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
         history.removeLast();
         final digest = history.removeLast();
         path.removeLast();
-        yield* _loadTree(digest);
+        return _loadTree(digest, emit);
       }
     } else if (event is LoadTree) {
       history.clear();
       path.clear();
-      yield* _loadTree(event.digest);
+      return _loadTree(event.digest, emit);
     } else if (event is ResetTree) {
       // Something else has happened (i.e. navigating snapshots) outside of this
       // bloc that requires signaling the consumers of the change.
-      yield Empty();
+      emit(Empty());
     } else if (event is RestoreSelections) {
       if (state is Loaded) {
         final tree = (state as Loaded).tree;
@@ -171,26 +176,26 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
             restoresEnqueued |= result.unwrap();
           }
         }
-        yield Loaded(
+        emit(Loaded(
           tree: tree,
           selections: selections,
           path: path,
           restoresEnqueued: restoresEnqueued,
-        );
+        ));
       }
     }
   }
 
-  Stream<TreeBrowserState> _loadTree(String digest) async* {
+  Future<void> _loadTree(String digest, Emitter<TreeBrowserState> emit) async {
     selections.clear();
-    yield Loading();
+    emit(Loading());
     final result = await getTree(gt.Params(checksum: digest));
-    yield result.mapOrElse(
+    emit(result.mapOrElse(
       (tree) {
         history.add(digest);
         return Loaded(tree: tree, selections: selections, path: path);
       },
       (failure) => Error(message: failure.toString()),
-    );
+    ));
   }
 }

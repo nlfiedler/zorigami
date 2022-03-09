@@ -1,23 +1,23 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:zorigami/core/error/exceptions.dart';
 import 'package:zorigami/core/error/failures.dart';
 import 'package:zorigami/core/data/sources/configuration_remote_data_source.dart';
 import 'package:zorigami/core/data/models/configuration_model.dart';
 import 'package:zorigami/core/data/repositories/configuration_repository_impl.dart';
-import './configuration_repository_impl_test.mocks.dart';
 
-@GenerateMocks([ConfigurationRemoteDataSource])
+class MockRemoteDataSource extends Mock
+    implements ConfigurationRemoteDataSource {}
+
 void main() {
   late ConfigurationRepositoryImpl repository;
-  late MockConfigurationRemoteDataSource mockRemoteDataSource;
+  late MockRemoteDataSource mockRemoteDataSource;
 
   setUp(() {
-    mockRemoteDataSource = MockConfigurationRemoteDataSource();
+    mockRemoteDataSource = MockRemoteDataSource();
     repository = ConfigurationRepositoryImpl(
       remoteDataSource: mockRemoteDataSource,
     );
@@ -34,12 +34,12 @@ void main() {
       'should return remote data when remote data source returns data',
       () async {
         // arrange
-        when(mockRemoteDataSource.getConfiguration())
+        when(() => mockRemoteDataSource.getConfiguration())
             .thenAnswer((_) async => tConfigurationModel);
         // act
         final result = await repository.getConfiguration();
         // assert
-        verify(mockRemoteDataSource.getConfiguration());
+        verify(() => mockRemoteDataSource.getConfiguration());
         expect(result.unwrap(), equals(tConfigurationModel));
       },
     );
@@ -48,12 +48,12 @@ void main() {
       'should return failure when remote data source returns null',
       () async {
         // arrange
-        when(mockRemoteDataSource.getConfiguration())
+        when(() => mockRemoteDataSource.getConfiguration())
             .thenAnswer((_) async => null);
         // act
         final result = await repository.getConfiguration();
         // assert
-        verify(mockRemoteDataSource.getConfiguration());
+        verify(() => mockRemoteDataSource.getConfiguration());
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );
@@ -62,12 +62,12 @@ void main() {
       'should return failure when remote data source is unsuccessful',
       () async {
         // arrange
-        when(mockRemoteDataSource.getConfiguration())
+        when(() => mockRemoteDataSource.getConfiguration())
             .thenThrow(ServerException());
         // act
         final result = await repository.getConfiguration();
         // assert
-        verify(mockRemoteDataSource.getConfiguration());
+        verify(() => mockRemoteDataSource.getConfiguration());
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );

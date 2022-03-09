@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
@@ -74,39 +74,39 @@ class SnapshotBrowserBloc
   final GetSnapshot usecase;
   final List<String> history = [];
 
-  SnapshotBrowserBloc({required this.usecase}) : super(Empty());
-
-  @override
-  Stream<SnapshotBrowserState> mapEventToState(
-    SnapshotBrowserEvent event,
-  ) async* {
-    if (event is LoadSnapshot) {
-      yield* _loadSnapshot(event.digest);
-    } else if (event is LoadParent) {
+  SnapshotBrowserBloc({required this.usecase}) : super(Empty()) {
+    on<LoadSnapshot>((event, emit) {
+      return _loadSnapshot(event.digest, emit);
+    });
+    on<LoadParent>((event, emit) {
       if (state is Loaded) {
         final current = (state as Loaded).snapshot;
         if (current.parent is Some) {
           history.add(current.checksum);
-          yield* _loadSnapshot(current.parent.unwrap());
+          return _loadSnapshot(current.parent.unwrap(), emit);
         }
       }
-    } else if (event is LoadSubsequent) {
+    });
+    on<LoadSubsequent>((event, emit) {
       if (history.isNotEmpty) {
         final digest = history.removeLast();
-        yield* _loadSnapshot(digest);
+        return _loadSnapshot(digest, emit);
       }
-    }
+    });
   }
 
-  Stream<SnapshotBrowserState> _loadSnapshot(String digest) async* {
-    yield Loading();
+  Future<void> _loadSnapshot(
+    String digest,
+    Emitter<SnapshotBrowserState> emit,
+  ) async {
+    emit(Loading());
     final result = await usecase(Params(checksum: digest));
-    yield result.mapOrElse(
+    emit(result.mapOrElse(
       (snapshot) => Loaded(
         snapshot: snapshot,
         hasSubsequent: history.isNotEmpty,
       ),
       (failure) => Error(message: failure.toString()),
-    );
+    ));
   }
 }

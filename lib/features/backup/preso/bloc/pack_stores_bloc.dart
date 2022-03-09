@@ -1,7 +1,6 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -59,26 +58,22 @@ class Error extends PackStoresState {
 class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
   final GetPackStores usecase;
 
-  PackStoresBloc({required this.usecase}) : super(Empty());
-
-  @override
-  Stream<PackStoresState> mapEventToState(
-    PackStoresEvent event,
-  ) async* {
-    if (event is LoadAllPackStores) {
-      yield Loading();
+  PackStoresBloc({required this.usecase}) : super(Empty()) {
+    on<LoadAllPackStores>((event, emit) async {
+      emit(Loading());
       final result = await usecase(NoParams());
-      yield result.mapOrElse(
+      emit(result.mapOrElse(
         (stores) {
           // put the pack stores in a consistent order
           stores.sort((a, b) => a.key.compareTo(b.key));
           return Loaded(stores: stores);
         },
         (failure) => Error(message: failure.toString()),
-      );
-    } else if (event is ReloadPackStores) {
+      ));
+    });
+    on<ReloadPackStores>((event, emit) {
       // force an update as something changed elsewhere
-      yield Empty();
-    }
+      emit(Empty());
+    });
   }
 }
