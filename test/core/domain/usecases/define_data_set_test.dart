@@ -7,6 +7,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/define_data_set.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockDataSetRepository extends Mock implements DataSetRepository {}
 
@@ -42,11 +43,11 @@ void main() {
     () async {
       // arrange
       when(() => mockDataSetRepository.defineDataSet(any()))
-          .thenAnswer((_) async => Ok(tDataSet));
+          .thenAnswer((_) async => Ok<DataSet, Failure>(tDataSet));
       // act
       final result = await usecase(Params(dataset: tDataSet));
       // assert
-      expect(result, Ok(tDataSet));
+      expect(result, equals(Ok<DataSet, Failure>(tDataSet)));
       verify(() => mockDataSetRepository.defineDataSet(any()));
       verifyNoMoreInteractions(mockDataSetRepository);
     },

@@ -8,6 +8,7 @@ import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_pack_stores.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockPackStoreRepository extends Mock implements PackStoreRepository {}
 
@@ -34,11 +35,11 @@ void main() {
     () async {
       // arrange
       when(() => mockPackStoreRepository.getAllPackStores())
-          .thenAnswer((_) async => Ok(tPackStores));
+          .thenAnswer((_) async => Ok<List<PackStore>, Failure>(tPackStores));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Ok(tPackStores));
+      expect(result, equals(Ok<List<PackStore>, Failure>(tPackStores)));
       verify(() => mockPackStoreRepository.getAllPackStores());
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

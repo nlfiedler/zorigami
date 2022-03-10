@@ -8,6 +8,7 @@ import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/repositories/data_set_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockDataSetRepository extends Mock implements DataSetRepository {}
 
@@ -40,11 +41,11 @@ void main() {
     () async {
       // arrange
       when(() => mockDataSetRepository.getAllDataSets())
-          .thenAnswer((_) async => Ok(tDataSets));
+          .thenAnswer((_) async => Ok<List<DataSet>, Failure>(tDataSets));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Ok(tDataSets));
+      expect(result, equals(Ok<List<DataSet>, Failure>(tDataSets)));
       verify(() => mockDataSetRepository.getAllDataSets());
       verifyNoMoreInteractions(mockDataSetRepository);
     },

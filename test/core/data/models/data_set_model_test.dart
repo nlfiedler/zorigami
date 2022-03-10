@@ -85,7 +85,7 @@ void main() {
       () {
         expect(
           decodeWeekOfMonth(encodeWeekOfMonth(None())),
-          equals(None()),
+          equals(None<WeekOfMonth>()),
         );
         expect(
           decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.first))),
@@ -117,7 +117,7 @@ void main() {
       () {
         expect(
           decodeDayOfWeek(encodeDayOfWeek(None())),
-          equals(None()),
+          equals(None<DayOfWeek>()),
         );
         expect(
           decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sun))),

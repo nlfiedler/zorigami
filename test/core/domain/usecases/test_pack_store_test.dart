@@ -7,6 +7,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/core/domain/repositories/pack_store_repository.dart';
 import 'package:zorigami/core/domain/usecases/test_pack_store.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockPackStoreRepository extends Mock implements PackStoreRepository {}
 
@@ -37,11 +38,11 @@ void main() {
     () async {
       // arrange
       when(() => mockPackStoreRepository.testPackStore(any()))
-          .thenAnswer((_) async => Ok('ok'));
+          .thenAnswer((_) async => Ok<String, Failure>('ok'));
       // act
       final result = await usecase(Params(store: tPackStore));
       // assert
-      expect(result.unwrap(), equals('ok'));
+      expect(result, Ok<String, Failure>('ok'));
       verify(() => mockPackStoreRepository.testPackStore(any()));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

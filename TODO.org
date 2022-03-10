@@ -1,11 +1,5 @@
 * Tasks
-** Update Dart/Flutter packages
-*** DONE update =graphql= to 5.0.1
-*** DONE update =flutter_form_builder= to 7.1.1
-*** DONE update =flutter_bloc= to 8.0.1
-*** DONE switch to =mocktail= from =mockito=
-*** TODO update =flutter_riverpod= to 1.0.3
-*** TODO update =oxidized=
+** Write unit tests for remaining use cases in flutter
 ** Replace unmaintained Google API crate
 *** replacing =google-storage1= with =google-cloud= which is less than awesome
 **** maintenance has slowed, author suggests using =google-apis-rs= instead

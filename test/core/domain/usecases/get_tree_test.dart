@@ -7,6 +7,7 @@ import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
 import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_tree.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockTreeRepository extends Mock implements TreeRepository {}
 
@@ -32,11 +33,11 @@ void main() {
     () async {
       // arrange
       when(() => mockTreeRepository.getTree(any()))
-          .thenAnswer((_) async => Ok(tTree));
+          .thenAnswer((_) async => Ok<Tree, Failure>(tTree));
       // act
       final result = await usecase(Params(checksum: 'deadbeef'));
       // assert
-      expect(result, Ok(tTree));
+      expect(result, equals(Ok<Tree, Failure>(tTree)));
       verify(() => mockTreeRepository.getTree(any()));
       verifyNoMoreInteractions(mockTreeRepository);
     },

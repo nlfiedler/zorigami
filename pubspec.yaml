@@ -21,7 +21,7 @@ dependencies:
   flutter_riverpod: ^1.0.1
   graphql: ^5.0.1
   intl: ^0.17.0
-  oxidized: ^4.2.0
+  oxidized: ^5.2.0
 
 dev_dependencies:
   flutter_test:

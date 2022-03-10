@@ -8,6 +8,7 @@ import 'package:zorigami/core/domain/entities/configuration.dart';
 import 'package:zorigami/core/domain/repositories/configuration_repository.dart';
 import 'package:zorigami/core/domain/usecases/get_configuration.dart';
 import 'package:zorigami/core/domain/usecases/usecase.dart';
+import 'package:zorigami/core/error/failures.dart';
 
 class MockConfigurationRepository extends Mock
     implements ConfigurationRepository {}
@@ -32,11 +33,11 @@ void main() {
     () async {
       // arrange
       when(() => mockConfigurationRepository.getConfiguration())
-          .thenAnswer((_) async => Ok(tConfiguration));
+          .thenAnswer((_) async => Ok<Configuration, Failure>(tConfiguration));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, Ok(tConfiguration));
+      expect(result, equals(Ok<Configuration, Failure>(tConfiguration)));
       verify(() => mockConfigurationRepository.getConfiguration());
       verifyNoMoreInteractions(mockConfigurationRepository);
     },
