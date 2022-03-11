@@ -1,10 +1,10 @@
 * Tasks
-** Write unit tests for remaining use cases in flutter
+** Fix minio store impl such that =block_on= does not fail ever
 ** Replace unmaintained Google API crate
-*** replacing =google-storage1= with =google-cloud= which is less than awesome
-**** maintenance has slowed, author suggests using =google-apis-rs= instead
-**** look at https://crates.io/crates/cloud-storage as an alternative
-***** would need a better API for loading credentials and creating the client
+*** https://github.com/Byron/google-apis-rs (google-storage1 source)
+*** https://github.com/dermesser/async-google-apis outdated
+*** https://crates.io/crates/cloud-storage inflexible envar/file-based auth
+*** https://github.com/google-apis-rs/google-cloud-rs order of magnitude less popular than google-storage1
 ** Replace Time Machine
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
@@ -154,9 +154,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** add hints to improve the presentation of information
 ***** configuration panel
 ***** snapshot browser
-** Flutter and form builder
-*** See comments in =pubspec.yaml= regarding =flutter_form_builder=
-*** Wait for flutter form builder to update to Flutter 2 stable
 ** Improved error handling
 *** Pack store input validation
 **** should validate Google Cloud service account key when defining pack
