@@ -40,28 +40,28 @@ impl PackDataSource for MinioPackSource {
         bucket: &str,
         object: &str,
     ) -> Result<PackLocation, Error> {
-        let coords = self.store.store_pack(packfile, bucket, object)?;
+        let coords = self.store.store_pack_sync(packfile, bucket, object)?;
         Ok(PackLocation::from(coords))
     }
 
     fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
         let coords: Coordinates = location.to_owned().into();
-        self.store.retrieve_pack(&coords, outfile)
+        self.store.retrieve_pack_sync(&coords, outfile)
     }
 
     fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        self.store.list_buckets()
+        self.store.list_buckets_sync()
     }
 
     fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        self.store.list_objects(bucket)
+        self.store.list_objects_sync(bucket)
     }
 
     fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        self.store.delete_object(bucket, object)
+        self.store.delete_object_sync(bucket, object)
     }
 
     fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        self.store.delete_bucket(bucket)
+        self.store.delete_bucket_sync(bucket)
     }
 }

@@ -1,8 +1,8 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-use bytes::Bytes;
 use anyhow::{anyhow, Error};
+use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
@@ -10,10 +10,8 @@ use rusoto_s3::{
     GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, StreamingBody, S3,
 };
 use std::collections::HashMap;
-use std::fs::File;
 use std::path::Path;
 use store_core::Coordinates;
-use tokio::fs;
 
 ///
 /// A pack store implementation that uses the Amazon S3 protocol to connect to a
@@ -71,7 +69,17 @@ impl MinioStore {
         S3Client::new_with(client, creds, region)
     }
 
-    pub fn store_pack(
+    pub fn store_pack_sync(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        // use and_then(std::convert::identity) until Result.flatten() is stable
+        block_on(self.store_pack(packfile, bucket, object)).and_then(std::convert::identity)
+    }
+
+    pub async fn store_pack(
         &self,
         packfile: &Path,
         bucket: &str,
@@ -79,13 +87,13 @@ impl MinioStore {
     ) -> Result<Coordinates, Error> {
         let client = self.connect();
         // the bucket must exist before receiving objects
-        create_bucket(&client, bucket)?;
+        create_bucket(&client, bucket).await?;
         //
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
         //
         let meta = std::fs::metadata(packfile)?;
-        let read_stream = fs::read(packfile.to_owned())
+        let read_stream = tokio::fs::read(packfile.to_owned())
             .into_stream()
             .map_ok(|b| Bytes::from(b));
         let req = PutObjectRequest {
@@ -96,7 +104,7 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        let result = block_on(client.put_object(req))??;
+        let result = client.put_object(req).await?;
         if let Some(ref etag) = result.e_tag {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
@@ -110,7 +118,11 @@ impl MinioStore {
         Ok(loc)
     }
 
-    pub fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
+    pub fn retrieve_pack_sync(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
+        block_on(self.retrieve_pack(location, outfile)).and_then(std::convert::identity)
+    }
+
+    pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
         let client = self.connect();
         let request = GetObjectRequest {
             bucket: location.bucket.clone(),
@@ -118,7 +130,7 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        let result = block_on(client.get_object(request))??;
+        let result = client.get_object(request).await?;
         let stream = result.body.ok_or_else(|| {
             anyhow!(format!(
                 "failed to retrieve object {} from bucket {}",
@@ -126,16 +138,24 @@ impl MinioStore {
                 location.bucket.clone()
             ))
         })?;
-        let mut file = File::create(outfile)?;
-        let mut body = stream.into_blocking_read();
-        std::io::copy(&mut body, &mut file)?;
+        let mut file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(outfile)
+            .await?;
+        let mut body = stream.into_async_read();
+        tokio::io::copy(&mut body, &mut file).await?;
         Ok(())
     }
 
-    pub fn list_buckets(&self) -> Result<Vec<String>, Error> {
+    pub fn list_buckets_sync(&self) -> Result<Vec<String>, Error> {
+        block_on(self.list_buckets()).and_then(std::convert::identity)
+    }
+
+    pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
         let client = self.connect();
         // wait for the future(s) to complete
-        let result = block_on(client.list_buckets())??;
+        let result = client.list_buckets().await?;
         let mut results = Vec::new();
         if let Some(buckets) = result.buckets {
             for bucket in buckets {
@@ -147,7 +167,11 @@ impl MinioStore {
         Ok(results)
     }
 
-    pub fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
+    pub fn list_objects_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        block_on(self.list_objects(bucket)).and_then(std::convert::identity)
+    }
+
+    pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
         let client = self.connect();
         // default AWS S3 max-keys is 1,000
         let mut request = ListObjectsV2Request {
@@ -158,7 +182,7 @@ impl MinioStore {
         loop {
             // we will be re-using the request, so clone it each time
             // wait for the future(s) to complete
-            let result = block_on(client.list_objects_v2(request.clone()))??;
+            let result = client.list_objects_v2(request.clone()).await?;
             if let Some(contents) = result.contents {
                 for entry in contents {
                     if let Some(key) = entry.key {
@@ -175,7 +199,11 @@ impl MinioStore {
         Ok(results)
     }
 
-    pub fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
+    pub fn delete_object_sync(&self, bucket: &str, object: &str) -> Result<(), Error> {
+        block_on(self.delete_object(bucket, object)).and_then(std::convert::identity)
+    }
+
+    pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
         let client = self.connect();
         let request = DeleteObjectRequest {
             bucket: bucket.to_owned(),
@@ -183,18 +211,22 @@ impl MinioStore {
             ..Default::default()
         };
         // wait for the future(s) to complete
-        block_on(client.delete_object(request))??;
+        client.delete_object(request).await?;
         Ok(())
     }
 
-    pub fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
+    pub fn delete_bucket_sync(&self, bucket: &str) -> Result<(), Error> {
+        block_on(self.delete_bucket(bucket)).and_then(std::convert::identity)
+    }
+
+    pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         let client = self.connect();
         let request = DeleteBucketRequest {
             bucket: bucket.to_owned(),
             expected_bucket_owner: None,
         };
         // wait for the future(s) to complete
-        let result = block_on(client.delete_bucket(request))?;
+        let result = client.delete_bucket(request).await;
         // certain error conditions are okay
         match result {
             Err(e) => match e {
@@ -207,13 +239,13 @@ impl MinioStore {
 }
 
 /// Ensure the named bucket exists.
-fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
+async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     let request = CreateBucketRequest {
         bucket: bucket.to_owned(),
         ..Default::default()
     };
     // wait for the future(s) to complete
-    let result = block_on(client.create_bucket(request))?;
+    let result = client.create_bucket(request).await;
     // certain error conditions are okay
     match result {
         Err(e) => match e {
@@ -227,18 +259,11 @@ fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     }
 }
 
-/// Run the given future on a single-threaded future executor.
+/// Run the given future either on the current runtime or on a newly created
+/// single-threaded future executor.
 fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
-    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-        // This condition is difficult to handle correctly, so it is treated as
-        // an error. Instead, the application is expected to invoke this store
-        // on a dedicated thread (or more likely the backup process will be
-        // running on a dedicated thread).
-        //
-        // * c.f. https://github.com/tokio-rs/tokio/issues/2603
-        // * c.f. https://github.com/tokio-rs/tokio/issues/2376
-        // * c.f. https://github.com/tokio-rs/tokio/discussions/2653
-        Err(anyhow!("running in tokio not permitted"))
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        Ok(handle.block_on(future))
     } else {
         // Build the simplest and lightest runtime we can, while still enabling
         // us to wait for this future (and everything it spawns) to complete
@@ -279,43 +304,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
-    async fn test_create_bucket_async() {
-        //
-        // This test is run within the tokio runtime, in an effort to simulate
-        // the server process manager, which itself will be running a tokio
-        // runtime (via actix). In such an environment, the async functions
-        // invoked by this store must have their Future results processed to
-        // completion, in a blocking environment. To do this, the store uses its
-        // own runtime, which must be separate from any other async runtime. As
-        // such, this test spawns a thread and runs an asynchronous task
-        // (creating a bucket) to simulate that scenario.
-        //
-        // set up the environment and remote connection
-        dotenv().ok();
-        let endp_var = env::var("MINIO_ENDPOINT");
-        if endp_var.is_err() {
-            // bail out silently if minio is not available
-            return;
-        }
-        let endpoint = endp_var.unwrap();
-        let region_str = env::var("MINIO_REGION").unwrap();
-        let access_key = env::var("MINIO_ACCESS_KEY").unwrap();
-        let secret_key = env::var("MINIO_SECRET_KEY").unwrap();
-        let handler = std::thread::spawn(|| {
-            let region = Region::Custom {
-                name: region_str,
-                endpoint: endpoint,
-            };
-            let client = rusoto_core::request::HttpClient::new().unwrap();
-            let creds = rusoto_credential::StaticProvider::new(access_key, secret_key, None, None);
-            let client = S3Client::new_with(client, creds, region);
-            create_bucket(&client, "7057118a9aa40c2747267d56e4c1730f")
-        });
-        let result = handler.join().unwrap();
-        assert!(result.is_ok());
-    }
-
     #[test]
     fn test_minio_store_roundtrip() {
         // set up the environment and remote connection
@@ -344,7 +332,7 @@ mod tests {
         let bucket = "747267d56e7057118a9aa40c24c1730f".to_owned();
         let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
-        let result = source.store_pack(packfile, &bucket, &object);
+        let result = source.store_pack_sync(packfile, &bucket, &object);
         assert!(result.is_ok());
         let location = result.unwrap();
         assert_eq!(location.store, "minioone");
@@ -352,14 +340,14 @@ mod tests {
         assert_eq!(location.object, object);
 
         // check for bucket(s) being present
-        let result = source.list_buckets();
+        let result = source.list_buckets_sync();
         assert!(result.is_ok());
         let buckets = result.unwrap();
         assert!(!buckets.is_empty());
         assert!(buckets.contains(&bucket));
 
         // check for object(s) being present
-        let result = source.list_objects(&bucket);
+        let result = source.list_objects_sync(&bucket);
         assert!(result.is_ok());
         let listing = result.unwrap();
         assert!(!listing.is_empty());
@@ -368,7 +356,7 @@ mod tests {
         // retrieve the file and verify by checksum
         let outdir = tempdir().unwrap();
         let outfile = outdir.path().join("restored.txt");
-        let result = source.retrieve_pack(&location, &outfile);
+        let result = source.retrieve_pack_sync(&location, &outfile);
         assert!(result.is_ok());
         let md5sum = store_core::md5sum_file(&outfile).unwrap();
         #[cfg(target_family = "unix")]
@@ -382,13 +370,13 @@ mod tests {
 
         // remove all objects from all buckets, and the buckets, too
         for bucket in buckets {
-            let result = source.list_objects(&bucket);
+            let result = source.list_objects_sync(&bucket);
             assert!(result.is_ok());
             let objects = result.unwrap();
             for obj in objects {
-                source.delete_object(&bucket, &obj).unwrap();
+                source.delete_object_sync(&bucket, &obj).unwrap();
             }
-            source.delete_bucket(&bucket).unwrap();
+            source.delete_bucket_sync(&bucket).unwrap();
         }
     }
 }

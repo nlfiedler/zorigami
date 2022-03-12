@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 //
 // If storage_v1_types crate is not yet published to crates.io, then
@@ -70,7 +70,8 @@ impl GoogleStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        block_on(self.store_pack(packfile, bucket, object))
+        // use and_then(std::convert::identity) until Result.flatten() is stable
+        block_on(self.store_pack(packfile, bucket, object)).and_then(std::convert::identity)
     }
 
     pub async fn store_pack(
@@ -115,7 +116,7 @@ impl GoogleStore {
     }
 
     pub fn retrieve_pack_sync(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        block_on(self.retrieve_pack(location, outfile))
+        block_on(self.retrieve_pack(location, outfile)).and_then(std::convert::identity)
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
@@ -148,7 +149,7 @@ impl GoogleStore {
     }
 
     pub fn list_buckets_sync(&self) -> Result<Vec<String>, Error> {
-        block_on(self.list_buckets())
+        block_on(self.list_buckets()).and_then(std::convert::identity)
     }
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
@@ -186,7 +187,7 @@ impl GoogleStore {
     }
 
     pub fn list_objects_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        block_on(self.list_objects(bucket))
+        block_on(self.list_objects(bucket)).and_then(std::convert::identity)
     }
 
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
@@ -224,7 +225,7 @@ impl GoogleStore {
     }
 
     pub fn delete_object_sync(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        block_on(self.delete_object(bucket, object))
+        block_on(self.delete_object(bucket, object)).and_then(std::convert::identity)
     }
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
@@ -240,7 +241,7 @@ impl GoogleStore {
     }
 
     pub fn delete_bucket_sync(&self, bucket: &str) -> Result<(), Error> {
-        block_on(self.delete_bucket(bucket))
+        block_on(self.delete_bucket(bucket)).and_then(std::convert::identity)
     }
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
@@ -301,9 +302,9 @@ fn md5sum_file(infile: &Path) -> Result<Vec<u8>, Error> {
 
 /// Run the given future either on the current runtime or on a newly created
 /// single-threaded future executor.
-fn block_on<F: core::future::Future>(future: F) -> F::Output {
+fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        handle.block_on(future)
+        Ok(handle.block_on(future))
     } else {
         // Build the simplest and lightest runtime we can, while still enabling
         // us to wait for this future (and everything it spawns) to complete
@@ -311,9 +312,8 @@ fn block_on<F: core::future::Future>(future: F) -> F::Output {
         // runtime does not really start.
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(future)
+            .build()?;
+        Ok(runtime.block_on(future))
     }
 }
 

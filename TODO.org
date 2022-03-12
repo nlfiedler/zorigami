@@ -1,6 +1,5 @@
 * Tasks
-** Fix minio store impl such that =block_on= does not fail ever
-** Replace unmaintained Google API crate
+** Replace google-apis crate that uses old version of =hyper-rustls=
 *** https://github.com/Byron/google-apis-rs (google-storage1 source)
 *** https://github.com/dermesser/async-google-apis outdated
 *** https://crates.io/crates/cloud-storage inflexible envar/file-based auth
