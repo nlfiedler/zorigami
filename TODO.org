@@ -1,9 +1,4 @@
 * Tasks
-** Replace google-apis crate that uses old version of =hyper-rustls=
-*** https://github.com/Byron/google-apis-rs (google-storage1 source)
-*** https://github.com/dermesser/async-google-apis outdated
-*** https://crates.io/crates/cloud-storage inflexible envar/file-based auth
-*** https://github.com/google-apis-rs/google-cloud-rs order of magnitude less popular than google-storage1
 ** Replace Time Machine
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes

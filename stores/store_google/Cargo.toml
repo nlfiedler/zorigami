@@ -1,17 +1,14 @@
 [package]
 name = "store_google"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2021"
 license = "UNLICENSED"
 
 [dependencies]
-async-google-apis-common = "0.3"
-base64 = "0.13"
 anyhow = "1.0.55"
-hyper = { version = "0.14", features = ["stream"] }
-# async-google-apis-common requires hyper-rustls version 0.22
-hyper-rustls = { version = "0.22.1", features = ["rustls-native-certs"] }
+base64 = "0.13"
+google-storage1 = "3.0.0"
 md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }

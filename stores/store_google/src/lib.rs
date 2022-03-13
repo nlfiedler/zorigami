@@ -1,28 +1,12 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-//
-// If storage_v1_types crate is not yet published to crates.io, then
-// grab the generated code from example_crates/gcs_example in the
-// https://github.com/dermesser/async-google-apis repository.
-//
-mod storage_v1_types;
-use async_google_apis_common::{
-    yup_oauth2::{self, authenticator::Authenticator},
-    ApiError, DownloadResult,
-};
+extern crate google_storage1 as storage1;
 use anyhow::{anyhow, Error};
-use hyper::client::HttpConnector;
-use hyper::Client;
-use hyper_rustls::HttpsConnector;
 use std::collections::HashMap;
+use std::default::Default;
 use std::path::Path;
-use std::sync::Arc;
 use store_core::Coordinates;
-
-type HttpClient = Client<HttpsConnector<HttpConnector>>;
-type AuthConnector = Authenticator<HttpsConnector<HttpConnector>>;
-type StorageHub = (HttpClient, Arc<AuthConnector>);
 
 #[derive(Debug)]
 pub struct GoogleStore {
@@ -53,15 +37,15 @@ impl GoogleStore {
         })
     }
 
-    async fn connect(&self) -> Result<StorageHub, Error> {
-        let conn = HttpsConnector::with_native_roots();
-        let https_client = Client::builder().build(conn);
-        let account_key = yup_oauth2::read_service_account_key(&self.credentials).await?;
-        let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
+    async fn connect(&self) -> Result<storage1::Storage, Error> {
+        let conn = storage1::hyper_rustls::HttpsConnector::with_native_roots();
+        let https_client = storage1::hyper::Client::builder().build(conn);
+        let account_key = storage1::oauth2::read_service_account_key(&self.credentials).await?;
+        let authenticator = storage1::oauth2::ServiceAccountAuthenticator::builder(account_key)
             .hyper_client(https_client.clone())
             .build()
             .await?;
-        Ok((https_client, Arc::new(authenticator)))
+        Ok(storage1::Storage::new(https_client, authenticator))
     }
 
     pub fn store_pack_sync(
@@ -83,33 +67,24 @@ impl GoogleStore {
         let hub = self.connect().await?;
         // the bucket must exist before receiving objects
         create_bucket(&hub, &self.project, bucket, &self.region, &self.storage).await?;
-        let mut params = storage_v1_types::ObjectsInsertParams::default();
-        params.bucket = bucket.into();
-        params.name = Some(object.into());
-        let f = tokio::fs::OpenOptions::new()
-            .read(true)
-            .open(packfile)
-            .await?;
-        let svc = storage_v1_types::ObjectsService::new(hub.0, hub.1);
-        let obj = storage_v1_types::Object::default();
-        let result = match svc.insert_resumable_upload(&params, &obj).await {
-            Ok(mut upload) => match upload.set_max_chunksize(1024 * 1024 * 4) {
-                Ok(_) => upload.upload_file(f).await,
-                Err(err) => Err(err),
-            },
-            Err(err) => Err(err),
-        };
+        let req = storage1::api::Object::default();
+        let infile = std::fs::File::open(packfile)?;
+        let mimetype = "application/octet-stream"
+            .parse()
+            .map_err(|e| anyhow!(format!("{:?}", e)))?;
         // storing the same object twice is not treated as an error
-        match result {
-            Err(error) => return Err(anyhow!(format!("{:?}", error))),
-            Ok(object) => {
-                if let Some(hash) = object.md5_hash.as_ref() {
-                    let decoded = base64::decode(hash)?;
-                    let md5 = md5sum_file(packfile)?;
-                    if !md5.eq(&decoded) {
-                        return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
-                    }
-                }
+        let (_response, objdata) = hub
+            .objects()
+            .insert(req, bucket)
+            .name(object)
+            .upload_resumable(infile, mimetype)
+            .await?;
+        // ensure uploaded file matches local contents
+        if let Some(hash) = objdata.md5_hash.as_ref() {
+            let returned = base64::decode(hash)?;
+            let expected = md5sum_file(packfile)?;
+            if !expected.eq(&returned) {
+                return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
             }
         }
         Ok(Coordinates::new(&self.store_id, bucket, object))
@@ -121,31 +96,18 @@ impl GoogleStore {
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
         let hub = self.connect().await?;
-        let svc = storage_v1_types::ObjectsService::new(hub.0, hub.1);
-        let mut gparams = storage_v1_types::StorageParams::default();
-        // the magic argument indicating to download the contents
-        gparams.alt = Some(storage_v1_types::StorageParamsAlt::Media);
-        let mut params = storage_v1_types::ObjectsGetParams::default();
-        params.storage_params = Some(gparams);
-        params.bucket = location.bucket.clone();
-        params.object = location.object.clone();
-        let mut f = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(outfile)
+        let (response, _object) = hub
+            .objects()
+            .get(&location.bucket, &location.object)
+            .param("alt", "media")
+            .doit()
             .await?;
-        match svc.get(&params).await {
-            Ok(mut download) => match download.do_it(Some(&mut f)).await {
-                Ok(result) => match result {
-                    DownloadResult::Downloaded => Ok(()),
-                    DownloadResult::Response(foo) => {
-                        Err(anyhow!(format!("download response: {:?}", foo)))
-                    }
-                },
-                Err(err) => Err(anyhow!(format!("{:?}", err))),
-            },
-            Err(err) => Err(anyhow!(format!("{:?}", err))),
-        }
+        let buf = storage1::hyper::body::aggregate(response).await?;
+        use storage1::hyper::body::Buf;
+        let mut remote = buf.reader();
+        let mut local = std::fs::File::create(outfile)?;
+        std::io::copy(&mut remote, &mut local)?;
+        Ok(())
     }
 
     pub fn list_buckets_sync(&self) -> Result<Vec<String>, Error> {
@@ -155,18 +117,18 @@ impl GoogleStore {
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
         let hub = self.connect().await?;
         let mut results: Vec<String> = Vec::new();
-        let svc = storage_v1_types::BucketsService::new(hub.0, hub.1);
-        let mut params = storage_v1_types::BucketsListParams::default();
         let mut page_token: Option<String> = None;
-        params.project = self.project.clone();
+        let methods = hub.buckets();
         loop {
-            if page_token.is_some() {
-                params.page_token = page_token.take();
-            }
-            match svc.list(&params).await {
-                Ok(buckets) => {
+            let call = if let Some(token) = page_token.take() {
+                methods.list(&self.project).page_token(&token)
+            } else {
+                methods.list(&self.project)
+            };
+            match call.doit().await {
+                Ok((_response, buckets)) => {
                     if let Some(bucks) = buckets.items.as_ref() {
-                        // Only consider named buckets; this is no guarantee
+                        // Only consider named buckets; there is no guarantee
                         // that they have one, despite the API requiring that
                         // names be provided when creating them.
                         for bucket in bucks.iter() {
@@ -193,18 +155,18 @@ impl GoogleStore {
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
         let hub = self.connect().await?;
         let mut results: Vec<String> = Vec::new();
-        let svc = storage_v1_types::ObjectsService::new(hub.0, hub.1);
-        let mut params = storage_v1_types::ObjectsListParams::default();
         let mut page_token: Option<String> = None;
-        params.bucket = bucket.into();
+        let methods = hub.objects();
         loop {
-            if page_token.is_some() {
-                params.page_token = page_token.take();
-            }
-            match svc.list(&params).await {
-                Ok(objects) => {
+            let call = if let Some(token) = page_token.take() {
+                methods.list(bucket).page_token(&token)
+            } else {
+                methods.list(bucket)
+            };
+            match call.doit().await {
+                Ok((_response, objects)) => {
                     if let Some(objs) = objects.items.as_ref() {
-                        // Only consider named objects; this is no guarantee
+                        // Only consider named objects; there is no guarantee
                         // that they have one, despite the API requiring that
                         // names be provided when uploading them.
                         for object in objs.iter() {
@@ -230,13 +192,7 @@ impl GoogleStore {
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
         let hub = self.connect().await?;
-        let svc = storage_v1_types::ObjectsService::new(hub.0, hub.1);
-        let mut params = storage_v1_types::ObjectsDeleteParams::default();
-        params.bucket = bucket.into();
-        params.object = object.into();
-        if let Err(err) = svc.delete(&params).await {
-            return Err(anyhow!(format!("{:?}", err)));
-        }
+        hub.objects().delete(bucket, object).doit().await?;
         Ok(())
     }
 
@@ -246,45 +202,48 @@ impl GoogleStore {
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         let hub = self.connect().await?;
-        let svc = storage_v1_types::BucketsService::new(hub.0, hub.1);
-        let mut params = storage_v1_types::BucketsDeleteParams::default();
-        params.bucket = bucket.into();
-        if let Err(err) = svc.delete(&params).await {
-            return Err(anyhow!(format!("{:?}", err)));
-        }
+        hub.buckets().delete(bucket).doit().await?;
         Ok(())
     }
 }
 
 /// Ensure the named bucket exists.
 async fn create_bucket(
-    hub: &StorageHub,
+    hub: &storage1::Storage,
     project_id: &str,
     name: &str,
     region: &Option<String>,
     storage_class: &Option<String>,
 ) -> Result<(), Error> {
-    let (https_client, authenticator) = hub.clone();
-    let svc = storage_v1_types::BucketsService::new(https_client, authenticator);
-    let mut params = storage_v1_types::BucketsInsertParams::default();
-    params.project = project_id.to_owned();
-    let mut bucket = storage_v1_types::Bucket::default();
-    bucket.name = Some(name.to_owned());
-    bucket.location = region.to_owned();
-    bucket.storage_class = storage_class.to_owned();
-    if let Err(error) = svc.insert(&params, &bucket).await {
-        match error.downcast::<ApiError>() {
-            Ok(err) => {
-                match err {
-                    ApiError::HTTPResponseError(code, _) => match code {
-                        // bucket with the same name already exists
-                        hyper::StatusCode::CONFLICT => return Ok(()),
-                        _ => return Err(anyhow!(format!("unhandled response {:?}", err))),
-                    },
-                    _ => return Err(err.into()),
+    let mut req = storage1::api::Bucket::default();
+    req.location = region.to_owned();
+    req.name = Some(name.to_owned());
+    req.storage_class = storage_class.to_owned();
+    //
+    // Somewhat complicated means of ascertaining that the request failed
+    // because the bucket already exists. The alternative is to attempt to get
+    // the bucket, but then distinquishing between the 404 case and any other
+    // kind of error is just as complicated as checking for the 409 case here.
+    // What's more, checking first only serves to introduce a possible race
+    // condition, which this approach avoids.
+    //
+    if let Err(error) = hub.buckets().insert(req, project_id).doit().await {
+        match &error {
+            storage1::client::Error::BadRequest(value) => {
+                if let Some(object) = value.as_object() {
+                    if let Some(errobj) = object.get("error") {
+                        if let Some(code) = errobj.get("code") {
+                            if let Some(num) = code.as_u64() {
+                                if num == 409 {
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
                 }
+                return Err(anyhow!(format!("{:?}", error)));
             }
-            Err(err) => return Err(anyhow!(format!("{:?}", err))),
+            _ => return Err(anyhow!(format!("{:?}", error))),
         }
     }
     Ok(())
