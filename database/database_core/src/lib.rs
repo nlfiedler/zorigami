@@ -36,6 +36,9 @@ pub trait Database {
     /// Delete the database record associated with the given key.
     fn delete_document(&self, key: &[u8]) -> Result<(), Error>;
 
+    /// Count those keys that start with the given prefix.
+    fn count_prefix(&self, prefix: &str) -> Result<usize, Error>;
+
     /// Fetch the key/value pairs for those keys that start with the given
     /// prefix. The prefix is stripped from the keys before being returned.
     fn fetch_prefix(&self, prefix: &str) -> Result<HashMap<String, Box<[u8]>>, Error>;

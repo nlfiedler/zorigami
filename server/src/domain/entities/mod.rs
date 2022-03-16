@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
@@ -850,6 +850,52 @@ impl Default for Configuration {
             username,
             computer_id,
         }
+    }
+}
+
+/// Record counts for the various entities stored in the record repository.
+#[derive(Clone, Debug)]
+pub struct RecordCounts {
+    /// Number of chunks stored in the repository.
+    pub chunk: usize,
+    /// Number of datasets stored in the repository.
+    pub dataset: usize,
+    /// Number of files stored in the repository.
+    pub file: usize,
+    /// Number of packs stored in the repository.
+    pub pack: usize,
+    /// Number of snapshots stored in the repository.
+    pub snapshot: usize,
+    /// Number of stores stored in the repository.
+    pub store: usize,
+    /// Number of trees stored in the repository.
+    pub tree: usize,
+    /// Number of extended attributes stored in the repository.
+    pub xattr: usize,
+}
+
+impl Default for RecordCounts {
+    fn default() -> Self {
+        Self {
+            chunk: 0,
+            dataset: 0,
+            file: 0,
+            pack: 0,
+            snapshot: 0,
+            store: 0,
+            tree: 0,
+            xattr: 0,
+        }
+    }
+}
+
+impl fmt::Display for RecordCounts {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "counts(chunks: {}, datasets: {}, files: {}, packs: {}, snapshots: {}, stores: {}, trees: {}, xattrs: {})",
+            self.chunk, self.dataset, self.file, self.pack, self.snapshot, self.store, self.tree, self.xattr
+        )
     }
 }
 

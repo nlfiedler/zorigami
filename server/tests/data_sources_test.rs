@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 mod common;
 
@@ -397,6 +397,80 @@ fn test_put_get_snapshot() {
     assert_eq!(actual.end_time, snapshot.end_time);
     assert_eq!(actual.file_count, snapshot.file_count);
     assert_eq!(actual.tree, snapshot.tree);
+}
+
+#[test]
+fn test_record_counts() {
+    let db_path = DBPath::new("_test_record_counts");
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    // computer identifier(s) are not counted
+    datasource
+        .put_computer_id("cafebabe", "charlietuna")
+        .unwrap();
+
+    // file(s)
+    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let chunks = vec![(0, file_digest.clone())];
+    let file = entities::File::new(file_digest.clone(), 3129, chunks);
+    datasource.insert_file(&file).unwrap();
+    let sha256sum = "5562df727e98eb815bb371f095964d07f3e821659d4eb27ed9e20cd5160c5338";
+    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let chunks = vec![(0, file_digest.clone())];
+    let file = entities::File::new(file_digest.clone(), 4096, chunks);
+    datasource.insert_file(&file).unwrap();
+
+    // tree(s)
+    let sha256sum = "659d4eb27ed9e20095964d07f3e821cd5160c53385562df727e98eb815bb371f";
+    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let reference = entities::TreeReference::FILE(file_digest);
+    let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
+    let entry = entities::TreeEntry::new(filepath, reference);
+    let tree = entities::Tree::new(vec![entry], 1);
+    datasource.insert_tree(&tree).unwrap();
+
+    // chunk(s)
+    let digest1 = Checksum::SHA256(
+        "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
+    );
+    let packsum1 = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
+    let chunk1 = entities::Chunk::new(digest1, 0, 40000).packfile(packsum1.clone());
+    assert!(datasource.insert_chunk(&chunk1).is_ok());
+    let digest2 = Checksum::SHA256(
+        "eb27a0167e9595659ca8a04949bc4f604eb6fc4f2a64b4bb3f3b780da62f6cb1".to_owned(),
+    );
+    let chunk2 = entities::Chunk::new(digest2, 40000, 64000).packfile(packsum1.clone());
+    assert!(datasource.insert_chunk(&chunk2).is_ok());
+    let digest3 = Checksum::SHA256(
+        "ca8a4f2aeb27a0167e959565964b4bb3f3b780da62f6cb104949bc4f604eb6fc".to_owned(),
+    );
+    let chunk3 = entities::Chunk::new(digest3, 64000, 99999).packfile(packsum1);
+    assert!(datasource.insert_chunk(&chunk3).is_ok());
+
+    // pack(s)
+    let digest1 = Checksum::SHA1(String::from("bc1a3198db79036e56b30f0ab307cee55e845907"));
+    let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
+    let mut pack = entities::Pack::new(digest1.clone(), coords);
+    // (normally should init sodiumoxide but for the tests it is okay)
+    pack.crypto_salt = Some(pwhash::gen_salt());
+    datasource.insert_pack(&pack).unwrap();
+
+    // snapshot(s)
+    let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
+    let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
+    let snapshot = entities::Snapshot::new(Some(parent), tree, 1024);
+    datasource.put_snapshot(&snapshot).unwrap();
+
+    let counts = datasource.get_entity_counts().unwrap();
+    assert_eq!(counts.file, 2);
+    assert_eq!(counts.tree, 1);
+    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.snapshot, 1);
+    assert_eq!(counts.dataset, 0);
+    assert_eq!(counts.store, 0);
+    assert_eq!(counts.xattr, 0);
 }
 
 #[test]

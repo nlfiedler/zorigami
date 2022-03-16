@@ -681,6 +681,49 @@ impl restore::Request {
     }
 }
 
+#[juniper::graphql_object(description = "Number of database records for each entity type.")]
+impl entities::RecordCounts {
+    /// Number of chunks stored in the repository.
+    fn chunks(&self) -> i32 {
+        self.chunk as i32
+    }
+
+    /// Number of datasets stored in the repository.
+    fn datasets(&self) -> i32 {
+        self.dataset as i32
+    }
+
+    /// Number of files stored in the repository.
+    fn files(&self) -> i32 {
+        self.file as i32
+    }
+
+    /// Number of packs stored in the repository.
+    fn packs(&self) -> i32 {
+        self.pack as i32
+    }
+
+    /// Number of snapshots stored in the repository.
+    fn snapshots(&self) -> i32 {
+        self.snapshot as i32
+    }
+
+    /// Number of stores stored in the repository.
+    fn stores(&self) -> i32 {
+        self.store as i32
+    }
+
+    /// Number of trees stored in the repository.
+    fn trees(&self) -> i32 {
+        self.tree as i32
+    }
+
+    /// Number of extended attributes stored in the repository.
+    fn xattrs(&self) -> i32 {
+        self.xattr as i32
+    }
+}
+
 pub struct QueryRoot;
 
 #[juniper::graphql_object(Context = GraphContext)]
@@ -714,6 +757,18 @@ impl QueryRoot {
         let params: Params = Params::new(store_id);
         let result: Vec<entities::Pack> = usecase.call(params)?;
         Ok(result)
+    }
+
+    /// Return the number of each type of database record.
+    fn record_counts(executor: &Executor) -> FieldResult<entities::RecordCounts> {
+        use crate::domain::usecases::get_counts::GetCounts;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetCounts::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let counts = usecase.call(params)?;
+        Ok(counts)
     }
 
     /// Query for any pending and recently completed file restore operations.
@@ -1605,6 +1660,76 @@ mod tests {
         let (res, errors) = juniper::execute_sync(
             r#"query {
                 datasets { computerId }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert!(res.is_null());
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].error().message().contains("oh no"));
+    }
+
+    #[test]
+    fn test_query_record_counts_ok() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_entity_counts().returning(move || {
+            Ok(entities::RecordCounts {
+                chunk: 5,
+                dataset: 1,
+                file: 25,
+                pack: 1,
+                snapshot: 1,
+                store: 1,
+                tree: 3,
+                xattr: 4,
+            })
+        });
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute_sync(
+            r#"query {
+                recordCounts { chunks datasets files packs snapshots trees }
+            }"#,
+            None,
+            &schema,
+            &Variables::new(),
+            &ctx,
+        )
+        .unwrap();
+        // assert
+        assert_eq!(errors.len(), 0);
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("recordCounts").unwrap();
+        let object = res.as_object_value().unwrap();
+        let field = object.get_field_value("chunks").unwrap();
+        let value = field.as_scalar_value::<i32>().unwrap();
+        assert_eq!(*value, 5);
+    }
+
+    #[test]
+    fn test_query_record_counts_err() {
+        // arrange
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_entity_counts()
+            .returning(move || Err(anyhow!("oh no")));
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
+        let appstate = Arc::new(MockStateStore::new());
+        let restorer = Arc::new(MockRestorer::new());
+        let ctx = Arc::new(GraphContext::new(datasource, appstate, restorer));
+        // act
+        let schema = create_schema();
+        let (res, errors) = juniper::execute_sync(
+            r#"query {
+                recordCounts { chunks files trees }
             }"#,
             None,
             &schema,

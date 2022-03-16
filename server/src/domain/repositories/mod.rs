@@ -2,7 +2,8 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
+    Store, Tree,
 };
 use anyhow::Error;
 #[cfg(test)]
@@ -140,6 +141,9 @@ pub trait RecordRepository: Send + Sync {
 
     /// Restore the database from the provided archive file.
     fn restore_from_backup(&self, path: &Path) -> Result<(), Error>;
+
+    /// Retrieve the counts of the various record types in the data source.
+    fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
 }
 
 ///

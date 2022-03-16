@@ -140,21 +140,21 @@ impl database_core::Database for Database {
         Ok(())
     }
 
-    //     /// Count those keys that start with the given prefix.
-    //     fn count_prefix(&self, prefix: &str) -> Result<usize, Error> {
-    //         let pre_bytes = prefix.as_bytes();
-    //         // this only gets us started, we then have to check for the end of the range
-    //         let iter = self.db.prefix_iterator(pre_bytes);
-    //         let mut count = 0;
-    //         for (key, _value) in iter {
-    //             let pre = &key[..pre_bytes.len()];
-    //             if pre != pre_bytes {
-    //                 break;
-    //             }
-    //             count += 1;
-    //         }
-    //         Ok(count)
-    //     }
+    /// Count those keys that start with the given prefix.
+    fn count_prefix(&self, prefix: &str) -> Result<usize, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut count = 0;
+        for (key, _value) in iter {
+            let pre = &key[..pre_bytes.len()];
+            if pre != pre_bytes {
+                break;
+            }
+            count += 1;
+        }
+        Ok(count)
+    }
 
     //     /// Find all those keys that start with the given prefix.
     //     ///

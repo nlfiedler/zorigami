@@ -3,9 +3,20 @@
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
 *** DONE Provide GUI for managing multiple exclusions for each data set
-*** TODO Create a local deployment script to automate desktop updates
+*** how to update local deployment
+**** installed in =~/Applications/Zorigami=
+**** launch agent in =~/Library/LaunchAgents/zorigami.plist=
+**** database in =~/Library/Application\ Support/Zorigami=
+**** stop server: =launchctl kill SIGTERM gui/501/zorigami=
+**** enable, start, and verify server is running
+#+begin_src shell
+launchctl enable gui/501/zorigami
+launchctl kickstart -p gui/501/zorigami
+ps -ef | grep -i zorigami
+#+end_src
+*** TODO develop as a macOS app that bundles the =server= and starts at login
 *** TODO Use =launchd= to manage the process, have it start automatically
-**** launchd property list
+**** launchd definition
 #+begin_src xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -37,16 +48,38 @@
     </dict>
 </plist>
 #+end_src
-**** starting
+**** how to start
 #+begin_src shell
 launchctl load ~/Library/LaunchAgents/zorigami.plist
 #+end_src
 *** TODO figure out how to give it permission to access files on macOS
 *** DONE pack prune tries to remove OS folders, results in IO error
-*** TODO need a query that shows the counts for all record types
-**** show number of files in latest snapshot
-**** show number of trees in latest snapshot
-**** show number of file records, trees, snapshots, chunks, packs, etc
+*** DONE need a query that shows the counts for all record types
+**** DONE write integration for =count_prefix()= in database impl
+**** DONE write usecase and unit tests
+**** DONE write graphql query field and tests
+*** TODO consider which records could be shrunk to save disk space
+**** compressed database backup image size in bytes: 2,379,181,138
+**** record counts on mini as of 2022-03-15
+| entity    |   count |
+|-----------+---------|
+| snapshots |     190 |
+| files     | 1806620 |
+| trees     |  302860 |
+| chunks    | 1830167 |
+| packs     |    3380 |
+| xattrs    |  185473 |
+**** files and chunks are the most numerous types of records
+**** TODO do not serialize the =length= field of chunk model
+**** TODO do not create a chunk record for small files
+***** strategy: if length of =File.chunks= list is 1 then it is a pack instead of a chunk
+***** when checking if a chunk has already been processed, need to consider small files as well
+***** in =record_completed_files()= if the =parts.len()= is 1 then handle differently
+****** store pack digest instead of the chunk checksum in the =File= entity
+***** file restore needs to consider when list of chunks is length 1
+*** TODO need a query to show details about the latest snapshot
+**** show number of files
+**** show number of trees
 *** TODO need a way to show differences between any two snapshots
 **** collect the paths and sizes of all new/changed files
 **** somehow show all of that information in a scalable fashion

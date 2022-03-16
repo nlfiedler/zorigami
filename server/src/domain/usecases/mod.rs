@@ -9,6 +9,7 @@ pub mod cancel_restore;
 pub mod delete_dataset;
 pub mod delete_store;
 pub mod find_missing;
+pub mod get_counts;
 pub mod get_datasets;
 pub mod get_snapshot;
 pub mod get_stores;

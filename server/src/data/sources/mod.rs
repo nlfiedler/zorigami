@@ -1,17 +1,17 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! Performs serde on entities and stores them in a database.
 
-use anyhow::Error;
 use crate::data::models::{
     ChunkDef, ConfigurationDef, DatasetDef, FileDef, PackDef, SnapshotDef, StoreDef,
 };
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, StoreType,
-    Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
+    Store, StoreType, Tree,
 };
+use anyhow::Error;
 use database_core::Database;
 use database_rocks;
 #[cfg(test)]
@@ -150,6 +150,9 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Restore the database from the backup path.
     fn restore_from_backup(&self, path: Option<PathBuf>) -> Result<(), Error>;
+
+    /// Retrieve the counts of the various record types in the data source.
+    fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
 }
 
 /// Implementation of the entity data source backed by RocksDB.
@@ -552,6 +555,28 @@ impl EntityDataSource for EntityDataSourceImpl {
         let mut db = self.database.lock().unwrap();
         *db = database_rocks::Database::new(db_path)?;
         Ok(())
+    }
+
+    fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
+        let db = self.database.lock().unwrap();
+        let chunks = db.count_prefix("chunk/")?;
+        let datasets = db.count_prefix("dataset/")?;
+        let files = db.count_prefix("file/")?;
+        let packs = db.count_prefix("pack/")?;
+        let snapshots = db.count_prefix("snapshot/")?;
+        let stores = db.count_prefix("store/")?;
+        let trees = db.count_prefix("tree/")?;
+        let xattrs = db.count_prefix("xattr/")?;
+        Ok(RecordCounts {
+            chunk: chunks,
+            dataset: datasets,
+            file: files,
+            pack: packs,
+            snapshot: snapshots,
+            store: stores,
+            tree: trees,
+            xattr: xattrs,
+        })
     }
 }
 

@@ -1,11 +1,12 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use crate::data::sources::{
     EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
 };
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
+    Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Context, Error, Result};
@@ -211,6 +212,10 @@ impl RecordRepository for RecordRepositoryImpl {
         let temppath = tempdir.path().to_path_buf();
         extract_tar(path, &temppath)?;
         self.datasource.restore_from_backup(Some(temppath))
+    }
+
+    fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
+        self.datasource.get_entity_counts()
     }
 }
 
