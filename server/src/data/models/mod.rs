@@ -130,7 +130,7 @@ pub struct ChunkDef {
     // in different files at different offsets.
     #[serde(skip)]
     pub offset: usize,
-    #[serde(rename = "le")]
+    #[serde(skip)]
     pub length: usize,
     #[serde(skip)]
     pub filepath: Option<PathBuf>,
@@ -288,7 +288,7 @@ mod tests {
         // assert
         let null_digest = Checksum::SHA1(String::from("0000000000000000000000000000000000000000"));
         assert_eq!(actual.digest, null_digest);
-        assert_eq!(actual.length, chunk.length);
+        assert_eq!(actual.length, 0);
         assert_eq!(actual.packfile, chunk.packfile);
         Ok(())
     }

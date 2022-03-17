@@ -70,13 +70,15 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 | packs     |    3380 |
 | xattrs    |  185473 |
 **** files and chunks are the most numerous types of records
-**** TODO do not serialize the =length= field of chunk model
+**** DONE do not serialize the =length= field of chunk model
 **** TODO do not create a chunk record for small files
 ***** strategy: if length of =File.chunks= list is 1 then it is a pack instead of a chunk
-***** when checking if a chunk has already been processed, need to consider small files as well
+***** in =record_completed_pack()= if the chunk digest matches a file digest, do not store in database
 ***** in =record_completed_files()= if the =parts.len()= is 1 then handle differently
 ****** store pack digest instead of the chunk checksum in the =File= entity
 ***** file restore needs to consider when list of chunks is length 1
+***** file restore needs to know that the "chunk" digest is the file digest when assembling the chunks
+***** add tests to ensure correct number of file and chunk records are created
 *** TODO need a query to show details about the latest snapshot
 **** show number of files
 **** show number of trees

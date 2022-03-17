@@ -41,7 +41,7 @@ fn test_insert_get_chunk() {
     );
     // skipped offset is always zero
     assert_eq!(actual.offset, 0);
-    assert_eq!(actual.length, 40000);
+    assert_eq!(actual.length, 0);
     assert!(actual.filepath.is_none());
     assert!(actual.packfile.is_some());
     assert_eq!(
@@ -70,7 +70,7 @@ fn test_insert_get_chunk() {
     );
     // skipped offset is always zero
     assert_eq!(actual.offset, 0);
-    assert_eq!(actual.length, 40000);
+    assert_eq!(actual.length, 0);
     assert!(actual.filepath.is_none());
     assert!(actual.packfile.is_some());
     assert_eq!(
