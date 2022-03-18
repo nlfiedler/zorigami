@@ -181,7 +181,7 @@ what type of record it is, such as `chunk/` for chunk records, and so on.
     - length: size of file in bytes
     - chunks:
         + offset: file position for this chunk
-        + digest: chunk SHA256
+        + digest: chunk SHA256 (or pack if only one chunk)
 * database snapshots (identical to pack records)
     - key: `dbase/` + SHA256 of pack file (with "sha256-" prefix)
     - coordinates:

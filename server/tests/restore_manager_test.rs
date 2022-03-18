@@ -50,7 +50,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset = dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
+    dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
     dbase.put_computer_id(&dataset.id, &computer_id)?;
@@ -82,6 +82,18 @@ async fn test_backup_restore() -> Result<(), Error> {
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
+
+    // ensure the backup(s) created the expected number of each record type
+    //
+    // The large image gets 3 chunks and the small files get 0; the shifted
+    // image file gets another new chunk, for a total of 4.
+    //
+    // Each backup with a new file generates another tree, so 4 in total.
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 4);
+    assert_eq!(counts.file, 5);
+    assert_eq!(counts.chunk, 4);
+    assert_eq!(counts.tree, 4);
 
     // restore the file from the first snapshot
     #[cfg(target_family = "unix")]

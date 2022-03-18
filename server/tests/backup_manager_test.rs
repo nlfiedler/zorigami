@@ -591,7 +591,7 @@ fn test_continue_backup() -> Result<(), Error> {
     fs::create_dir_all(basepath)?;
     let mut dataset = entities::Dataset::new(Path::new(basepath));
     dataset = dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
+    dataset.pack_size = 131072 as u64;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
@@ -615,6 +615,13 @@ fn test_continue_backup() -> Result<(), Error> {
     assert_eq!(first_sha1, second_sha1);
     let snapshot = dbase.get_snapshot(&first_sha1)?.unwrap();
     assert!(snapshot.end_time.is_some());
+
+    // ensure the backup created the expected number of each record type
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.tree, 1);
 
     Ok(())
 }

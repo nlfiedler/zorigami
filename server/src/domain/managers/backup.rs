@@ -965,7 +965,7 @@ impl<'a> PackBuilder<'a> {
             // Get the first file from the map and start putting its chunks into
             // the pack, ignoring any duplicates.
             //
-            // Would use first_key_value() but that is experimental in 1.41.
+            // Would use first_key_value() but that is experimental in 1.59.
             let filesum = self.file_chunks.keys().take(1).next().unwrap().to_owned();
             let mut chunks_processed = 0;
             let chunks = &self.file_chunks[&filesum];
@@ -1001,7 +1001,7 @@ impl<'a> PackBuilder<'a> {
 /// algorithm. The given `size` is the desired average size in bytes for the
 /// chunks, but they may be between half and twice that size.
 ///
-fn find_file_chunks(infile: &Path, size: u64) -> io::Result<Vec<entities::Chunk>> {
+pub fn find_file_chunks(infile: &Path, size: u64) -> io::Result<Vec<entities::Chunk>> {
     let file = fs::File::open(infile)?;
     let mmap = unsafe {
         memmap::MmapOptions::new()
@@ -1083,9 +1083,14 @@ impl Pack {
         let digest = self.digest.as_ref().unwrap();
         // record the uploaded chunks to the database
         for chunk in self.chunks.iter_mut() {
-            // set the pack digest for each chunk record
-            chunk.packfile = Some(digest.clone());
-            dbase.insert_chunk(chunk)?;
+            // The chunk is the entire file, which will be recorded soon and its
+            // chunk digest will in fact by the pack digest, thereby eliminating
+            // the need for a chunk record at all.
+            if !self.files.contains_key(&chunk.digest) {
+                // set the pack digest for each chunk record
+                chunk.packfile = Some(digest.clone());
+                dbase.insert_chunk(chunk)?;
+            }
         }
         self.chunks.clear();
         // record the pack in the database
@@ -1106,9 +1111,22 @@ impl Pack {
         for (filesum, parts) in &self.files {
             let mut length: u64 = 0;
             let mut chunks: Vec<(u64, entities::Checksum)> = Vec::new();
-            for chunk in parts {
-                length += chunk.length as u64;
-                chunks.push((chunk.offset as u64, chunk.digest.clone()));
+            // Determine if a chunk record is needed, as the information is only
+            // useful when a file produces multiple chunks. In many cases the
+            // files are small and will result in only a single chunk. As such,
+            // do not create a chunk record and instead save the pack digest as
+            // the "chunk" in the file record. The fact that the file record
+            // contains only a single chunk will be sufficient information for
+            // the file restore to know that the "chunk" digest is a pack.
+            if parts.len() == 1 {
+                length += parts[0].length as u64;
+                let digest = self.digest.as_ref().unwrap();
+                chunks.push((0, digest.to_owned()));
+            } else {
+                for chunk in parts {
+                    length += chunk.length as u64;
+                    chunks.push((chunk.offset as u64, chunk.digest.clone()));
+                }
             }
             let file = entities::File::new(filesum.clone(), length, chunks);
             dbase.insert_file(&file)?;

@@ -652,6 +652,9 @@ pub struct File {
     /// The set of the chunks contained in this file. There may be many of these
     /// for large files, so they are represented compactly. The first field is
     /// the byte offset of the chunk within the saved file.
+    ///
+    /// If the list contains only a single entry, then the checksum is that of
+    /// the pack record, avoiding the need for a chunk record.
     pub chunks: Vec<(u64, Checksum)>,
 }
 

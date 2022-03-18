@@ -25,3 +25,4 @@ This design has been used not only in this application, but also in another, and
 ## Links
 
 * Clean Architecture [cleancoder.com](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+* Hexagonal Architecture [cockburn.us](https://alistair.cockburn.us/hexagonal-architecture/)

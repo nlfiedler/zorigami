@@ -3,6 +3,49 @@
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
 *** DONE Provide GUI for managing multiple exclusions for each data set
+*** TODO fix broken dataset creation form
+#+begin_src
+══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞═══════════════════════════════════════════════════════════
+The following assertion was thrown building Form-[LabeledGlobalKey<FormState>#205c8](dirty, state:
+FormState#e6a42):
+Assertion failed:
+file:///Users/nfiedler/.pub-cache/hosted/pub.dartlang.org/form_builder_validators-7.6.1/lib/localization/l10n.dart:44:12
+instance != null
+"No instance of FormBuilderLocalizations present in the widget tree. Did you add
+FormBuilderLocalizations.delegate in localizationsDelegates?"
+
+The relevant error-causing widget was:
+  Form-[LabeledGlobalKey<FormState>#205c8]
+  Form:file:///Users/nfiedler/.pub-cache/hosted/pub.dartlang.org/flutter_form_builder-7.1.1/lib/src/form_builder.dart:262:12
+
+When the exception was thrown, this was the stack:
+dart-sdk/lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart 251:49  throw_
+dart-sdk/lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart 29:3    assertFailed
+packages/form_builder_validators/localization/l10n.dart 44:20                 of
+packages/form_builder_validators/src/form_builder_validators.dart 36:50       <fn>
+packages/flutter/src/widgets/form.dart 399:33                                 [_validate]
+packages/flutter/src/widgets/form.dart 392:7                                  <fn>
+packages/flutter/src/widgets/framework.dart 1121:30                           setState
+packages/flutter/src/widgets/form.dart 391:5                                  validate
+packages/flutter_form_builder/src/form_builder_field.dart 225:29              validate
+packages/flutter/src/widgets/form.dart 191:24                                 [_validate]
+packages/flutter/src/widgets/form.dart 137:9                                  build
+packages/flutter/src/widgets/framework.dart 4870:27                           build
+packages/flutter/src/widgets/framework.dart 4754:15                           performRebuild
+packages/flutter/src/widgets/framework.dart 4928:11                           performRebuild
+packages/flutter/src/widgets/framework.dart 4477:5                            rebuild
+packages/flutter/src/widgets/framework.dart 2659:18                           buildScope
+packages/flutter/src/widgets/binding.dart 882:9                               drawFrame
+packages/flutter/src/rendering/binding.dart 363:5                             [_handlePersistentFrameCallback]
+packages/flutter/src/scheduler/binding.dart 1144:15                           [_invokeFrameCallback]
+packages/flutter/src/scheduler/binding.dart 1081:9                            handleDrawFrame
+packages/flutter/src/scheduler/binding.dart 995:5                             [_handleDrawFrame]
+lib/_engine/engine/platform_dispatcher.dart 1011:13                           invoke
+lib/_engine/engine/platform_dispatcher.dart 159:5                             invokeOnDrawFrame
+lib/_engine/engine/initialization.dart 128:45                                 <fn>
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+#+end_src
 *** how to update local deployment
 **** installed in =~/Applications/Zorigami=
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
@@ -58,27 +101,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 **** DONE write integration for =count_prefix()= in database impl
 **** DONE write usecase and unit tests
 **** DONE write graphql query field and tests
-*** TODO consider which records could be shrunk to save disk space
-**** compressed database backup image size in bytes: 2,379,181,138
-**** record counts on mini as of 2022-03-15
-| entity    |   count |
-|-----------+---------|
-| snapshots |     190 |
-| files     | 1806620 |
-| trees     |  302860 |
-| chunks    | 1830167 |
-| packs     |    3380 |
-| xattrs    |  185473 |
-**** files and chunks are the most numerous types of records
-**** DONE do not serialize the =length= field of chunk model
-**** TODO do not create a chunk record for small files
-***** strategy: if length of =File.chunks= list is 1 then it is a pack instead of a chunk
-***** in =record_completed_pack()= if the chunk digest matches a file digest, do not store in database
-***** in =record_completed_files()= if the =parts.len()= is 1 then handle differently
-****** store pack digest instead of the chunk checksum in the =File= entity
-***** file restore needs to consider when list of chunks is length 1
-***** file restore needs to know that the "chunk" digest is the file digest when assembling the chunks
-***** add tests to ensure correct number of file and chunk records are created
+*** DONE remove =length= from serialized chunk records
+*** DONE do not record chunk records if only 1 chunk in a file
 *** TODO need a query to show details about the latest snapshot
 **** show number of files
 **** show number of trees
@@ -291,6 +315,12 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Pack file integrity
 *** Retrieve random pack files and verify integrity
 ** Architecture Review
+*** Rust dependency injection, is it helpful?
+**** https://github.com/mineichen/minfac
+**** https://github.com/austinjones/lifeline-rs (whole runtime message bus system)
+**** https://github.com/dmitryb-dev/waiter
+**** https://github.com/AzureMarker/shaku
+**** https://github.com/tobni/inject-rs
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -582,7 +612,31 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** will need to prompt the user when a different passphrase is needed
 * Technical Information
 ** Data Growth
-*** Database backup tgz seems to grow 8mb in 6 months
+*** main server
+**** original database schema
+***** compressed database seems to grow 8mb in 6 months
+***** compressed database size: 61,920,768
+***** record counts as of 2022-03-17
+| entity    |  count |
+|-----------+--------|
+| snapshots |    576 |
+| files     | 137081 |
+| trees     |  97598 |
+| chunks    | 190758 |
+| packs     |   4282 |
+| xattrs    |  19263 |
+*** mac mini statistics
+**** original database schema
+***** compressed database size: 2,379,181,138
+***** record counts as of 2022-03-15
+| entity    |   count |
+|-----------+---------|
+| snapshots |     190 |
+| files     | 1806620 |
+| trees     |  302860 |
+| chunks    | 1830167 |
+| packs     |    3380 |
+| xattrs    |  185473 |
 ** Possible corner cases
 *** Database backup, then restore, then pack prune
 Because the database snapshot is recorded in the database after the snapshot
@@ -620,3 +674,8 @@ perform a pack pruning, the most recent database snapshot would be removed.
 **** Rust: nominal subtyping is much easier to follow
 **** Rust: streamlined error handling
 **** Rust: fine-grained namespaces and visibility control
+* Deployments
+** mac mini
+*** base path: =/User/nfiedler=
+*** excludes: =**/Downloads, **/node_modules, **/target=
+*** run daily at noon

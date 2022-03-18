@@ -4,8 +4,8 @@
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
-use chrono::prelude::*;
 use anyhow::{anyhow, Error};
+use chrono::prelude::*;
 use log::{debug, error};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -430,67 +430,91 @@ impl PackFetcher {
         filepath: &Path,
         passphrase: &str,
     ) -> Result<(), Error> {
-        let workspace = self.packpath.as_ref().unwrap().path();
-        fs::create_dir_all(workspace)?;
-        let stores = self.stores.as_ref().unwrap();
+        let workspace = self.packpath.as_ref().unwrap().path().to_path_buf();
+        fs::create_dir_all(&workspace)?;
         // look up the file record to get chunks
         let saved_file = self
             .dbase
             .get_file(checksum)?
             .ok_or_else(|| anyhow!(format!("missing file: {:?}", checksum)))?;
-        // look up chunk records to get pack record(s)
-        for (_offset, chunk) in &saved_file.chunks {
-            let chunk_rec = self
-                .dbase
-                .get_chunk(&chunk)?
-                .ok_or_else(|| anyhow!(format!("missing chunk: {:?}", chunk)))?;
-            let pack_digest = chunk_rec.packfile.as_ref().unwrap();
-            if !self.downloaded.contains(pack_digest) {
-                let saved_pack = self
+        if saved_file.chunks.len() == 1 {
+            // If the file record contains a single chunk entry then its digest
+            // is actually that of the pack record rather than a chunk record.
+            let pack_digest = &saved_file.chunks[0].1;
+            self.fetch_pack(pack_digest, &workspace, passphrase)?;
+            let mut cpath = PathBuf::from(&workspace);
+            let filename = &saved_file.digest.to_string();
+            cpath.push(filename);
+            let mut outfile = self.basepath.clone().unwrap();
+            outfile.push(filepath);
+            let chunk_paths: Vec<&Path> = vec![&cpath];
+            assemble_chunks(&chunk_paths, &outfile)?;
+        } else {
+            // look up chunk records to get pack record(s)
+            for (_offset, chunk) in &saved_file.chunks {
+                let chunk_rec = self
                     .dbase
-                    .get_pack(pack_digest)?
-                    .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
-                // check the salt before downloading the pack, otherwise we waste
-                // time fetching it when we would not be able to decrypt it
-                let salt = saved_pack
-                    .crypto_salt
-                    .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
-                // retrieve the pack file
-                let mut encrypted = PathBuf::new();
-                encrypted.push(workspace);
-                encrypted.push(pack_digest.to_string());
-                debug!("restore: fetching pack {}", pack_digest);
-                stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
-                // decrypt, decompress, and then unpack the contents
-                let mut zipped = encrypted.clone();
-                zipped.set_extension("gz");
-                super::decrypt_file(passphrase, &salt, &encrypted, &zipped)?;
-                fs::remove_file(&encrypted)?;
-                let deflated = encrypted;
-                super::decompress_file(&zipped, &deflated)?;
-                fs::remove_file(zipped)?;
-                verify_pack_digest(pack_digest, &deflated)?;
-                super::unpack_chunks(&deflated, &workspace)?;
-                fs::remove_file(deflated)?;
-                // remember this pack as being downloaded
-                self.downloaded.insert(pack_digest.to_owned());
+                    .get_chunk(&chunk)?
+                    .ok_or_else(|| anyhow!(format!("missing chunk: {:?}", chunk)))?;
+                let pack_digest = chunk_rec.packfile.as_ref().unwrap();
+                self.fetch_pack(&pack_digest, &workspace, passphrase)?;
             }
+            // sort the chunks by offset to produce the ordered file list
+            let mut chunks = saved_file.chunks;
+            chunks.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            let chunk_bufs: Vec<PathBuf> = chunks
+                .iter()
+                .map(|c| {
+                    let mut cpath = PathBuf::from(&workspace);
+                    cpath.push(c.1.to_string());
+                    cpath
+                })
+                .collect();
+            let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
+            let mut outfile = self.basepath.clone().unwrap();
+            outfile.push(filepath);
+            assemble_chunks(&chunk_paths, &outfile)?;
         }
-        // sort the chunks by offset to produce the ordered file list
-        let mut chunks = saved_file.chunks;
-        chunks.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-        let chunk_bufs: Vec<PathBuf> = chunks
-            .iter()
-            .map(|c| {
-                let mut cpath = PathBuf::from(&workspace);
-                cpath.push(c.1.to_string());
-                cpath
-            })
-            .collect();
-        let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
-        let mut outfile = self.basepath.clone().unwrap();
-        outfile.push(filepath);
-        assemble_chunks(&chunk_paths, &outfile)?;
+        Ok(())
+    }
+
+    fn fetch_pack(
+        &mut self,
+        pack_digest: &Checksum,
+        workspace: &Path,
+        passphrase: &str,
+    ) -> Result<(), Error> {
+        if !self.downloaded.contains(pack_digest) {
+            let stores = self.stores.as_ref().unwrap();
+            let saved_pack = self
+                .dbase
+                .get_pack(pack_digest)?
+                .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
+            // check the salt before downloading the pack, otherwise we waste
+            // time fetching it when we would not be able to decrypt it
+            let salt = saved_pack
+                .crypto_salt
+                .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
+            // retrieve the pack file
+            let mut encrypted = PathBuf::new();
+            encrypted.push(workspace);
+            encrypted.push(pack_digest.to_string());
+            debug!("restore: fetching pack {}", pack_digest);
+            stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
+            // decrypt, decompress, and then unpack the contents
+            let mut zipped = encrypted.clone();
+            zipped.set_extension("gz");
+            super::decrypt_file(passphrase, &salt, &encrypted, &zipped)?;
+            fs::remove_file(&encrypted)?;
+            let deflated = encrypted;
+            super::decompress_file(&zipped, &deflated)?;
+            fs::remove_file(zipped)?;
+            verify_pack_digest(pack_digest, &deflated)?;
+            super::unpack_chunks(&deflated, &workspace)?;
+            fs::remove_file(deflated)?;
+            // remember this pack as being downloaded
+            self.downloaded.insert(pack_digest.to_owned());
+        }
         Ok(())
     }
 }
@@ -566,7 +590,7 @@ mod tests {
         // act
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let result = sut.enqueue(crate::domain::managers::restore::Request::new(
+        let result = sut.enqueue(managers::restore::Request::new(
             Checksum::SHA256("cafebabe".into()),
             PathBuf::from("lorem-ipsum.txt"),
             "dataset1".into(),
@@ -583,14 +607,15 @@ mod tests {
         Ok(())
     }
 
+    // A pack with one file containing one chunk.
     struct PackChunkFile {
         pack: Pack,
         packpath: String,
-        chunk: Chunk,
         file: File,
     }
 
-    fn create_pack(
+    // create a pack containing one file with a single chunk
+    fn create_single_pack(
         passphrase: &str,
         filepath: &Path,
         packpath: &Path,
@@ -605,7 +630,6 @@ mod tests {
         pack_file.push(filepath.file_stem().unwrap());
         pack_file.set_extension("tar");
         let pack_digest = managers::pack_chunks(&chunks, &pack_file).unwrap();
-        chunk = chunk.packfile(pack_digest.clone());
         let mut zipped = pack_file.clone();
         zipped.set_extension("gz");
         managers::compress_file(&pack_file, &zipped).unwrap();
@@ -615,10 +639,11 @@ mod tests {
         let salt = managers::encrypt_file(passphrase, &zipped, &encrypted).unwrap();
         std::fs::remove_file(zipped).unwrap();
         let pack_file_path = encrypted.to_string_lossy().into_owned();
+        // create file record chose "chunk" digest is actually the pack digest
         let file = File::new(
             file_digest.clone(),
             file_len,
-            vec![(0, file_digest.clone())],
+            vec![(0, pack_digest.clone())],
         );
         let object = pack_digest.to_string();
         let location = PackLocation::new("store1", "bucket1", &object);
@@ -627,7 +652,6 @@ mod tests {
         Ok(PackChunkFile {
             pack,
             packpath: pack_file_path,
-            chunk,
             file,
         })
     }
@@ -647,14 +671,13 @@ mod tests {
 
         // create a realistic pack file but mock database records
         let passphrase = managers::get_passphrase();
-        let packed1 = create_pack(
+        let packed1 = create_single_pack(
             &passphrase,
             Path::new("../test/fixtures/lorem-ipsum.txt"),
             tmpdir.path(),
         )
         .unwrap();
         let packed1_file = packed1.file.clone();
-        let packed1_chunk = packed1.chunk.clone();
         let packed1_pack = packed1.pack.clone();
         mock.expect_load_dataset_stores().returning(move |_| {
             let pack_file_path_clone = packed1.packpath.clone();
@@ -669,8 +692,6 @@ mod tests {
         });
         mock.expect_get_file()
             .returning(move |_| Ok(Some(packed1_file.clone())));
-        mock.expect_get_chunk()
-            .returning(move |_| Ok(Some(packed1_chunk.clone())));
         mock.expect_get_pack()
             .returning(move |_| Ok(Some(packed1_pack.clone())));
 
@@ -679,7 +700,7 @@ mod tests {
         let sut = RestorerImpl::new();
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let result = sut.enqueue(crate::domain::managers::restore::Request::new(
+        let result = sut.enqueue(managers::restore::Request::new(
             Checksum::SHA256("deadbeef".into()),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
@@ -699,7 +720,7 @@ mod tests {
         let mut filepath = tmpdir.path().to_path_buf();
         filepath.push("lorem-ipsum.txt");
         assert!(!filepath.exists());
-        let result = sut.enqueue(crate::domain::managers::restore::Request::new(
+        let result = sut.enqueue(managers::restore::Request::new(
             Checksum::SHA256("cafebabe".into()),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
@@ -720,6 +741,64 @@ mod tests {
         Ok(())
     }
 
+    // A pack with one file containing multiple chunks.
+    struct PackChunksFile {
+        pack: Pack,
+        packpath: String,
+        chunks: Vec<Chunk>,
+        file: File,
+    }
+
+    // create a pack containing one file with multiple chunks of 32kb
+    fn create_multi_pack(
+        passphrase: &str,
+        filepath: &Path,
+        packpath: &Path,
+    ) -> Result<PackChunksFile, Error> {
+        let file_digest = Checksum::sha256_from_file(filepath).unwrap();
+        let mut chunks = managers::backup::find_file_chunks(filepath, 32768)?;
+        let mut pack_file = packpath.to_path_buf();
+        pack_file.push(filepath.file_stem().unwrap());
+        pack_file.set_extension("tar");
+        let pack_digest = managers::pack_chunks(&chunks, &pack_file).unwrap();
+        for chunk in chunks.iter_mut() {
+            chunk.packfile = Some(pack_digest.clone());
+        }
+        let mut zipped = pack_file.clone();
+        zipped.set_extension("gz");
+        managers::compress_file(&pack_file, &zipped).unwrap();
+        std::fs::remove_file(&pack_file).unwrap();
+        let mut encrypted = pack_file.clone();
+        encrypted.set_extension("pack");
+        let salt = managers::encrypt_file(passphrase, &zipped, &encrypted).unwrap();
+        std::fs::remove_file(zipped).unwrap();
+        let pack_file_path = encrypted.to_string_lossy().into_owned();
+        // construct the list of chunks for the file record
+        let mut file_chunks: Vec<(u64, Checksum)> = Vec::new();
+        let mut chunk_offset: u64 = 0;
+        for chunk in chunks.iter() {
+            file_chunks.push((chunk_offset, chunk.digest.clone()));
+            chunk_offset += chunk.length as u64;
+        }
+        let fs_file = fs::File::open(filepath)?;
+        let file_len = fs_file.metadata()?.len();
+        let file = File::new(
+            file_digest.clone(),
+            file_len,
+            file_chunks,
+        );
+        let object = pack_digest.to_string();
+        let location = PackLocation::new("store1", "bucket1", &object);
+        let mut pack = Pack::new(pack_digest, vec![location]);
+        pack.crypto_salt = Some(salt);
+        Ok(PackChunksFile {
+            pack,
+            packpath: pack_file_path,
+            chunks,
+            file,
+        })
+    }
+
     #[actix_rt::test]
     async fn test_restorer_restore_tree() -> io::Result<()> {
         // arrange
@@ -732,43 +811,47 @@ mod tests {
 
         // create realistic pack files but mock database records
         let passphrase = managers::get_passphrase();
-        let packed1 = create_pack(
+        let packed1 = create_single_pack(
             &passphrase,
             Path::new("../test/fixtures/lorem-ipsum.txt"),
             tmpdir.path(),
         )
         .unwrap();
         let packed1_file = packed1.file.clone();
-        let packed1_chunk = packed1.chunk.clone();
         let packed1_pack = packed1.pack.clone();
         let file1_digest = packed1_file.digest.clone();
-        let chunk1_digest = packed1_chunk.digest.clone();
         let pack1_digest = packed1_pack.digest.clone();
         let pack1_digest_copy = packed1_pack.digest.clone();
-        let packed2 = create_pack(
+        let packed2 = create_single_pack(
             &passphrase,
             Path::new("../test/fixtures/washington-journal.txt"),
             tmpdir.path(),
         )
         .unwrap();
         let packed2_file = packed2.file.clone();
-        let packed2_chunk = packed2.chunk.clone();
         let packed2_pack = packed2.pack.clone();
         let file2_digest = packed2_file.digest.clone();
-        let chunk2_digest = packed2_chunk.digest.clone();
         let pack2_digest = packed2_pack.digest.clone();
         let pack2_digest_copy = packed2_pack.digest.clone();
-        let packed3 = create_pack(
+        let packed3 = create_multi_pack(
             &passphrase,
             Path::new("../test/fixtures/SekienAkashita.jpg"),
             tmpdir.path(),
         )
         .unwrap();
         let packed3_file = packed3.file.clone();
-        let packed3_chunk = packed3.chunk.clone();
+        // The image file should be broken into 3 chunks, which the rest of this
+        // test function assumes to be the case, so assert for certainty.
+        assert_eq!(packed3.chunks.len(), 3);
+        let packed3_chunks = packed3.chunks.clone();
         let packed3_pack = packed3.pack.clone();
         let file3_digest = packed3_file.digest.clone();
-        let chunk3_digest = packed3_chunk.digest.clone();
+        let chunk3_1_digest = packed3_chunks[0].digest.clone();
+        let chunk3_2_digest = packed3_chunks[1].digest.clone();
+        let chunk3_3_digest = packed3_chunks[2].digest.clone();
+        let packed3_chunk_1 = packed3_chunks[0].clone();
+        let packed3_chunk_2 = packed3_chunks[1].clone();
+        let packed3_chunk_3 = packed3_chunks[2].clone();
         let pack3_digest = packed3_pack.digest.clone();
         let pack3_digest_copy = packed3_pack.digest.clone();
         mock.expect_load_dataset_stores().returning(move |_| {
@@ -803,14 +886,14 @@ mod tests {
             .with(eq(file3_digest))
             .returning(move |_| Ok(Some(packed3_file.clone())));
         mock.expect_get_chunk()
-            .with(eq(chunk1_digest))
-            .returning(move |_| Ok(Some(packed1_chunk.clone())));
+            .with(eq(chunk3_1_digest))
+            .returning(move |_| Ok(Some(packed3_chunk_1.clone())));
         mock.expect_get_chunk()
-            .with(eq(chunk2_digest))
-            .returning(move |_| Ok(Some(packed2_chunk.clone())));
+            .with(eq(chunk3_2_digest))
+            .returning(move |_| Ok(Some(packed3_chunk_2.clone())));
         mock.expect_get_chunk()
-            .with(eq(chunk3_digest))
-            .returning(move |_| Ok(Some(packed3_chunk.clone())));
+            .with(eq(chunk3_3_digest))
+            .returning(move |_| Ok(Some(packed3_chunk_3.clone())));
         mock.expect_get_pack()
             .with(eq(pack1_digest_copy))
             .returning(move |_| Ok(Some(packed1_pack.clone())));
@@ -862,7 +945,7 @@ mod tests {
         let mut filepath3 = tmpdir.path().to_path_buf();
         filepath3.push("SekienAkashita.jpg");
         assert!(!filepath3.exists());
-        let result = sut.enqueue(crate::domain::managers::restore::Request::new(
+        let result = sut.enqueue(managers::restore::Request::new(
             tree_sha1,
             PathBuf::new(),
             dataset_id.clone(),
