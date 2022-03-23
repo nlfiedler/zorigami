@@ -3,17 +3,10 @@
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
 *** DONE Provide GUI for managing multiple exclusions for each data set
-*** how to update local deployment
-**** installed in =~/Applications/Zorigami=
-**** launch agent in =~/Library/LaunchAgents/zorigami.plist=
-**** database in =~/Library/Application\ Support/Zorigami=
-**** stop server: =launchctl kill SIGTERM gui/501/zorigami=
-**** enable, start, and verify server is running
-#+begin_src shell
-launchctl enable gui/501/zorigami
-launchctl kickstart -p gui/501/zorigami
-ps -ef | grep -i zorigami
-#+end_src
+*** TODO add a graphql query to list the contents of a specific pack file
+**** write a use case and entity to return pack details
+**** fetch pack file, decrypt, use =tar= crate to get detailed listing
+**** query contents of =ef6ff7a6d8c7b1ab2324663ba4280700674ed587a9ff05dcaacdae1e52f21fe0=
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 *** TODO Use =launchd= to manage the process, have it start automatically
 **** launchd definition
@@ -66,10 +59,7 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** TODO need a way to show differences between any two snapshots
 **** collect the paths and sizes of all new/changed files
 **** somehow show all of that information in a scalable fashion
-*** TODO should compress chunks on the way into the pack file
-**** pack file sizes vary widely due to compression happening late
-**** should compress the chunks as they go into the pack file
-**** then do not compress the final pack file
+*** DONE compress chunks on the way into the pack file
 *** TODO change default pack size to 64mb instead of 16
 *** TODO database backup procedure should prune old snapshots
 **** for local disk case, retain only a few snapshots
@@ -111,7 +101,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** maybe consider a means of countering this error at runtime
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
-*** TODO fix the GraphQL query/mutation names to be snakecase
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
 *** TODO probably should use a better client cache
@@ -576,6 +565,9 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 * Technical Information
 ** Data Growth
 *** main server
+**** better pack file generation
+***** average pack size ~before~ change: 68,647,434
+***** average pack size ~after~ change:
 **** original database schema
 ***** compressed database seems to grow 8mb in 6 months
 ***** compressed database size: 61,920,768
@@ -614,6 +606,21 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 | packs     |    369 |
 | xattrs    |  14388 |
 ****** only 1% of files are larger than a chunk
+**** with new packing algorithm
+***** 2022-03-22
+****** compressed database size: 462,090,768
+****** database record counts
+| entity    |  count |
+|-----------+--------|
+| snapshots |      1 |
+| files     | 457980 |
+| trees     |  52844 |
+| chunks    |   4061 |
+| packs     |    176 |
+| xattrs    |  13624 |
+**** better pack file generation
+***** average pack size ~before~ change: 46,960,186
+***** average pack size ~after~ change: 70,496,178
 ** Possible corner cases
 *** Database backup, then restore, then pack prune
 Because the database snapshot is recorded in the database after the snapshot
@@ -653,6 +660,17 @@ perform a pack pruning, the most recent database snapshot would be removed.
 **** Rust: fine-grained namespaces and visibility control
 * Deployments
 ** mac mini
+*** how to update
+**** installed in =~/Applications/Zorigami=
+**** launch agent in =~/Library/LaunchAgents/zorigami.plist=
+**** database in =~/Library/Application\ Support/Zorigami=
+**** stop server: =launchctl kill SIGTERM gui/501/zorigami=
+**** enable, start, and verify server is running
+#+begin_src shell
+launchctl enable gui/501/zorigami
+launchctl kickstart -p gui/501/zorigami
+ps -ef | grep -i zorigami
+#+end_src
 *** base path: =/User/nfiedler=
-*** excludes: =**/Downloads, **/node_modules, **/target=
+*** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
 *** run daily at noon

@@ -252,6 +252,8 @@ mod tests {
             (22, 0, 6, 0, 6, 1, false),
             (22, 0, 6, 0, 21, 59, false),
             (22, 0, 6, 0, 21, 0, false),
+            // edge cases
+            (13, 0, 12, 59, 13, 1, true),
             // midnight edge case
             (17, 0, 0, 0, 17, 0, true),
             (17, 0, 0, 0, 18, 0, true),

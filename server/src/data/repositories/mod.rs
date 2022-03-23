@@ -220,11 +220,11 @@ impl RecordRepository for RecordRepositoryImpl {
 }
 
 ///
-/// Create a compressed tar file for the given directory structure.
+/// Create a gzip compressed tar file for the given directory structure.
 ///
 fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
     let file = std::fs::File::create(outfile)?;
-    let encoder = flate2::write::ZlibEncoder::new(file, flate2::Compression::default());
+    let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
     let mut builder = tar::Builder::new(encoder);
     builder.append_dir_all(".", basepath)?;
     let _output = builder.into_inner()?;
@@ -232,11 +232,11 @@ fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
 }
 
 ///
-/// Extract the contents of the compressed tar file to the given directory.
+/// Extract the contents of the gzip compressed tar file to the given directory.
 ///
 fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
     let file = std::fs::File::open(infile)?;
-    let decoder = flate2::read::ZlibDecoder::new(file);
+    let decoder = flate2::read::GzDecoder::new(file);
     let mut ar = tar::Archive::new(decoder);
     ar.unpack(outdir)?;
     Ok(())

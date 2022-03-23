@@ -63,18 +63,33 @@ async fn test_backup_restore() -> Result<(), Error> {
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 2);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 1);
 
     // perform the second backup
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 2);
+    assert_eq!(counts.file, 3);
+    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.tree, 2);
 
     // perform the third backup
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 3);
+    assert_eq!(counts.file, 4);
+    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.tree, 3);
 
     // perform the fourth backup with shifted larger file
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
@@ -82,13 +97,6 @@ async fn test_backup_restore() -> Result<(), Error> {
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     assert!(backup_opt.is_some());
-
-    // ensure the backup(s) created the expected number of each record type
-    //
-    // The large image gets 3 chunks and the small files get 0; the shifted
-    // image file gets another new chunk, for a total of 4.
-    //
-    // Each backup with a new file generates another tree, so 4 in total.
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
     assert_eq!(counts.file, 5);

@@ -424,142 +424,6 @@ fn test_snapshot_was_links() -> Result<(), Error> {
 }
 
 #[test]
-fn test_pack_builder() -> Result<(), Error> {
-    let db_path = DBPath::new("_test_pack_builder");
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-
-    #[cfg(target_family = "unix")]
-    let basepath = "tmp/test/engine/builder/fixtures";
-    #[cfg(target_family = "windows")]
-    let basepath = "tmp\\test\\engine\\builder\\fixtures";
-    let _ = fs::remove_dir_all(basepath);
-    fs::create_dir_all(basepath)?;
-    let mut builder = PackBuilder::new(&dbase, 65536);
-    assert_eq!(builder.has_chunks(), false);
-    assert_eq!(builder.is_full(), false);
-    let lorem_path = Path::new("../test/fixtures/lorem-ipsum.txt");
-    let lorem_sha = Checksum::sha256_from_file(&lorem_path)?;
-    builder.add_file(lorem_path, lorem_sha.clone())?;
-    let sekien_path = Path::new("../test/fixtures/SekienAkashita.jpg");
-    let sekien_sha = Checksum::sha256_from_file(&sekien_path)?;
-    builder.add_file(sekien_path, sekien_sha.clone())?;
-    let pack_file: PathBuf = [basepath, "pack.001"].iter().collect();
-    assert!(builder.has_chunks());
-    assert!(builder.is_full());
-    let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    let coords = vec![entities::PackLocation::new("acme", "bucket1", "object1")];
-    pack.record_completed_pack(&dbase, coords)?;
-    pack.record_completed_files(&dbase)?;
-    // the builder should still have some chunks, but not be full either
-    assert!(builder.has_chunks());
-    assert_eq!(builder.is_full(), false);
-    // verify records in the database match expectations
-    let option = dbase.get_pack(pack.get_digest().unwrap())?;
-    assert!(option.is_some());
-    let saved_pack = option.unwrap();
-    assert_eq!(&saved_pack.locations[0].bucket, "bucket1");
-    assert_eq!(&saved_pack.locations[0].object, "object1");
-    // ensure pack digest is _not_ the default
-    assert_ne!(saved_pack.digest.to_string(), entities::NULL_SHA1);
-    // The large file will not have been completed yet, it is too large for the
-    // pack size that we set above; can't be sure about the small file, either.
-    let option = dbase.get_file(&sekien_sha)?;
-    assert!(option.is_none());
-    let mut pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    let coords = vec![entities::PackLocation::new("acme", "bucket1", "object2")];
-    pack.record_completed_pack(&dbase, coords)?;
-    pack.record_completed_files(&dbase)?;
-    // should be completely empty at this point
-    assert_eq!(builder.has_chunks(), false);
-    assert_eq!(builder.is_full(), false);
-    builder.clear_cache();
-    let option = dbase.get_pack(pack.get_digest().unwrap())?;
-    assert!(option.is_some());
-    let saved_pack = option.unwrap();
-    assert_eq!(saved_pack.locations[0].bucket, "bucket1");
-    assert_eq!(saved_pack.locations[0].object, "object2");
-    // ensure pack digest is _not_ the default
-    assert_ne!(saved_pack.digest.to_string(), entities::NULL_SHA1);
-    // the big file should be saved by now
-    let option = dbase.get_file(&sekien_sha)?;
-    assert!(option.is_some());
-    let saved_file = option.unwrap();
-    assert_eq!(saved_file.length, 109_466);
-    assert_eq!(
-        saved_file.digest.to_string(),
-        "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
-    );
-    // the small file should also be saved
-    let option = dbase.get_file(&lorem_sha)?;
-    assert!(option.is_some());
-    let saved_file = option.unwrap();
-    #[cfg(target_family = "unix")]
-    assert_eq!(saved_file.length, 3_129);
-    #[cfg(target_family = "windows")]
-    assert_eq!(saved_file.length, 3_138);
-    #[cfg(target_family = "unix")]
-    assert_eq!(
-        saved_file.digest.to_string(),
-        "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
-    );
-    #[cfg(target_family = "windows")]
-    assert_eq!(
-        saved_file.digest.to_string(),
-        "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
-    );
-    Ok(())
-}
-
-#[test]
-fn test_pack_builder_empty() -> Result<(), Error> {
-    let db_path = DBPath::new("_test_pack_builder_empty");
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-
-    let mut builder = PackBuilder::new(&dbase, 65536);
-    assert_eq!(builder.has_chunks(), false);
-    assert_eq!(builder.is_full(), false);
-    let pack_file = Path::new("pack.001");
-    // empty builder should not create a file or have a digest
-    let pack = builder.build_pack(&pack_file, "keyboard cat")?;
-    assert!(pack.get_digest().is_none());
-    assert_eq!(pack_file.exists(), false);
-    Ok(())
-}
-
-#[test]
-fn test_pack_builder_dupes() -> Result<(), Error> {
-    let db_path = DBPath::new("_test_pack_builder_dupes");
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-
-    let mut builder = PackBuilder::new(&dbase, 65536);
-    assert_eq!(builder.file_count(), 0);
-    assert_eq!(builder.chunk_count(), 0);
-    // builder should ignore attempts to add files with the same checksum as
-    // have already been added to this builder prior to emptying into pack files
-    let lorem_path = Path::new("../test/fixtures/lorem-ipsum.txt");
-    let lorem_sha = Checksum::sha256_from_file(&lorem_path)?;
-    builder.add_file(lorem_path, lorem_sha.clone())?;
-    builder.add_file(lorem_path, lorem_sha.clone())?;
-    builder.add_file(lorem_path, lorem_sha.clone())?;
-    builder.add_file(lorem_path, lorem_sha)?;
-    let sekien_path = Path::new("../test/fixtures/SekienAkashita.jpg");
-    let sekien_sha = Checksum::sha256_from_file(&sekien_path)?;
-    builder.add_file(sekien_path, sekien_sha.clone())?;
-    builder.add_file(sekien_path, sekien_sha.clone())?;
-    builder.add_file(sekien_path, sekien_sha.clone())?;
-    builder.add_file(sekien_path, sekien_sha)?;
-    assert_eq!(builder.file_count(), 2);
-    assert_eq!(builder.chunk_count(), 7);
-    Ok(())
-}
-
-#[test]
 fn test_continue_backup() -> Result<(), Error> {
     let db_path = DBPath::new("_test_continue_backup");
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
@@ -718,5 +582,10 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
     // it did not blow up, so that counts as passing
     assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 1);
     Ok(())
 }

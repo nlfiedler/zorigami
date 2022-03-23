@@ -501,17 +501,14 @@ impl PackFetcher {
             encrypted.push(pack_digest.to_string());
             debug!("restore: fetching pack {}", pack_digest);
             stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
-            // decrypt, decompress, and then unpack the contents
-            let mut zipped = encrypted.clone();
-            zipped.set_extension("gz");
-            super::decrypt_file(passphrase, &salt, &encrypted, &zipped)?;
+            // decrypt and then unpack the contents
+            let mut tarball = encrypted.clone();
+            tarball.set_extension("tar");
+            super::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
             fs::remove_file(&encrypted)?;
-            let deflated = encrypted;
-            super::decompress_file(&zipped, &deflated)?;
-            fs::remove_file(zipped)?;
-            verify_pack_digest(pack_digest, &deflated)?;
-            super::unpack_chunks(&deflated, &workspace)?;
-            fs::remove_file(deflated)?;
+            verify_pack_digest(pack_digest, &tarball)?;
+            super::extract_pack(&tarball, &workspace)?;
+            fs::remove_file(tarball)?;
             // remember this pack as being downloaded
             self.downloaded.insert(pack_digest.to_owned());
         }
@@ -607,6 +604,19 @@ mod tests {
         Ok(())
     }
 
+    // Simplified pack builder that assumes all chunks will fit in a 64mb pack
+    // file. Returns the digest of the resulting file.
+    fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> Result<Checksum, Error> {
+        let mut builder = managers::PackBuilder::new(67108864);
+        builder.initialize(outfile)?;
+        for chunk in chunks {
+            builder.add_chunk(chunk)?;
+        }
+        let _output = builder.finalize()?;
+        let digest = Checksum::sha256_from_file(outfile)?;
+        Ok(digest)
+    }
+
     // A pack with one file containing one chunk.
     struct PackChunkFile {
         pack: Pack,
@@ -620,7 +630,7 @@ mod tests {
         filepath: &Path,
         packpath: &Path,
     ) -> Result<PackChunkFile, Error> {
-        let file_digest = Checksum::sha256_from_file(filepath).unwrap();
+        let file_digest = Checksum::sha256_from_file(filepath)?;
         let fs_file = fs::File::open(filepath)?;
         let file_len = fs_file.metadata()?.len();
         let mut chunk = Chunk::new(file_digest.clone(), 0, file_len as usize);
@@ -629,15 +639,11 @@ mod tests {
         let mut pack_file = packpath.to_path_buf();
         pack_file.push(filepath.file_stem().unwrap());
         pack_file.set_extension("tar");
-        let pack_digest = managers::pack_chunks(&chunks, &pack_file).unwrap();
-        let mut zipped = pack_file.clone();
-        zipped.set_extension("gz");
-        managers::compress_file(&pack_file, &zipped).unwrap();
-        std::fs::remove_file(&pack_file).unwrap();
+        let pack_digest = pack_chunks(&chunks, &pack_file)?;
         let mut encrypted = pack_file.clone();
-        encrypted.set_extension("pack");
-        let salt = managers::encrypt_file(passphrase, &zipped, &encrypted).unwrap();
-        std::fs::remove_file(zipped).unwrap();
+        encrypted.set_extension("nacl");
+        let salt = managers::encrypt_file(passphrase, &pack_file, &encrypted)?;
+        std::fs::remove_file(pack_file)?;
         let pack_file_path = encrypted.to_string_lossy().into_owned();
         // create file record chose "chunk" digest is actually the pack digest
         let file = File::new(
@@ -756,22 +762,18 @@ mod tests {
         packpath: &Path,
     ) -> Result<PackChunksFile, Error> {
         let file_digest = Checksum::sha256_from_file(filepath).unwrap();
-        let mut chunks = managers::backup::find_file_chunks(filepath, 32768)?;
+        let mut chunks: Vec<Chunk> = managers::find_file_chunks(filepath, 32768)?;
         let mut pack_file = packpath.to_path_buf();
         pack_file.push(filepath.file_stem().unwrap());
         pack_file.set_extension("tar");
-        let pack_digest = managers::pack_chunks(&chunks, &pack_file).unwrap();
+        let pack_digest = pack_chunks(&chunks, &pack_file).unwrap();
         for chunk in chunks.iter_mut() {
             chunk.packfile = Some(pack_digest.clone());
         }
-        let mut zipped = pack_file.clone();
-        zipped.set_extension("gz");
-        managers::compress_file(&pack_file, &zipped).unwrap();
-        std::fs::remove_file(&pack_file).unwrap();
         let mut encrypted = pack_file.clone();
-        encrypted.set_extension("pack");
-        let salt = managers::encrypt_file(passphrase, &zipped, &encrypted).unwrap();
-        std::fs::remove_file(zipped).unwrap();
+        encrypted.set_extension("nacl");
+        let salt = managers::encrypt_file(passphrase, &pack_file, &encrypted).unwrap();
+        std::fs::remove_file(pack_file).unwrap();
         let pack_file_path = encrypted.to_string_lossy().into_owned();
         // construct the list of chunks for the file record
         let mut file_chunks: Vec<(u64, Checksum)> = Vec::new();
@@ -782,11 +784,7 @@ mod tests {
         }
         let fs_file = fs::File::open(filepath)?;
         let file_len = fs_file.metadata()?.len();
-        let file = File::new(
-            file_digest.clone(),
-            file_len,
-            file_chunks,
-        );
+        let file = File::new(file_digest.clone(), file_len, file_chunks);
         let object = pack_digest.to_string();
         let location = PackLocation::new("store1", "bucket1", &object);
         let mut pack = Pack::new(pack_digest, vec![location]);
