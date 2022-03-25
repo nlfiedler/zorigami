@@ -3,11 +3,31 @@
 *** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
 *** DONE Update GraphQL to support returning and changing the excludes
 *** DONE Provide GUI for managing multiple exclusions for each data set
-*** TODO add a graphql query to list the contents of a specific pack file
-**** write a use case and entity to return pack details
-**** fetch pack file, decrypt, use =tar= crate to get detailed listing
-**** query contents of =ef6ff7a6d8c7b1ab2324663ba4280700674ed587a9ff05dcaacdae1e52f21fe0=
+*** DONE add a graphql query to list the contents of a specific pack file
+*** DONE need to consider the overhead of each tar file entry when packing
+*** TODO write tests for backup and restore of symbolic links
+**** create a symlink as a part of a data set
+**** backup the entire data set
+**** modify the symlink contents
+**** backup the entire data set
+**** request to restore the tree containing the sym link
+**** currently will fail because restore does not handle symlinks at all
+*** TODO consider storing very small files directly in the tree record
+**** ASCII string of sha256 digest is 64 bytes
+**** files 64 bytes or less are ~very small~
+**** base64 encode the file contents and store in the tree
+**** base64 encoded file of 64 bytes becomes 88 bytes
+**** gzip of the 88 bytes turns into 113 bytes (including original file name)
+**** create a new =TreeReference= named =SMALL=
+**** write integration tests; backup, restore, count records
+*** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
+**** change restore =Request= to take tree reference and entry name
+**** change GraphQL to allow restoring symbolic links
+**** =TreeBrowserBloc= has the current tree digest in the =history=
+*** TODO add support for restoring very small files directly (not as part of a tree restore)
+**** current =restoreFiles= GraphQL mutation does not take a tree and entry name as arguments
 *** TODO develop as a macOS app that bundles the =server= and starts at login
+*** TODO store the passphrase in the Keychain app
 *** TODO Use =launchd= to manage the process, have it start automatically
 **** launchd definition
 #+begin_src xml
@@ -87,6 +107,7 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 **** using =DBPath= and async code and =Path::exists()= causes a =SIGILL=
 *** TODO testing the minio(?) pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
+**** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
 **** note that using =Cow= helps to minimize copying
 #+BEGIN_SRC rust
 pub fn name<T: Into<String>>(mut self, name: T) -> Self {
@@ -621,6 +642,16 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** better pack file generation
 ***** average pack size ~before~ change: 46,960,186
 ***** average pack size ~after~ change: 70,496,178
+** Pack files
+*** analysis of overly large pack files before accounting for tar entry overhead
+**** packing would only account for compressed size of chunks
+**** with many small files, tar file overhead increased file size by half (99mb vs 64mb)
+| pack digest | count |  file sz | content len | smallest | largest | average |
+|-------------+-------+----------+-------------+----------+---------+---------|
+| 3fa54d0     | 19193 | 82480128 |    67114835 |       22 | 4755936 |    3496 |
+| b93402d     | 39932 | 99137536 |    67109129 |       39 |  446087 |    1680 |
+| c57960e     | 38894 | 98344448 |    67111246 |       40 |  452424 |    1725 |
+| ef6ff7a     | 40001 | 99184640 |    67111284 |       40 |  492592 |    1677 |
 ** Possible corner cases
 *** Database backup, then restore, then pack prune
 Because the database snapshot is recorded in the database after the snapshot

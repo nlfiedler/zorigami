@@ -612,6 +612,57 @@ impl entities::Configuration {
     }
 }
 
+#[juniper::graphql_object(description = "Entry within a saved pack file.")]
+impl entities::PackEntry {
+    /// File name of the entry in the pack file.
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Length of the content of the entry.
+    fn size(&self) -> BigInt {
+        BigInt(self.size as i64)
+    }
+}
+
+#[juniper::graphql_object(description = "Details about a pack file.")]
+impl entities::PackFile {
+    /// Number of entries in the pack file.
+    fn count(&self) -> i32 {
+        self.entries.len() as i32
+    }
+
+    /// All entries in the pack file.
+    fn entries(&self) -> Vec<entities::PackEntry> {
+        self.entries.clone()
+    }
+
+    /// Length of the pack file in bytes.
+    fn length(&self) -> BigInt {
+        BigInt(self.length as i64)
+    }
+
+    /// Total size of all pack entries.
+    fn content_length(&self) -> BigInt {
+        BigInt(self.content_length as i64)
+    }
+
+    /// Size of the smallest entry in the pack file.
+    fn smallest(&self) -> BigInt {
+        BigInt(self.smallest as i64)
+    }
+
+    /// Size of the largest entry in the pack file.
+    fn largest(&self) -> BigInt {
+        BigInt(self.largest as i64)
+    }
+
+    /// Average size of all entries in the pack file.
+    fn average(&self) -> BigInt {
+        BigInt(self.average as i64)
+    }
+}
+
 #[juniper::graphql_object(description = "Location within a store of a saved pack.")]
 impl entities::PackLocation {
     /// ULID of the pack store.
@@ -756,6 +807,24 @@ impl QueryRoot {
         let usecase = FindMissingPacks::new(Box::new(repo));
         let params: Params = Params::new(store_id);
         let result: Vec<entities::Pack> = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Retrieve entry listing a specific pack.
+    fn pack(
+        executor: &Executor,
+        dataset: String,
+        digest: Checksum,
+    ) -> FieldResult<entities::PackFile> {
+        use crate::domain::managers;
+        use crate::domain::usecases::get_pack::{GetPack, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetPack::new(Box::new(repo));
+        let passphrase = managers::get_passphrase();
+        let params: Params = Params::new(dataset, digest, passphrase);
+        let result: entities::PackFile = usecase.call(params)?;
         Ok(result)
     }
 

@@ -816,6 +816,70 @@ impl Pack {
     }
 }
 
+/// Information about an entry in a pack file.
+#[derive(Clone, Debug)]
+pub struct PackEntry {
+    /// File name of the entry in the pack file.
+    pub name: String,
+    /// Length of the content of the entry.
+    pub size: u64,
+}
+
+impl PackEntry {
+    /// Create a new PackEntry using the given information.
+    pub fn new(name: String, size: u64) -> Self {
+        Self { name, size }
+    }
+}
+
+/// Details about a pack file and its contents.
+#[derive(Clone, Debug)]
+pub struct PackFile {
+    /// Length of the pack file.
+    pub length: u64,
+    /// All entries in the pack file.
+    pub entries: Vec<PackEntry>,
+    /// Total size of all pack entries.
+    pub content_length: u64,
+    /// Size of the smallest pack entry.
+    pub smallest: u64,
+    /// Size of the largest pack entry.
+    pub largest: u64,
+    /// Average size of the pack entries.
+    pub average: u64,
+}
+
+impl PackFile {
+    /// Create a new PackFile.
+    pub fn new(length: u64, entries: Vec<PackEntry>) -> Self {
+        let mut content_length: u64 = 0;
+        let mut smallest: u64 = u64::MAX;
+        let mut largest: u64 = 0;
+        for entry in entries.iter() {
+            content_length += entry.size;
+            if entry.size < smallest {
+                smallest = entry.size;
+            }
+            if entry.size > largest {
+                largest = entry.size;
+            }
+        }
+        let count: u64 = entries.len() as u64;
+        let average: u64 = if count > 0 { content_length / count } else { 0 };
+        if content_length == 0 {
+            smallest = 0;
+        }
+        Self {
+            length,
+            entries,
+            content_length,
+            smallest,
+            largest,
+            average,
+        }
+    }
+}
+
 /// Contains the configuration of the application, pertaining to all datasets.
 #[derive(Clone, Debug)]
 pub struct Configuration {

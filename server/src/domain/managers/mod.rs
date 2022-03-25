@@ -99,6 +99,13 @@ impl PackBuilder {
         let filename = chunk.digest.to_string();
         builder.append_data(&mut header, filename, &compressed[..])?;
         self.bytes_packed += compressed_size;
+        // Account for the overhead of each tar file entry, which can be
+        // significant if there are many (thousands) small files added to a
+        // single pack, pushing the pack from the desired size (e.g. 64mb) to
+        // something much larger (99mb). The actual overhead for a zero-byte
+        // file is more than 1500 bytes but 1024 is closer to the average
+        // overhead for a typical file set (about 800 bytes).
+        self.bytes_packed += 1024;
         self.chunks_packed += 1;
         Ok(self.bytes_packed >= self.target_size)
     }
