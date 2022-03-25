@@ -236,7 +236,7 @@ impl RestoreSupervisor {
     fn process_queue(&mut self) -> Result<(), Error> {
         // Construct the pack fetcher that will keep track of which pack files
         // have been downloaded to avoid fetching the same one twice.
-        let mut fetcher = PackFetcher::new(self.dbase.clone());
+        let mut fetcher = FileRestorer::new(self.dbase.clone());
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
@@ -275,7 +275,7 @@ impl RestoreSupervisor {
         request: &mut Request,
         digest: Checksum,
         filepath: PathBuf,
-        fetcher: &mut PackFetcher,
+        fetcher: &mut FileRestorer,
     ) -> Result<(), Error> {
         // fetch the packs for the file and assemble the chunks
         fetcher.fetch_file(&digest, &filepath, &request.passphrase)?;
@@ -289,23 +289,23 @@ impl RestoreSupervisor {
         request: &mut Request,
         digest: Checksum,
         path: PathBuf,
-        fetcher: &mut PackFetcher,
+        fetcher: &mut FileRestorer,
     ) -> Result<(), Error> {
         let tree = self
             .dbase
             .get_tree(&digest)?
             .ok_or_else(|| anyhow!(format!("missing tree: {:?}", digest)))?;
         for entry in tree.entries.iter() {
+            let mut filepath = path.clone();
+            filepath.push(&entry.name);
             match &entry.reference {
-                TreeReference::LINK(_) => (),
+                TreeReference::LINK(contents) => {
+                    fetcher.restore_link(contents, filepath)?;
+                }
                 TreeReference::TREE(digest) => {
-                    let mut filepath = path.clone();
-                    filepath.push(&entry.name);
                     self.process_tree(request, digest.to_owned(), filepath, fetcher)?;
                 }
                 TreeReference::FILE(digest) => {
-                    let mut filepath = path.clone();
-                    filepath.push(&entry.name);
                     self.process_file(request, digest.to_owned(), filepath, fetcher)?;
                 }
             }
@@ -379,7 +379,7 @@ impl Handler<Restore> for RestoreSupervisor {
     }
 }
 
-struct PackFetcher {
+struct FileRestorer {
     // Database connection for querying datasets.
     dbase: Arc<dyn RecordRepository>,
     // Identifier of the loaded data set, if any.
@@ -394,7 +394,7 @@ struct PackFetcher {
     downloaded: HashSet<Checksum>,
 }
 
-impl PackFetcher {
+impl FileRestorer {
     fn new(dbase: Arc<dyn RecordRepository>) -> Self {
         Self {
             dbase,
@@ -514,9 +514,31 @@ impl PackFetcher {
         }
         Ok(())
     }
+
+    fn restore_link(&self, encoded: &String, filepath: PathBuf) -> Result<(), Error> {
+        // The backup procedure ensures that the data collected is able to be
+        // converted back, so simply raise errors if anything goes wrong.
+        let decoded_raw = base64::decode(encoded)?;
+        let target = std::str::from_utf8(&decoded_raw)?;
+        let mut outfile = self.basepath.clone().unwrap();
+        outfile.push(filepath);
+        fs::remove_file(&outfile).unwrap();
+        // cfg! macro will not work in this OS-specific import case
+        {
+            #[cfg(target_family = "unix")]
+            use std::os::unix::fs;
+            #[cfg(target_family = "windows")]
+            use std::os::windows::fs;
+            #[cfg(target_family = "unix")]
+            fs::symlink(&target, &outfile)?;
+            #[cfg(target_family = "windows")]
+            fs::symlink_file(&target, &outfile)?;
+        }
+        Ok(())
+    }
 }
 
-impl Drop for PackFetcher {
+impl Drop for FileRestorer {
     fn drop(&mut self) {
         // quietly clean up temporary files
         if let Some(workspace) = self.packpath.take() {

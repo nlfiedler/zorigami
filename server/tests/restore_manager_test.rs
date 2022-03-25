@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -16,11 +16,7 @@ use std::sync::Arc;
 
 #[actix_rt::test]
 async fn test_backup_restore() -> Result<(), Error> {
-    //
-    // Using DBPath, RestorerImpl, and Path::exists() together causes the tests
-    // to crash with a SIGILL (illegal instruction) so instead use tempfile.
-    //
-    let db_base: PathBuf = ["tmp", "test", "databaseTBR"].iter().collect();
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(db_path.path())?;
@@ -217,7 +213,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_actual = Checksum::sha256_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
-    // shutdown the restorer supervisor to release the databse lock
+    // shutdown the restorer supervisor to release the database lock
     let result = sut.stop();
     assert!(result.is_ok());
     actix::System::current().stop();
@@ -242,10 +238,6 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     use std::fs::Permissions;
     use std::os::unix::fs::PermissionsExt;
 
-    //
-    // Using DBPath, RestorerImpl, and Path::exists() together causes this test
-    // to crash with a SIGTRAP (trace/breakpoint trap) so instead use tempfile.
-    //
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
@@ -336,5 +328,122 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());
+    Ok(())
+}
+
+#[actix_rt::test]
+async fn test_backup_restore_symlink() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    // set up local pack store
+    let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+    fs::create_dir_all(&pack_base)?;
+    let pack_path = tempfile::tempdir_in(&pack_base)?;
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert(
+        "basepath".to_owned(),
+        pack_path.into_path().to_string_lossy().into(),
+    );
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+    };
+    dbase.put_store(&store)?;
+
+    // create a dataset
+    let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+    fs::create_dir_all(&fixture_base)?;
+    let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+    let mut dataset = entities::Dataset::new(fixture_path.path());
+    dataset = dataset.add_store("local123");
+    dataset.pack_size = 131072 as u64;
+    dbase.put_dataset(&dataset)?;
+    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
+    dbase.put_computer_id(&dataset.id, &computer_id)?;
+
+    // perform the first backup
+    let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
+    assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    let dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
+    let target = "lorem-ipsum.txt";
+    // cfg! macro will not work in this OS-specific import case
+    {
+        #[cfg(target_family = "unix")]
+        use std::os::unix::fs;
+        #[cfg(target_family = "windows")]
+        use std::os::windows::fs;
+        #[cfg(target_family = "unix")]
+        fs::symlink(&target, &dest)?;
+        #[cfg(target_family = "windows")]
+        fs::symlink_file(&target, &dest)?;
+    }
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 1);
+
+    // perform the second backup
+    let dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
+    fs::remove_file(&dest).unwrap();
+    let target = "target-does-not-exist";
+    // cfg! macro will not work in this OS-specific import case
+    {
+        #[cfg(target_family = "unix")]
+        use std::os::unix::fs;
+        #[cfg(target_family = "windows")]
+        use std::os::windows::fs;
+        #[cfg(target_family = "unix")]
+        fs::symlink(&target, &dest)?;
+        #[cfg(target_family = "windows")]
+        fs::symlink_file(&target, &dest)?;
+    }
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 2);
+
+    // restore the tree containing the symlink from the first snapshot
+    let latest_snapshot = dbase.get_snapshot(&backup_opt.unwrap())?.unwrap();
+    let parent_snapshot = dbase.get_snapshot(&latest_snapshot.parent.unwrap())?.unwrap();
+    let sut = RestorerImpl::new();
+    let result = sut.start(dbase);
+    assert!(result.is_ok());
+    let result = sut.enqueue(Request::new(
+        parent_snapshot.tree,
+        PathBuf::from("."),
+        dataset.id.to_owned(),
+        "keyboard cat".into(),
+    ));
+    assert!(result.is_ok());
+    sut.wait_for_completed();
+    let requests = sut.requests();
+    assert_eq!(requests.len(), 1);
+    let request = &requests[0];
+    assert!(request.error_msg.is_none());
+
+    // ensure symlink contains expected contents
+    let link_path: PathBuf = fixture_path.path().join("link-to-lorem.txt");
+    let value_path = fs::read_link(link_path).unwrap();
+    let value_str = value_path.to_str().unwrap();
+    assert_eq!(value_str, "lorem-ipsum.txt");
+
+    // shutdown the restorer supervisor to release the database lock
+    let result = sut.stop();
+    assert!(result.is_ok());
+    actix::System::current().stop();
     Ok(())
 }

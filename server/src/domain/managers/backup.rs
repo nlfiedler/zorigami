@@ -280,11 +280,11 @@ impl<'a> BackupDriver<'a> {
     /// files and chunks that have already been processed. Raises an error if
     /// time runs out.
     fn process_queue(&mut self) -> Result<(), Error> {
-        while !self.file_chunks.is_empty() {
-            // would use first_key_value() but that is experimental in 1.59
-            let filesum = self.file_chunks.keys().take(1).next().unwrap().to_owned();
+        // would use first_key_value() but that is experimental in 1.59
+        while let Some(key) = self.file_chunks.keys().take(1).next() {
+            let filesum = key.to_owned();
             let mut chunks_processed = 0;
-            let chunks = &self.file_chunks[&filesum].to_owned();
+            let chunks = &self.file_chunks[key].to_owned();
             for chunk in chunks {
                 chunks_processed += 1;
                 // determine if this chunk has already been processed
@@ -897,7 +897,7 @@ fn build_exclusions(excludes: &[PathBuf]) -> GlobSet {
 }
 
 ///
-/// Read the symbolic link value.
+/// Read the symbolic link value and encode using base64.
 ///
 fn read_link(path: &Path) -> String {
     if let Ok(value) = fs::read_link(path) {
@@ -908,7 +908,7 @@ fn read_link(path: &Path) -> String {
             base64::encode(&s)
         }
     } else {
-        path.to_string_lossy().into_owned()
+        base64::encode(path.to_string_lossy().into_owned())
     }
 }
 

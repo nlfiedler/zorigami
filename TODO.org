@@ -5,21 +5,13 @@
 *** DONE Provide GUI for managing multiple exclusions for each data set
 *** DONE add a graphql query to list the contents of a specific pack file
 *** DONE need to consider the overhead of each tar file entry when packing
-*** TODO write tests for backup and restore of symbolic links
-**** create a symlink as a part of a data set
-**** backup the entire data set
-**** modify the symlink contents
-**** backup the entire data set
-**** request to restore the tree containing the sym link
-**** currently will fail because restore does not handle symlinks at all
+*** TODO fix all of the =TreeReference.checksum()= calls to use =if let Some(value)= instead of =unwrap()=
 *** TODO consider storing very small files directly in the tree record
 **** ASCII string of sha256 digest is 64 bytes
 **** files 64 bytes or less are ~very small~
-**** base64 encode the file contents and store in the tree
-**** base64 encoded file of 64 bytes becomes 88 bytes
-**** gzip of the 88 bytes turns into 113 bytes (including original file name)
-**** create a new =TreeReference= named =SMALL=
+**** create a new =TreeReference= named =SMALL= to hold =Vec<u8>= of file contents
 **** write integration tests; backup, restore, count records
+**** need to rebuild the serde model code
 *** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
 **** change restore =Request= to take tree reference and entry name
 **** change GraphQL to allow restoring symbolic links
@@ -84,6 +76,10 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** TODO database backup procedure should prune old snapshots
 **** for local disk case, retain only a few snapshots
 **** for cloud case, honor the least expensive retention plan
+** Schema Changes
+*** do not encode symbolic links as base64, there is no need
+*** consider using ~xid~ (12 bytes) as an alternative to ~ulid~ (16 bytes)
+**** c.f. https://crates.io/crates/xid
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -95,16 +91,17 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ***** that is, enqueue =StartBackup= on the =Runner= actor
 *** similiarly have a "stop backup" button if it is running
 **** need a GraphQL mutation to signal backup to stop
-**** add a =StopBackup= action in =state= module
-**** the =StopBackup= action sets =stop_requested= in =BackupState=
-**** then =handle_file()= in =engine= module calls =get_state()= and checks for =stop_requested=
-**** =handle_file()= will return an error if =stop_requested= is true
+**** add new =StopBackup= action in =state= module
+**** =StopBackup= action sets =stop_requested= in =BackupState=
+**** =process_queue()= in =BackupDriver= calls =get_state()= to check for =stop_requested=
+**** =process_queue()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
 *** TODO consider replacing =DBPath= in tests with =tempfile=
 **** using =DBPath= and async code and =Path::exists()= causes a =SIGILL=
+**** see the tests in =restore_manager_test.rs= which use =tempfile=
 *** TODO testing the minio(?) pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
@@ -260,9 +257,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO consider how datasets can be modified after creation
 **** cannot change stores assigned to dataset once there are snapshots
 **** basically would require starting over if changing stores, base path, etc
-*** TODO consider how to restore symbolic links
-**** i.e. no file chooser to download anything
-**** what if the same path is now a file/directory?
 *** TODO Secure FTP improvements
 **** TODO support SFTP with private key authentication
 ***** use store form to take paths for public and private keys
