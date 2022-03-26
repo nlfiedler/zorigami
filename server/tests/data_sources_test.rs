@@ -1,18 +1,19 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-mod common;
-
-use common::DBPath;
+use anyhow::Error;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::entities::{self, Checksum};
 use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[test]
-fn test_insert_get_chunk() {
-    let db_path = DBPath::new("_test_insert_get_chunk");
+fn test_insert_get_chunk() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // missing Chunk returns None
@@ -77,11 +78,14 @@ fn test_insert_get_chunk() {
         actual.packfile.unwrap().to_string(),
         "sha1-bc1a3198db79036e56b30f0ab307cee55e845907"
     );
+    Ok(())
 }
 
 #[test]
-fn test_insert_get_pack() {
-    let db_path = DBPath::new("_test_insert_get_pack");
+fn test_insert_get_pack() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
@@ -141,11 +145,14 @@ fn test_insert_get_pack() {
     assert_eq!(packs[0].digest, digest5);
     assert_eq!(packs[1].digest, digest2);
     assert_eq!(packs[2].digest, digest1);
+    Ok(())
 }
 
 #[test]
-fn test_insert_get_database() {
-    let db_path = DBPath::new("_test_insert_get_database");
+fn test_insert_get_database() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
@@ -182,11 +189,14 @@ fn test_insert_get_database() {
     assert_eq!(packs[0].digest, digest2);
     assert_eq!(packs[1].digest, digest1);
     assert_eq!(packs[2].digest, digest3);
+    Ok(())
 }
 
 #[test]
-fn test_put_get_delete_store() {
-    let db_path = DBPath::new("_test_put_get_delete_store");
+fn test_put_get_delete_store() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // populate the data source with stores
@@ -231,11 +241,14 @@ fn test_put_get_delete_store() {
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 1);
     assert_eq!(stores[0].id, "cafebabe");
+    Ok(())
 }
 
 #[test]
-fn test_put_get_delete_datasets() {
-    let db_path = DBPath::new("_test_put_get_delete_datasets");
+fn test_put_get_delete_datasets() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // populate the data source with datasets
@@ -262,11 +275,14 @@ fn test_put_get_delete_datasets() {
     datasource.delete_dataset(&datasets[0].id).unwrap();
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 1);
+    Ok(())
 }
 
 #[test]
-fn test_put_get_configuration() {
-    let db_path = DBPath::new("_test_put_get_configuration");
+fn test_put_get_configuration() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let expected: entities::Configuration = Default::default();
@@ -277,11 +293,14 @@ fn test_put_get_configuration() {
     assert_eq!(actual.username, expected.username);
     assert_eq!(actual.hostname, expected.hostname);
     assert_eq!(actual.computer_id, expected.computer_id);
+    Ok(())
 }
 
 #[test]
-fn test_put_get_computer_id() {
-    let db_path = DBPath::new("_test_put_get_computer_id");
+fn test_put_get_computer_id() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     datasource
@@ -295,11 +314,14 @@ fn test_put_get_computer_id() {
     datasource.delete_computer_id("cafebabe").unwrap();
     let opt = datasource.get_computer_id("cafebabe").unwrap();
     assert!(opt.is_none());
+    Ok(())
 }
 
 #[test]
-fn test_put_get_latest_snapshot() {
-    let db_path = DBPath::new("_test_put_get_latest_snapshot");
+fn test_put_get_latest_snapshot() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
@@ -312,11 +334,14 @@ fn test_put_get_latest_snapshot() {
     datasource.delete_latest_snapshot("cafebabe").unwrap();
     let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
     assert!(opt.is_none());
+    Ok(())
 }
 
 #[test]
-fn test_insert_get_file() {
-    let db_path = DBPath::new("_test_insert_get_file");
+fn test_insert_get_file() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
@@ -334,11 +359,14 @@ fn test_insert_get_file() {
     assert_eq!(actual.chunks.len(), 1);
     assert_eq!(actual.chunks[0].0, 0);
     assert_eq!(actual.chunks[0].1, file_digest);
+    Ok(())
 }
 
 #[test]
-fn test_put_get_tree() {
-    let db_path = DBPath::new("_test_put_get_tree");
+fn test_put_get_tree() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
@@ -356,11 +384,14 @@ fn test_put_get_tree() {
     assert_eq!(actual.digest, tree.digest);
     assert_eq!(actual.entries.len(), 1);
     assert_eq!(actual.entries[0].name, "lorem-ipsum.txt");
+    Ok(())
 }
 
 #[test]
-fn test_put_get_xattr() {
-    let db_path = DBPath::new("_test_put_get_xattr");
+fn test_put_get_xattr() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let raw_xattr: Vec<u8> = vec![
@@ -377,11 +408,14 @@ fn test_put_get_xattr() {
     let actual = option.unwrap();
     let new1sum = Checksum::sha1_from_bytes(&actual);
     assert_eq!(new1sum, sha1sum);
+    Ok(())
 }
 
 #[test]
-fn test_put_get_snapshot() {
-    let db_path = DBPath::new("_test_put_get_snapshot");
+fn test_put_get_snapshot() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
@@ -409,11 +443,14 @@ fn test_put_get_snapshot() {
     assert_eq!(actual.end_time, snapshot.end_time);
     assert_eq!(actual.file_counts, snapshot.file_counts);
     assert_eq!(actual.tree, snapshot.tree);
+    Ok(())
 }
 
 #[test]
-fn test_record_counts() {
-    let db_path = DBPath::new("_test_record_counts");
+fn test_record_counts() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
     // computer identifier(s) are not counted
@@ -483,18 +520,21 @@ fn test_record_counts() {
     assert_eq!(counts.dataset, 0);
     assert_eq!(counts.store, 0);
     assert_eq!(counts.xattr, 0);
+    Ok(())
 }
 
 #[test]
-fn test_backup_restore() {
-    let db_path = DBPath::new("_test_backup_restore");
+fn test_backup_restore() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
     assert!(datasource.put_computer_id("charlie", "localhost").is_ok());
 
     // backup the database
-    let backup_path = DBPath::new("_test_backup_restore_bup");
+    let backup_path = tempfile::tempdir_in(&db_base)?;
     datasource
-        .create_backup(Some(backup_path.as_ref().to_path_buf()))
+        .create_backup(Some(backup_path.path().to_path_buf()))
         .unwrap();
 
     // modify the database
@@ -502,7 +542,7 @@ fn test_backup_restore() {
 
     // restore from backup
     datasource
-        .restore_from_backup(Some(backup_path.as_ref().to_path_buf()))
+        .restore_from_backup(Some(backup_path.path().to_path_buf()))
         .unwrap();
 
     // verify contents of restored database
@@ -512,4 +552,5 @@ fn test_backup_restore() {
         Err(e) => panic!("error: {}", e),
     };
     let _ = std::fs::remove_dir_all(backup_path);
+    Ok(())
 }

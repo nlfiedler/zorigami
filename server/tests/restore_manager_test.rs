@@ -247,11 +247,14 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
-    let pack_path = "tmp/test/managers/backup_error/packs";
-    let _ = fs::remove_dir_all(pack_path);
-
+    let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+    fs::create_dir_all(&pack_base)?;
+    let pack_path = tempfile::tempdir_in(&pack_base)?;
     let mut local_props: HashMap<String, String> = HashMap::new();
-    local_props.insert("basepath".to_owned(), pack_path.to_owned());
+    local_props.insert(
+        "basepath".to_owned(),
+        pack_path.into_path().to_string_lossy().into(),
+    );
     let store = entities::Store {
         id: "local123".to_owned(),
         store_type: entities::StoreType::LOCAL,
@@ -261,10 +264,10 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dbase.put_store(&store)?;
 
     // create a dataset
-    let basepath = "tmp/test/managers/backup_error/fixtures";
-    let _ = fs::remove_dir_all(basepath);
-    fs::create_dir_all(basepath)?;
-    let mut dataset = entities::Dataset::new(Path::new(basepath));
+    let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+    fs::create_dir_all(&fixture_base)?;
+    let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+    let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset = dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
     dbase.put_dataset(&dataset)?;
@@ -272,7 +275,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let dest: PathBuf = [basepath, "lorem-ipsum.txt"].iter().collect();
+    let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
@@ -280,9 +283,9 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 
     // perform the second backup with a file that is not readable
     // (add two files so there is something to backup, producing a snapshot)
-    let dest: PathBuf = [basepath, "short-file.txt"].iter().collect();
+    let dest: PathBuf = fixture_path.path().join("short-file.txt");
     assert!(fs::write(dest, vec![102, 111, 111, 98, 97, 114]).is_ok());
-    let dest: PathBuf = [basepath, "washington-journal.txt"].iter().collect();
+    let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
     let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
