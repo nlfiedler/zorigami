@@ -340,9 +340,14 @@ impl From<FileType> for EntryType {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TreeReference {
+    /// Base64 encoded value of a symbolic link.
     LINK(String),
+    /// Hash digest of the formatted tree.
     TREE(Checksum),
+    /// Hash digest of the file contents.
     FILE(Checksum),
+    /// Raw contents of a very small file.
+    SMALL(Vec<u8>),
 }
 
 impl TreeReference {
@@ -359,6 +364,11 @@ impl TreeReference {
     /// Return `true` if this reference is for a file.
     pub fn is_file(&self) -> bool {
         matches!(*self, TreeReference::FILE(_))
+    }
+
+    /// Return `true` if this reference is for a very small file.
+    pub fn is_small(&self) -> bool {
+        matches!(*self, TreeReference::SMALL(_))
     }
 
     /// Return the checksum for this reference, if possible.
@@ -385,6 +395,10 @@ impl fmt::Display for TreeReference {
             TreeReference::LINK(value) => write!(f, "link-{}", value),
             TreeReference::TREE(digest) => write!(f, "tree-{}", digest),
             TreeReference::FILE(digest) => write!(f, "file-{}", digest),
+            TreeReference::SMALL(contents) => {
+                let encoded = base64::encode(contents);
+                write!(f, "small-{}", encoded)
+            }
         }
     }
 }
@@ -399,8 +413,11 @@ impl FromStr for TreeReference {
             let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
             Ok(TreeReference::TREE(digest.expect("invalid tree SHA1")))
         } else if s.starts_with("file-") {
-            let digest: Result<Checksum, Error> = FromStr::from_str(&s[7..]);
+            let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
             Ok(TreeReference::FILE(digest.expect("invalid file SHA256")))
+        } else if s.starts_with("small-") {
+            let decoded = base64::decode(&s[6..])?;
+            Ok(TreeReference::SMALL(decoded))
         } else {
             Err(anyhow!(format!("not a recognized reference: {}", s)))
         }
@@ -1106,6 +1123,44 @@ mod tests {
         assert_eq!(entries.next().unwrap().name, "lorem-ipsum.txt");
         assert!(entries.next().is_none());
         assert_eq!(tree.file_count, 2);
+    }
+
+    #[test]
+    fn test_treereference_string() {
+        // file
+        let sha256 = Checksum::SHA256(
+            "b4cfd55cb7a434f534993bddbb51c8fc04a4142c4bb8a04e11773a1acc26c5ac".to_owned(),
+        );
+        let tref = TreeReference::FILE(sha256);
+        let result = tref.to_string();
+        assert_eq!(
+            result,
+            "file-sha256-b4cfd55cb7a434f534993bddbb51c8fc04a4142c4bb8a04e11773a1acc26c5ac"
+        );
+        let result = FromStr::from_str(
+            "file-sha256-b4cfd55cb7a434f534993bddbb51c8fc04a4142c4bb8a04e11773a1acc26c5ac",
+        );
+        assert_eq!(tref, result.unwrap());
+        // tree
+        let sha1 = Checksum::SHA1("4c009e44fe5794df0b1f828f2a8c868e66644964".to_owned());
+        let tref = TreeReference::TREE(sha1);
+        let result = tref.to_string();
+        assert_eq!(result, "tree-sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
+        let result = FromStr::from_str("tree-sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
+        assert_eq!(tref, result.unwrap());
+        // link
+        let tref = TreeReference::LINK("a2V5Ym9hcmQgY2F0".to_owned());
+        let result = tref.to_string();
+        assert_eq!(result, "link-a2V5Ym9hcmQgY2F0");
+        let result = FromStr::from_str("link-a2V5Ym9hcmQgY2F0");
+        assert_eq!(tref, result.unwrap());
+        // small
+        let contents = "keyboard cat".as_bytes().to_vec();
+        let tref = TreeReference::SMALL(contents);
+        let result = tref.to_string();
+        assert_eq!(result, "small-a2V5Ym9hcmQgY2F0");
+        let result = FromStr::from_str("small-a2V5Ym9hcmQgY2F0");
+        assert_eq!(tref, result.unwrap());
     }
 
     #[test]

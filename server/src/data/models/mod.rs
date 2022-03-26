@@ -85,6 +85,7 @@ mod tree;
 //     LINK(String),
 //     TREE(Checksum),
 //     FILE(Checksum),
+//     SMALL(Vec<u8>),
 // }
 // #[derive(Serialize, Deserialize)]
 // pub struct TreeEntry {
@@ -440,10 +441,10 @@ mod tests {
         let file = File::new(file_digest.clone(), 3129, chunks);
         // act
         let mut buffer: Vec<u8> = Vec::new();
-        let mut ser = serde_json::Serializer::new(&mut buffer);
+        let mut ser = serde_cbor::Serializer::new(&mut buffer);
         FileDef::serialize(&file, &mut ser)?;
-        let as_text = String::from_utf8(buffer)?;
-        let mut de = serde_json::Deserializer::from_str(&as_text);
+        assert_eq!(buffer.len(), 85);
+        let mut de = serde_cbor::Deserializer::from_slice(&buffer);
         let actual = FileDef::deserialize(&mut de)?;
         // assert
         let null_digest = Checksum::SHA1(String::from("0000000000000000000000000000000000000000"));

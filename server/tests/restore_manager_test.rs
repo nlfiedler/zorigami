@@ -61,7 +61,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert!(backup_opt.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
-    assert_eq!(counts.file, 2);
+    assert_eq!(counts.file, 1);
     assert_eq!(counts.chunk, 0);
     assert_eq!(counts.tree, 1);
 
@@ -72,7 +72,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert!(backup_opt.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 2);
-    assert_eq!(counts.file, 3);
+    assert_eq!(counts.file, 2);
     assert_eq!(counts.chunk, 3);
     assert_eq!(counts.tree, 2);
 
@@ -83,7 +83,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert!(backup_opt.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 3);
-    assert_eq!(counts.file, 4);
+    assert_eq!(counts.file, 3);
     assert_eq!(counts.chunk, 3);
     assert_eq!(counts.tree, 3);
 
@@ -95,7 +95,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert!(backup_opt.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
-    assert_eq!(counts.file, 5);
+    assert_eq!(counts.file, 4);
     assert_eq!(counts.chunk, 4);
     assert_eq!(counts.tree, 4);
 
@@ -193,25 +193,27 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_actual = Checksum::sha256_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
+    // TODO: some day will have a way to selectively restore a small file
     // restore the zero length file from the first snapshot
-    let digest_expected = Checksum::SHA256(String::from(
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    ));
-    sut.reset_completed();
-    let result = sut.enqueue(Request::new(
-        digest_expected.clone(),
-        PathBuf::from("restored.bin"),
-        dataset.id.to_owned(),
-        "keyboard cat".into(),
-    ));
-    assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert!(request.error_msg.is_none());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
-    assert_eq!(digest_expected, digest_actual);
+    // let digest_expected = Checksum::SHA256(String::from(
+    //     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    // ));
+    // sut.reset_completed();
+    // let result = sut.enqueue(Request::new(
+    //     digest_expected.clone(),
+    //     PathBuf::from("restored.bin"),
+    //     dataset.id.to_owned(),
+    //     "keyboard cat".into(),
+    // ));
+    // assert!(result.is_ok());
+    // sut.wait_for_completed();
+    // let requests = sut.requests();
+    // assert_eq!(requests.len(), 1);
+    // let request = &requests[0];
+    // println!("request: {:?}", request);
+    // assert!(request.error_msg.is_none());
+    // let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    // assert_eq!(digest_expected, digest_actual);
 
     // shutdown the restorer supervisor to release the database lock
     let result = sut.stop();
@@ -418,7 +420,9 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
 
     // restore the tree containing the symlink from the first snapshot
     let latest_snapshot = dbase.get_snapshot(&backup_opt.unwrap())?.unwrap();
-    let parent_snapshot = dbase.get_snapshot(&latest_snapshot.parent.unwrap())?.unwrap();
+    let parent_snapshot = dbase
+        .get_snapshot(&latest_snapshot.parent.unwrap())?
+        .unwrap();
     let sut = RestorerImpl::new();
     let result = sut.start(dbase);
     assert!(result.is_ok());
@@ -440,6 +444,110 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let value_path = fs::read_link(link_path).unwrap();
     let value_str = value_path.to_str().unwrap();
     assert_eq!(value_str, "lorem-ipsum.txt");
+
+    // shutdown the restorer supervisor to release the database lock
+    let result = sut.stop();
+    assert!(result.is_ok());
+    actix::System::current().stop();
+    Ok(())
+}
+
+#[actix_rt::test]
+async fn test_backup_restore_small() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    // set up local pack store
+    let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+    fs::create_dir_all(&pack_base)?;
+    let pack_path = tempfile::tempdir_in(&pack_base)?;
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert(
+        "basepath".to_owned(),
+        pack_path.into_path().to_string_lossy().into(),
+    );
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+    };
+    dbase.put_store(&store)?;
+
+    // create a dataset
+    let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+    fs::create_dir_all(&fixture_base)?;
+    let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+    let mut dataset = entities::Dataset::new(fixture_path.path());
+    dataset = dataset.add_store("local123");
+    dataset.pack_size = 131072 as u64;
+    dbase.put_dataset(&dataset)?;
+    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
+    dbase.put_computer_id(&dataset.id, &computer_id)?;
+
+    // perform the first backup
+    let dest: PathBuf = fixture_path.path().join("zero-length.txt");
+    assert!(fs::write(dest, vec![]).is_ok());
+    let dest: PathBuf = fixture_path.path().join("very-small.txt");
+    let content = "keyboard cat".as_bytes().to_vec();
+    assert!(fs::write(dest, content).is_ok());
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 0);
+    assert_eq!(counts.file, 0);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 1);
+
+    // perform the second backup
+    let dest: PathBuf = fixture_path.path().join("zero-length.txt");
+    assert!(fs::remove_file(&dest).is_ok());
+    assert!(fs::metadata(&dest).is_err());
+    let dest: PathBuf = fixture_path.path().join("very-small.txt");
+    let content = "danger mouse".as_bytes().to_vec();
+    assert!(fs::write(dest, content).is_ok());
+    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    assert!(backup_opt.is_some());
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 0);
+    assert_eq!(counts.file, 0);
+    assert_eq!(counts.chunk, 0);
+    assert_eq!(counts.tree, 2);
+
+    // restore the tree containing the small file from the first snapshot
+    let latest_snapshot = dbase.get_snapshot(&backup_opt.unwrap())?.unwrap();
+    let parent_snapshot = dbase
+        .get_snapshot(&latest_snapshot.parent.unwrap())?
+        .unwrap();
+    let sut = RestorerImpl::new();
+    let result = sut.start(dbase);
+    assert!(result.is_ok());
+    let result = sut.enqueue(Request::new(
+        parent_snapshot.tree,
+        PathBuf::from("."),
+        dataset.id.to_owned(),
+        "keyboard cat".into(),
+    ));
+    assert!(result.is_ok());
+    sut.wait_for_completed();
+    let requests = sut.requests();
+    assert_eq!(requests.len(), 1);
+    let request = &requests[0];
+    assert!(request.error_msg.is_none());
+
+    // ensure small file contains expected contents
+    let small_path: PathBuf = fixture_path.path().join("very-small.txt");
+    let value_str = fs::read_to_string(small_path).unwrap();
+    assert_eq!(value_str, "keyboard cat");
+    // ensure zero-length file was restored
+    let zero_length: PathBuf = fixture_path.path().join("zero-length.txt");
+    let metadata = fs::metadata(&zero_length).unwrap();
+    assert_eq!(metadata.len(), 0);
 
     // shutdown the restorer supervisor to release the database lock
     let result = sut.stop();

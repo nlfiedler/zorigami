@@ -648,7 +648,7 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                     } else if left_entry.name > right_entry.name {
                         // file or directory has been added
                         self.right_idx += 1;
-                        if right_entry.fstype.is_dir() {
+                        if right_entry.reference.is_tree() {
                             // a new tree: add every file contained therein
                             let mut path = PathBuf::from(base);
                             path.push(&right_entry.name);
@@ -656,7 +656,7 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                             self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
                             // return to the main loop
                             break;
-                        } else if right_entry.fstype.is_file() {
+                        } else if right_entry.reference.is_file() {
                             // return the file
                             let sum = right_entry.reference.checksum().unwrap();
                             let mut path = PathBuf::from(base);
@@ -668,11 +668,11 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                         // they have the same name but differ somehow
                         self.left_idx += 1;
                         self.right_idx += 1;
-                        let left_is_dir = left_entry.fstype.is_dir();
-                        let left_is_file = left_entry.fstype.is_file();
-                        let left_is_link = left_entry.fstype.is_link();
-                        let right_is_dir = right_entry.fstype.is_dir();
-                        let right_is_file = right_entry.fstype.is_file();
+                        let left_is_dir = left_entry.reference.is_tree();
+                        let left_is_file = left_entry.reference.is_file();
+                        let left_is_link = left_entry.reference.is_link();
+                        let right_is_dir = right_entry.reference.is_tree();
+                        let right_is_file = right_entry.reference.is_file();
                         if left_is_dir && right_is_dir {
                             // tree A & B: add both trees to the queue
                             let left_sum = left_entry.reference.checksum().unwrap();
@@ -709,13 +709,13 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                     let base = self.path.as_ref().unwrap();
                     let right_entry = &right_tree.entries[self.right_idx];
                     self.right_idx += 1;
-                    if right_entry.fstype.is_dir() {
+                    if right_entry.reference.is_tree() {
                         // a new tree: add every file contained therein
                         let mut path = PathBuf::from(base);
                         path.push(&right_entry.name);
                         let sum = right_entry.reference.checksum().unwrap();
                         self.walker = Some(TreeWalker::new(self.dbase, &path, sum));
-                    } else if right_entry.fstype.is_file() {
+                    } else if right_entry.reference.is_file() {
                         // return the file
                         let sum = right_entry.reference.checksum().unwrap();
                         let mut path = PathBuf::from(base);
@@ -945,23 +945,33 @@ fn scan_tree(
                                     file_count += scan.file_count;
                                     let digest = scan.digest.clone();
                                     let tref = entities::TreeReference::TREE(digest);
-                                    let ent = process_path(&path, tref, dbase);
-                                    entries.push(ent);
+                                    entries.push(process_path(&path, tref, dbase));
                                 } else if file_type.is_symlink() {
                                     let link = read_link(&path);
                                     let tref = entities::TreeReference::LINK(link);
-                                    let ent = process_path(&path, tref, dbase);
-                                    entries.push(ent);
+                                    entries.push(process_path(&path, tref, dbase));
                                 } else if file_type.is_file() {
-                                    match entities::Checksum::sha256_from_file(&path) {
-                                        Ok(digest) => {
-                                            let tref = entities::TreeReference::FILE(digest);
-                                            let ent = process_path(&path, tref, dbase);
-                                            entries.push(ent);
-                                            file_count += 1;
+                                    if metadata.len() <= 80 {
+                                        // file smaller than FileDef record
+                                        match fs::read(&path) {
+                                            Ok(contents) => {
+                                                let tref = entities::TreeReference::SMALL(contents);
+                                                entries.push(process_path(&path, tref, dbase));
+                                            }
+                                            Err(err) => {
+                                                error!("could not read file: {:?}: {}", path, err)
+                                            }
                                         }
-                                        Err(err) => {
-                                            error!("could not read file: {:?}: {}", path, err)
+                                    } else {
+                                        match entities::Checksum::sha256_from_file(&path) {
+                                            Ok(digest) => {
+                                                let tref = entities::TreeReference::FILE(digest);
+                                                entries.push(process_path(&path, tref, dbase));
+                                                file_count += 1;
+                                            }
+                                            Err(err) => {
+                                                error!("could not read file: {:?}: {}", path, err)
+                                            }
                                         }
                                     }
                                 }

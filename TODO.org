@@ -1,22 +1,17 @@
 * Tasks
 ** Replace Time Machine
-*** DONE Support wildcard exclusions (e.g. =*/node_modules/**=)
-*** DONE Update GraphQL to support returning and changing the excludes
-*** DONE Provide GUI for managing multiple exclusions for each data set
+*** DONE support wildcard exclusions (e.g. =*/node_modules/**=)
+*** DONE update GraphQL to support returning and changing the excludes
+*** DONE provide GUI for managing multiple exclusions for each data set
 *** DONE add a graphql query to list the contents of a specific pack file
-*** DONE need to consider the overhead of each tar file entry when packing
-*** TODO fix all of the =TreeReference.checksum()= calls to use =if let Some(value)= instead of =unwrap()=
-*** TODO consider storing very small files directly in the tree record
-**** ASCII string of sha256 digest is 64 bytes
-**** files 64 bytes or less are ~very small~
-**** create a new =TreeReference= named =SMALL= to hold =Vec<u8>= of file contents
-**** write integration tests; backup, restore, count records
-**** need to rebuild the serde model code
+*** DONE account for the overhead of each tar file entry when packing
+*** DONE store very small files directly in the tree record
 *** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
 **** change restore =Request= to take tree reference and entry name
 **** change GraphQL to allow restoring symbolic links
 **** =TreeBrowserBloc= has the current tree digest in the =history=
 *** TODO add support for restoring very small files directly (not as part of a tree restore)
+**** see the ~TODO~ in =restore_manager_test.rs=
 **** current =restoreFiles= GraphQL mutation does not take a tree and entry name as arguments
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 *** TODO store the passphrase in the Keychain app

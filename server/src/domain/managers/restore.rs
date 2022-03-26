@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
@@ -308,6 +308,9 @@ impl RestoreSupervisor {
                 TreeReference::FILE(digest) => {
                     self.process_file(request, digest.to_owned(), filepath, fetcher)?;
                 }
+                TreeReference::SMALL(contents) => {
+                    fetcher.restore_small(contents, filepath)?;
+                }
             }
         }
         Ok(())
@@ -522,7 +525,7 @@ impl FileRestorer {
         let target = std::str::from_utf8(&decoded_raw)?;
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
-        fs::remove_file(&outfile).unwrap();
+        fs::remove_file(&outfile)?;
         // cfg! macro will not work in this OS-specific import case
         {
             #[cfg(target_family = "unix")]
@@ -534,6 +537,13 @@ impl FileRestorer {
             #[cfg(target_family = "windows")]
             fs::symlink_file(&target, &outfile)?;
         }
+        Ok(())
+    }
+
+    fn restore_small(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error> {
+        let mut outfile = self.basepath.clone().unwrap();
+        outfile.push(filepath);
+        fs::write(&outfile, contents)?;
         Ok(())
     }
 }
