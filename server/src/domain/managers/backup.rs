@@ -898,19 +898,15 @@ fn build_exclusions(excludes: &[PathBuf]) -> GlobSet {
 }
 
 ///
-/// Read the symbolic link value and encode using base64.
+/// Read the symbolic link value and convert to raw bytes.
 ///
-fn read_link(path: &Path) -> String {
-    if let Ok(value) = fs::read_link(path) {
-        if let Some(vstr) = value.to_str() {
-            base64::encode(vstr)
-        } else {
-            let s: String = value.to_string_lossy().into_owned();
-            base64::encode(&s)
-        }
-    } else {
-        base64::encode(path.to_string_lossy().into_owned())
-    }
+fn read_link(path: &Path) -> Result<Vec<u8>, Error> {
+    #[cfg(target_family = "unix")]
+    use std::os::unix::ffi::OsStringExt;
+    #[cfg(target_family = "windows")]
+    use std::os::windows::ffi::OsStringExt;
+    let value = fs::read_link(path)?;
+    Ok(value.into_os_string().into_vec())
 }
 
 ///
@@ -949,9 +945,15 @@ fn scan_tree(
                                     let tref = entities::TreeReference::TREE(digest);
                                     entries.push(process_path(&path, tref, dbase));
                                 } else if metadata.is_symlink() {
-                                    let link = read_link(&path);
-                                    let tref = entities::TreeReference::LINK(link);
-                                    entries.push(process_path(&path, tref, dbase));
+                                    match read_link(&path) {
+                                        Ok(contents) => {
+                                            let tref = entities::TreeReference::LINK(contents);
+                                            entries.push(process_path(&path, tref, dbase));
+                                        }
+                                        Err(err) => {
+                                            error!("could not read link: {:?}: {}", path, err)
+                                        }
+                                    }
                                 } else if metadata.is_file() {
                                     if metadata.len() <= 80 {
                                         // file smaller than FileDef record
@@ -1088,8 +1090,8 @@ mod tests {
         fs::symlink(&target, &link)?;
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &link)?;
-        let actual = read_link(&link);
-        assert_eq!(actual, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
+        let actual = read_link(&link)?;
+        assert_eq!(actual, target.as_bytes());
         Ok(())
     }
 }

@@ -333,15 +333,14 @@ impl From<FileType> for EntryType {
 }
 
 ///
-/// A `TreeReference` represents the "value" for a tree entry, either the
-/// checksum of a tree object, or an individual file, or a symbolic link. The
-/// symbolic link value should be base64 encoded for the purpose of character
-/// encoding safety.
+/// A `TreeReference` represents the "value" for a tree entry, which can be one
+/// of the following: the checksum of a tree, the checksum of a file, the
+/// contents of a symbolic link, or the contents of a very small file.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TreeReference {
-    /// Base64 encoded value of a symbolic link.
-    LINK(String),
+    /// Raw value of a symbolic link.
+    LINK(Vec<u8>),
     /// Hash digest of the formatted tree.
     TREE(Checksum),
     /// Hash digest of the file contents.
@@ -381,7 +380,7 @@ impl TreeReference {
     }
 
     /// Return the base64 encoded value for this symlink, if possible.
-    pub fn symlink(&self) -> Option<String> {
+    pub fn symlink(&self) -> Option<Vec<u8>> {
         match self {
             TreeReference::LINK(link) => Some(link.clone()),
             _ => None,
@@ -392,7 +391,10 @@ impl TreeReference {
 impl fmt::Display for TreeReference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TreeReference::LINK(value) => write!(f, "link-{}", value),
+            TreeReference::LINK(value) => {
+                let encoded = base64::encode(value);
+                write!(f, "link-{}", encoded)
+            },
             TreeReference::TREE(digest) => write!(f, "tree-{}", digest),
             TreeReference::FILE(digest) => write!(f, "file-{}", digest),
             TreeReference::SMALL(contents) => {
@@ -408,7 +410,8 @@ impl FromStr for TreeReference {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.starts_with("link-") {
-            Ok(TreeReference::LINK(s[5..].to_owned()))
+            let decoded = base64::decode(&s[5..])?;
+            Ok(TreeReference::LINK(decoded))
         } else if s.starts_with("tree-") {
             let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
             Ok(TreeReference::TREE(digest.expect("invalid tree SHA1")))
@@ -1198,10 +1201,11 @@ mod tests {
         let result = FromStr::from_str("tree-sha1-4c009e44fe5794df0b1f828f2a8c868e66644964");
         assert_eq!(tref, result.unwrap());
         // link
-        let tref = TreeReference::LINK("a2V5Ym9hcmQgY2F0".to_owned());
+        let contents = "danger mouse".as_bytes().to_vec();
+        let tref = TreeReference::LINK(contents);
         let result = tref.to_string();
-        assert_eq!(result, "link-a2V5Ym9hcmQgY2F0");
-        let result = FromStr::from_str("link-a2V5Ym9hcmQgY2F0");
+        assert_eq!(result, "link-ZGFuZ2VyIG1vdXNl");
+        let result = FromStr::from_str("link-ZGFuZ2VyIG1vdXNl");
         assert_eq!(tref, result.unwrap());
         // small
         let contents = "keyboard cat".as_bytes().to_vec();

@@ -7,7 +7,7 @@
 *** DONE account for the overhead of each tar file entry when packing
 *** DONE store very small files directly in the tree record
 *** DONE collect statistics of files and directories during snapshot
-*** TODO do not encode symbolic links as base64, there is no need
+*** DONE do not encode symbolic links as base64, there is no need
 *** TODO consider using ~xid~ (12 bytes) as an alternative to ~ulid~ (16 bytes)
 **** c.f. https://crates.io/crates/xid
 **** TODO use =xid= instead of =ulid= for data set identifiers

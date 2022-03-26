@@ -518,11 +518,12 @@ impl FileRestorer {
         Ok(())
     }
 
-    fn restore_link(&self, encoded: &String, filepath: PathBuf) -> Result<(), Error> {
-        // The backup procedure ensures that the data collected is able to be
-        // converted back, so simply raise errors if anything goes wrong.
-        let decoded_raw = base64::decode(encoded)?;
-        let target = std::str::from_utf8(&decoded_raw)?;
+    fn restore_link(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error> {
+        #[cfg(target_family = "unix")]
+        use std::os::unix::ffi::OsStringExt;
+        #[cfg(target_family = "windows")]
+        use std::os::windows::ffi::OsStringExt;
+        let target = std::ffi::OsString::from_vec(contents.to_owned());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
         fs::remove_file(&outfile)?;

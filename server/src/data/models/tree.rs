@@ -393,7 +393,7 @@ const _: () = {
                         }
                     } {
                         (__Field::__field0, __variant) => _serde::__private::Result::map(
-                            _serde::de::VariantAccess::newtype_variant::<String>(__variant),
+                            _serde::de::VariantAccess::newtype_variant::<Vec<u8>>(__variant),
                             TreeReference::LINK,
                         ),
                         (__Field::__field1, __variant) => _serde::__private::Result::map(

@@ -197,7 +197,7 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "meaningless");
     let value = entries[0].reference.symlink().unwrap();
-    assert_eq!(value, "bGlua190YXJnZXRfaXNfbWVhbmluZ2xlc3M=");
+    assert_eq!(value, target.as_bytes());
     Ok(())
 }
 
