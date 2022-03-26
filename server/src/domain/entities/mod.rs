@@ -687,6 +687,54 @@ impl File {
 }
 
 ///
+/// Holds statistics regarding a specific snapshot.
+///
+#[derive(Clone, Debug, PartialEq)]
+pub struct FileCounts {
+    pub directories: u32,
+    pub symlinks: u32,
+    pub files_below_80: u32,
+    pub files_below_1k: u32,
+    pub files_below_10k: u32,
+    pub files_below_100k: u32,
+    pub files_below_1m: u32,
+    pub files_below_10m: u32,
+    pub files_below_100m: u32,
+    pub very_large_files: u32,
+}
+
+impl FileCounts {
+    pub fn total_files(&self) -> u64 {
+        let mut count: u64 = self.files_below_80.into();
+        count += self.files_below_1k as u64;
+        count += self.files_below_10k as u64;
+        count += self.files_below_100k as u64;
+        count += self.files_below_1m as u64;
+        count += self.files_below_10m as u64;
+        count += self.files_below_100m as u64;
+        count += self.very_large_files as u64;
+        count
+    }
+}
+
+impl Default for FileCounts {
+    fn default() -> Self {
+        Self {
+            directories: 0,
+            symlinks: 0,
+            files_below_80: 0,
+            files_below_1k: 0,
+            files_below_10k: 0,
+            files_below_100k: 0,
+            files_below_1m: 0,
+            files_below_10m: 0,
+            files_below_100m: 0,
+            very_large_files: 0,
+        }
+    }
+}
+
+///
 /// A `Snapshot` represents a single backup, either in progress or completed.
 /// It references a possible parent snapshot, and a tree representing the files
 /// contained in the snapshot.
@@ -702,22 +750,22 @@ pub struct Snapshot {
     /// Time when the snapshot completed its upload. Will be `None` until
     /// the backup has completed.
     pub end_time: Option<DateTime<Utc>>,
-    /// Total number of files contained in this snapshot.
-    pub file_count: u32,
+    /// Number of files and directories contained in this snapshot.
+    pub file_counts: FileCounts,
     /// Digest of the root tree for this snapshot.
     pub tree: Checksum,
 }
 
 impl Snapshot {
     /// Construct a new `Snapshot` for the given tree, and optional parent.
-    pub fn new(parent: Option<Checksum>, tree: Checksum, file_count: u32) -> Self {
+    pub fn new(parent: Option<Checksum>, tree: Checksum, file_counts: FileCounts) -> Self {
         let start_time = Utc::now();
         let mut snapshot = Self {
             digest: Checksum::SHA1(FORTY_ZEROS.to_owned()),
             parent,
             start_time,
             end_time: None,
-            file_count,
+            file_counts,
             tree,
         };
         // Need to compute a checksum and save that as the "key" for this
@@ -754,10 +802,11 @@ impl fmt::Display for Snapshot {
             None => NULL_SHA1.to_string(),
             Some(ref value) => value.to_string(),
         };
+        let file_count = self.file_counts.total_files();
         write!(
             f,
             "tree {}\nparent {}\nnumFiles {}\nstartTime {}",
-            self.tree, parent, self.file_count, start_time
+            self.tree, parent, file_count, start_time
         )
     }
 }
@@ -1221,5 +1270,23 @@ mod tests {
             tree.digest.to_string(),
             "sha1-086f6c6ba3e51882c4fd55fc9733316c4ee1b15d"
         );
+    }
+
+    #[test]
+    fn test_file_counts() {
+        let counts = FileCounts {
+            directories: 100,
+            symlinks: 1000,
+            files_below_80: 1,
+            files_below_1k: 2,
+            files_below_10k: 3,
+            files_below_100k: 4,
+            files_below_1m: 5,
+            files_below_10m: 6,
+            files_below_100m: 7,
+            very_large_files: 8,
+        };
+        let actual = counts.total_files();
+        assert_eq!(actual, 36);
     }
 }

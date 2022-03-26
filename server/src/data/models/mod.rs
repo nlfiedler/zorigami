@@ -3,7 +3,8 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, Snapshot, Store, StoreType,
+    Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, Snapshot, Store,
+    StoreType,
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -206,6 +207,31 @@ pub struct FileDef {
     pub chunks: Vec<(u64, Checksum)>,
 }
 
+mod file_counts;
+// #[derive(Serialize, Deserialize)]
+// pub struct FileCounts {
+//     #[serde(rename = "d")]
+//     pub directories: u32,
+//     #[serde(rename = "s")]
+//     pub symlinks: u32,
+//     #[serde(rename = "f1")]
+//     pub files_below_80: u32,
+//     #[serde(rename = "f2")]
+//     pub files_below_1k: u32,
+//     #[serde(rename = "f3")]
+//     pub files_below_10k: u32,
+//     #[serde(rename = "f4")]
+//     pub files_below_100k: u32,
+//     #[serde(rename = "f5")]
+//     pub files_below_1m: u32,
+//     #[serde(rename = "f6")]
+//     pub files_below_10m: u32,
+//     #[serde(rename = "f7")]
+//     pub files_below_100m: u32,
+//     #[serde(rename = "f8")]
+//     pub very_large_files: u32,
+// }
+
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Snapshot")]
 pub struct SnapshotDef {
@@ -218,7 +244,7 @@ pub struct SnapshotDef {
     #[serde(rename = "et")]
     pub end_time: Option<DateTime<Utc>>,
     #[serde(rename = "fc")]
-    pub file_count: u32,
+    pub file_counts: FileCounts,
     #[serde(rename = "tr")]
     pub tree: Checksum,
 }
@@ -348,7 +374,10 @@ mod tests {
         // arrange
         let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
         let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
-        let mut snapshot = Snapshot::new(Some(parent), tree, 1024);
+        let mut file_counts: FileCounts = Default::default();
+        file_counts.directories = 5;
+        file_counts.files_below_10k = 10;
+        let mut snapshot = Snapshot::new(Some(parent), tree, file_counts);
         snapshot = snapshot.end_time(Utc::now());
         // act
         let mut buffer: Vec<u8> = Vec::new();
@@ -363,7 +392,7 @@ mod tests {
         assert_eq!(actual.parent, snapshot.parent);
         assert_eq!(actual.start_time, snapshot.start_time);
         assert_eq!(actual.end_time, snapshot.end_time);
-        assert_eq!(actual.file_count, snapshot.file_count);
+        assert_eq!(actual.file_counts, snapshot.file_counts);
         assert_eq!(actual.tree, snapshot.tree);
         Ok(())
     }

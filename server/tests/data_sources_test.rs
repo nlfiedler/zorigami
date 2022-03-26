@@ -386,7 +386,19 @@ fn test_put_get_snapshot() {
 
     let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
-    let snapshot = entities::Snapshot::new(Some(parent), tree, 1024);
+    let file_counts = entities::FileCounts {
+        directories: 100,
+        symlinks: 1000,
+        files_below_80: 1,
+        files_below_1k: 2,
+        files_below_10k: 3,
+        files_below_100k: 4,
+        files_below_1m: 5,
+        files_below_10m: 6,
+        files_below_100m: 7,
+        very_large_files: 8,
+    };
+    let snapshot = entities::Snapshot::new(Some(parent), tree, file_counts);
     datasource.put_snapshot(&snapshot).unwrap();
     let option = datasource.get_snapshot(&snapshot.digest).unwrap();
     assert!(option.is_some());
@@ -395,7 +407,7 @@ fn test_put_get_snapshot() {
     assert_eq!(actual.parent, snapshot.parent);
     assert_eq!(actual.start_time, snapshot.start_time);
     assert_eq!(actual.end_time, snapshot.end_time);
-    assert_eq!(actual.file_count, snapshot.file_count);
+    assert_eq!(actual.file_counts, snapshot.file_counts);
     assert_eq!(actual.tree, snapshot.tree);
 }
 
@@ -459,7 +471,7 @@ fn test_record_counts() {
     // snapshot(s)
     let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
-    let snapshot = entities::Snapshot::new(Some(parent), tree, 1024);
+    let snapshot = entities::Snapshot::new(Some(parent), tree, Default::default());
     datasource.put_snapshot(&snapshot).unwrap();
 
     let counts = datasource.get_entity_counts().unwrap();

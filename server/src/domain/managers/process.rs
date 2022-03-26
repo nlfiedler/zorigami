@@ -446,7 +446,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that finished just now
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let end_time = Utc::now();
         snapshot = snapshot.end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
@@ -477,7 +477,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that finished a while ago
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
         snapshot = snapshot.end_time(end_time);
@@ -511,7 +511,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that finished a while ago
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
         snapshot = snapshot.end_time(end_time);
@@ -548,7 +548,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that did not finish
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -582,7 +582,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that finished just now
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let end_time = Utc::now();
         snapshot = snapshot.end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
@@ -618,7 +618,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that finished a while ago
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut snapshot = Snapshot::new(None, tree_sha, 0);
+        let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
         snapshot = snapshot.end_time(end_time);
@@ -654,7 +654,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that started just now
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -701,7 +701,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that started recently
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -745,7 +745,7 @@ mod tests {
         let datasets = vec![dataset];
         // build a "latest" snapshot that started recently
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 0);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()

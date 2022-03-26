@@ -59,7 +59,7 @@ mod tests {
     fn test_get_snapshot_some() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 110);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
         let snapshot_sha3 = snapshot.digest.clone();
@@ -83,7 +83,7 @@ mod tests {
     fn test_get_snapshot_none() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 110);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
@@ -104,7 +104,7 @@ mod tests {
     fn test_get_snapshot_err() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = Snapshot::new(None, tree_sha, 110);
+        let snapshot = Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();

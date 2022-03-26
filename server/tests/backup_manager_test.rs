@@ -36,7 +36,7 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let snap1_sha = take_snapshot(&basepath, None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
-    assert_eq!(snapshot1.file_count, 1);
+    assert_eq!(snapshot1.file_counts.total_files(), 1);
     // make a change to the data set
     let mut dest: PathBuf = basepath.clone();
     dest.push("SekienAkashita.jpg");
@@ -47,7 +47,9 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
     assert!(snapshot2.parent.is_some());
     assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
-    assert_eq!(snapshot2.file_count, 2);
+    assert_eq!(snapshot2.file_counts.files_below_10k, 1);
+    assert_eq!(snapshot2.file_counts.files_below_1m, 1);
+    assert_eq!(snapshot2.file_counts.total_files(), 2);
     assert_ne!(snap1_sha, snap2_sha);
     assert_ne!(snapshot1.tree, snapshot2.tree);
     // compute the differences
@@ -95,7 +97,7 @@ fn test_basic_excludes() -> Result<(), Error> {
     let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
-    assert_eq!(snapshot1.file_count, 3);
+    assert_eq!(snapshot1.file_counts.total_files(), 3);
     // walk the snapshot and ensure excluded files are excluded
     let tree = snapshot1.tree;
     let iter = TreeWalker::new(&dbase, &basepath, tree);
@@ -136,7 +138,7 @@ fn test_snapshots_xattrs() -> Result<(), Error> {
     let snapshot_digest = take_snapshot(&basepath, None, &dbase, vec![])?.unwrap();
     let snapshot = dbase.get_snapshot(&snapshot_digest)?.unwrap();
     assert!(snapshot.parent.is_none());
-    assert_eq!(snapshot.file_count, 1);
+    assert_eq!(snapshot.file_counts.total_files(), 1);
 
     // ensure extended attributes are stored in database
     if xattr_worked {
@@ -188,7 +190,7 @@ fn test_snapshot_symlinks() -> Result<(), Error> {
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
     assert!(snapshot1.parent.is_none());
-    assert_eq!(snapshot1.file_count, 0);
+    assert_eq!(snapshot1.file_counts.total_files(), 0);
     let tree = dbase.get_tree(&snapshot1.tree)?.unwrap();
 
     // ensure the tree has exactly one symlink entry
@@ -229,7 +231,7 @@ fn test_snapshot_ordering() -> Result<(), Error> {
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
-    assert_eq!(snapshot1.file_count, 3);
+    assert_eq!(snapshot1.file_counts.total_files(), 3);
     // add new files, change one file
     let bbb: PathBuf = [basepath, "bbb", "bbb.txt"].iter().collect();
     let nnn: PathBuf = [basepath, "nnn", "nnn.txt"].iter().collect();
@@ -294,7 +296,7 @@ fn test_snapshot_types() -> Result<(), Error> {
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
-    assert_eq!(snapshot1.file_count, 2);
+    assert_eq!(snapshot1.file_counts.total_files(), 2);
     // change files to dirs and vice versa
     fs::remove_file(&ccc)?;
     let ccc: PathBuf = [basepath, "ccc", "ccc.txt"].iter().collect();
@@ -335,7 +337,7 @@ fn test_snapshot_ignore_links() -> Result<(), Error> {
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
-    assert_eq!(snapshot1.file_count, 2);
+    assert_eq!(snapshot1.file_counts.total_files(), 2);
     // replace the files and directories with links
     let mmm: PathBuf = [basepath, "mmm.txt"].iter().collect();
     fs::write(&mmm, b"morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins")?;
@@ -404,7 +406,7 @@ fn test_snapshot_was_links() -> Result<(), Error> {
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(Path::new(basepath), None, &dbase, vec![])?.unwrap();
     let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
-    assert_eq!(snapshot1.file_count, 1);
+    assert_eq!(snapshot1.file_counts.total_files(), 1);
     // replace the links with files and directories
     fs::remove_file(&bbb)?;
     fs::write(&bbb, b"bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing")?;

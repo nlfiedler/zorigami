@@ -6,6 +6,7 @@
 *** DONE add a graphql query to list the contents of a specific pack file
 *** DONE account for the overhead of each tar file entry when packing
 *** DONE store very small files directly in the tree record
+*** DONE collect statistics of files and directories during snapshot
 *** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
 **** change restore =Request= to take tree reference and entry name
 **** change GraphQL to allow restoring symbolic links
@@ -691,6 +692,6 @@ launchctl enable gui/501/zorigami
 launchctl kickstart -p gui/501/zorigami
 ps -ef | grep -i zorigami
 #+end_src
-*** base path: =/User/nfiedler=
+*** base path: =/Users/nfiedler=
 *** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
-*** run daily at noon
+*** run daily at 4pm

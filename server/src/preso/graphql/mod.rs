@@ -211,6 +211,49 @@ impl entities::Tree {
     }
 }
 
+#[juniper::graphql_object(description = "Number of files and directories in a snapshot.")]
+impl entities::FileCounts {
+    fn directories(&self) -> BigInt {
+        BigInt(self.directories as i64)
+    }
+
+    fn symlinks(&self) -> BigInt {
+        BigInt(self.symlinks as i64)
+    }
+
+    fn files_below_80(&self) -> BigInt {
+        BigInt(self.files_below_80 as i64)
+    }
+
+    fn files_below_1k(&self) -> BigInt {
+        BigInt(self.files_below_1k as i64)
+    }
+
+    fn files_below_10k(&self) -> BigInt {
+        BigInt(self.files_below_10k as i64)
+    }
+
+    fn files_below_100k(&self) -> BigInt {
+        BigInt(self.files_below_100k as i64)
+    }
+
+    fn files_below_1m(&self) -> BigInt {
+        BigInt(self.files_below_1m as i64)
+    }
+
+    fn files_below_10m(&self) -> BigInt {
+        BigInt(self.files_below_10m as i64)
+    }
+
+    fn files_below_100m(&self) -> BigInt {
+        BigInt(self.files_below_100m as i64)
+    }
+
+    fn very_large_files(&self) -> BigInt {
+        BigInt(self.very_large_files as i64)
+    }
+}
+
 #[juniper::graphql_object(description = "A single backup, either in progress or completed.")]
 impl entities::Snapshot {
     /// Original computed checksum of the snapshot.
@@ -235,7 +278,12 @@ impl entities::Snapshot {
 
     /// Total number of files contained in this snapshot.
     fn file_count(&self) -> BigInt {
-        BigInt(self.file_count as i64)
+        BigInt(self.file_counts.total_files() as i64)
+    }
+
+    /// Number of files and directories contained in this snapshot.
+    fn file_counts(&self) -> entities::FileCounts {
+        self.file_counts.clone()
     }
 
     /// Reference to the tree containing all of the files.
@@ -1816,7 +1864,9 @@ mod tests {
     fn test_query_snapshot_some() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = entities::Snapshot::new(None, tree_sha, 110);
+        let mut file_counts: entities::FileCounts = Default::default();
+        file_counts.files_below_10k = 110;
+        let snapshot = entities::Snapshot::new(None, tree_sha, file_counts);
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
         let mut mock = MockEntityDataSource::new();
@@ -1845,10 +1895,10 @@ mod tests {
         assert_eq!(errors.len(), 0);
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("snapshot").unwrap();
-        let object = res.as_object_value().unwrap();
-        let field = object.get_field_value("fileCount").unwrap();
-        // fileCount is a bigint that comes over the wire as a string
-        let value = field.as_scalar_value::<String>().unwrap();
+        let res = res.as_object_value().unwrap();
+        let res = res.get_field_value("fileCount").unwrap();
+        // fileCounts are bigints that comes over the wire as strings
+        let value = res.as_scalar_value::<String>().unwrap();
         assert_eq!(value, "110");
     }
 
@@ -1856,7 +1906,7 @@ mod tests {
     fn test_query_snapshot_none() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = entities::Snapshot::new(None, tree_sha, 110);
+        let snapshot = entities::Snapshot::new(None, tree_sha, Default::default());
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
         let mut mock = MockEntityDataSource::new();

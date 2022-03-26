@@ -523,7 +523,8 @@ pub fn take_snapshot(
     let start_time = SystemTime::now();
     let actual_start_time = Utc::now();
     let exclusions = build_exclusions(&excludes);
-    let tree = scan_tree(basepath, dbase, &exclusions)?;
+    let mut file_counts: entities::FileCounts = Default::default();
+    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
@@ -536,7 +537,7 @@ pub fn take_snapshot(
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
     let pretty_time = super::pretty_print_duration(time_diff);
-    let mut snap = entities::Snapshot::new(parent, tree.digest.clone(), tree.file_count);
+    let mut snap = entities::Snapshot::new(parent, tree.digest.clone(), file_counts);
     info!(
         "took snapshot {} with {} files after {}",
         snap.digest, tree.file_count, pretty_time
@@ -924,6 +925,7 @@ fn scan_tree(
     basepath: &Path,
     dbase: &Arc<dyn RecordRepository>,
     excludes: &GlobSet,
+    file_counts: &mut entities::FileCounts,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
@@ -939,18 +941,18 @@ fn scan_tree(
                         // DirEntry.metadata() does not follow symlinks
                         match entry.metadata() {
                             Ok(metadata) => {
-                                let file_type = metadata.file_type();
-                                if file_type.is_dir() {
-                                    let scan = scan_tree(&path, dbase, excludes)?;
+                                count_files(&metadata, file_counts);
+                                if metadata.is_dir() {
+                                    let scan = scan_tree(&path, dbase, excludes, file_counts)?;
                                     file_count += scan.file_count;
                                     let digest = scan.digest.clone();
                                     let tref = entities::TreeReference::TREE(digest);
                                     entries.push(process_path(&path, tref, dbase));
-                                } else if file_type.is_symlink() {
+                                } else if metadata.is_symlink() {
                                     let link = read_link(&path);
                                     let tref = entities::TreeReference::LINK(link);
                                     entries.push(process_path(&path, tref, dbase));
-                                } else if file_type.is_file() {
+                                } else if metadata.is_file() {
                                     if metadata.len() <= 80 {
                                         // file smaller than FileDef record
                                         match fs::read(&path) {
@@ -1026,6 +1028,34 @@ fn process_path(
         }
     }
     entry
+}
+
+/// Update the file_counts record to reflect this tree entry.
+fn count_files(metadata: &fs::Metadata, file_counts: &mut entities::FileCounts) {
+    if metadata.is_dir() {
+        file_counts.directories += 1;
+    } else if metadata.is_symlink() {
+        file_counts.symlinks += 1;
+    } else if metadata.is_file() {
+        let len = metadata.len();
+        if len <= 80 {
+            file_counts.files_below_80 += 1;
+        } else if len <= 1024 {
+            file_counts.files_below_1k += 1;
+        } else if len <= 10240 {
+            file_counts.files_below_10k += 1;
+        } else if len <= 102400 {
+            file_counts.files_below_100k += 1;
+        } else if len <= 1048576 {
+            file_counts.files_below_1m += 1;
+        } else if len <= 10485760 {
+            file_counts.files_below_10m += 1;
+        } else if len <= 104857600 {
+            file_counts.files_below_100m += 1;
+        } else {
+            file_counts.very_large_files += 1;
+        }
+    }
 }
 
 #[cfg(test)]
