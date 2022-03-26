@@ -49,6 +49,7 @@ tempfile = "3.2.0"
 thiserror = "1.0.30"
 uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
 whoami = "1.0"
+xid = "1.0.0"
 
 [target.'cfg(unix)'.dependencies]
 xattr = "0.2.2"

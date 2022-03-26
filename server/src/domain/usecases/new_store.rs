@@ -1,10 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::{Store, StoreType};
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
-use rusty_ulid::generate_ulid_string;
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
@@ -23,7 +22,7 @@ impl NewStore {
 impl super::UseCase<Store, Params> for NewStore {
     fn call(&self, params: Params) -> Result<Store, Error> {
         let store_type = StoreType::from_str(&params.type_name)?;
-        let id = generate_ulid_string().to_lowercase();
+        let id = xid::new().to_string();
         let store = Store {
             id,
             store_type,

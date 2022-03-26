@@ -4,7 +4,6 @@
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
 use log::error;
-use rusty_ulid::generate_ulid_string;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::fmt;
@@ -236,7 +235,7 @@ impl Dataset {
     /// Construct a Dataset with the given unique (computer) identifier, and
     /// base path of the directory structure to be saved.
     pub fn new(basepath: &Path) -> Dataset {
-        let id = generate_ulid_string().to_lowercase();
+        let id = xid::new().to_string();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {
@@ -820,7 +819,7 @@ impl fmt::Display for Snapshot {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackLocation {
-    /// ULID of the pack store.
+    /// Unique identifier of the pack store.
     pub store: String,
     /// Remote bucket name.
     pub bucket: String,
