@@ -3,11 +3,10 @@
 //
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use log::error;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::{self, FileType};
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -288,49 +287,6 @@ impl fmt::Display for Dataset {
     }
 }
 
-/// Tree entry type, such as a file or directory.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum EntryType {
-    /// Anything that is not a directory or symlink.
-    FILE,
-    /// Represents a directory.
-    DIR,
-    /// Represents a symbolic link.
-    LINK,
-    /// Error occurred while processing the entry.
-    ERROR,
-}
-
-impl EntryType {
-    /// Return `true` if this entry is for a file.
-    pub fn is_file(self) -> bool {
-        matches!(self, EntryType::FILE)
-    }
-
-    /// Return `true` if this entry is for a directory.
-    pub fn is_dir(self) -> bool {
-        matches!(self, EntryType::DIR)
-    }
-
-    /// Return `true` if this entry is for a symbolic link.
-    pub fn is_link(self) -> bool {
-        matches!(self, EntryType::LINK)
-    }
-}
-
-impl From<FileType> for EntryType {
-    fn from(fstype: FileType) -> Self {
-        if fstype.is_dir() {
-            EntryType::DIR
-        } else if fstype.is_symlink() {
-            EntryType::LINK
-        } else {
-            // default to file type for everything else
-            EntryType::FILE
-        }
-    }
-}
-
 ///
 /// A `TreeReference` represents the "value" for a tree entry, which can be one
 /// of the following: the checksum of a tree, the checksum of a file, the
@@ -393,7 +349,7 @@ impl fmt::Display for TreeReference {
             TreeReference::LINK(value) => {
                 let encoded = base64::encode(value);
                 write!(f, "link-{}", encoded)
-            },
+            }
             TreeReference::TREE(digest) => write!(f, "tree-{}", digest),
             TreeReference::FILE(digest) => write!(f, "file-{}", digest),
             TreeReference::SMALL(contents) => {
@@ -446,8 +402,6 @@ fn get_file_name(path: &Path) -> String {
 pub struct TreeEntry {
     /// Name of the file, directory, or symbolic link.
     pub name: String,
-    /// Basic type of the entry, e.g. file or directory.
-    pub fstype: EntryType,
     /// Unix file mode of the entry.
     pub mode: Option<u32>,
     /// Unix user identifier
@@ -479,13 +433,6 @@ impl TreeEntry {
         // Lot of error handling built-in so we can safely process any path
         // entry and not blow up the backup process.
         let metadata = fs::symlink_metadata(path);
-        let fstype = match metadata.as_ref() {
-            Ok(attr) => EntryType::from(attr.file_type()),
-            Err(err) => {
-                error!("error getting metadata for {:?}: {}", path, err);
-                EntryType::ERROR
-            }
-        };
         let mtime = match metadata.as_ref() {
             Ok(attr) => attr.modified().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),
             Err(_) => SystemTime::UNIX_EPOCH,
@@ -498,7 +445,6 @@ impl TreeEntry {
         };
         Self {
             name,
-            fstype,
             mode: None,
             uid: None,
             gid: None,
@@ -596,7 +542,7 @@ impl fmt::Display for TreeEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let form_mode = if let Some(mode) = self.mode {
             mode
-        } else if self.fstype == EntryType::DIR {
+        } else if self.reference.is_tree() {
             0o040_000
         } else {
             0o100_644
@@ -1220,7 +1166,6 @@ mod tests {
         let tref1 = TreeReference::FILE(Checksum::SHA1("cafebabe".to_owned()));
         let entry1 = TreeEntry {
             name: String::from("madoka.kaname"),
-            fstype: EntryType::FILE,
             mode: Some(0o644),
             uid: Some(100),
             gid: Some(100),
@@ -1234,7 +1179,6 @@ mod tests {
         let tref2 = TreeReference::FILE(Checksum::SHA1("babecafe".to_owned()));
         let entry2 = TreeEntry {
             name: String::from("homura.akemi"),
-            fstype: EntryType::FILE,
             mode: Some(0o644),
             uid: Some(100),
             gid: Some(100),
@@ -1248,7 +1192,6 @@ mod tests {
         let tref3 = TreeReference::FILE(Checksum::SHA1("babebabe".to_owned()));
         let entry3 = TreeEntry {
             name: String::from("sayaka.miki"),
-            fstype: EntryType::FILE,
             mode: Some(0o644),
             uid: Some(100),
             gid: Some(100),

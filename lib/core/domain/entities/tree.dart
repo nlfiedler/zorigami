@@ -1,9 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 
-enum EntryType { tree, error, file, link }
+enum EntryType { tree, file, link, small }
 
 /// A tree reference captures the type and value of an entry in a tree. It can
 /// either be a file, a directory (tree), a symbolic link, or it is an error
@@ -14,7 +14,7 @@ class TreeReference extends Equatable {
   final EntryType type;
   final String value;
 
-  TreeReference({
+  const TreeReference({
     required this.type,
     required this.value,
   });
@@ -33,7 +33,7 @@ class TreeEntry extends Equatable {
   final DateTime modTime;
   final TreeReference reference;
 
-  TreeEntry({
+  const TreeEntry({
     required this.name,
     required this.modTime,
     required this.reference,
@@ -50,7 +50,7 @@ class TreeEntry extends Equatable {
 class Tree extends Equatable {
   final List<TreeEntry> entries;
 
-  Tree({required this.entries});
+  const Tree({required this.entries});
 
   @override
   List<Object> get props => [entries];

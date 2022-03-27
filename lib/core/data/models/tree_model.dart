@@ -1,10 +1,10 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/tree.dart';
 
 class TreeReferenceModel extends TreeReference {
-  TreeReferenceModel({
+  const TreeReferenceModel({
     required EntryType type,
     required String value,
   }) : super(
@@ -14,10 +14,10 @@ class TreeReferenceModel extends TreeReference {
 
   // Feed the entire tree entry to get the reference.
   factory TreeReferenceModel.fromJson(Map<String, dynamic> json) {
-    final fstype = decodeEntryType(json['fstype']);
+    final type = decodeEntryType(json['reference']);
     final value = decodeReference(json['reference']);
     return TreeReferenceModel(
-      type: fstype,
+      type: type,
       value: value,
     );
   }
@@ -31,14 +31,14 @@ class TreeReferenceModel extends TreeReference {
         return 'tree-' + value;
       case EntryType.link:
         return 'link-' + value;
-      case EntryType.error:
-        return 'error-' + value;
+      case EntryType.small:
+        return 'small-' + value;
     }
   }
 }
 
 class TreeEntryModel extends TreeEntry {
-  TreeEntryModel({
+  const TreeEntryModel({
     required String name,
     required DateTime modTime,
     required TreeReference reference,
@@ -69,7 +69,6 @@ class TreeEntryModel extends TreeEntry {
   Map<String, dynamic> toJson() {
     return {
       'name': name,
-      'fstype': encodeEntryType(reference.type),
       'modTime': modTime.toIso8601String(),
       'reference': reference.toString(),
     };
@@ -77,7 +76,7 @@ class TreeEntryModel extends TreeEntry {
 }
 
 class TreeModel extends Tree {
-  TreeModel({
+  const TreeModel({
     required List<TreeEntry> entries,
   }) : super(entries: entries);
 
@@ -96,18 +95,17 @@ class TreeModel extends Tree {
   }
 }
 
-EntryType decodeEntryType(String fstype) {
-  switch (fstype) {
-    case 'FILE':
-      return EntryType.file;
-    case 'DIR':
-      return EntryType.tree;
-    case 'LINK':
-      return EntryType.link;
-    case 'ERROR':
-      return EntryType.error;
+EntryType decodeEntryType(String reference) {
+  if (reference.startsWith('file-')) {
+    return EntryType.file;
+  } else if (reference.startsWith('tree-')) {
+    return EntryType.tree;
+  } else if (reference.startsWith('link-')) {
+    return EntryType.link;
+  } else if (reference.startsWith('small-')) {
+    return EntryType.small;
   }
-  throw ArgumentError('unrecognized type: ' + fstype);
+  throw ArgumentError('unrecognized type: ' + reference);
 }
 
 String encodeEntryType(EntryType type) {
@@ -118,8 +116,8 @@ String encodeEntryType(EntryType type) {
       return 'DIR';
     case EntryType.link:
       return 'LINK';
-    case EntryType.error:
-      return 'ERROR';
+    case EntryType.small:
+      return 'SMALL';
   }
 }
 
@@ -130,6 +128,8 @@ String decodeReference(String reference) {
     return reference.substring(5);
   } else if (reference.startsWith('link-')) {
     return reference.substring(5);
+  } else if (reference.startsWith('small-')) {
+    return reference.substring(6);
   }
   throw ArgumentError('unrecognized reference: ' + reference);
 }

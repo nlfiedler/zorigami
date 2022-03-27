@@ -145,51 +145,11 @@ where
     }
 }
 
-/// Tree entry type, such as a file or directory.
-#[derive(Copy, Clone, GraphQLEnum)]
-pub enum EntryType {
-    /// Anything that is not a directory or symlink.
-    FILE,
-    /// Represents a directory.
-    DIR,
-    /// Represents a symbolic link.
-    LINK,
-    /// Error occurred while processing the entry.
-    ERROR,
-}
-
-impl From<entities::EntryType> for EntryType {
-    fn from(dow: entities::EntryType) -> Self {
-        match dow {
-            entities::EntryType::FILE => EntryType::FILE,
-            entities::EntryType::DIR => EntryType::DIR,
-            entities::EntryType::LINK => EntryType::LINK,
-            entities::EntryType::ERROR => EntryType::ERROR,
-        }
-    }
-}
-
-impl Into<entities::EntryType> for EntryType {
-    fn into(self) -> entities::EntryType {
-        match self {
-            EntryType::FILE => entities::EntryType::FILE,
-            EntryType::DIR => entities::EntryType::DIR,
-            EntryType::LINK => entities::EntryType::LINK,
-            EntryType::ERROR => entities::EntryType::ERROR,
-        }
-    }
-}
-
 #[juniper::graphql_object(description = "A file, directory, or symbolic link within a tree.")]
 impl entities::TreeEntry {
     /// Name of the file, directory, or symbolic link.
     fn name(&self) -> String {
         self.name.clone()
-    }
-
-    /// Basic type of the entry, e.g. file or directory.
-    fn fstype(&self) -> EntryType {
-        self.fstype.into()
     }
 
     /// Modification time of the entry.
