@@ -92,8 +92,6 @@ mod tree;
 // pub struct TreeEntry {
 //     #[serde(rename = "nm")]
 //     pub name: String,
-//     #[serde(rename = "ty")]
-//     pub fstype: EntryType,
 //     #[serde(rename = "mo")]
 //     pub mode: Option<u32>,
 //     #[serde(rename = "ui")]

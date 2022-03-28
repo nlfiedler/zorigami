@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:graphql/client.dart' as gql;
 import 'package:gql/language.dart' as lang;
@@ -36,12 +36,11 @@ class TreeRemoteDataSourceImpl extends TreeRemoteDataSource {
 
   @override
   Future<TreeModel?> getTree(String checksum) async {
-    final query = r'''
+    const query = r'''
       query Fetch($checksum: Checksum!) {
         tree(digest: $checksum) {
           entries {
             name
-            fstype
             modTime
             reference
           }
