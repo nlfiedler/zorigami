@@ -1,6 +1,5 @@
 * Tasks
 ** Replace Time Machine
-*** TODO the =.Trash= and =Library= excludes are not working
 *** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
 **** change restore =Request= to take tree reference and entry name
 **** change GraphQL to allow restoring symbolic links

@@ -88,8 +88,8 @@ fn test_basic_excludes() -> Result<(), Error> {
     // pattern that ends with /**, it has the same effect for our purposes since
     // we ignore directories)
     excludes.push(PathBuf::from("**/node_modules"));
-    // entire directory structure by wildcard
-    excludes.push(PathBuf::from("**/workspace/**"));
+    // entire directory structure by name based at the root only
+    excludes.push(PathBuf::from("workspace"));
     let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
     // take a snapshot of the test data
     let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();

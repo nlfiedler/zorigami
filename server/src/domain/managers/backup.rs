@@ -522,7 +522,7 @@ pub fn take_snapshot(
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
     let actual_start_time = Utc::now();
-    let exclusions = build_exclusions(&excludes);
+    let exclusions = build_exclusions(basepath, &excludes);
     let mut file_counts: entities::FileCounts = Default::default();
     let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts)?;
     if let Some(ref parent_sha1) = parent {
@@ -877,17 +877,46 @@ impl<'a> Iterator for TreeWalker<'a> {
 //
 // Build the glob set used to match file/directory exclusions.
 //
-fn build_exclusions(excludes: &[PathBuf]) -> GlobSet {
+fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
     let mut builder = GlobSetBuilder::new();
-    for exclusion in excludes {
-        if let Some(path_str) = exclusion.to_str() {
-            if let Ok(glob) = Glob::new(path_str) {
-                builder.add(glob);
+    if let Some(basepath_str) = basepath.to_str() {
+        let mut groomed: Vec<PathBuf> = Vec::new();
+        for exclusion in excludes {
+            if let Some(pattern) = exclusion.to_str() {
+                if pattern.starts_with("**") {
+                    if pattern.ends_with("**") {
+                        // no need to change the pattern
+                        groomed.push(exclusion.to_owned());
+                    } else {
+                        // exclude the path and everything below
+                        groomed.push(PathBuf::from(pattern));
+                        groomed.push([pattern, "**"].iter().collect());
+                    }
+                } else if pattern.ends_with("**") {
+                    // prepend basepath
+                    groomed.push([basepath_str, pattern].iter().collect());
+                } else if pattern.starts_with("*") {
+                    // prepend basepath
+                    groomed.push([basepath_str, pattern].iter().collect());
+                } else {
+                    // exclude the path and everything below
+                    groomed.push([basepath_str, pattern].iter().collect());
+                    groomed.push([basepath_str, pattern, "**"].iter().collect());
+                };
             } else {
-                warn!("could not build glob for {:?}", exclusion);
+                warn!("PathBuf::to_str() failed for {:?}", exclusion);
             }
-        } else {
-            warn!("PathBuf::to_str() failed for {:?}", exclusion);
+        }
+        for exclusion in groomed.iter() {
+            if let Some(pattern) = exclusion.to_str() {
+                if let Ok(glob) = Glob::new(&pattern) {
+                    builder.add(glob);
+                } else {
+                    warn!("could not build glob for {:?}", pattern);
+                }
+            } else {
+                warn!("PathBuf::to_str() failed for {:?}", exclusion);
+            }
         }
     }
     if let Ok(set) = builder.build() {
@@ -1077,6 +1106,39 @@ mod tests {
         assert_eq!(calc_chunk_size(16_777_216), 4_194_304);
         assert_eq!(calc_chunk_size(33_554_432), 4_194_304);
         assert_eq!(calc_chunk_size(134_217_728), 4_194_304);
+    }
+
+    #[test]
+    fn test_build_exclusions() {
+        let excludes = vec![
+            PathBuf::from("Library"),
+            PathBuf::from("**/Downloads"),
+            PathBuf::from("node_modules/**"),
+            PathBuf::from("*.exe"),
+        ];
+        let basedir = PathBuf::from("/basedir");
+        let globset = build_exclusions(&basedir, &excludes[..]);
+        // positive cases
+        assert!(globset.is_match("/basedir/Library"));
+        assert!(globset.is_match("/basedir/Library/subdir"));
+        assert!(globset.is_match("/basedir/Library/subdir/file.txt"));
+        assert!(globset.is_match("/basedir/Downloads"));
+        assert!(globset.is_match("/basedir/Downloads/subdir"));
+        assert!(globset.is_match("/basedir/Downloads/subdir/file.txt"));
+        assert!(globset.is_match("/basedir/subdir/Downloads"));
+        assert!(globset.is_match("/basedir/subdir/Downloads/subdir"));
+        assert!(globset.is_match("/basedir/subdir/Downloads/subdir/file.txt"));
+        assert!(globset.is_match("/basedir/node_modules/subdir"));
+        assert!(globset.is_match("/basedir/node_modules/subdir/file.txt"));
+        assert!(globset.is_match("/basedir/file.exe"));
+        assert!(globset.is_match("/basedir/subdir/file.exe"));
+        // negative cases
+        assert!(!globset.is_match("/basedir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir/file.txt"));
+        assert!(!globset.is_match("/basedir/subdir"));
+        assert!(!globset.is_match("/basedir/subdir/file.txt"));
     }
 
     #[test]
