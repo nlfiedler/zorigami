@@ -248,6 +248,7 @@ void main() {
       // act
       final result = await dataSource.restoreFiles(
         'sha1-cafebabe',
+        'entry',
         'file',
         'homura',
       );
@@ -262,7 +263,8 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.restoreFiles('sha1-cafebabe', 'file', 'homura');
+          await dataSource.restoreFiles(
+              'sha1-cafebabe', 'entry', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -277,7 +279,8 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.restoreFiles('sha1-cafebabe', 'file', 'homura');
+          await dataSource.restoreFiles(
+              'sha1-cafebabe', 'entry', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -297,10 +300,7 @@ void main() {
       });
       // act
       final result = await dataSource.restoreFiles(
-        'sha1-cafebabe',
-        'file',
-        'homura',
-      );
+          'sha1-cafebabe', 'entry', 'file', 'homura');
       // assert
       expect(result, equals(false));
     });
@@ -329,14 +329,15 @@ void main() {
     );
 
     test(
-      'should return one pack store',
+      'should return one restore request',
       () async {
         // arrange
         final response = {
           'data': {
             'restores': [
               {
-                'digest': 'cafebabe',
+                'tree': 'sha1-cafebabe',
+                'entry': 'file',
                 'filepath': 'dir/file',
                 'dataset': 'data123',
                 'finished': null,
@@ -357,8 +358,9 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(1)));
-        final store = RequestModel(
-          digest: 'cafebabe',
+        const store = RequestModel(
+          tree: 'sha1-cafebabe',
+          entry: 'file',
           filepath: 'dir/file',
           dataset: 'data123',
           finished: None(),
@@ -377,7 +379,8 @@ void main() {
           'data': {
             'restores': [
               {
-                'digest': 'cafebabe',
+                'tree': 'sha1-cafebabe',
+                'entry': 'file',
                 'filepath': 'dir/file',
                 'dataset': 'data123',
                 'finished': null,
@@ -385,7 +388,8 @@ void main() {
                 'errorMessage': null,
               },
               {
-                'digest': 'cafed00d',
+                'tree': 'sha1-cafed00d',
+                'entry': 'file',
                 'filepath': 'dir/dir/file',
                 'dataset': 'data123',
                 'finished': null,
@@ -393,7 +397,8 @@ void main() {
                 'errorMessage': null,
               },
               {
-                'digest': 'deadbeef',
+                'tree': 'sha1-deadbeef',
+                'entry': 'xfiles',
                 'filepath': 'folder/xfiles',
                 'dataset': 'data123',
                 'finished': '2021-04-09T06:32:16.786716685+00:00',
@@ -414,8 +419,9 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(3)));
-        final store = RequestModel(
-          digest: 'cafed00d',
+        const store = RequestModel(
+          tree: 'sha1-cafed00d',
+          entry: 'file',
           filepath: 'dir/dir/file',
           dataset: 'data123',
           finished: None(),
@@ -470,10 +476,7 @@ void main() {
       });
       // act
       final result = await dataSource.cancelRestore(
-        'sha1-cafebabe',
-        'file',
-        'homura',
-      );
+          'sha1-cafebabe', 'entry', 'file', 'homura');
       // assert
       expect(result, equals(true));
     });
@@ -485,7 +488,8 @@ void main() {
         setUpMockHttpClientFailure403();
         // act, assert
         try {
-          await dataSource.cancelRestore('sha1-cafebabe', 'file', 'homura');
+          await dataSource.cancelRestore(
+              'sha1-cafebabe', 'entry', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -500,7 +504,8 @@ void main() {
         setUpMockHttpClientGraphQLError();
         // act, assert
         try {
-          await dataSource.cancelRestore('sha1-cafebabe', 'file', 'homura');
+          await dataSource.cancelRestore(
+              'sha1-cafebabe', 'entry', 'file', 'homura');
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
@@ -520,10 +525,7 @@ void main() {
       });
       // act
       final result = await dataSource.cancelRestore(
-        'sha1-cafebabe',
-        'file',
-        'homura',
-      );
+          'sha1-cafebabe', 'entry', 'file', 'homura');
       // assert
       expect(result, equals(false));
     });

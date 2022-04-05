@@ -28,7 +28,7 @@ void main() {
       TreeEntry(
         name: 'file1',
         modTime: DateTime.utc(2018, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.file,
           value: 'sha256-8c983bd',
         ),
@@ -36,7 +36,7 @@ void main() {
       TreeEntry(
         name: 'folder1',
         modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.tree,
           value: 'sha1-cafed00d',
         ),
@@ -49,7 +49,7 @@ void main() {
       TreeEntry(
         name: 'file2',
         modTime: DateTime.utc(2019, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.file,
           value: 'sha256-89c8b3d',
         ),
@@ -57,7 +57,7 @@ void main() {
       TreeEntry(
         name: 'folder2',
         modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.tree,
           value: 'sha1-deadbeef',
         ),
@@ -70,7 +70,7 @@ void main() {
       TreeEntry(
         name: 'file3',
         modTime: DateTime.utc(2020, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.file,
           value: 'sha256-98c8bd3',
         ),
@@ -78,7 +78,7 @@ void main() {
       TreeEntry(
         name: 'folder3',
         modTime: DateTime.utc(2017, 5, 7, 3, 52, 44),
-        reference: TreeReference(
+        reference: const TreeReference(
           type: EntryType.tree,
           value: 'sha1-beefcafe',
         ),
@@ -117,7 +117,10 @@ void main() {
       ),
       act: (TreeBrowserBloc bloc) =>
           bloc.add(LoadTree(digest: 'sha1-cafebabe')),
-      expect: () => [Loading(), Loaded(tree: tTree1, selections: [], path: [])],
+      expect: () => [
+        Loading(),
+        Loaded(tree: tTree1, selections: const [], path: const [])
+      ],
     );
 
     blocTest(
@@ -133,8 +136,8 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
       ],
     );
 
@@ -152,9 +155,9 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
-        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
       ],
     );
 
@@ -173,8 +176,8 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
       ],
     );
 
@@ -203,10 +206,10 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
         Loading(),
-        Loaded(tree: tTree2, selections: [], path: ['folder1']),
+        Loaded(tree: tTree2, selections: const [], path: const ['folder1']),
       ],
       verify: (TreeBrowserBloc bloc) async {
         expect(bloc.path.length, equals(1));
@@ -228,10 +231,10 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
         Loading(),
-        Loaded(tree: tTree2, selections: [], path: []),
+        Loaded(tree: tTree2, selections: const [], path: const []),
       ],
     );
 
@@ -249,8 +252,8 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
         Empty(),
       ],
     );
@@ -279,11 +282,11 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
         Loading(),
-        Loaded(tree: tTree2, selections: [], path: ['folder1']),
+        Loaded(tree: tTree2, selections: const [], path: const ['folder1']),
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
       ],
       verify: (TreeBrowserBloc bloc) async {
         expect(bloc.path.length, equals(0));
@@ -301,7 +304,7 @@ void main() {
       when(() => mockTreeRepository.getTree('sha1-cafebabe'))
           .thenAnswer((_) async => Ok(tTree1));
       when(() => mockSnapshotRepository.restoreFiles(
-              'sha256-8c983bd', 'file1', 'dataset1'))
+              'sha1-cafebabe', 'file1', 'file1', 'dataset1'))
           .thenAnswer((_) async => Ok(true));
     });
 
@@ -319,12 +322,12 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(tree: tTree1, selections: [], path: []),
-        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: []),
+        Loaded(tree: tTree1, selections: const [], path: const []),
+        Loaded(tree: tTree1, selections: [tTree1.entries[0]], path: const []),
         Loaded(
           tree: tTree1,
-          selections: [],
-          path: [],
+          selections: const [],
+          path: const [],
         ),
       ],
     );

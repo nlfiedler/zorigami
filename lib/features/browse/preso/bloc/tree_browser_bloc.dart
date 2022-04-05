@@ -167,7 +167,8 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
           final filepath =
               path.isEmpty ? entry.name : path.join('/') + '/' + entry.name;
           final params = rf.Params(
-            digest: entry.reference.value,
+            tree: history.last,
+            entry: entry.name,
             filepath: filepath,
             dataset: event.datasetKey,
           );

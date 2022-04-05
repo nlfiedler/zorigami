@@ -1,15 +1,7 @@
 * Tasks
 ** Replace Time Machine
-*** TODO add support for restoring symbolic links directly (not as a part of a tree restore)
-**** change restore =Request= to take tree reference and entry name
-**** change GraphQL to allow restoring symbolic links
-**** =TreeBrowserBloc= has the current tree digest in the =history=
-*** TODO add support for restoring very small files directly (not as part of a tree restore)
-**** see the ~TODO~ in =restore_manager_test.rs=
-**** current =restoreFiles= GraphQL mutation does not take a tree and entry name as arguments
 *** TODO develop as a macOS app that bundles the =server= and starts at login
-*** TODO store the passphrase in the Keychain app
-*** TODO use =launchd= to manage the process, have it start automatically
+**** consider if =launchd= is needed for this
 **** launchd definition
 #+begin_src xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -47,10 +39,7 @@
 launchctl load ~/Library/LaunchAgents/zorigami.plist
 #+end_src
 *** TODO figure out how to give it permission to access files on macOS
-*** TODO need a way to show differences between any two snapshots
-**** collect the paths and sizes of all new/changed files
-**** somehow show all of that information in a scalable fashion
-*** TODO change default pack size to 64mb instead of 16
+**** not sure this is possible, even Zoom does not do this prior to running
 *** TODO database backup procedure should prune old snapshots
 **** for local disk case, retain only a few snapshots
 **** for cloud case, honor the least expensive retention plan
@@ -70,6 +59,9 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 **** =process_queue()= in =BackupDriver= calls =get_state()= to check for =stop_requested=
 **** =process_queue()= will return an error if =stop_requested= is true
 *** consider how one might "pause" a backup in progress
+** Manage user passphrase
+*** introduce a setup phase in which user is prompted for passphrase
+*** store passphrase in the local key store
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
@@ -207,6 +199,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
 ** More Functionality
+*** TODO show differences between any two snapshots
+**** collect the paths and sizes of all new/changed files
+**** somehow show all of that information in a scalable fashion
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
@@ -632,6 +627,31 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 | filesBelow10m  |   2322 |
 | filesBelow100m |    222 |
 | veryLargeFiles |     16 |
+**** working file excludes
+***** 2022-03-27
+****** compressed database size: 70,466,060
+****** database record counts
+| entity    |  count |
+|-----------+--------|
+| snapshots |      1 |
+| files     | 321419 |
+| trees     |  40786 |
+| chunks    |   1533 |
+| packs     |     67 |
+| xattrs    |    350 |
+****** file counts
+| type           |  count |
+|----------------+--------|
+| directories    |  45074 |
+| symlinks       |    672 |
+| filesBelow80   |  52633 |
+| filesBelow1k   | 135193 |
+| filesBelow10k  | 311948 |
+| filesBelow100k |  65487 |
+| filesBelow1m   |   5531 |
+| filesBelow10m  |    789 |
+| filesBelow100m |    164 |
+| veryLargeFiles |      7 |
 ** Pack files
 *** analysis of overly large pack files before accounting for tar entry overhead
 **** packing would only account for compressed size of chunks

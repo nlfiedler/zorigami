@@ -1,13 +1,15 @@
 //
-// Copyright (c) 2021 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
 
 /// A `Request` holds details regarding a file restore.
 class Request extends Equatable {
-  // Digest of either a file or a tree to restore.
-  final String digest;
+  // Digest of the tree containing the entry to restore.
+  final String tree;
+  // Name of the entry within the tree to be restored.
+  final String entry;
   // Relative path where file/tree will be restored.
   final String filepath;
   // Identifier of the dataset containing the data.
@@ -19,8 +21,9 @@ class Request extends Equatable {
   // Error message if request processing failed.
   final Option<String> errorMessage;
 
-  Request({
-    required this.digest,
+  const Request({
+    required this.tree,
+    required this.entry,
     required this.filepath,
     required this.dataset,
     required this.finished,
@@ -29,7 +32,7 @@ class Request extends Equatable {
   });
 
   @override
-  List<Object> get props => [digest, filepath];
+  List<Object> get props => [tree, entry];
 
   @override
   bool get stringify => true;

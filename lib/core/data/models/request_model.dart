@@ -1,19 +1,21 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
 
 class RequestModel extends Request {
-  RequestModel({
-    required String digest,
+  const RequestModel({
+    required String tree,
+    required String entry,
     required String filepath,
     required String dataset,
     required Option<DateTime> finished,
     required int filesRestored,
     required Option<String> errorMessage,
   }) : super(
-          digest: digest,
+          tree: tree,
+          entry: entry,
           filepath: filepath,
           dataset: dataset,
           finished: finished,
@@ -23,7 +25,8 @@ class RequestModel extends Request {
 
   factory RequestModel.from(Request request) {
     return RequestModel(
-      digest: request.digest,
+      tree: request.tree,
+      entry: request.entry,
       filepath: request.filepath,
       dataset: request.dataset,
       finished: request.finished,
@@ -37,7 +40,8 @@ class RequestModel extends Request {
       (v) => DateTime.parse(v as String),
     );
     return RequestModel(
-      digest: json['digest'],
+      tree: json['tree'],
+      entry: json['entry'],
       filepath: json['filepath'],
       dataset: json['dataset'],
       finished: finished,
@@ -49,7 +53,8 @@ class RequestModel extends Request {
 
   Map<String, dynamic> toJson() {
     return {
-      'digest': digest,
+      'tree': tree,
+      'entry': entry,
       'filepath': filepath,
       'dataset': dataset,
       'finished': finished.mapOr((v) => v.toIso8601String(), null),

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
@@ -17,7 +17,7 @@ abstract class SnapshotRepository {
   ///
   /// Returns true if the restore request was successfully enqueued.
   Future<Result<bool, Failure>> restoreFiles(
-      String checksum, String filepath, String dataset);
+      String tree, String entry, String filepath, String dataset);
 
   /// Get all file restore requests.
   Future<Result<List<Request>, Failure>> getAllRestores();
@@ -26,5 +26,5 @@ abstract class SnapshotRepository {
   ///
   /// Returns true if the cancellation was successfully enqueued.
   Future<Result<bool, Failure>> cancelRestore(
-      String checksum, String filepath, String dataset);
+      String tree, String entry, String filepath, String dataset);
 }

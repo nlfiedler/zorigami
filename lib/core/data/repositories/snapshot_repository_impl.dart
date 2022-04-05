@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
@@ -40,10 +40,10 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
 
   @override
   Future<Result<bool, Failure>> restoreFiles(
-      String checksum, String filepath, String dataset) async {
+      String tree, String entry, String filepath, String dataset) async {
     try {
       return Ok(
-        await remoteDataSource.restoreFiles(checksum, filepath, dataset),
+        await remoteDataSource.restoreFiles(tree, entry, filepath, dataset),
       );
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));
@@ -61,10 +61,10 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
 
   @override
   Future<Result<bool, Failure>> cancelRestore(
-      String checksum, String filepath, String dataset) async {
+      String tree, String entry, String filepath, String dataset) async {
     try {
       return Ok(
-        await remoteDataSource.cancelRestore(checksum, filepath, dataset),
+        await remoteDataSource.cancelRestore(tree, entry, filepath, dataset),
       );
     } on ServerException catch (e) {
       return Err(ServerFailure(e.toString()));

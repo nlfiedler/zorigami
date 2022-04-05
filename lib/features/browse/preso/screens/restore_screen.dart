@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2021 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,14 +20,14 @@ class RestoreRequestsScreen extends ConsumerWidget {
         listener: (context, state) {
           if (state is Loaded && state.requestCancelled) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Request cancelled')),
+              const SnackBar(content: Text('Request cancelled')),
             );
           }
         },
         builder: (context, state) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('RESTORE'),
+              title: const Text('RESTORE'),
               actions: <Widget>[
                 IconButton(
                   icon: const Icon(Icons.refresh),
@@ -55,14 +55,14 @@ Widget buildBody(BuildContext context, RestoresState state) {
   if (state is Error) {
     return Card(
       child: ListTile(
-        title: Text('Error loading restore requests'),
+        title: const Text('Error loading restore requests'),
         subtitle: Text(state.message),
       ),
     );
   }
   if (state is Loaded) {
     if (state.requests.isEmpty) {
-      return Card(
+      return const Card(
         child: ListTile(
           leading: Icon(Icons.dns),
           title: Text('No restore requests found'),
@@ -75,7 +75,7 @@ Widget buildBody(BuildContext context, RestoresState state) {
       ),
     );
   }
-  return CircularProgressIndicator();
+  return const CircularProgressIndicator();
 }
 
 class RestoreListEntry extends StatelessWidget {
@@ -88,14 +88,14 @@ class RestoreListEntry extends StatelessWidget {
     final subtitle = requestSubtitle(request);
     final inProgress = request.finished is None && request.errorMessage is None;
     final trailing = request.errorMessage is Some
-        ? Icon(Icons.error)
+        ? const Icon(Icons.error)
         : request.finished is None
-            ? CircularProgressIndicator()
-            : Icon(Icons.done);
+            ? const CircularProgressIndicator()
+            : const Icon(Icons.done);
     final onTap = inProgress ? () => _showCancelDialog(context) : null;
     final card = Card(
       child: ListTile(
-        leading: Icon(Icons.archive),
+        leading: const Icon(Icons.archive),
         title: Text(request.filepath),
         subtitle: Text(subtitle),
         trailing: trailing,
@@ -117,25 +117,26 @@ class RestoreListEntry extends StatelessWidget {
       barrierDismissible: true,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Cancel request?'),
-          content: Text('Do you wish to cancel the restore request?'),
+          title: const Text('Cancel request?'),
+          content: const Text('Do you wish to cancel the restore request?'),
           actions: [
             TextButton(
               onPressed: () {
                 BlocProvider.of<RestoresBloc>(contextO).add(
                   CancelRequest(
-                    digest: request.digest,
+                    tree: request.tree,
+                    entry: request.entry,
                     filepath: request.filepath,
                     dataset: request.dataset,
                   ),
                 );
                 Navigator.of(context).pop();
               },
-              child: Text('Yes'),
+              child: const Text('Yes'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('No'),
+              child: const Text('No'),
             ),
           ],
         );

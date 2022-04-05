@@ -21,12 +21,14 @@ abstract class RestoresEvent extends Equatable {
 class LoadRequests extends RestoresEvent {}
 
 class CancelRequest extends RestoresEvent {
-  final String digest;
+  final String tree;
+  final String entry;
   final String filepath;
   final String dataset;
 
   CancelRequest({
-    required this.digest,
+    required this.tree,
+    required this.entry,
     required this.filepath,
     required this.dataset,
   });
@@ -92,14 +94,16 @@ class RestoresBloc extends Bloc<RestoresEvent, RestoresState> {
       if (state is Loaded) {
         final List<Request> requests = List.from((state as Loaded).requests);
         final params = cr.Params(
-          digest: event.digest,
+          tree: event.tree,
+          entry: event.entry,
           filepath: event.filepath,
           dataset: event.dataset,
         );
         final result = await cancelRestore(params);
         final cancelled = result.unwrapOr(false);
         if (cancelled) {
-          requests.removeWhere((Request r) => r.digest == event.digest);
+          requests.removeWhere(
+              (Request r) => r.tree == event.tree && r.entry == event.entry);
         }
         emit(Loaded(
           requests: requests,

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:graphql/client.dart' as gql;
 import 'package:gql/language.dart' as lang;
@@ -12,9 +12,11 @@ import 'package:zorigami/core/error/exceptions.dart';
 abstract class SnapshotRemoteDataSource {
   Future<SnapshotModel?> getSnapshot(String checksum);
   Future<String> restoreDatabase(String storeId);
-  Future<bool> restoreFiles(String checksum, String filepath, String dataset);
+  Future<bool> restoreFiles(
+      String tree, String entry, String filepath, String dataset);
   Future<List<RequestModel>> getAllRestores();
-  Future<bool> cancelRestore(String checksum, String filepath, String dataset);
+  Future<bool> cancelRestore(
+      String tree, String entry, String filepath, String dataset);
 }
 
 // Work around bug in juniper in which it fails to implement __typename for the
@@ -41,7 +43,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<SnapshotModel?> getSnapshot(String checksum) async {
-    final query = r'''
+    const query = r'''
       query Fetch($checksum: Checksum!) {
         snapshot(digest: $checksum) {
           checksum
@@ -74,7 +76,7 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<String> restoreDatabase(String storeId) async {
-    final query = r'''
+    const query = r'''
       mutation Restore($storeId: String!) {
         restoreDatabase(storeId: $storeId)
       }
@@ -95,19 +97,21 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<bool> restoreFiles(
-    String checksum,
+    String tree,
+    String entry,
     String filepath,
     String dataset,
   ) async {
-    final query = r'''
-      mutation Restore($digest: Checksum!, $filepath: String!, $dataset: String!) {
-        restoreFiles(digest: $digest, filepath: $filepath, dataset: $dataset)
+    const query = r'''
+      mutation Restore($tree: Checksum!, $entry: String!, $filepath: String!, $dataset: String!) {
+        restoreFiles(tree: $tree, entry: $entry, filepath: $filepath, dataset: $dataset)
       }
     ''';
     final mutationOptions = gql.MutationOptions(
       document: gqlNoTypename(query),
       variables: <String, dynamic>{
-        'digest': checksum,
+        'tree': tree,
+        'entry': entry,
         'filepath': filepath,
         'dataset': dataset,
       },
@@ -122,10 +126,11 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<List<RequestModel>> getAllRestores() async {
-    final query = r'''
+    const query = r'''
       query {
         restores {
-          digest
+          tree
+          entry
           filepath
           dataset
           finished
@@ -155,19 +160,21 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
 
   @override
   Future<bool> cancelRestore(
-    String checksum,
+    String tree,
+    String entry,
     String filepath,
     String dataset,
   ) async {
-    final query = r'''
-      mutation Cancel($digest: Checksum!, $filepath: String!, $dataset: String!) {
-        cancelRestore(digest: $digest, filepath: $filepath, dataset: $dataset)
+    const query = r'''
+      mutation Cancel($tree: Checksum!, $entry: String!, $filepath: String!, $dataset: String!) {
+        cancelRestore(tree: $tree, entry: $entry, filepath: $filepath, dataset: $dataset)
       }
     ''';
     final mutationOptions = gql.MutationOptions(
       document: gqlNoTypename(query),
       variables: <String, dynamic>{
-        'digest': checksum,
+        'tree': tree,
+        'entry': entry,
         'filepath': filepath,
         'dataset': dataset,
       },

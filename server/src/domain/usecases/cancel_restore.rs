@@ -27,18 +27,21 @@ impl super::UseCase<bool, Params> for CancelRestore {
 }
 
 pub struct Params {
-    /// Hash digest of the file to restore.
-    digest: Checksum,
-    /// Relative path of file to be restored.
+    /// Digest of the tree containing the entry to restore.
+    pub tree: Checksum,
+    /// Name of the entry within the tree to be restored.
+    pub entry: String,
+    /// Relative path of entry to be restored.
     filepath: PathBuf,
     /// Identifier of the dataset containing the snapshot.
     dataset: String,
 }
 
 impl Params {
-    pub fn new(digest: Checksum, filepath: PathBuf, dataset: String) -> Self {
+    pub fn new(tree: Checksum, entry: String, filepath: PathBuf, dataset: String) -> Self {
         Self {
-            digest,
+            tree,
+            entry,
             filepath,
             dataset,
         }
@@ -47,19 +50,25 @@ impl Params {
 
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Params({})", self.digest)
+        write!(f, "Params({}, {})", self.tree, self.entry)
     }
 }
 
 impl Into<Request> for Params {
     fn into(self) -> Request {
-        Request::new(self.digest, self.filepath, self.dataset, String::new())
+        Request::new(
+            self.tree,
+            self.entry,
+            self.filepath,
+            self.dataset,
+            String::new(),
+        )
     }
 }
 
 impl cmp::PartialEq for Params {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest
+        self.tree == other.tree && self.entry == other.entry
     }
 }
 
@@ -78,10 +87,11 @@ mod tests {
         mock.expect_cancel().returning(|_| true);
         // act
         let usecase = CancelRestore::new(Arc::new(mock));
-        let file_digest = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());
+        let tree = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());
+        let entry = String::from("entry.txt");
         let filepath = PathBuf::from("restored.txt");
         let dataset = String::from("dataset1");
-        let params = Params::new(file_digest.clone(), filepath.clone(), dataset);
+        let params = Params::new(tree.clone(), entry.clone(), filepath.clone(), dataset);
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());

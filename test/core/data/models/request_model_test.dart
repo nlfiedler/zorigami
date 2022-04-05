@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/request_model.dart';
@@ -8,8 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('RequestModel', () {
-    final tRequestModel = RequestModel(
-      digest: 'cafebabe',
+    const tRequestModel = RequestModel(
+      tree: 'sha1-cafebabe',
+      entry: 'file',
       filepath: 'dir/file',
       dataset: 'data123',
       finished: None(),
@@ -32,7 +33,8 @@ void main() {
           equals(tRequestModel),
         );
         final actual = RequestModel(
-          digest: 'cafebabe',
+          tree: 'sha1-cafebabe',
+          entry: 'file',
           filepath: 'dir/file',
           dataset: 'data123',
           finished: Some(DateTime.now()),

@@ -20,8 +20,9 @@ void main() {
   late CancelRestore cancelRestore;
   late GetRestores getRestores;
 
-  final tRequestModel = RequestModel(
-    digest: 'cafebabe',
+  const tRequestModel = RequestModel(
+    tree: 'sha1-cafebabe',
+    entry: 'file',
     filepath: 'dir/file',
     dataset: 'data123',
     finished: None(),
@@ -37,7 +38,8 @@ void main() {
       getRestores = GetRestores(mockSnapshotRepository);
       when(() => mockSnapshotRepository.getAllRestores())
           .thenAnswer((_) async => Ok(tRequests));
-      when(() => mockSnapshotRepository.cancelRestore(any(), any(), any()))
+      when(() =>
+              mockSnapshotRepository.cancelRestore(any(), any(), any(), any()))
           .thenAnswer((_) async => Ok(true));
     });
 
@@ -81,7 +83,8 @@ void main() {
       act: (RestoresBloc bloc) {
         bloc.add(LoadRequests());
         bloc.add(CancelRequest(
-          digest: 'cafebabe',
+          tree: 'sha1-cafebabe',
+          entry: 'file',
           filepath: 'dir/file',
           dataset: 'superset',
         ));
@@ -90,7 +93,7 @@ void main() {
       expect: () => [
         Loading(),
         Loaded(requests: tRequests, requestCancelled: false),
-        Loaded(requests: [], requestCancelled: true),
+        Loaded(requests: const [], requestCancelled: true),
       ],
     );
   });

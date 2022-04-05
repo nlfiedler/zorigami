@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! The `schema` module defines the GraphQL schema and resolvers.
@@ -709,9 +709,14 @@ impl entities::Pack {
 
 #[juniper::graphql_object(description = "A request to restore a file or directory.")]
 impl restore::Request {
-    /// Digest of either a file or a tree to restore.
-    fn digest(&self) -> Checksum {
-        self.digest.clone()
+    /// Digest of the tree containing the entry to restore.
+    fn tree(&self) -> Checksum {
+        self.tree.clone()
+    }
+
+    /// Name of the entry within the tree to be restored.
+    fn entry(&self) -> String {
+        self.entry.clone()
     }
 
     /// Relative path where file/tree will be restored.
@@ -1299,7 +1304,8 @@ impl MutationRoot {
     /// Enqueue a request to restore the given file or directory tree.
     fn restore_files(
         executor: &Executor,
-        digest: Checksum,
+        tree: Checksum,
+        entry: String,
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
@@ -1308,7 +1314,7 @@ impl MutationRoot {
         let ctx = executor.context();
         let usecase = RestoreFiles::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
-        let params: Params = Params::new(digest.clone(), fpath, dataset);
+        let params: Params = Params::new(tree.clone(), entry.clone(), fpath, dataset);
         usecase.call(params)?;
         Ok(true)
     }
@@ -1316,7 +1322,8 @@ impl MutationRoot {
     /// Cancel the pending restore request that matches the given values.
     fn cancel_restore(
         executor: &Executor,
-        digest: Checksum,
+        tree: Checksum,
+        entry: String,
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
@@ -1325,7 +1332,7 @@ impl MutationRoot {
         let ctx = executor.context();
         let usecase = CancelRestore::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
-        let params: Params = Params::new(digest.clone(), fpath, dataset);
+        let params: Params = Params::new(tree.clone(), entry.clone(), fpath, dataset);
         let result = usecase.call(params)?;
         Ok(result)
     }

@@ -19,8 +19,10 @@ use std::sync::{Arc, Condvar, Mutex};
 /// Request to restore a single file or a tree of files.
 #[derive(Clone, Debug)]
 pub struct Request {
-    /// Digest of either a file or a tree to restore.
-    pub digest: Checksum,
+    /// Digest of the tree containing the entry to restore.
+    pub tree: Checksum,
+    /// Name of the entry within the tree to be restored.
+    pub entry: String,
     /// Relative path where file/tree will be restored.
     pub filepath: PathBuf,
     /// Identifier of the dataset containing the data.
@@ -36,9 +38,16 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(digest: Checksum, filepath: PathBuf, dataset: String, passphrase: String) -> Self {
+    pub fn new(
+        tree: Checksum,
+        entry: String,
+        filepath: PathBuf,
+        dataset: String,
+        passphrase: String,
+    ) -> Self {
         Self {
-            digest,
+            tree,
+            entry,
             filepath,
             dataset,
             passphrase,
@@ -51,13 +60,13 @@ impl Request {
 
 impl fmt::Display for Request {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Request({}, {:?})", self.digest, self.filepath)
+        write!(f, "Request({}, {})", self.tree, self.entry)
     }
 }
 
 impl cmp::PartialEq for Request {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest && self.filepath == other.filepath
+        self.tree == other.tree && self.entry == other.entry
     }
 }
 
@@ -155,7 +164,10 @@ impl Restorer for RestorerImpl {
     }
 
     fn enqueue(&self, request: Request) -> Result<(), Error> {
-        debug!("restore: enqueuing request {}", request.digest);
+        debug!(
+            "restore: enqueuing request {}/{}",
+            request.tree, request.entry
+        );
         let mut queue = self.pending.lock().unwrap();
         queue.push_back(request);
         let su_addr = self.super_addr.lock().unwrap();
@@ -240,32 +252,51 @@ impl RestoreSupervisor {
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
-            debug!("restore: processing request {}", request.digest);
+            debug!(
+                "restore: processing request {}/{}",
+                request.tree, request.entry
+            );
             let mut req = request.clone();
             if let Err(error) = fetcher.load_dataset(&request.dataset) {
                 self.set_error(error, &mut req);
             } else {
-                if request.digest.is_sha256() {
-                    if let Err(error) = self.process_file(
-                        &mut req,
-                        request.digest.clone(),
-                        request.filepath.clone(),
-                        &mut fetcher,
-                    ) {
-                        self.set_error(error, &mut req);
-                    }
-                } else {
-                    if let Err(error) = self.process_tree(
-                        &mut req,
-                        request.digest.clone(),
-                        request.filepath.clone(),
-                        &mut fetcher,
-                    ) {
-                        self.set_error(error, &mut req);
-                    }
+                if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
+                    self.set_error(error, &mut req);
                 }
             }
             self.push_completed(req);
+        }
+        Ok(())
+    }
+
+    fn process_entry(
+        &self,
+        request: &mut Request,
+        fetcher: &mut FileRestorer,
+    ) -> Result<(), Error> {
+        let tree = self
+            .dbase
+            .get_tree(&request.tree)?
+            .ok_or_else(|| anyhow!(format!("missing tree: {:?}", request.tree)))?;
+        for entry in tree.entries.iter() {
+            if entry.name == request.entry {
+                let filepath = request.filepath.clone();
+                match &entry.reference {
+                    TreeReference::LINK(contents) => {
+                        fetcher.restore_link(contents, filepath)?;
+                    }
+                    TreeReference::TREE(digest) => {
+                        self.process_tree(request, digest.to_owned(), filepath, fetcher)?;
+                    }
+                    TreeReference::FILE(digest) => {
+                        self.process_file(request, digest.to_owned(), filepath, fetcher)?;
+                    }
+                    TreeReference::SMALL(contents) => {
+                        fetcher.restore_small(contents, filepath)?;
+                    }
+                }
+                break;
+            }
         }
         Ok(())
     }
@@ -594,6 +625,7 @@ mod tests {
     use crate::domain::managers;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use std::io;
+    use std::str::FromStr;
 
     #[test]
     fn test_assemble_chunks() -> Result<(), Error> {
@@ -621,7 +653,8 @@ mod tests {
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let result = sut.enqueue(managers::restore::Request::new(
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::SHA1("cafebabe".into()),
+            String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             "dataset1".into(),
             "password".into(),
@@ -704,9 +737,21 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
-        mock.expect_get_file()
-            .withf(|digest| digest.to_string() == "sha256-deadbeef")
+        mock.expect_get_tree()
+            .withf(|digest| digest.to_string() == "sha1-deadbeef")
             .returning(|_| Err(anyhow!("oh no")));
+        let tree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("../test/fixtures/lorem-ipsum.txt"),
+                TreeReference::FILE(Checksum::SHA256(String::from(
+                    "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+                ))),
+            )],
+            1,
+        );
+        mock.expect_get_tree()
+            .withf(|digest| digest.to_string() == "sha1-cafebabe")
+            .returning(move |_| Ok(Some(tree.clone())));
 
         // create a realistic pack file but mock database records
         let passphrase = managers::get_passphrase();
@@ -740,7 +785,8 @@ mod tests {
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let result = sut.enqueue(managers::restore::Request::new(
-            Checksum::SHA256("deadbeef".into()),
+            Checksum::SHA1("deadbeef".into()),
+            String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
             passphrase.clone(),
@@ -760,7 +806,8 @@ mod tests {
         filepath.push("lorem-ipsum.txt");
         assert!(!filepath.exists());
         let result = sut.enqueue(managers::restore::Request::new(
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::SHA1("cafebabe".into()),
+            String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
             passphrase.clone(),
@@ -935,7 +982,7 @@ mod tests {
             .with(eq(pack3_digest_copy))
             .returning(move |_| Ok(Some(packed3_pack.clone())));
 
-        let tree = Tree::new(
+        let subtree = Tree::new(
             vec![
                 TreeEntry::new(
                     Path::new("../test/fixtures/lorem-ipsum.txt"),
@@ -958,9 +1005,25 @@ mod tests {
             ],
             3,
         );
-        let tree_sha1 = tree.digest.clone();
+        let subtree_sha1 = subtree.digest.clone();
+        let subtree_str = subtree_sha1.to_string();
+        let subtree_str_clone = subtree_str.clone();
         mock.expect_get_tree()
-            .returning(move |_| Ok(Some(tree.clone())));
+            .withf(move |digest| digest.to_string() == subtree_str_clone)
+            .returning(move |_| Ok(Some(subtree.clone())));
+        let subtree_digest: Checksum = FromStr::from_str(&subtree_str).unwrap();
+        let roottree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("../test/fixtures"),
+                TreeReference::TREE(subtree_digest),
+            )],
+            1,
+        );
+        let roottree_sha1 = roottree.digest.clone();
+        let roottree_str = roottree_sha1.to_string();
+        mock.expect_get_tree()
+            .withf(move |digest| digest.to_string() == roottree_str)
+            .returning(move |_| Ok(Some(roottree.clone())));
 
         // act
         let repo = Arc::new(mock);
@@ -977,8 +1040,9 @@ mod tests {
         filepath3.push("SekienAkashita.jpg");
         assert!(!filepath3.exists());
         let result = sut.enqueue(managers::restore::Request::new(
-            tree_sha1,
-            PathBuf::new(),
+            roottree_sha1,
+            String::from("fixtures"),
+            tmpdir.path().to_path_buf(),
             dataset_id.clone(),
             passphrase.clone(),
         ));

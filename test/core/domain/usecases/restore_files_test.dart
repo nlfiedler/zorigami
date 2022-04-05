@@ -23,17 +23,20 @@ void main() {
     'should send file restore request to the repository',
     () async {
       // arrange
-      when(() => mockSnapshotRepository.restoreFiles(any(), any(), any()))
+      when(() =>
+              mockSnapshotRepository.restoreFiles(any(), any(), any(), any()))
           .thenAnswer((_) async => Ok<bool, Failure>(true));
       // act
-      final result = await usecase(Params(
-        digest: 'deadbeef',
+      final result = await usecase(const Params(
+        tree: 'sha1-deadbeef',
+        entry: 'filename.txt',
         filepath: 'filename.txt',
         dataset: 'homeset',
       ));
       // assert
       expect(result, equals(Ok<bool, Failure>(true)));
-      verify(() => mockSnapshotRepository.restoreFiles(any(), any(), any()));
+      verify(() =>
+          mockSnapshotRepository.restoreFiles(any(), any(), any(), any()));
       verifyNoMoreInteractions(mockSnapshotRepository);
     },
   );
