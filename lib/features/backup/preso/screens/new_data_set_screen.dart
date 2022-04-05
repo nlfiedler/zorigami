@@ -24,8 +24,7 @@ class NewDataSetScreen extends ConsumerWidget {
       body: MultiBlocProvider(
         providers: [
           BlocProvider<CreateDataSetsBloc>(
-            create: (_) =>
-                ref.read(createDatasetsBlocProvider),
+            create: (_) => ref.read(createDatasetsBlocProvider),
           ),
           BlocProvider<psb.PackStoresBloc>(
             create: (_) => ref.read(packStoresBlocProvider),
@@ -140,7 +139,7 @@ DataSet defaultDataSet() {
   return DataSet(
     key: 'auto-generated',
     computerId: 'auto-generated',
-    packSize: 67120384,
+    packSize: 67108864,
     snapshot: None(),
     basepath: '/',
     schedules: [],
