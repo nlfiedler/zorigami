@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! The `process` module spawns threads to perform backups, ensuring backups are
@@ -10,8 +10,8 @@ use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
-use chrono::prelude::*;
 use anyhow::{anyhow, Error};
+use chrono::prelude::*;
 use log::{debug, error, info, trace};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -44,7 +44,14 @@ pub struct ProcessorImpl {
     state: Arc<dyn StateStore>,
     // Address of the supervisor actor, if it has been started.
     super_addr: Mutex<Option<Addr<BackupSupervisor>>>,
+    // Sleep interval between checks for datasets ready to run.
+    interval: u64,
 }
+
+#[cfg(test)]
+static SUPERVISOR_INTERVAL: u64 = 100;
+#[cfg(not(test))]
+static SUPERVISOR_INTERVAL: u64 = 300_000;
 
 impl ProcessorImpl {
     /// Construct a new instance of ProcessorImpl.
@@ -54,7 +61,15 @@ impl ProcessorImpl {
             runner: Arbiter::new(),
             state: state.clone(),
             super_addr: Mutex::new(None),
+            interval: SUPERVISOR_INTERVAL,
         }
+    }
+
+    /// Set the interval in seconds by which the background thread will wake up
+    /// and check if any datasets are ready to run.
+    pub fn interval(mut self, interval: u64) -> Self {
+        self.interval = interval;
+        self
     }
 }
 
@@ -64,8 +79,9 @@ impl Processor for ProcessorImpl {
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
+            let interval = self.interval;
             let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                BackupSupervisor::new(repo, state)
+                BackupSupervisor::new(repo, state, interval)
             });
             *su_addr = Some(addr);
         }
@@ -101,10 +117,12 @@ struct BackupSupervisor {
     state: Arc<dyn StateStore>,
     // Arbiter manages the runner actors that perform the backups.
     runner: Arbiter,
+    // Sleep interval between checks for datasets ready to run.
+    interval: u64,
 }
 
 impl BackupSupervisor {
-    fn new(repo: Arc<dyn RecordRepository>, state: Arc<dyn StateStore>) -> Self {
+    fn new(repo: Arc<dyn RecordRepository>, state: Arc<dyn StateStore>, interval: u64) -> Self {
         // Create an Arbiter to manage an event loop on a new thread, keeping
         // the backup runners separate from the supervisor since they manage a
         // significant workload for an extended period of time.
@@ -112,6 +130,7 @@ impl BackupSupervisor {
             dbase: repo,
             state,
             runner: Arbiter::new(),
+            interval,
         }
     }
 
@@ -137,18 +156,13 @@ impl BackupSupervisor {
     }
 }
 
-#[cfg(test)]
-static SUPERVISOR_INTERVAL: u64 = 100;
-#[cfg(not(test))]
-static SUPERVISOR_INTERVAL: u64 = 300_000;
-
 impl Actor for BackupSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         debug!("backup: supervisor started");
         self.state.supervisor_event(SupervisorAction::Started);
-        ctx.run_interval(Duration::from_millis(SUPERVISOR_INTERVAL), |this, _ctx| {
+        ctx.run_interval(Duration::from_millis(self.interval), |this, _ctx| {
             trace!("supervisor interval fired");
             if let Err(err) = this.start_due_datasets() {
                 error!("failed to check datasets: {}", err);
@@ -199,8 +213,7 @@ impl Handler<StartBackup> for BackupRunner {
         thread::spawn(move || {
             // Allow the backup process to run an async runtime of its own, if
             // necessary, possibly with a threaded future executor, by spawning
-            // it to a separate thread. This helps with some pack stores that
-            // call into libraries that return their results as a Future.
+            // it to a separate thread.
             run_dataset(
                 msg.dbase,
                 msg.state,

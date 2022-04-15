@@ -12,7 +12,7 @@ google-storage1 = "3.0.0"
 md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }
-tokio = { version = "1.4", features = ["macros", "io-util", "rt", "rt-multi-thread", "fs"] }
+tokio = { version = "1.17", features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
 
 [dev-dependencies]
 dotenv = "0.15"

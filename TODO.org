@@ -1,4 +1,11 @@
 * Tasks
+** Fix kohaku deployment
+*** TODO seems not to be backing up any files at all
+*** DONE google/minio pack stores fail due to runtime-inside-runtime error
+**** DONE change =store_minio= to raise an error if running inside a runtime
+**** DONE change =store_google= to raise an error if running inside a runtime
+**** DONE write a test that uses =actix_rt::test= to run the backup process
+**** DONE fix whatever is going wrong with running backup on its own thread
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -153,6 +160,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Allow user to set user/host names for computer UUID
 **** They may need to avoid naming conflicts with other local users
 **** Imagine a computer lab all sharing a single cloud storage account
+*** Allow user to browse files in existing dataset and choose which ones to exclude
 ** Remote pack store interaction
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
@@ -202,6 +210,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO show differences between any two snapshots
 **** collect the paths and sizes of all new/changed files
 **** somehow show all of that information in a scalable fashion
+*** TODO show =fileCounts= query for each of latest N snapshots to show recent data growth
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
@@ -715,3 +724,21 @@ ps -ef | grep -i zorigami
 *** base path: =/Users/nfiedler=
 *** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
 *** run daily at 4pm
+** kohaku
+*** deploy using docker and ansible
+*** store credentials file as =/zeniba/shared/zorigami.json=
+*** data sets
+**** shared files
+:base_path: /datasets
+:pack_size: 64mb
+:excludes: (none)
+:pack_stores: all
+:schedule: daily, 11:30pm to 6:00am
+*** pack stores
+**** local
+:path: /packstore
+**** cloud
+:credentials: /datasets/zorigami.json
+:project_id: zorigami
+:region: us-west1
+:storage: NEARLINE

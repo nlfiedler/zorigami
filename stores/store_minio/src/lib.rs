@@ -17,7 +17,7 @@ use store_core::Coordinates;
 /// A pack store implementation that uses the Amazon S3 protocol to connect to a
 /// Minio storage server.
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MinioStore {
     store_id: String,
     region: String,
@@ -259,11 +259,11 @@ async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     }
 }
 
-/// Run the given future either on the current runtime or on a newly created
-/// single-threaded future executor.
-fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        Ok(handle.block_on(future))
+/// Run the given future on a newly created single-threaded runtime if possible,
+/// otherwise raise an error if this thread already has a runtime.
+fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
+    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+        Err(anyhow!("cannot call block_on inside a runtime"))
     } else {
         // Build the simplest and lightest runtime we can, while still enabling
         // us to wait for this future (and everything it spawns) to complete
@@ -305,18 +305,18 @@ mod tests {
     }
 
     #[test]
-    fn test_minio_store_roundtrip() {
+    fn test_minio_store_roundtrip() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
         let endp_var = env::var("MINIO_ENDPOINT");
         if endp_var.is_err() {
             // bail out silently if minio is not available
-            return;
+            return Ok(());
         }
-        let endpoint = endp_var.unwrap();
-        let region = env::var("MINIO_REGION").unwrap();
-        let access_key = env::var("MINIO_ACCESS_KEY").unwrap();
-        let secret_key = env::var("MINIO_SECRET_KEY").unwrap();
+        let endpoint = endp_var?;
+        let region = env::var("MINIO_REGION")?;
+        let access_key = env::var("MINIO_ACCESS_KEY")?;
+        let secret_key = env::var("MINIO_SECRET_KEY")?;
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
@@ -324,41 +324,33 @@ mod tests {
         properties.insert("endpoint".to_owned(), endpoint);
         properties.insert("access_key".to_owned(), access_key);
         properties.insert("secret_key".to_owned(), secret_key);
-        let result = MinioStore::new("minioone", &properties);
-        assert!(result.is_ok());
-        let source = result.unwrap();
+        let source = MinioStore::new("minioone", &properties)?;
 
         // store an object
         let bucket = "747267d56e7057118a9aa40c24c1730f".to_owned();
         let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
-        let result = source.store_pack_sync(packfile, &bucket, &object);
-        assert!(result.is_ok());
-        let location = result.unwrap();
+        let location = source.store_pack_sync(packfile, &bucket, &object)?;
         assert_eq!(location.store, "minioone");
         assert_eq!(location.bucket, bucket);
         assert_eq!(location.object, object);
 
         // check for bucket(s) being present
-        let result = source.list_buckets_sync();
-        assert!(result.is_ok());
-        let buckets = result.unwrap();
+        let buckets = source.list_buckets_sync()?;
         assert!(!buckets.is_empty());
         assert!(buckets.contains(&bucket));
 
         // check for object(s) being present
-        let result = source.list_objects_sync(&bucket);
-        assert!(result.is_ok());
-        let listing = result.unwrap();
+        let listing = source.list_objects_sync(&bucket)?;
         assert!(!listing.is_empty());
         assert!(listing.contains(&object));
 
         // retrieve the file and verify by checksum
-        let outdir = tempdir().unwrap();
+        let outdir = tempdir()?;
         let outfile = outdir.path().join("restored.txt");
         let result = source.retrieve_pack_sync(&location, &outfile);
         assert!(result.is_ok());
-        let md5sum = store_core::md5sum_file(&outfile).unwrap();
+        let md5sum = store_core::md5sum_file(&outfile)?;
         #[cfg(target_family = "unix")]
         assert_eq!(md5sum, "40756e6058736e2485119410c2014380");
         #[cfg(target_family = "windows")]
@@ -370,13 +362,12 @@ mod tests {
 
         // remove all objects from all buckets, and the buckets, too
         for bucket in buckets {
-            let result = source.list_objects_sync(&bucket);
-            assert!(result.is_ok());
-            let objects = result.unwrap();
+            let objects = source.list_objects_sync(&bucket)?;
             for obj in objects {
-                source.delete_object_sync(&bucket, &obj).unwrap();
+                source.delete_object_sync(&bucket, &obj)?;
             }
-            source.delete_bucket_sync(&bucket).unwrap();
+            source.delete_bucket_sync(&bucket)?;
         }
+        Ok(())
     }
 }

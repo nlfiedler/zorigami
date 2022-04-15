@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! The `state` module manages the application state.
@@ -26,10 +26,15 @@ pub trait StateStore: Send + Sync {
     /// Dispatch a backup related action to the store.
     fn backup_event(&self, action: BackupAction);
 
+    /// Wait for the given backup action to have been received.
+    ///
+    /// This function will block the current **thread** of execution.
+    fn wait_for_backup(&self, action: BackupAction);
+
     /// Dispatch a supervisor related action to the store.
     fn supervisor_event(&self, action: SupervisorAction);
 
-    /// Wait for the given action to have been received.
+    /// Wait for the given supervisor action to have been received.
     ///
     /// This function will block the current **thread** of execution.
     fn wait_for_supervisor(&self, action: SupervisorAction);
@@ -51,6 +56,8 @@ pub trait StateStore: Send + Sync {
 pub struct StateStoreImpl {
     // Mutable shared reference to the redux store.
     store: Mutex<Store<State, Display>>,
+    // Used to allow callers to wait for backup events.
+    backup_var: Arc<(Mutex<BackupAction>, Condvar)>,
     // Used to allow callers to wait for supervisor events.
     super_var: Arc<(Mutex<SupervisorAction>, Condvar)>,
 }
@@ -59,10 +66,16 @@ impl StateStoreImpl {
     /// Construct a new instance of StateStoreImpl.
     pub fn new() -> Self {
         let store = Store::new(State::default(), Display::default());
-        let pair = Arc::new((Mutex::new(SupervisorAction::Stopped), Condvar::new()));
+        let backup_var = Arc::new((
+            // ideally would have a no-op action
+            Mutex::new(BackupAction::Restart("none".into())),
+            Condvar::new(),
+        ));
+        let super_var = Arc::new((Mutex::new(SupervisorAction::Stopped), Condvar::new()));
         Self {
             store: Mutex::new(store),
-            super_var: pair,
+            backup_var,
+            super_var,
         }
     }
 }
@@ -70,7 +83,22 @@ impl StateStoreImpl {
 impl StateStore for StateStoreImpl {
     fn backup_event(&self, action: BackupAction) {
         let mut store = self.store.lock().unwrap();
-        let _ = store.dispatch(action);
+        let _ = store.dispatch(action.clone());
+        drop(store);
+        let pair = self.backup_var.clone();
+        let (lock, cvar) = &*pair;
+        let mut actual = lock.lock().unwrap();
+        *actual = action;
+        cvar.notify_all();
+    }
+
+    fn wait_for_backup(&self, action: BackupAction) {
+        let pair = self.backup_var.clone();
+        let (lock, cvar) = &*pair;
+        let mut actual = lock.lock().unwrap();
+        while *actual != action {
+            actual = cvar.wait(actual).unwrap();
+        }
     }
 
     fn supervisor_event(&self, action: SupervisorAction) {
@@ -123,7 +151,7 @@ enum SubscriberAction {
 ///
 /// Actions related to the state of a backup.
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BackupAction {
     /// Reset the counters for the backup of a given dataset.
     Start(String),
@@ -160,7 +188,7 @@ pub enum SupervisorAction {
 ///
 /// The state of the backup process for a particular dataset.
 ///
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BackupState {
     start_time: DateTime<Utc>,
     end_time: Option<DateTime<Utc>>,
@@ -244,6 +272,12 @@ pub struct State {
     pub supervisor: SupervisorState,
     /// Collection of subscribers to the application state.
     subscribers: HashMap<String, Subscription<State>>,
+}
+
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "backups: {:?}, supervisor: {:?}", self.backups, self.supervisor)
+    }
 }
 
 impl Default for State {
@@ -482,6 +516,33 @@ mod tests {
         sut.supervisor_event(SupervisorAction::Stopped);
         let state = sut.get_state();
         assert_eq!(state.supervisor, SupervisorState::Stopped);
+    }
+
+    #[test]
+    fn test_wait_for_backup() {
+        let sut = Arc::new(StateStoreImpl::new());
+        // assert initial state is empty
+        let state = sut.get_state();
+        assert_eq!(state.backups.len(), 0);
+        // spawn a thread that sends an event later
+        let sut_clone = sut.clone();
+        std::thread::spawn(move || {
+            let delay = std::time::Duration::from_millis(250);
+            std::thread::sleep(delay);
+            sut_clone.backup_event(BackupAction::Start("dataset".into()));
+        });
+        // wait on the current thread for the action to arrive
+        sut.wait_for_backup(BackupAction::Start("dataset".into()));
+        let state = sut.get_state();
+        assert_eq!(state.backups.len(), 1);
+        // wait for an action that has already arrived
+        sut.backup_event(BackupAction::Finish("dataset".into()));
+        sut.wait_for_backup(BackupAction::Finish("dataset".into()));
+        let state = sut.get_state();
+        let backup = state.backups("dataset").unwrap();
+        assert_eq!(backup.had_error(), false);
+        assert_eq!(backup.is_paused(), false);
+        assert!(backup.end_time().is_some());
     }
 
     #[test]

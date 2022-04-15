@@ -352,7 +352,7 @@ impl PackRepository for PackRepositoryImpl {
             }
         }
 
-        Err(anyhow!("unable to retrieve pack file"))
+        Err(anyhow!("unable to retrieve pack file: {:?}", locations))
     }
 
     fn test_store(&self, store_id: &str) -> Result<(), Error> {
