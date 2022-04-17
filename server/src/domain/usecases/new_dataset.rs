@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
@@ -24,7 +24,12 @@ impl super::UseCase<Dataset, Params> for NewDataset {
         // use the constructor to generate a new identifier and then copy
         // everything over
         let mut dataset = Dataset::new(&params.basepath);
-        dataset.excludes = params.excludes;
+        dataset.excludes = params
+            .excludes
+            .into_iter()
+            .map(|e| e.trim().to_owned())
+            .filter(|e| e.len() > 0)
+            .collect();
         for schedule in params.schedules {
             dataset = dataset.add_schedule(schedule);
         }
@@ -120,9 +125,43 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
+        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");
+        assert_eq!(actual.excludes.len(), 0);
+    }
+
+    #[test]
+    fn test_new_dataset_empty_excludes() {
+        // arrange
+        let config: Configuration = Default::default();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_configuration()
+            .returning(move || Ok(config.clone()));
+        mock.expect_put_dataset().returning(|_| Ok(()));
+        mock.expect_put_computer_id()
+            .with(always(), always())
+            .returning(|_, _| Ok(()));
+        // act
+        let usecase = NewDataset::new(Box::new(mock));
+        let params = Params {
+            basepath: PathBuf::from("/home/planet"),
+            schedules: vec![],
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec!["".to_owned()],
+        };
+        let result = usecase.call(params);
+        // assert
+        assert!(result.is_ok());
+        let actual = result.unwrap();
+        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
+        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
+        assert_eq!(actual.pack_size, 33_554_432);
+        assert_eq!(actual.stores.len(), 1);
+        assert_eq!(actual.stores[0], "cafebabe");
+        assert_eq!(actual.excludes.len(), 0);
     }
 
     #[test]

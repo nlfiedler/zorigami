@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +14,7 @@ class TimeRange extends Equatable {
   final int start;
   final int stop;
 
-  TimeRange({required this.start, required this.stop});
+  const TimeRange({required this.start, required this.stop});
 
   @override
   List<Object> get props => [start, stop];
@@ -54,7 +54,7 @@ class Schedule extends Equatable {
   final Option<DayOfWeek> dayOfWeek;
   final Option<int> dayOfMonth;
 
-  Schedule({
+  const Schedule({
     required this.frequency,
     required this.timeRange,
     required this.weekOfMonth,
@@ -170,7 +170,7 @@ class DataSet extends Equatable {
   final Status status;
   final Option<String> errorMsg;
 
-  DataSet({
+  const DataSet({
     required this.key,
     required this.computerId,
     required this.basepath,

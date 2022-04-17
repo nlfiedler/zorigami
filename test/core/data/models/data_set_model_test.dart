@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
@@ -11,15 +11,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('TimeRangeModel', () {
     // pathological case that amounts to only mere seconds
-    final tTimeRangeOneTwo = TimeRangeModel(start: 1, stop: 2);
+    const tTimeRangeOneTwo = TimeRangeModel(start: 1, stop: 2);
     // special case, midnight to noon
-    final tTimeRangeMidnight = TimeRangeModel(start: 0, stop: 43200);
+    const tTimeRangeMidnight = TimeRangeModel(start: 0, stop: 43200);
     // range with hours and minutes: 10:30am to 6:30pm
-    final tTimeRangeMinutes = TimeRangeModel(start: 37800, stop: 66600);
+    const tTimeRangeMinutes = TimeRangeModel(start: 37800, stop: 66600);
     // range with hours, minutes, and seconds: 8:45:25am to 12:30:36pm
-    final tTimeRangeSeconds = TimeRangeModel(start: 31525, stop: 45036);
+    const tTimeRangeSeconds = TimeRangeModel(start: 31525, stop: 45036);
     // start time is greater than stop time
-    final tTimeRangeOvernight = TimeRangeModel(start: 79200, stop: 21600);
+    const tTimeRangeOvernight = TimeRangeModel(start: 79200, stop: 21600);
     test(
       'should be a subclass of TimeRange entity',
       () {
@@ -84,8 +84,8 @@ void main() {
       'should convert to and from JSON',
       () {
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(None())),
-          equals(None<WeekOfMonth>()),
+          decodeWeekOfMonth(encodeWeekOfMonth(const None())),
+          equals(const None<WeekOfMonth>()),
         );
         expect(
           decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.first))),
@@ -116,8 +116,8 @@ void main() {
       'should convert to and from JSON',
       () {
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(None())),
-          equals(None<DayOfWeek>()),
+          decodeDayOfWeek(encodeDayOfWeek(const None())),
+          equals(const None<DayOfWeek>()),
         );
         expect(
           decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sun))),
@@ -152,7 +152,7 @@ void main() {
   });
 
   group('ScheduleModel', () {
-    final tScheduleModel = ScheduleModel(
+    const tScheduleModel = ScheduleModel(
       frequency: Frequency.hourly,
       timeRange: None(),
       dayOfMonth: None(),
@@ -176,10 +176,10 @@ void main() {
         );
         final weeklyThursday = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: None(),
-          dayOfMonth: None(),
+          timeRange: const None(),
+          dayOfMonth: const None(),
           dayOfWeek: Some(DayOfWeek.thu),
-          weekOfMonth: None(),
+          weekOfMonth: const None(),
         );
         expect(
           ScheduleModel.fromJson(weeklyThursday.toJson()),
@@ -187,8 +187,8 @@ void main() {
         );
         final monthlyThirdWed = ScheduleModel(
           frequency: Frequency.monthly,
-          timeRange: None(),
-          dayOfMonth: None(),
+          timeRange: const None(),
+          dayOfMonth: const None(),
           dayOfWeek: Some(DayOfWeek.wed),
           weekOfMonth: Some(WeekOfMonth.third),
         );
@@ -198,10 +198,10 @@ void main() {
         );
         final weeklySaturdayNight = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: Some(TimeRangeModel(start: 72000, stop: 14400)),
-          dayOfMonth: None(),
-          dayOfWeek: None(),
-          weekOfMonth: None(),
+          timeRange: Some(const TimeRangeModel(start: 72000, stop: 14400)),
+          dayOfMonth: const None(),
+          dayOfWeek: const None(),
+          weekOfMonth: const None(),
         );
         expect(
           ScheduleModel.fromJson(weeklySaturdayNight.toJson()),
@@ -219,15 +219,15 @@ void main() {
       schedules: [
         ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: None(),
-          dayOfMonth: None(),
+          timeRange: const None(),
+          dayOfMonth: const None(),
           dayOfWeek: Some(DayOfWeek.thu),
-          weekOfMonth: None(),
+          weekOfMonth: const None(),
         )
       ],
       packSize: 67108864,
-      stores: ['store/local/storey'],
-      excludes: [],
+      stores: const ['store/local/storey'],
+      excludes: const [],
       snapshot: Some(
         SnapshotModel(
           checksum: 'cafebabe',
@@ -239,10 +239,10 @@ void main() {
         ),
       ),
       status: Status.finished,
-      errorMsg: None(),
+      errorMsg: const None(),
     );
     test(
-      'should be a subclass of Schedule entity',
+      'should be a subclass of DataSet entity',
       () {
         // assert
         expect(tDataSetModel, isA<DataSet>());
@@ -264,7 +264,7 @@ void main() {
         // expect(decoded.snapshot, equals(tDataSetModel.snapshot));
 
         // arrange (with minimal data)
-        final model = DataSetModel(
+        const model = DataSetModel(
           key: '',
           computerId: '',
           basepath: '',
@@ -293,15 +293,15 @@ void main() {
         schedules: [
           Schedule(
             frequency: Frequency.weekly,
-            timeRange: None(),
-            dayOfMonth: None(),
+            timeRange: const None(),
+            dayOfMonth: const None(),
             dayOfWeek: Some(DayOfWeek.thu),
-            weekOfMonth: None(),
+            weekOfMonth: const None(),
           )
         ],
         packSize: 67108864,
-        stores: ['store/local/setkey1'],
-        excludes: [],
+        stores: const ['store/local/setkey1'],
+        excludes: const [],
         snapshot: Some(
           Snapshot(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
@@ -315,7 +315,7 @@ void main() {
           ),
         ),
         status: Status.finished,
-        errorMsg: None(),
+        errorMsg: const None(),
       );
       final dataSetModel = DataSetModel(
         key: 'setkey1',
@@ -324,15 +324,15 @@ void main() {
         schedules: [
           ScheduleModel(
             frequency: Frequency.weekly,
-            timeRange: None(),
-            dayOfMonth: None(),
+            timeRange: const None(),
+            dayOfMonth: const None(),
             dayOfWeek: Some(DayOfWeek.thu),
-            weekOfMonth: None(),
+            weekOfMonth: const None(),
           )
         ],
         packSize: 67108864,
-        stores: ['store/local/setkey1'],
-        excludes: [],
+        stores: const ['store/local/setkey1'],
+        excludes: const [],
         snapshot: Some(
           SnapshotModel(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
@@ -346,7 +346,7 @@ void main() {
           ),
         ),
         status: Status.finished,
-        errorMsg: None(),
+        errorMsg: const None(),
       );
       // act
       final result = DataSetModel.from(dataSet);

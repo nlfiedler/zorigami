@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -44,7 +44,7 @@ class DataSetForm extends StatefulWidget {
   final List<PackStore> stores;
   final GlobalKey<FormBuilderState> formKey;
 
-  DataSetForm({
+  const DataSetForm({
     Key? key,
     required this.dataset,
     required this.stores,
@@ -88,11 +88,11 @@ class DataSetForm extends StatefulWidget {
       computerId: state.value['computerId'],
       basepath: state.value['basepath'],
       packSize: packSize,
-      snapshot: None(),
+      snapshot: const None(),
       schedules: schedules,
       stores: state.value['stores'],
       excludes: excludes,
-      errorMsg: None(),
+      errorMsg: const None(),
       status: Status.none,
     );
   }
@@ -118,7 +118,7 @@ class _DataSetFormState extends State<DataSetForm> {
       children: <Widget>[
         FormBuilderTextField(
           name: 'key',
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Dataset Key',
           ),
@@ -164,7 +164,7 @@ class _DataSetFormState extends State<DataSetForm> {
           options: packStoreOptions,
           // bug https://github.com/danvick/flutter_form_builder/issues/657
           initialValue: formState.initialValue['stores'],
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.archive),
             labelText: 'Pack Store(s)',
           ),
@@ -304,11 +304,11 @@ Option<DateTime> getTimeFromDataSet(
   Option<DateTime> Function(Schedule) op,
 ) {
   if (dataset.schedules.isEmpty) {
-    return None();
+    return const None();
   }
   switch (dataset.schedules[0].frequency) {
     case Frequency.hourly:
-      return None();
+      return const None();
     case Frequency.daily:
     case Frequency.weekly:
     case Frequency.monthly:
@@ -319,7 +319,7 @@ Option<DateTime> getTimeFromDataSet(
 }
 
 DateTime timeFromInt(int time) {
-  final int as_minutes = (time / 60) as int;
+  final int asMinutes = (time / 60) as int;
   //
   // This code works fine in dartdevc:
   //
@@ -332,8 +332,8 @@ DateTime timeFromInt(int time) {
   // component to paint an enormous grey rectangle. As such, perform all the
   // arithmetic using not-integer operators and then convert to ints at the end.
   //
-  final hour = as_minutes / 60;
-  final minutes = as_minutes - (hour.toInt() * 60);
+  final hour = asMinutes / 60;
+  final minutes = asMinutes - (hour.toInt() * 60);
   return DateTime(1, 1, 1, hour.toInt(), minutes.toInt());
 }
 
@@ -345,14 +345,14 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
   }
   // dart needs help knowing exactly what type of option is returned
   final Option<TimeRange> timeRange =
-      allowTimeRange(option) ? timeRangeFromState(state) : None();
+      allowTimeRange(option) ? timeRangeFromState(state) : const None();
   return [
     Schedule(
       frequency: option.frequency!,
       timeRange: timeRange,
-      weekOfMonth: None(),
-      dayOfWeek: None(),
-      dayOfMonth: None(),
+      weekOfMonth: const None(),
+      dayOfWeek: const None(),
+      dayOfMonth: const None(),
     )
   ];
 }
@@ -370,7 +370,7 @@ Option<TimeRange> timeRangeFromState(FormBuilderState state) {
     final stop = (stopDateTime.hour * 60 + stopDateTime.minute) * 60;
     return Some(TimeRange(start: start, stop: stop));
   }
-  return None();
+  return const None();
 }
 
 bool allowTimeRange(FrequencyOption frequency) {

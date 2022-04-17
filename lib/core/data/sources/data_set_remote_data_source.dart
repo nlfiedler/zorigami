@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:graphql/client.dart' as gql;
 import 'package:gql/language.dart' as lang;
@@ -69,7 +69,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<List<DataSetModel>> getAllDataSets() async {
-    final getAllDatasets = '''
+    const getAllDatasets = '''
       query {
         datasets {
           $dataSetFields
@@ -96,7 +96,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<String> deleteDataSet(DataSet input) async {
-    final deleteDataSet = r'''
+    const deleteDataSet = r'''
       mutation DeleteDataset($id: String!) {
         deleteDataset(id: $id)
       }
@@ -116,7 +116,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<DataSetModel?> defineDataSet(DataSet input) async {
-    final defineStore = '''
+    const defineStore = '''
       mutation DefineDataset(\$input: DatasetInput!) {
         defineDataset(input: \$input) {
           $dataSetFields
@@ -143,7 +143,7 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
 
   @override
   Future<DataSetModel?> updateDataSet(DataSet input) async {
-    final updateStore = '''
+    const updateStore = '''
       mutation UpdateDataset(\$input: DatasetInput!) {
         updateDataset(input: \$input) {
           $dataSetFields

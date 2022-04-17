@@ -1,12 +1,12 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 
 class TimeRangeModel extends TimeRange {
-  TimeRangeModel({
+  const TimeRangeModel({
     required int start,
     required int stop,
   }) : super(
@@ -77,7 +77,7 @@ int convertToUtc(int inputSeconds) {
 }
 
 class ScheduleModel extends Schedule {
-  ScheduleModel({
+  const ScheduleModel({
     required Frequency frequency,
     required Option<TimeRange> timeRange,
     required Option<WeekOfMonth> weekOfMonth,
@@ -133,7 +133,7 @@ class ScheduleModel extends Schedule {
 }
 
 class DataSetModel extends DataSet {
-  DataSetModel({
+  const DataSetModel({
     required String key,
     required String computerId,
     required String basepath,
@@ -266,7 +266,7 @@ Option<TimeRange> decodeTimeRange(Map<String, dynamic>? timeRange) {
   // Will get a non-null timeRange with unit tests that need to have a full
   // GraphQL structure to make the graphql package happy.
   if (timeRange == null || timeRange['startTime'] == null) {
-    return None();
+    return const None();
   }
   return Option.some(TimeRangeModel.fromJson(timeRange));
 }
@@ -308,7 +308,7 @@ String encodeFrequency(Frequency frequency) {
 
 Option<WeekOfMonth> decodeWeekOfMonth(String? weekOfMonth) {
   if (weekOfMonth == null) {
-    return None();
+    return const None();
   } else if (weekOfMonth == 'FIRST') {
     return Some(WeekOfMonth.first);
   } else if (weekOfMonth == 'SECOND') {
@@ -345,7 +345,7 @@ String? encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
 
 Option<DayOfWeek> decodeDayOfWeek(String? dayOfWeek) {
   if (dayOfWeek == null) {
-    return None();
+    return const None();
   } else if (dayOfWeek == 'SUN') {
     return Some(DayOfWeek.sun);
   } else if (dayOfWeek == 'MON') {
@@ -390,7 +390,7 @@ String? encodeDayOfWeek(Option<DayOfWeek> dayOfWeek) {
 
 Option<int> decodeDayOfMonth(dynamic dayOfMonth) {
   if (dayOfMonth == null) {
-    return None();
+    return const None();
   }
   return Option.some((dayOfMonth as num).toInt());
 }

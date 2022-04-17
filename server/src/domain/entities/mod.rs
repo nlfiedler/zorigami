@@ -231,8 +231,7 @@ pub struct Dataset {
 const DEFAULT_PACK_SIZE: u64 = 67_108_864;
 
 impl Dataset {
-    /// Construct a Dataset with the given unique (computer) identifier, and
-    /// base path of the directory structure to be saved.
+    /// Construct a Dataset with the path of the directory tree to be saved.
     pub fn new(basepath: &Path) -> Dataset {
         let id = xid::new().to_string();
         let mut workspace = basepath.to_owned();

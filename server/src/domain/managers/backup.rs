@@ -33,9 +33,9 @@ pub fn perform_backup(
     stop_time: Option<DateTime<Utc>>,
 ) -> Result<Option<entities::Checksum>, Error> {
     if let Some(time) = stop_time {
-        debug!("performing backup for {} until {}", dataset, time);
+        debug!("backup: starting for {} until {}", dataset, time);
     } else {
-        debug!("performing backup for {} until completion", dataset);
+        debug!("backup: starting for {} until completion", dataset);
     }
     fs::create_dir_all(&dataset.workspace)?;
     // Check if latest snapshot exists and lacks an end time, which indicates
@@ -47,7 +47,7 @@ pub fn perform_backup(
                 // continue from the previous incomplete backup
                 let parent_sha1 = snapshot.parent;
                 let current_sha1 = latest.to_owned();
-                debug!("continuing previous backup {}", &current_sha1);
+                debug!("backup: continuing previous snapshot {}", &current_sha1);
                 return continue_backup(
                     dataset,
                     repo,
@@ -72,6 +72,7 @@ pub fn perform_backup(
     for exclusion in dataset.excludes.iter() {
         excludes.push(PathBuf::from(exclusion));
     }
+    debug!("backup: dataset exclusions: {:?}", excludes);
     // Take a snapshot and record it as the new most recent snapshot for this
     // dataset, to allow detecting a running backup, and thus recover from a
     // crash or forced shutdown.
@@ -84,7 +85,7 @@ pub fn perform_backup(
         }
         Some(current_sha1) => {
             repo.put_latest_snapshot(&dataset.id, &current_sha1)?;
-            debug!("starting new backup {}", &current_sha1);
+            debug!("backup: starting new snapshot {}", &current_sha1);
             continue_backup(
                 dataset,
                 repo,
@@ -898,7 +899,7 @@ fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
                 } else if pattern.starts_with("*") {
                     // prepend basepath
                     groomed.push([basepath_str, pattern].iter().collect());
-                } else {
+                } else if pattern.len() > 0 {
                     // exclude the path and everything below
                     groomed.push([basepath_str, pattern].iter().collect());
                     groomed.push([basepath_str, pattern, "**"].iter().collect());
@@ -1138,6 +1139,45 @@ mod tests {
         assert!(!globset.is_match("/basedir/subdir/node_modules/subdir"));
         assert!(!globset.is_match("/basedir/subdir/node_modules/subdir/file.txt"));
         assert!(!globset.is_match("/basedir/subdir"));
+        assert!(!globset.is_match("/basedir/subdir/file.txt"));
+    }
+
+    #[test]
+    fn test_build_exclusions_nearly_empty() {
+        // somehow the excludes list for a dataset contained a single empty
+        // string and that caused the backup process to find nothing at all
+        let excludes = vec![
+            PathBuf::from("/storage/database"),
+            PathBuf::from("/basedir/.tmp"),
+            PathBuf::from(""),
+        ];
+        let basedir = PathBuf::from("/basedir");
+        let globset = build_exclusions(&basedir, &excludes[..]);
+        // positive cases
+        assert!(globset.is_match("/basedir/.tmp"));
+        assert!(globset.is_match("/basedir/.tmp/subdir"));
+        assert!(globset.is_match("/basedir/.tmp/subdir/file.txt"));
+        assert!(globset.is_match("/storage/database/LOCK"));
+        // negative cases
+        assert!(!globset.is_match("/basedir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir/file.txt"));
+        assert!(!globset.is_match("/basedir/file.txt"));
+        assert!(!globset.is_match("/basedir/subdir/file.txt"));
+    }
+
+    #[test]
+    fn test_build_exclusions_empty() {
+        let excludes: Vec<PathBuf> = Vec::new();
+        let basedir = PathBuf::from("/basedir");
+        let globset = build_exclusions(&basedir, &excludes[..]);
+        // negative cases
+        assert!(!globset.is_match("/basedir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir"));
+        assert!(!globset.is_match("/basedir/subdir/node_modules/subdir/file.txt"));
+        assert!(!globset.is_match("/basedir/file.txt"));
         assert!(!globset.is_match("/basedir/subdir/file.txt"));
     }
 

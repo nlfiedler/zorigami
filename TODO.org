@@ -1,11 +1,4 @@
 * Tasks
-** Fix kohaku deployment
-*** TODO seems not to be backing up any files at all
-*** DONE google/minio pack stores fail due to runtime-inside-runtime error
-**** DONE change =store_minio= to raise an error if running inside a runtime
-**** DONE change =store_google= to raise an error if running inside a runtime
-**** DONE write a test that uses =actix_rt::test= to run the backup process
-**** DONE fix whatever is going wrong with running backup on its own thread
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -146,6 +139,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** configuration panel
 ***** snapshot browser
 ** Improved error handling
+*** Collect and present errors encountered during the backup
+**** e.g. all the "permission denied" and such
 *** Data set input validation
 **** Ask backend to verify the entered basepath before trying to save
 *** Pack store input validation

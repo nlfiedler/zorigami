@@ -73,6 +73,54 @@ fn test_basic_snapshots() -> Result<(), Error> {
 }
 
 #[test]
+fn test_default_excludes() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
+    let mut workspace = basepath.clone();
+    workspace.push(".tmp");
+    let excludes = vec![workspace];
+    // take a snapshot of the test data
+    let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
+    let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+    assert!(snapshot1.parent.is_none());
+    assert_eq!(snapshot1.file_counts.total_files(), 6);
+    // walk the snapshot and ensure all files were included
+    let tree = snapshot1.tree;
+    let iter = TreeWalker::new(&dbase, &basepath, tree);
+    let mut exe_count: usize = 0;
+    let mut txt_count: usize = 0;
+    let mut js_count: usize = 0;
+    let mut jpg_count: usize = 0;
+    for result in iter {
+        let path = result.unwrap().path;
+        let path_str = path.to_str().unwrap();
+        if path_str.ends_with(".exe") {
+            exe_count += 1;
+        }
+        if path_str.ends_with(".txt") {
+            txt_count += 1;
+        }
+        if path_str.ends_with(".js") {
+            js_count += 1;
+        }
+        if path_str.ends_with(".jpg") {
+            jpg_count += 1;
+        }
+    }
+    assert_eq!(exe_count, 1);
+    assert_eq!(txt_count, 2);
+    assert_eq!(js_count, 1);
+    assert_eq!(jpg_count, 1);
+    Ok(())
+}
+
+#[test]
 fn test_basic_excludes() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;

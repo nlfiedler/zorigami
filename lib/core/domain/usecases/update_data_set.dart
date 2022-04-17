@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
@@ -22,7 +22,7 @@ class UpdateDataSet implements UseCase<DataSet, Params> {
 class Params extends Equatable {
   final DataSet dataset;
 
-  Params({required this.dataset});
+  const Params({required this.dataset});
 
   @override
   List<Object> get props => [dataset];

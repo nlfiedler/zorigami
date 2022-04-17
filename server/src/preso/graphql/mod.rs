@@ -296,6 +296,14 @@ impl entities::Dataset {
             .unwrap_or_else(|| self.basepath.to_string_lossy().into_owned())
     }
 
+    /// Path for temporary pack building.
+    fn workspace(&self) -> String {
+        self.workspace
+            .to_str()
+            .map(|v| v.to_owned())
+            .unwrap_or_else(|| self.workspace.to_string_lossy().into_owned())
+    }
+
     /// Set of schedules that apply to this dataset.
     fn schedules(&self) -> Vec<entities::schedule::Schedule> {
         self.schedules.clone()
@@ -2360,6 +2368,8 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
+        let mut ws = cwd.clone();
+        ws.push(".tmp");
         let input = DatasetInput {
             id: None,
             basepath: cwd.to_str().unwrap().to_owned(),
@@ -2373,7 +2383,7 @@ mod tests {
         let (res, errors) = juniper::execute_sync(
             r#"mutation Define($input: DatasetInput!) {
                 defineDataset(input: $input) {
-                    basepath packSize
+                    basepath workspace packSize
                 }
             }"#,
             None,
@@ -2390,6 +2400,9 @@ mod tests {
         let field = object.get_field_value("basepath").unwrap();
         let value = field.as_scalar_value::<String>().unwrap();
         assert_eq!(value, cwd.to_str().unwrap());
+        let field = object.get_field_value("workspace").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, ws.to_str().unwrap());
         let field = object.get_field_value("packSize").unwrap();
         // packSize is a bigint that comes over the wire as a string
         let value = field.as_scalar_value::<String>().unwrap();
@@ -2497,6 +2510,8 @@ mod tests {
         let schema = create_schema();
         let mut vars = Variables::new();
         let cwd = std::env::current_dir().unwrap();
+        let mut ws = cwd.clone();
+        ws.push(".tmp");
         let input = DatasetInput {
             id: Some("cafebabe".to_owned()),
             basepath: cwd.to_str().unwrap().to_owned(),
@@ -2510,7 +2525,7 @@ mod tests {
         let (res, errors) = juniper::execute_sync(
             r#"mutation Update($input: DatasetInput!) {
                 updateDataset(input: $input) {
-                    basepath packSize
+                    basepath workspace packSize
                 }
             }"#,
             None,
@@ -2527,6 +2542,9 @@ mod tests {
         let field = object.get_field_value("basepath").unwrap();
         let value = field.as_scalar_value::<String>().unwrap();
         assert_eq!(value, cwd.to_str().unwrap());
+        let field = object.get_field_value("workspace").unwrap();
+        let value = field.as_scalar_value::<String>().unwrap();
+        assert_eq!(value, ws.to_str().unwrap());
         let field = object.get_field_value("packSize").unwrap();
         // packSize is a bigint that comes over the wire as a string
         let value = field.as_scalar_value::<String>().unwrap();
