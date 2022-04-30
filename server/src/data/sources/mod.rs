@@ -617,6 +617,23 @@ pub trait PackDataSource {
     /// Delete the named bucket. It almost certainly needs to be empty first, so
     /// use `list_objects()` and `delete_object()` to remove the objects.
     fn delete_bucket(&self, bucket: &str) -> Result<(), Error>;
+
+    /// Store the database archive under the named bucket and referenced by the
+    /// object name. Returns the remote location of the pack, in case it was
+    /// assigned new values by the backing store.
+    fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error>;
+
+    /// Retrieve a database archive from the given location, writing the
+    /// contents to the given path.
+    fn retrieve_database(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error>;
+
+    /// List all database archives in the named bucket.
+    fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error>;
 }
 
 /// Builder for pack data sources.

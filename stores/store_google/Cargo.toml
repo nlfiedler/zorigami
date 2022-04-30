@@ -8,11 +8,14 @@ license = "UNLICENSED"
 [dependencies]
 anyhow = "1.0.55"
 base64 = "0.13"
-google-storage1 = "3.0.0"
+google-firestore1 = "3.1.0"
+google-storage1 = "3.1.0"
 md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }
+thiserror = "1.0.30"
 tokio = { version = "1.17", features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
+uuid = { version = "1.0", features = ["v4"] }
 
 [dev-dependencies]
 dotenv = "0.15"

@@ -107,4 +107,47 @@ impl PackDataSource for MinioPackSource {
         });
         rx.recv()?
     }
+
+    fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
+        // work-around for async runtime not allowing block_on call
+        let (tx, rx) = std::sync::mpsc::channel::<Result<Coordinates, Error>>();
+        let store = self.store.clone();
+        let pack = packfile.to_path_buf();
+        let buck = bucket.to_owned();
+        let obj = object.to_owned();
+        std::thread::spawn(move || {
+            tx.send(store.store_database_sync(&pack, &buck, &obj))
+                .unwrap();
+        });
+        Ok(PackLocation::from(rx.recv()??))
+    }
+
+    fn retrieve_database(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
+        let coords: Coordinates = location.to_owned().into();
+        // work-around for async runtime not allowing block_on call
+        let (tx, rx) = std::sync::mpsc::channel::<Result<(), Error>>();
+        let store = self.store.clone();
+        let target = outfile.to_path_buf();
+        std::thread::spawn(move || {
+            tx.send(store.retrieve_database_sync(&coords, &target))
+                .unwrap();
+        });
+        rx.recv()?
+    }
+
+    fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        // work-around for async runtime not allowing block_on call
+        let (tx, rx) = std::sync::mpsc::channel::<Result<Vec<String>, Error>>();
+        let store = self.store.clone();
+        let buck = bucket.to_owned();
+        std::thread::spawn(move || {
+            tx.send(store.list_databases_sync(&buck)).unwrap();
+        });
+        rx.recv()?
+    }
 }

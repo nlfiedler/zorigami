@@ -50,22 +50,26 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** write use cases for starting and stopping a backup
 *** add a "backup now" button to datasets listing
 **** need a GraphQL mutation to signal backup to start
-**** add a =start_dataset_now()= in =supervisor= module, similar to =start_due_datasets()=
-***** that is, enqueue =StartBackup= on the =Runner= actor
+**** add =start_backup(dataset_id)= to =Processor= to selectively start a backup
+***** should do nothing if backup already running
+***** sends a message to =BackupSupervisor= to start a backup
+***** add a =start_dataset_now()=, similar to =start_due_datasets()=
 *** similiarly have a "stop backup" button if it is running
 **** need a GraphQL mutation to signal backup to stop
-**** add new =StopBackup= action in =state= module
-**** =StopBackup= action sets =stop_requested= in =BackupState=
+**** add new =BackupAction::Stop= action in =state= module
+**** =Stop= action sets =stop_requested= in =BackupState=
+**** =Restart= action clears =stop_requested= in =BackupAction=
 **** =process_queue()= in =BackupDriver= calls =get_state()= to check for =stop_requested=
 **** =process_queue()= will return an error if =stop_requested= is true
-*** consider how one might "pause" a backup in progress
+** Bucket collision and renaming
+*** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
+**** need to consider the buckets and objects that may have been renamed by the pack store
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
-*** TODO testing the minio(?) pack store showed a tokio runtime error
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
 **** note that using =Cow= helps to minimize copying
@@ -202,10 +206,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
 ** More Functionality
-*** TODO show differences between any two snapshots
-**** collect the paths and sizes of all new/changed files
-**** somehow show all of that information in a scalable fashion
-*** TODO show =fileCounts= query for each of latest N snapshots to show recent data growth
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
@@ -235,6 +235,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO Repair missing pack files in pack stores
 **** expose the GraphQL operation via the graphical interface
 ** More Information
+*** TODO show differences between any two snapshots
+**** collect the paths and sizes of all new/changed files
+**** somehow show all of that information in a scalable fashion
+*** TODO show =fileCounts= query for each of latest N snapshots to show recent data growth
 *** TODO Show details about snapshots and files
 **** show differences between two snapshots
 **** show pack/chunk metrics for   all   files in a snapshot

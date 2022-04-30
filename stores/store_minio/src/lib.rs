@@ -236,6 +236,36 @@ impl MinioStore {
             Ok(_) => Ok(()),
         }
     }
+
+    pub fn store_database_sync(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        self.store_pack_sync(packfile, bucket, object)
+    }
+
+    // pub async fn store_database(
+    //     &self,
+    //     packfile: &Path,
+    //     bucket: &str,
+    //     object: &str,
+    // ) -> Result<Coordinates, Error> {
+    //     self.store_pack(packfile, bucket, object)
+    // }
+
+    pub fn retrieve_database_sync(
+        &self,
+        location: &Coordinates,
+        outfile: &Path,
+    ) -> Result<(), Error> {
+        self.retrieve_pack_sync(location, outfile)
+    }
+
+    pub fn list_databases_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        self.list_objects_sync(bucket)
+    }
 }
 
 /// Ensure the named bucket exists.

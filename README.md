@@ -150,6 +150,9 @@ docker compose up --build -d
 How to create a new project and get the service account credentials file.
 
 1. Create a new project in Google Cloud Platform
+1. Navigate to the **Firestore** page under _DATABASES_
+    * Do **not** select _Filestore_ under _STORAGE_, that is a different service
+1. Create the Firestore database (there can be only one)
 1. Navigate to **APIs & Services**
 1. Open **Credentials** screen
 1. Click _CREATE CREDENTIALS_ and select _Service_ account
@@ -159,6 +162,8 @@ How to create a new project and get the service account credentials file.
 1. Start typing the name of the service account and select the result
 1. Add role for _Storage Admin_ under the _Cloud Storage_ category
     * The service account needs to be able to create buckets and objects.
+1. Add role for _Firebase Admin_ under the _Firebase_ category
+    * The service account needs to be able to create and update documents.
 1. Click _Manage service accounts_ link or navigate to **IAM & Admin / Service Accounts**
 1. Click on the _Actions_ 3-dot button and select _Create key_
 1. Choose *JSON* and click **CREATE** button

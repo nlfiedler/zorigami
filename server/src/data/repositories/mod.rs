@@ -368,22 +368,31 @@ impl PackRepository for PackRepositoryImpl {
     fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error> {
         // Use a ULID as the object name so they sort by time which will make
         // it easier to find the latest database archive later.
-        let object_name = rusty_ulid::generate_ulid_string();
+        let object = rusty_ulid::generate_ulid_string();
         // Use a predictable bucket name so we can find it easily later.
-        let bucket_name = crate::domain::computer_bucket_name(computer_id);
-        self.store_pack(infile, &bucket_name, &object_name)
+        let bucket = crate::domain::computer_bucket_name(computer_id);
+        let mut results: Vec<PackLocation> = Vec::new();
+        for (store, source) in self.sources.iter() {
+            let ctx = format!(
+                "database store {} ({}) failed for {}/{}",
+                store.id, store.label, bucket, object
+            );
+            let loc = store_database_retry(source, infile, &bucket, &object).context(ctx)?;
+            results.push(loc.into())
+        }
+        Ok(results)
     }
 
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {
         let bucket_name = crate::domain::computer_bucket_name(computer_id);
         // use the first store returned by the iterator, probably only one anyway
         for (store, source) in self.sources.iter() {
-            let mut objects = source.list_objects(&bucket_name)?;
+            let mut objects = source.list_databases(&bucket_name)?;
             objects.sort();
             if let Some(latest) = objects.last() {
                 let loc = PackLocation::new(&store.id, &bucket_name, latest);
                 source
-                    .retrieve_pack(&loc, &outfile)
+                    .retrieve_database(&loc, &outfile)
                     .context("database archive retrieval")?;
                 return Ok(());
             } else {
@@ -552,6 +561,27 @@ fn store_pack_retry(
             return result;
         }
         warn!("pack store failed, will retry: {:?}", result);
+    }
+}
+
+// Try to store the database archive up to three times before giving up.
+fn store_database_retry(
+    source: &Box<dyn PackDataSource>,
+    packfile: &Path,
+    bucket: &str,
+    object: &str,
+) -> anyhow::Result<PackLocation, Error> {
+    let mut retries = 0;
+    loop {
+        let result = source.store_database(packfile, bucket, object);
+        if result.is_ok() {
+            return result;
+        }
+        retries += 1;
+        if retries == 3 {
+            return result;
+        }
+        warn!("database store failed, will retry: {:?}", result);
     }
 }
 
@@ -1000,7 +1030,7 @@ mod tests {
         builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source
-                .expect_store_pack()
+                .expect_store_database()
                 .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
             Ok(Box::new(source))
         });
@@ -1026,8 +1056,8 @@ mod tests {
         let mut builder = MockPackSourceBuilder::new();
         builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
-            source.expect_list_objects().returning(|_| Ok(Vec::new()));
-            source.expect_retrieve_pack().returning(|_, _| Ok(()));
+            source.expect_list_databases().returning(|_| Ok(Vec::new()));
+            source.expect_retrieve_database().returning(|_, _| Ok(()));
             Ok(Box::new(source))
         });
         let stores = vec![Store {
@@ -1055,10 +1085,10 @@ mod tests {
         builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
             source
-                .expect_list_objects()
+                .expect_list_databases()
                 .returning(|_| Ok(vec!["007".to_owned()]));
             source
-                .expect_retrieve_pack()
+                .expect_retrieve_database()
                 .withf(|location, _| location.object == "007")
                 .returning(|_, _| Ok(()));
             Ok(Box::new(source))
@@ -1085,7 +1115,7 @@ mod tests {
         let mut builder = MockPackSourceBuilder::new();
         builder.expect_build_source().returning(|_| {
             let mut source = MockPackDataSource::new();
-            source.expect_list_objects().returning(|_| {
+            source.expect_list_databases().returning(|_| {
                 let objects = vec![
                     "01arz3ndektsv4rrffq69g5fav".to_owned(),
                     "01edn29q3m3n7ccpd2sfh4244b".to_owned(),
@@ -1094,7 +1124,7 @@ mod tests {
                 Ok(objects)
             });
             source
-                .expect_retrieve_pack()
+                .expect_retrieve_database()
                 .withf(|loc, _| loc.object == "01edn29q3m3n7ccpd2sfh4244b")
                 .returning(|_, _| Ok(()));
             Ok(Box::new(source))

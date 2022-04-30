@@ -157,6 +157,23 @@ impl SftpStore {
         sftp.rmdir(&bucket_path)?;
         Ok(())
     }
+
+    pub fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        self.store_pack(packfile, bucket, object)
+    }
+
+    pub fn retrieve_database(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
+        self.retrieve_pack(location, outfile)
+    }
+
+    pub fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        self.list_objects(bucket)
+    }
 }
 
 #[cfg(test)]

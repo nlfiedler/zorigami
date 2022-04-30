@@ -1,12 +1,28 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
+extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
 use anyhow::{anyhow, Error};
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt;
 use std::path::Path;
 use store_core::Coordinates;
+use uuid::Uuid;
+
+///
+/// Raised when the cloud service responds with 403 indicating a bucket with the
+/// same name already exists but belongs to another project.
+///
+#[derive(thiserror::Error, Debug)]
+pub struct ForbiddenError;
+
+impl fmt::Display for ForbiddenError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bucket collision")
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct GoogleStore {
@@ -38,7 +54,12 @@ impl GoogleStore {
     }
 
     async fn connect(&self) -> Result<storage1::Storage, Error> {
-        let conn = storage1::hyper_rustls::HttpsConnector::with_native_roots();
+        let conn = storage1::hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
         let https_client = storage1::hyper::Client::builder().build(conn);
         let account_key = storage1::oauth2::read_service_account_key(&self.credentials).await?;
         let authenticator = storage1::oauth2::ServiceAccountAuthenticator::builder(account_key)
@@ -46,6 +67,22 @@ impl GoogleStore {
             .build()
             .await?;
         Ok(storage1::Storage::new(https_client, authenticator))
+    }
+
+    async fn connect_fire(&self) -> Result<firestore1::Firestore, Error> {
+        let conn = firestore1::hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
+        let https_client = firestore1::hyper::Client::builder().build(conn);
+        let account_key = firestore1::oauth2::read_service_account_key(&self.credentials).await?;
+        let authenticator = firestore1::oauth2::ServiceAccountAuthenticator::builder(account_key)
+            .hyper_client(https_client.clone())
+            .build()
+            .await?;
+        Ok(firestore1::Firestore::new(https_client, authenticator))
     }
 
     pub fn store_pack_sync(
@@ -73,21 +110,45 @@ impl GoogleStore {
             .parse()
             .map_err(|e| anyhow!(format!("{:?}", e)))?;
         // storing the same object twice is not treated as an error
-        let (_response, objdata) = hub
+        match hub
             .objects()
             .insert(req, bucket)
             .name(object)
             .upload_resumable(infile, mimetype)
-            .await?;
-        // ensure uploaded file matches local contents
-        if let Some(hash) = objdata.md5_hash.as_ref() {
-            let returned = base64::decode(hash)?;
-            let expected = md5sum_file(packfile)?;
-            if !expected.eq(&returned) {
-                return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
+            .await
+        {
+            Ok((_response, objdata)) => {
+                // ensure uploaded file matches local contents
+                if let Some(hash) = objdata.md5_hash.as_ref() {
+                    let returned = base64::decode(hash)?;
+                    let expected = md5sum_file(packfile)?;
+                    if !expected.eq(&returned) {
+                        return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
+                    }
+                }
+                Ok(Coordinates::new(&self.store_id, bucket, object))
             }
+            Err(error) => match &error {
+                // detect the case of a bucket that exists but belongs to
+                // another project, in which case we are forbidden to write to
+                // that bucket
+                storage1::client::Error::BadRequest(value) => {
+                    if let Some(object) = value.as_object() {
+                        if let Some(errobj) = object.get("error") {
+                            if let Some(code) = errobj.get("code") {
+                                if let Some(num) = code.as_u64() {
+                                    if num == 403 {
+                                        return Err(Error::from(ForbiddenError {}));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return Err(anyhow!(format!("{:?}", error)));
+                }
+                _ => return Err(anyhow!(format!("{:?}", error))),
+            },
         }
-        Ok(Coordinates::new(&self.store_id, bucket, object))
     }
 
     pub fn retrieve_pack_sync(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
@@ -133,7 +194,12 @@ impl GoogleStore {
                         // names be provided when creating them.
                         for bucket in bucks.iter() {
                             if let Some(name) = bucket.name.as_ref() {
-                                results.push(name.to_owned());
+                                // ignore the Firestore buckets, which we do not
+                                // want to accidentally delete and thus lose the
+                                // bucket collision database
+                                if !name.ends_with(".appspot.com") {
+                                    results.push(name.to_owned());
+                                }
                             }
                         }
                     }
@@ -205,6 +271,164 @@ impl GoogleStore {
         hub.buckets().delete(bucket).doit().await?;
         Ok(())
     }
+
+    /// Record the new name of the bucket.
+    async fn save_bucket_name(&self, original: &str, renamed: &str) -> Result<(), Error> {
+        let hub = self.connect_fire().await?;
+        let mut values: HashMap<String, firestore1::api::Value> = HashMap::new();
+        let mut value: firestore1::api::Value = Default::default();
+        value.string_value = Some(renamed.to_owned());
+        values.insert("renamed".into(), value);
+        let name = format!(
+            "projects/{}/databases/{}/documents/renames/{}",
+            &self.project, "(default)", original
+        );
+        let mut document: firestore1::api::Document = Default::default();
+        document.fields = Some(values);
+        // databases_documents_patch() will either insert or update
+        let (_response, _document) = hub
+            .projects()
+            .databases_documents_patch(document, &name)
+            .doit()
+            .await?;
+        Ok(())
+    }
+
+    /// Retrieve the renamed value for the original bucket.
+    async fn get_bucket_name(&self, original: &str) -> Result<Option<String>, Error> {
+        let hub = self.connect_fire().await?;
+        let name = format!(
+            "projects/{}/databases/{}/documents/renames/{}",
+            &self.project, "(default)", original
+        );
+        // If the document is missing a 404 error is returned, and if the
+        // document is returned and has missing values, still return none.
+        if let Ok((_response, document)) =
+            hub.projects().databases_documents_get(&name).doit().await
+        {
+            if let Some(fields) = document.fields {
+                if let Some(renamed_field) = fields.get("renamed") {
+                    return Ok(renamed_field.string_value.to_owned());
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    // async fn get_renamed_buckets(&self) -> Result<Vec<String>, Error> {
+    //     let hub = self.connect_fire().await?;
+    //     let parent = format!(
+    //         "projects/{}/databases/{}/documents",
+    //         &self.project, "(default)"
+    //     );
+    //     // TODO: deal with paging of results
+    //     let (_response, documents) = hub
+    //         .projects()
+    //         .databases_documents_list(&parent, "renames")
+    //         .doit()
+    //         .await?;
+    //     println!("documents: {:?}", documents);
+    //     Ok(vec![])
+    // }
+
+    // for testing purposes only
+    #[allow(dead_code)]
+    fn delete_bucket_name(&self, original: &str) -> Result<(), Error> {
+        block_on(async {
+            let hub = self.connect_fire().await?;
+            let name = format!(
+                "projects/{}/databases/{}/documents/renames/{}",
+                &self.project, "(default)", original
+            );
+            hub.projects()
+                .databases_documents_delete(&name)
+                .doit()
+                .await?;
+            Ok(())
+        })
+        .and_then(std::convert::identity)
+    }
+
+    pub fn store_database_sync(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        block_on(self.store_database(packfile, bucket, object)).and_then(std::convert::identity)
+    }
+
+    pub async fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+            // If the renamed bucket fails for some reason, then report it
+            // immediately, do not attempt to generate a new name again.
+            self.store_pack(packfile, &renamed, object).await
+        } else {
+            // Store the database in the same manner as any pack file, using the
+            // given bucket and object names. If there is a collision with an
+            // existing bucket that belongs to a different project, generate a
+            // new random bucket name and try that instead. Loop until it works
+            // or fails in some other manner.
+            let mut bucket_name = bucket.to_owned();
+            loop {
+                match self.store_pack(packfile, &bucket_name, object).await {
+                    Ok(coords) => return Ok(coords),
+                    Err(err) => {
+                        match err.downcast::<ForbiddenError>() {
+                            Ok(_) => {
+                                // There was a collision, simply generate a new
+                                // name and hope that it will work. Type 4 UUID
+                                // works well since it conforms to Google's
+                                // bucket naming conventions.
+                                bucket_name = Uuid::new_v4().to_string();
+                                self.save_bucket_name(bucket, &bucket_name).await?;
+                            }
+                            Err(err) => return Err(err),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn retrieve_database_sync(
+        &self,
+        location: &Coordinates,
+        outfile: &Path,
+    ) -> Result<(), Error> {
+        block_on(self.retrieve_database(location, outfile)).and_then(std::convert::identity)
+    }
+
+    pub async fn retrieve_database(
+        &self,
+        location: &Coordinates,
+        outfile: &Path,
+    ) -> Result<(), Error> {
+        if let Some(renamed) = self.get_bucket_name(&location.bucket).await? {
+            let mut adjusted = location.clone();
+            adjusted.bucket = renamed;
+            self.retrieve_pack(&adjusted, outfile).await
+        } else {
+            self.retrieve_pack(location, outfile).await
+        }
+    }
+
+    pub fn list_databases_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        block_on(self.list_databases(bucket)).and_then(std::convert::identity)
+    }
+
+    pub async fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+            self.list_objects(&renamed).await
+        } else {
+            self.list_objects(bucket).await
+        }
+    }
 }
 
 /// Ensure the named bucket exists.
@@ -219,14 +443,8 @@ async fn create_bucket(
     req.location = region.to_owned();
     req.name = Some(name.to_owned());
     req.storage_class = storage_class.to_owned();
-    //
-    // Somewhat complicated means of ascertaining that the request failed
-    // because the bucket already exists. The alternative is to attempt to get
-    // the bucket, but then distinquishing between the 404 case and any other
-    // kind of error is just as complicated as checking for the 409 case here.
-    // What's more, checking first only serves to introduce a possible race
-    // condition, which this approach avoids.
-    //
+    // If bucket creation results in a 409, it means the bucket already exists,
+    // but may possibly be owned by some other project.
     if let Err(error) = hub.buckets().insert(req, project_id).doit().await {
         match &error {
             storage1::client::Error::BadRequest(value) => {
@@ -367,6 +585,54 @@ mod tests {
             }
             source.delete_bucket_sync(&bucket)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_google_store_bucket_collision() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let creds_var = env::var("GOOGLE_CREDENTIALS");
+        if creds_var.is_err() {
+            // bail out silently if google is not configured
+            return Ok(());
+        }
+        let credentials = creds_var?;
+        let project_id = env::var("GOOGLE_PROJECT_ID")?;
+        let region = env::var("GOOGLE_REGION")?;
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("credentials".to_owned(), credentials);
+        properties.insert("project".to_owned(), project_id);
+        // use standard storage class for testing since it is cheaper when
+        // performing frequent downloads and deletions
+        properties.insert("storage".to_owned(), "STANDARD".to_owned());
+        properties.insert("region".to_owned(), region);
+        let source = GoogleStore::new("google1", &properties)?;
+
+        // attempt to store an object in a bucket that exists but does not
+        // belong to this project
+        let bucket = "afd73b8b997a5452b94a6b7c564041b1".to_owned();
+        let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_database_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.store, "google1");
+        assert_ne!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // retrieve the database file
+        let location = Coordinates::new("google1", &bucket, &object);
+        let outdir = tempdir()?;
+        let outfile = outdir.path().join("restored.txt");
+        source.retrieve_database_sync(&location, &outfile)?;
+
+        // list available databases
+        let databases = source.list_databases_sync(&bucket)?;
+        assert_eq!(databases.len(), 1);
+        assert_eq!(&databases[0], &object);
+
+        // remove database mapping for test reproduction
+        source.delete_bucket_name("afd73b8b997a5452b94a6b7c564041b1")?;
         Ok(())
     }
 }

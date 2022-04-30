@@ -64,4 +64,23 @@ impl PackDataSource for LocalPackSource {
     fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         self.store.delete_bucket(bucket)
     }
+
+    fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
+        let coords = self.store.store_database(packfile, bucket, object)?;
+        Ok(PackLocation::from(coords))
+    }
+
+    fn retrieve_database(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
+        let coords: Coordinates = location.to_owned().into();
+        self.store.retrieve_database(&coords, outfile)
+    }
+
+    fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        self.store.list_databases(bucket)
+    }
 }
