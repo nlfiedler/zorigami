@@ -59,4 +59,24 @@ class DataSetRepositoryImpl extends DataSetRepository {
       return Err(ServerFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Result<bool, Failure>> startBackup(DataSet input) async {
+    try {
+      final result = await remoteDataSource.startBackup(input);
+      return Ok(result);
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Result<bool, Failure>> stopBackup(DataSet input) async {
+    try {
+      final result = await remoteDataSource.stopBackup(input);
+      return Ok(result);
+    } on ServerException catch (e) {
+      return Err(ServerFailure(e.toString()));
+    }
+  }
 }

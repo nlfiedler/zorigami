@@ -14,6 +14,8 @@ abstract class DataSetRemoteDataSource {
   Future<String> deleteDataSet(DataSet input);
   Future<DataSetModel?> defineDataSet(DataSet input);
   Future<DataSetModel?> updateDataSet(DataSet input);
+  Future<bool> startBackup(DataSet input);
+  Future<bool> stopBackup(DataSet input);
 }
 
 // Work around bug in juniper in which it fails to implement __typename for the
@@ -166,5 +168,48 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
     }
     final dataset = result.data?['updateDataset'] as Map<String, dynamic>;
     return DataSetModel.fromJson(dataset);
+  }
+
+  @override
+  Future<bool> startBackup(DataSet input) async {
+    const updateStore = '''
+      mutation StartBackup(\$id: String!) {
+        startBackup(id: \$id)
+      }
+    ''';
+    final mutationOptions = gql.MutationOptions(
+      document: gqlNoTypename(updateStore),
+      variables: <String, dynamic>{
+        'id': input.key,
+      },
+      fetchPolicy: gql.FetchPolicy.noCache,
+    );
+
+    final gql.QueryResult result = await client.mutate(mutationOptions);
+    if (result.hasException) {
+      throw ServerException(result.exception.toString());
+    }
+    return (result.data?['startBackup'] ?? false) as bool;
+  }
+
+  @override
+  Future<bool> stopBackup(DataSet input) async {
+    const updateStore = '''
+      mutation StopBackup(\$id: String!) {
+        stopBackup(id: \$id)
+      }
+    ''';
+    final mutationOptions = gql.MutationOptions(
+      document: gqlNoTypename(updateStore),
+      variables: <String, dynamic>{
+        'id': input.key,
+      },
+      fetchPolicy: gql.FetchPolicy.noCache,
+    );
+    final gql.QueryResult result = await client.mutate(mutationOptions);
+    if (result.hasException) {
+      throw ServerException(result.exception.toString());
+    }
+    return (result.data?['stopBackup'] ?? false) as bool;
   }
 }

@@ -155,6 +155,8 @@ enum SubscriberAction {
 pub enum BackupAction {
     /// Reset the counters for the backup of a given dataset.
     Start(String),
+    /// Signal the backup to be stopped if it is running.
+    Stop(String),
     /// Increment the pack upload count for a dataset.
     UploadPack(String),
     /// Increase the file upload count for a dataset by the given amount.
@@ -196,6 +198,7 @@ pub struct BackupState {
     files_uploaded: u64,
     error_msg: Option<String>,
     paused: bool,
+    stop_requested: bool,
 }
 
 impl Default for BackupState {
@@ -207,6 +210,7 @@ impl Default for BackupState {
             files_uploaded: 0,
             error_msg: None,
             paused: false,
+            stop_requested: false,
         }
     }
 }
@@ -241,9 +245,15 @@ impl BackupState {
     pub fn error_message(&self) -> Option<String> {
         self.error_msg.clone()
     }
+
     /// Return the state of the paused flag.
     pub fn is_paused(&self) -> bool {
         self.paused
+    }
+
+    /// Return true if the backup should be stopped.
+    pub fn should_stop(&self) -> bool {
+        self.stop_requested
     }
 }
 
@@ -276,7 +286,11 @@ pub struct State {
 
 impl std::fmt::Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "backups: {:?}, supervisor: {:?}", self.backups, self.supervisor)
+        write!(
+            f,
+            "backups: {:?}, supervisor: {:?}",
+            self.backups, self.supervisor
+        )
     }
 }
 
@@ -319,6 +333,11 @@ impl Reducer<BackupAction> for State {
             BackupAction::Start(key) => {
                 self.backups.insert(key, BackupState::default());
             }
+            BackupAction::Stop(key) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.stop_requested = true;
+                }
+            }
             BackupAction::UploadPack(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.packs_uploaded += 1;
@@ -348,6 +367,7 @@ impl Reducer<BackupAction> for State {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.error_msg = None;
                     record.paused = false;
+                    record.stop_requested = false;
                     record.end_time = None;
                 }
             }

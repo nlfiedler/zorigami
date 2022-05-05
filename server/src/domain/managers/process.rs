@@ -15,6 +15,7 @@ use chrono::prelude::*;
 use log::{debug, error, info, trace};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
@@ -27,6 +28,9 @@ use std::time::{Duration, SystemTime};
 pub trait Processor: Send + Sync {
     /// Start a supervisor that will run scheduled backups.
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
+
+    /// Start the backup for a given dataset immediately.
+    fn start_backup(&self, dataset: Dataset) -> Result<(), Error>;
 
     /// Signal the supervisor to stop and release the database reference.
     fn stop(&self) -> Result<(), Error>;
@@ -88,6 +92,18 @@ impl Processor for ProcessorImpl {
         Ok(())
     }
 
+    fn start_backup(&self, dataset: Dataset) -> Result<(), Error> {
+        fn err_convert(err: SendError<Start>) -> Error {
+            anyhow!(format!("ProcessorImpl.start_backup(): {:?}", err))
+        }
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.deref() {
+            addr.try_send(Start { dataset }).map_err(err_convert)
+        } else {
+            Ok(())
+        }
+    }
+
     fn stop(&self) -> Result<(), Error> {
         fn err_convert(err: SendError<Stop>) -> Error {
             anyhow!(format!("ProcessorImpl.stop(): {:?}", err))
@@ -99,6 +115,12 @@ impl Processor for ProcessorImpl {
             Ok(())
         }
     }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct Start {
+    dataset: Dataset,
 }
 
 #[derive(Message)]
@@ -154,6 +176,24 @@ impl BackupSupervisor {
         }
         Ok(())
     }
+
+    /// Begin the backup process for the given dataset if not already running.
+    fn start_dataset_now(&self, dataset: Dataset) -> Result<(), Error> {
+        let state = self.state.clone();
+        if let Some(schedule) = can_run(&state, &dataset)? {
+            let msg = StartBackup {
+                dbase: self.dbase.clone(),
+                state: state.clone(),
+                dataset,
+                schedule,
+            };
+            let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
+            if let Err(err) = addr.try_send(msg) {
+                return Err(anyhow!(format!("error sending message to runner: {}", err)));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Actor for BackupSupervisor {
@@ -174,6 +214,17 @@ impl Actor for BackupSupervisor {
 impl Supervised for BackupSupervisor {
     fn restarting(&mut self, _ctx: &mut Context<BackupSupervisor>) {
         debug!("backup: supervisor restarting");
+    }
+}
+
+impl Handler<Start> for BackupSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, msg: Start, _ctx: &mut Context<BackupSupervisor>) {
+        debug!("backup: supervisor received start message");
+        if let Err(err) = self.start_dataset_now(msg.dataset) {
+            error!("failed to check datasets: {}", err);
+        }
     }
 }
 
@@ -224,6 +275,28 @@ impl Handler<StartBackup> for BackupRunner {
         debug!("backup: runner spawned backup process");
         ctx.stop();
     }
+}
+
+///
+/// Check if dataset can be backed up now (backup not already running).
+///
+/// Returns Some(Schedule::Hourly) if okay to run, otherwise None.
+///
+fn can_run(state: &Arc<dyn StateStore>, set: &Dataset) -> Result<Option<Schedule>, Error> {
+    let redux = state.get_state();
+    let backup_state = redux.backups(&set.id);
+    if let Some(backup) = backup_state {
+        // not errored, not poused, and no end time means it is still running
+        if !backup.had_error() && !backup.is_paused() && backup.end_time().is_none() {
+            debug!("backup: dataset {} still in progress", &set.id);
+            return Ok(None);
+        }
+    } else {
+        // maybe the application restarted after a crash
+        debug!("backup: reset missing state to start");
+        state.backup_event(BackupAction::Start(set.id.clone()));
+    }
+    Ok(Some(Schedule::Hourly))
 }
 
 ///
@@ -376,6 +449,66 @@ mod tests {
         // assert (start again)
         assert!(result.is_ok());
         Ok(())
+    }
+
+    #[test]
+    fn test_can_run_empty_state() {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        // act
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let result = can_run(&state, &dataset);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn test_can_run_backup_running() {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        let dataset_id = dataset.id.clone();
+        // indicate that the dataset is already running a backup
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset_id));
+        // act
+        let result = can_run(&state, &dataset);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_can_run_backup_had_error() {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        // indicate that the backup started but then failed
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset.id.clone()));
+        state.backup_event(BackupAction::Error(
+            dataset.id.clone(),
+            String::from("oh no"),
+        ));
+        // act
+        let result = can_run(&state, &dataset);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn test_can_run_backup_paused() {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        // indicate that the backup has been paused
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        state.backup_event(BackupAction::Start(dataset.id.clone()));
+        state.backup_event(BackupAction::Pause(dataset.id.clone()));
+        // act
+        let result = can_run(&state, &dataset);
+        // assert
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
     }
 
     #[test]

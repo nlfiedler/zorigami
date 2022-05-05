@@ -320,6 +320,12 @@ impl<'a> BackupDriver<'a> {
                         return Err(Error::from(OutOfTimeFailure {}));
                     }
                 }
+                // check if the user requested that the backup stop
+                if let Some(backup) = self.state.get_state().backups(&self.dataset.id) {
+                    if backup.should_stop() {
+                        return Err(Error::from(OutOfTimeFailure {}));
+                    }
+                }
             }
             // if we successfully visited all of the chunks in this file,
             // including duplicates, then this file is considered "done"

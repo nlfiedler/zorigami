@@ -22,6 +22,8 @@ pub mod query_restores;
 pub mod restore_database;
 pub mod restore_files;
 pub mod restore_missing;
+pub mod start_backup;
+pub mod stop_backup;
 pub mod test_store;
 pub mod update_dataset;
 pub mod update_store;

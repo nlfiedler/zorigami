@@ -5,6 +5,8 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/usecases/get_data_sets.dart';
+import 'package:zorigami/core/domain/usecases/start_backup.dart' as start;
+import 'package:zorigami/core/domain/usecases/stop_backup.dart' as stop;
 import 'package:zorigami/core/domain/usecases/usecase.dart';
 
 //
@@ -19,6 +21,18 @@ abstract class DataSetsEvent extends Equatable {
 class LoadAllDataSets extends DataSetsEvent {}
 
 class ReloadDataSets extends DataSetsEvent {}
+
+class StartBackup extends DataSetsEvent {
+  final DataSet dataset;
+
+  StartBackup({required this.dataset});
+}
+
+class StopBackup extends DataSetsEvent {
+  final DataSet dataset;
+
+  StopBackup({required this.dataset});
+}
 
 //
 // states
@@ -56,12 +70,18 @@ class Error extends DataSetsState {
 //
 
 class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
-  final GetDataSets usecase;
+  final GetDataSets getDataSets;
+  final start.StartBackup startBackup;
+  final stop.StopBackup stopBackup;
 
-  DataSetsBloc({required this.usecase}) : super(Empty()) {
+  DataSetsBloc(
+      {required this.getDataSets,
+      required this.startBackup,
+      required this.stopBackup})
+      : super(Empty()) {
     on<LoadAllDataSets>((event, emit) async {
       emit(Loading());
-      final result = await usecase(NoParams());
+      final result = await getDataSets(NoParams());
       emit(result.mapOrElse(
         (sets) => Loaded(sets: sets),
         (failure) => Error(message: failure.toString()),
@@ -70,6 +90,24 @@ class DataSetsBloc extends Bloc<DataSetsEvent, DataSetsState> {
     on<ReloadDataSets>((event, emit) {
       // force an update as something changed elsewhere
       emit(Empty());
+    });
+    on<StartBackup>((event, emit) async {
+      emit(Loading());
+      await startBackup(start.Params(dataset: event.dataset));
+      final result = await getDataSets(NoParams());
+      emit(result.mapOrElse(
+        (sets) => Loaded(sets: sets),
+        (failure) => Error(message: failure.toString()),
+      ));
+    });
+    on<StopBackup>((event, emit) async {
+      emit(Loading());
+      await stopBackup(stop.Params(dataset: event.dataset));
+      final result = await getDataSets(NoParams());
+      emit(result.mapOrElse(
+        (sets) => Loaded(sets: sets),
+        (failure) => Error(message: failure.toString()),
+      ));
     });
   }
 }

@@ -1,4 +1,12 @@
 * Tasks
+** Cleanup and Testing
+*** TODO try removing the =AddNestedTypenameVisitor= hack from the dart code
+*** TODO make abstract version of ~backup~ manager code for testing
+**** rename =process.rs= to =schedule.rs= to make clear it schedules (backups)
+**** just like the =Restorer= trait and implementation
+**** make the =perform_backup()= function module private
+**** use the mock version of backup manager in =process.rs= to test the actor logic
+**** add tests for =start_backup= to ensure repeatable behavior
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -46,21 +54,6 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
-** Manual Backup controls
-*** write use cases for starting and stopping a backup
-*** add a "backup now" button to datasets listing
-**** need a GraphQL mutation to signal backup to start
-**** add =start_backup(dataset_id)= to =Processor= to selectively start a backup
-***** should do nothing if backup already running
-***** sends a message to =BackupSupervisor= to start a backup
-***** add a =start_dataset_now()=, similar to =start_due_datasets()=
-*** similiarly have a "stop backup" button if it is running
-**** need a GraphQL mutation to signal backup to stop
-**** add new =BackupAction::Stop= action in =state= module
-**** =Stop= action sets =stop_requested= in =BackupState=
-**** =Restart= action clears =stop_requested= in =BackupAction=
-**** =process_queue()= in =BackupDriver= calls =get_state()= to check for =stop_requested=
-**** =process_queue()= will return an error if =stop_requested= is true
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store

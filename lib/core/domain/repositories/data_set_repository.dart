@@ -17,4 +17,10 @@ abstract class DataSetRepository {
 
   /// Remove a data set.
   Future<Result<DataSet, Failure>> deleteDataSet(DataSet input);
+
+  /// Start the backup process for a dataset.
+  Future<Result<bool, Failure>> startBackup(DataSet input);
+
+  /// Stop the running backup for a dataset.
+  Future<Result<bool, Failure>> stopBackup(DataSet input);
 }

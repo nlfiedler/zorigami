@@ -47,8 +47,8 @@ lazy_static! {
     // File restore implementation.
     static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new());
     // Supervisor for managing the running of backups.
-    static ref PROCESSOR: Box<dyn process::Processor> = {
-        Box::new(process::ProcessorImpl::new(STATE_STORE.clone()))
+    static ref PROCESSOR: Arc<dyn process::Processor> = {
+        Arc::new(process::ProcessorImpl::new(STATE_STORE.clone()))
     };
     // Path to the database files.
     static ref DB_PATH: PathBuf = {
@@ -83,8 +83,9 @@ async fn graphql(
     let source = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
     let state = STATE_STORE.clone();
-    let restore = FILE_RESTORER.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(datasource, state, restore));
+    let processor = PROCESSOR.clone();
+    let restorer = FILE_RESTORER.clone();
+    let ctx = Arc::new(graphql::GraphContext::new(datasource, state, processor, restorer));
     let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()

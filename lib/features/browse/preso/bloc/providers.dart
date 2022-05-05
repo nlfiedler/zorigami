@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/core/domain/usecases/providers.dart';
@@ -24,7 +24,9 @@ final databaseRestoreBlocProvider = Provider.autoDispose<DatabaseRestoreBloc>(
 
 final datasetsBlocProvider = Provider.autoDispose<DataSetsBloc>(
   (ref) => DataSetsBloc(
-    usecase: ref.read(getDataSetsUsecaseProvider),
+    getDataSets: ref.read(getDataSetsUsecaseProvider),
+    startBackup: ref.read(startBackupUsecaseProvider),
+    stopBackup: ref.read(stopBackupUsecaseProvider),
   ),
 );
 

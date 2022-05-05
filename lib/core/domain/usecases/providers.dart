@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2021 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zorigami/container.dart';
@@ -16,6 +16,8 @@ import 'package:zorigami/core/domain/usecases/get_data_sets.dart' as gds;
 import 'package:zorigami/core/domain/usecases/get_restores.dart' as gr;
 import 'package:zorigami/core/domain/usecases/get_snapshot.dart' as gs;
 import 'package:zorigami/core/domain/usecases/get_tree.dart' as gt;
+import 'package:zorigami/core/domain/usecases/start_backup.dart' as start;
+import 'package:zorigami/core/domain/usecases/stop_backup.dart' as stop;
 import 'package:zorigami/core/domain/usecases/test_pack_store.dart' as tps;
 import 'package:zorigami/core/domain/usecases/restore_database.dart' as rd;
 import 'package:zorigami/core/domain/usecases/restore_files.dart' as rf;
@@ -113,5 +115,17 @@ final getRestoresUsecaseProvider = Provider<gr.GetRestores>(
 final cancelRestoreUsecaseProvider = Provider<cr.CancelRestore>(
   (ref) => cr.CancelRestore(
     ref.read(snapshotRepositoryProvider),
+  ),
+);
+
+final startBackupUsecaseProvider = Provider<start.StartBackup>(
+  (ref) => start.StartBackup(
+    ref.read(datasetRepositoryProvider),
+  ),
+);
+
+final stopBackupUsecaseProvider = Provider<stop.StopBackup>(
+  (ref) => stop.StopBackup(
+    ref.read(datasetRepositoryProvider),
   ),
 );

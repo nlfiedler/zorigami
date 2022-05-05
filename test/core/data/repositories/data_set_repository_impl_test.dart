@@ -24,7 +24,7 @@ void main() {
     );
   });
 
-  final tDataSetModel = DataSetModel(
+  const tDataSetModel = DataSetModel(
     key: 'a1',
     computerId: 's1',
     basepath: '/home/planet',
@@ -38,7 +38,7 @@ void main() {
   );
   final tDataSetList = [tDataSetModel];
   final List<DataSet> tDataSets = [tDataSetModel];
-  final DataSet tDataSet = tDataSetModel;
+  const DataSet tDataSet = tDataSetModel;
 
   setUpAll(() {
     // mocktail needs a fallback for any() that involves custom types
@@ -65,7 +65,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.getAllDataSets())
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.getAllDataSets();
         // assert
@@ -95,7 +95,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.defineDataSet(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.defineDataSet(tDataSet);
         // assert
@@ -125,7 +125,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.updateDataSet(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.updateDataSet(tDataSet);
         // assert
@@ -155,11 +155,71 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.deleteDataSet(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.deleteDataSet(tDataSet);
         // assert
         verify(() => mockRemoteDataSource.deleteDataSet(any()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
+
+  group('startBackup', () {
+    test(
+      'should return true when call to remote data source is successful',
+      () async {
+        // arrange
+        when(() => mockRemoteDataSource.startBackup(any()))
+            .thenAnswer((_) async => true);
+        // act
+        final result = await repository.startBackup(tDataSet);
+        // assert
+        verify(() => mockRemoteDataSource.startBackup(any()));
+        expect(result.unwrap(), equals(true));
+      },
+    );
+
+    test(
+      'should return server failure when call to remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(() => mockRemoteDataSource.startBackup(any()))
+            .thenThrow(const ServerException());
+        // act
+        final result = await repository.startBackup(tDataSet);
+        // assert
+        verify(() => mockRemoteDataSource.startBackup(any()));
+        expect(result.err().unwrap(), isA<ServerFailure>());
+      },
+    );
+  });
+
+  group('stopBackup', () {
+    test(
+      'should return true when call to remote data source is successful',
+      () async {
+        // arrange
+        when(() => mockRemoteDataSource.stopBackup(any()))
+            .thenAnswer((_) async => true);
+        // act
+        final result = await repository.stopBackup(tDataSet);
+        // assert
+        verify(() => mockRemoteDataSource.stopBackup(any()));
+        expect(result.unwrap(), equals(true));
+      },
+    );
+
+    test(
+      'should return server failure when call to remote data source is unsuccessful',
+      () async {
+        // arrange
+        when(() => mockRemoteDataSource.stopBackup(any()))
+            .thenThrow(const ServerException());
+        // act
+        final result = await repository.stopBackup(tDataSet);
+        // assert
+        verify(() => mockRemoteDataSource.stopBackup(any()));
         expect(result.err().unwrap(), isA<ServerFailure>());
       },
     );

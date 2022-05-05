@@ -48,15 +48,15 @@ void main() {
     schedules: [
       Schedule(
         frequency: Frequency.weekly,
-        timeRange: None(),
-        dayOfMonth: None(),
+        timeRange: const None(),
+        dayOfMonth: const None(),
         dayOfWeek: Some(DayOfWeek.thu),
-        weekOfMonth: None(),
+        weekOfMonth: const None(),
       )
     ],
     packSize: 67108864,
-    stores: ['store/local/setkey1'],
-    excludes: [],
+    stores: const ['store/local/setkey1'],
+    excludes: const [],
     snapshot: Some(
       Snapshot(
         checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
@@ -70,7 +70,7 @@ void main() {
       ),
     ),
     status: Status.finished,
-    errorMsg: None(),
+    errorMsg: const None(),
   );
   final tDataSetModel = DataSetModel.from(tDataSet);
 
@@ -162,6 +162,18 @@ void main() {
     });
   }
 
+  void setUpMockBooleanGraphQLResponse(String field) {
+    final response = {
+      'data': {field: true}
+    };
+    // graphql client uses the 'send' method
+    when(() => mockHttpClient.send(any())).thenAnswer((_) async {
+      final bytes = utf8.encode(json.encode(response));
+      final stream = http.ByteStream.fromBytes(bytes);
+      return http.StreamedResponse(stream, 200);
+    });
+  }
+
   group('getAllDataSets', () {
     test(
       'should return zero data sets',
@@ -215,7 +227,7 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(1)));
-        final simpleModel = DataSetModel(
+        const simpleModel = DataSetModel(
           key: 'a1',
           computerId: 's1',
           basepath: '/home/planet',
@@ -285,7 +297,7 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(3)));
-        final simpleModel = DataSetModel(
+        const simpleModel = DataSetModel(
           key: 'a1',
           computerId: 's1',
           basepath: '/home/planet',
@@ -456,6 +468,94 @@ void main() {
         // act, assert
         try {
           await dataSource.updateDataSet(tDataSet);
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+  });
+
+  group('startBackup', () {
+    test(
+      'should return true if successful',
+      () async {
+        // arrange
+        setUpMockBooleanGraphQLResponse('startBackup');
+        // act
+        final result = await dataSource.startBackup(tDataSet);
+        // assert
+        expect(result, equals(true));
+      },
+    );
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.startBackup(tDataSet);
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.startBackup(tDataSet);
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+  });
+
+  group('stopBackup', () {
+    test(
+      'should return true if successful',
+      () async {
+        // arrange
+        setUpMockBooleanGraphQLResponse('stopBackup');
+        // act
+        final result = await dataSource.stopBackup(tDataSet);
+        // assert
+        expect(result, equals(true));
+      },
+    );
+
+    test(
+      'should report failure when response unsuccessful',
+      () async {
+        // arrange
+        setUpMockHttpClientFailure403();
+        // act, assert
+        try {
+          await dataSource.stopBackup(tDataSet);
+          fail('should have raised an error');
+        } catch (e) {
+          expect(e, isA<ServerException>());
+        }
+      },
+    );
+
+    test(
+      'should raise error when GraphQL server returns an error',
+      () async {
+        // arrange
+        setUpMockHttpClientGraphQLError();
+        // act, assert
+        try {
+          await dataSource.stopBackup(tDataSet);
           fail('should have raised an error');
         } catch (e) {
           expect(e, isA<ServerException>());
