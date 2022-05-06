@@ -1,13 +1,10 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-import 'package:graphql/client.dart' as gql;
-import 'package:gql/language.dart' as lang;
-import 'package:gql/ast.dart' as ast;
-import 'package:normalize/utils.dart';
+import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
-import 'package:zorigami/core/error/exceptions.dart';
+import 'package:zorigami/core/error/exceptions.dart' as err;
 
 abstract class DataSetRemoteDataSource {
   Future<List<DataSetModel>> getAllDataSets();
@@ -17,23 +14,6 @@ abstract class DataSetRemoteDataSource {
   Future<bool> startBackup(DataSet input);
   Future<bool> stopBackup(DataSet input);
 }
-
-// Work around bug in juniper in which it fails to implement __typename for the
-// root query, which is in violation of the GraphQL spec.
-//
-// c.f. https://github.com/graphql-rust/juniper/issues/372
-class AddNestedTypenameVisitor extends AddTypenameVisitor {
-  @override
-  ast.OperationDefinitionNode visitOperationDefinitionNode(
-    ast.OperationDefinitionNode node,
-  ) =>
-      node;
-}
-
-ast.DocumentNode gqlNoTypename(String document) => ast.transform(
-      lang.parseString(document),
-      [AddNestedTypenameVisitor()],
-    );
 
 const String dataSetFields = '''
   id
@@ -65,7 +45,7 @@ const String dataSetFields = '''
 ''';
 
 class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
-  final gql.GraphQLClient client;
+  final GraphQLClient client;
 
   DataSetRemoteDataSourceImpl({required this.client});
 
@@ -78,13 +58,13 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = gql.QueryOptions(
-      document: gqlNoTypename(getAllDatasets),
-      fetchPolicy: gql.FetchPolicy.noCache,
+    final queryOptions = QueryOptions(
+      document: gql(getAllDatasets),
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.query(queryOptions);
+    final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     final List<dynamic> datasets =
         (result.data?['datasets'] ?? []) as List<dynamic>;
@@ -103,15 +83,15 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         deleteDataset(id: $id)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(deleteDataSet),
+    final mutationOptions = MutationOptions(
+      document: gql(deleteDataSet),
       variables: <String, dynamic>{
         'id': input.key,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['deleteDataset'] ?? 'null') as String;
   }
@@ -126,15 +106,15 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
       }
     ''';
     final encoded = DataSetModel.from(input).toJson(input: true);
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(defineStore),
+    final mutationOptions = MutationOptions(
+      document: gql(defineStore),
       variables: <String, dynamic>{
         'input': encoded,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     if (result.data?['defineDataset'] == null) {
       return null;
@@ -153,15 +133,15 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
       }
     ''';
     final encoded = DataSetModel.from(input).toJson(input: true);
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(updateStore),
+    final mutationOptions = MutationOptions(
+      document: gql(updateStore),
       variables: <String, dynamic>{
         'input': encoded,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     if (result.data?['updateDataset'] == null) {
       return null;
@@ -177,17 +157,17 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         startBackup(id: \$id)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(updateStore),
+    final mutationOptions = MutationOptions(
+      document: gql(updateStore),
       variables: <String, dynamic>{
         'id': input.key,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
 
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['startBackup'] ?? false) as bool;
   }
@@ -199,16 +179,16 @@ class DataSetRemoteDataSourceImpl extends DataSetRemoteDataSource {
         stopBackup(id: \$id)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(updateStore),
+    final mutationOptions = MutationOptions(
+      document: gql(updateStore),
       variables: <String, dynamic>{
         'id': input.key,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['stopBackup'] ?? false) as bool;
   }

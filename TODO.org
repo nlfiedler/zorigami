@@ -1,12 +1,15 @@
 * Tasks
 ** Cleanup and Testing
-*** TODO try removing the =AddNestedTypenameVisitor= hack from the dart code
-*** TODO make abstract version of ~backup~ manager code for testing
-**** rename =process.rs= to =schedule.rs= to make clear it schedules (backups)
-**** just like the =Restorer= trait and implementation
-**** make the =perform_backup()= function module private
-**** use the mock version of backup manager in =process.rs= to test the actor logic
-**** add tests for =start_backup= to ensure repeatable behavior
+*** TODO organize the managers code
+**** TODO move =PackBuilder= into =domain/helpers/packs.rs=
+**** TODO move =find_file_chunks()= into =domain/helpers/chunks.rs=
+**** TODO move =encrypt_file()= into =domain/helpers/crypto.rs=
+**** TODO move =decrypt_file()= into =domain/helpers/crypto.rs=
+**** TODO move =process.rs= code into =backup.rs=
+**** TODO make a =Backupper= trait/impl like =Restorer= trait/impl
+**** TODO make the =perform_backup()= function module private
+**** TODO use the mock version of backupper to test the actor logic
+**** TODO add tests for =start_backup= to ensure repeatable behavior
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this

@@ -1,13 +1,10 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
-import 'package:graphql/client.dart' as gql;
-import 'package:gql/language.dart' as lang;
-import 'package:gql/ast.dart' as ast;
-import 'package:normalize/utils.dart';
+import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
-import 'package:zorigami/core/error/exceptions.dart';
+import 'package:zorigami/core/error/exceptions.dart' as err;
 
 abstract class PackStoreRemoteDataSource {
   Future<List<PackStoreModel>> getAllPackStores();
@@ -17,31 +14,14 @@ abstract class PackStoreRemoteDataSource {
   Future<PackStoreModel?> updatePackStore(PackStore input);
 }
 
-// Work around bug in juniper in which it fails to implement __typename for the
-// root query, which is in violation of the GraphQL spec.
-//
-// c.f. https://github.com/graphql-rust/juniper/issues/372
-class AddNestedTypenameVisitor extends AddTypenameVisitor {
-  @override
-  ast.OperationDefinitionNode visitOperationDefinitionNode(
-    ast.OperationDefinitionNode node,
-  ) =>
-      node;
-}
-
-ast.DocumentNode gqlNoTypename(String document) => ast.transform(
-      lang.parseString(document),
-      [AddNestedTypenameVisitor()],
-    );
-
 class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
-  final gql.GraphQLClient client;
+  final GraphQLClient client;
 
   PackStoreRemoteDataSourceImpl({required this.client});
 
   @override
   Future<List<PackStoreModel>> getAllPackStores() async {
-    final getAllStores = r'''
+    const getAllStores = r'''
       query {
         stores {
           id
@@ -54,13 +34,13 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = gql.QueryOptions(
-      document: gqlNoTypename(getAllStores),
-      fetchPolicy: gql.FetchPolicy.noCache,
+    final queryOptions = QueryOptions(
+      document: gql(getAllStores),
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.query(queryOptions);
+    final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     final List<dynamic> stores =
         (result.data?['stores'] ?? []) as List<dynamic>;
@@ -74,42 +54,42 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
 
   @override
   Future<String> testPackStore(PackStore input) async {
-    final testStore = r'''
+    const testStore = r'''
       mutation TestStore($input: StoreInput!) {
         testStore(input: $input)
       }
     ''';
     final storeModel = PackStoreModel.fromStore(input);
     final encodedStore = storeModel.toJson();
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(testStore),
+    final mutationOptions = MutationOptions(
+      document: gql(testStore),
       variables: <String, dynamic>{
         'input': encodedStore,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['testStore'] ?? 'ng') as String;
   }
 
   @override
   Future<String> deletePackStore(PackStore input) async {
-    final getStore = r'''
+    const getStore = r'''
       mutation DeleteStore($id: String!) {
         deleteStore(id: $id)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(getStore),
+    final mutationOptions = MutationOptions(
+      document: gql(getStore),
       variables: <String, dynamic>{
         'id': input.key,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     final identifier = (result.data?['deleteStore'] ?? 'ng') as String;
     return identifier;
@@ -117,7 +97,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
 
   @override
   Future<PackStoreModel?> definePackStore(PackStore input) async {
-    final defineStore = r'''
+    const defineStore = r'''
       mutation DefineStore($input: StoreInput!) {
         defineStore(input: $input) {
           id
@@ -132,15 +112,15 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     ''';
     final storeModel = PackStoreModel.fromStore(input);
     final encodedStore = storeModel.toJson();
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(defineStore),
+    final mutationOptions = MutationOptions(
+      document: gql(defineStore),
       variables: <String, dynamic>{
         'input': encodedStore,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     if (result.data?['defineStore'] == null) {
       return null;
@@ -151,7 +131,7 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
 
   @override
   Future<PackStoreModel?> updatePackStore(PackStore input) async {
-    final updateStore = r'''
+    const updateStore = r'''
       mutation UpdateStore($input: StoreInput!) {
         updateStore(input: $input) {
           id
@@ -166,15 +146,15 @@ class PackStoreRemoteDataSourceImpl extends PackStoreRemoteDataSource {
     ''';
     final storeModel = PackStoreModel.fromStore(input);
     final encodedStore = storeModel.toJson();
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(updateStore),
+    final mutationOptions = MutationOptions(
+      document: gql(updateStore),
       variables: <String, dynamic>{
         'input': encodedStore,
       },
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     if (result.data?['updateStore'] == null) {
       return null;

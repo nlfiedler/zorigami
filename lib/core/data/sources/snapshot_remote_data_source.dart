@@ -1,13 +1,10 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-import 'package:graphql/client.dart' as gql;
-import 'package:gql/language.dart' as lang;
-import 'package:gql/ast.dart' as ast;
-import 'package:normalize/utils.dart';
+import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/request_model.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
-import 'package:zorigami/core/error/exceptions.dart';
+import 'package:zorigami/core/error/exceptions.dart' as err;
 
 abstract class SnapshotRemoteDataSource {
   Future<SnapshotModel?> getSnapshot(String checksum);
@@ -19,25 +16,8 @@ abstract class SnapshotRemoteDataSource {
       String tree, String entry, String filepath, String dataset);
 }
 
-// Work around bug in juniper in which it fails to implement __typename for the
-// root query, which is in violation of the GraphQL spec.
-//
-// c.f. https://github.com/graphql-rust/juniper/issues/372
-class AddNestedTypenameVisitor extends AddTypenameVisitor {
-  @override
-  ast.OperationDefinitionNode visitOperationDefinitionNode(
-    ast.OperationDefinitionNode node,
-  ) =>
-      node;
-}
-
-ast.DocumentNode gqlNoTypename(String document) => ast.transform(
-      lang.parseString(document),
-      [AddNestedTypenameVisitor()],
-    );
-
 class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
-  final gql.GraphQLClient client;
+  final GraphQLClient client;
 
   SnapshotRemoteDataSourceImpl({required this.client});
 
@@ -55,16 +35,16 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = gql.QueryOptions(
-      document: gqlNoTypename(query),
+    final queryOptions = QueryOptions(
+      document: gql(query),
       variables: <String, dynamic>{
         'checksum': checksum,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.query(queryOptions);
+    final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     if (result.data?['snapshot'] == null) {
       return null;
@@ -81,16 +61,16 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         restoreDatabase(storeId: $storeId)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(query),
+    final mutationOptions = MutationOptions(
+      document: gql(query),
       variables: <String, dynamic>{
         'storeId': storeId,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return result.data?['restoreDatabase'] ?? 'ng';
   }
@@ -107,19 +87,19 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         restoreFiles(tree: $tree, entry: $entry, filepath: $filepath, dataset: $dataset)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(query),
+    final mutationOptions = MutationOptions(
+      document: gql(query),
       variables: <String, dynamic>{
         'tree': tree,
         'entry': entry,
         'filepath': filepath,
         'dataset': dataset,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['restoreFiles'] ?? false) as bool;
   }
@@ -139,14 +119,14 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         }
       }
     ''';
-    final queryOptions = gql.QueryOptions(
-      document: gqlNoTypename(query),
-      variables: <String, dynamic>{},
-      fetchPolicy: gql.FetchPolicy.noCache,
+    final queryOptions = QueryOptions(
+      document: gql(query),
+      variables: const <String, dynamic>{},
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.query(queryOptions);
+    final QueryResult result = await client.query(queryOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     final List<dynamic> restores =
         (result.data?['restores'] ?? []) as List<dynamic>;
@@ -170,19 +150,19 @@ class SnapshotRemoteDataSourceImpl extends SnapshotRemoteDataSource {
         cancelRestore(tree: $tree, entry: $entry, filepath: $filepath, dataset: $dataset)
       }
     ''';
-    final mutationOptions = gql.MutationOptions(
-      document: gqlNoTypename(query),
+    final mutationOptions = MutationOptions(
+      document: gql(query),
       variables: <String, dynamic>{
         'tree': tree,
         'entry': entry,
         'filepath': filepath,
         'dataset': dataset,
       },
-      fetchPolicy: gql.FetchPolicy.noCache,
+      fetchPolicy: FetchPolicy.noCache,
     );
-    final gql.QueryResult result = await client.mutate(mutationOptions);
+    final QueryResult result = await client.mutate(mutationOptions);
     if (result.hasException) {
-      throw ServerException(result.exception.toString());
+      throw err.ServerException(result.exception.toString());
     }
     return (result.data?['cancelRestore'] ?? false) as bool;
   }

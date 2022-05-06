@@ -76,7 +76,7 @@ void main() {
 
   void setUpMockDeleteGraphQLResponse() {
     final response = {
-      'data': {'deleteDataset': 'setkey1'}
+      'data': {'__typename': 'Dataset', 'deleteDataset': 'setkey1'}
     };
     // graphql client uses the 'send' method
     when(() => mockHttpClient.send(any())).thenAnswer((_) async {

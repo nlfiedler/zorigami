@@ -43,12 +43,12 @@ void main() {
     key: 'abc123',
     label: 'lstore',
     kind: StoreKind.local,
-    options: {'basepath': '/home/user'},
+    options: const {'basepath': '/home/user'},
   );
 
   void setUpMockDeleteGraphQLResponse() {
     final response = {
-      'data': {'deleteStore': 'abc123'}
+      'data': {'__typename': 'Store', 'deleteStore': 'abc123'}
     };
     // graphql client uses the 'send' method
     when(() => mockHttpClient.send(any())).thenAnswer((_) async {
@@ -60,7 +60,7 @@ void main() {
 
   void setUpMockTestGraphQLResponse() {
     final response = {
-      'data': {'testStore': 'ok'}
+      'data': {'__typename': 'Store', 'testStore': 'ok'}
     };
     // graphql client uses the 'send' method
     when(() => mockHttpClient.send(any())).thenAnswer((_) async {
@@ -175,7 +175,7 @@ void main() {
           key: 'a1',
           label: 's1',
           kind: StoreKind.minio,
-          options: {},
+          options: const {},
         );
         expect(result, contains(store));
       },
@@ -224,7 +224,7 @@ void main() {
           key: 'a1',
           label: 's1',
           kind: StoreKind.minio,
-          options: {},
+          options: const {},
         );
         expect(result, contains(store));
       },
