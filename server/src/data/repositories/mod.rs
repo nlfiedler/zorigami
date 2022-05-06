@@ -11,6 +11,7 @@ use crate::domain::entities::{
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Context, Error, Result};
 use log::{error, info, warn};
+use rusty_ulid::generate_ulid_string;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -370,7 +371,7 @@ impl PackRepository for PackRepositoryImpl {
         // it easier to find the latest database archive later.
         let object = rusty_ulid::generate_ulid_string();
         // Use a predictable bucket name so we can find it easily later.
-        let bucket = crate::domain::computer_bucket_name(computer_id);
+        let bucket = computer_bucket_name(computer_id);
         let mut results: Vec<PackLocation> = Vec::new();
         for (store, source) in self.sources.iter() {
             let ctx = format!(
@@ -384,7 +385,7 @@ impl PackRepository for PackRepositoryImpl {
     }
 
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {
-        let bucket_name = crate::domain::computer_bucket_name(computer_id);
+        let bucket_name = computer_bucket_name(computer_id);
         // use the first store returned by the iterator, probably only one anyway
         for (store, source) in self.sources.iter() {
             let mut objects = source.list_databases(&bucket_name)?;
@@ -456,6 +457,19 @@ impl PackRepository for PackRepositoryImpl {
 }
 
 ///
+/// Return the unique bucket name for this computer and user.
+///
+pub fn computer_bucket_name(unique_id: &str) -> String {
+    match blob_uuid::to_uuid(unique_id) {
+        Ok(uuid) => uuid.to_simple().to_string(),
+        Err(err) => {
+            error!("failed to convert unique ID: {:?}", err);
+            generate_ulid_string().to_lowercase()
+        }
+    }
+}
+
+///
 /// Generate a suitable bucket name, using a ULID and the given unique ID.
 ///
 /// The unique ID is assumed to be a shorted version of the UUID returned from
@@ -463,7 +477,6 @@ impl PackRepository for PackRepositoryImpl {
 /// purposes of generating a bucket name consisting only of lowercase letters.
 ///
 pub fn generate_bucket_name(unique_id: &str) -> String {
-    use rusty_ulid::generate_ulid_string;
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => {
             let shorter = uuid.to_simple().to_string();

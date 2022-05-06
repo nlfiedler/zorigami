@@ -7,6 +7,7 @@
 //! previous snapshot, building pack files, and sending them to the store.
 
 use crate::domain::entities;
+use crate::domain::helpers::{self, crypto, pack};
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Error};
@@ -173,7 +174,7 @@ struct BackupDriver<'a> {
     /// Preferred size of chunks in bytes.
     chunk_size: u64,
     /// Builds a pack file comprised of compressed chunks.
-    builder: super::PackBuilder,
+    builder: pack::PackBuilder,
     /// Tracks files and chunks in the current pack.
     record: PackRecord,
     /// Map of file checksum to the chunks it contains that have not yet been
@@ -204,7 +205,7 @@ impl<'a> BackupDriver<'a> {
             stores,
             stop_time,
             chunk_size,
-            builder: super::PackBuilder::new(dataset.pack_size),
+            builder: pack::PackBuilder::new(dataset.pack_size),
             record: Default::default(),
             file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),
@@ -246,7 +247,7 @@ impl<'a> BackupDriver<'a> {
         let file_size = attr.len();
         let chunks = if file_size > self.chunk_size {
             // split large files into chunks, add chunks to the list
-            super::find_file_chunks(path, self.chunk_size)?
+            helpers::find_file_chunks(path, self.chunk_size)?
         } else {
             let mut chunk = entities::Chunk::new(file_digest.clone(), 0, file_size as usize);
             chunk = chunk.filepath(path);
@@ -356,7 +357,7 @@ impl<'a> BackupDriver<'a> {
         if self.dbase.get_pack(&pack_digest)?.is_none() {
             let mut outfile = pack_path.to_path_buf();
             outfile.set_extension("nacl");
-            let salt = super::encrypt_file(&self.passphrase, &pack_path, &outfile)?;
+            let salt = crypto::encrypt_file(&self.passphrase, &pack_path, &outfile)?;
             // new pack file, need to upload this and record to database
             let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
             let bucket_name = self.stores.get_bucket_name(&computer_id);

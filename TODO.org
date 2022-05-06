@@ -1,10 +1,11 @@
 * Tasks
 ** Cleanup and Testing
 *** TODO organize the managers code
-**** TODO move =PackBuilder= into =domain/helpers/packs.rs=
-**** TODO move =find_file_chunks()= into =domain/helpers/chunks.rs=
-**** TODO move =encrypt_file()= into =domain/helpers/crypto.rs=
-**** TODO move =decrypt_file()= into =domain/helpers/crypto.rs=
+**** DONE move =PackBuilder= into =domain/helpers/packs.rs=
+**** DONE move =find_file_chunks()= into =domain/helpers/mod.rs=
+**** DONE move =encrypt_file()= into =domain/helpers/crypto.rs=
+**** DONE move =decrypt_file()= into =domain/helpers/crypto.rs=
+**** DONE move =computer_bucket_name()= into =data/repositories/mod.rs=
 **** TODO move =process.rs= code into =backup.rs=
 **** TODO make a =Backupper= trait/impl like =Restorer= trait/impl
 **** TODO make the =perform_backup()= function module private

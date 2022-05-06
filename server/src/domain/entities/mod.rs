@@ -1056,6 +1056,13 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_unique_id() {
+        let uuid = Configuration::generate_unique_id("charlie", "localhost");
+        // UUIDv5 = 747267d5-6e70-5711-8a9a-a40c24c1730f
+        assert_eq!(uuid, "dHJn1W5wVxGKmqQMJMFzDw");
+    }
+
+    #[test]
     fn test_storetype_fromstr() {
         let result = StoreType::from_str("local");
         assert!(result.is_ok());

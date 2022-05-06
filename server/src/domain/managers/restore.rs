@@ -2,6 +2,7 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
+use crate::domain::helpers::{crypto, pack};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
@@ -538,10 +539,10 @@ impl FileRestorer {
             // decrypt and then unpack the contents
             let mut tarball = encrypted.clone();
             tarball.set_extension("tar");
-            super::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
+            crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
             fs::remove_file(&encrypted)?;
             verify_pack_digest(pack_digest, &tarball)?;
-            super::extract_pack(&tarball, &workspace)?;
+            pack::extract_pack(&tarball, &workspace)?;
             fs::remove_file(tarball)?;
             // remember this pack as being downloaded
             self.downloaded.insert(pack_digest.to_owned());
@@ -622,6 +623,7 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
     use crate::domain::entities::{Chunk, Dataset, File, Pack, PackLocation, Tree, TreeEntry};
+    use crate::domain::helpers::{self, pack};
     use crate::domain::managers;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use std::io;
@@ -673,7 +675,7 @@ mod tests {
     // Simplified pack builder that assumes all chunks will fit in a 64mb pack
     // file. Returns the digest of the resulting file.
     fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> Result<Checksum, Error> {
-        let mut builder = managers::PackBuilder::new(67108864);
+        let mut builder = pack::PackBuilder::new(67108864);
         builder.initialize(outfile)?;
         for chunk in chunks {
             builder.add_chunk(chunk)?;
@@ -708,7 +710,7 @@ mod tests {
         let pack_digest = pack_chunks(&chunks, &pack_file)?;
         let mut encrypted = pack_file.clone();
         encrypted.set_extension("nacl");
-        let salt = managers::encrypt_file(passphrase, &pack_file, &encrypted)?;
+        let salt = crypto::encrypt_file(passphrase, &pack_file, &encrypted)?;
         std::fs::remove_file(pack_file)?;
         let pack_file_path = encrypted.to_string_lossy().into_owned();
         // create file record chose "chunk" digest is actually the pack digest
@@ -754,7 +756,7 @@ mod tests {
             .returning(move |_| Ok(Some(tree.clone())));
 
         // create a realistic pack file but mock database records
-        let passphrase = managers::get_passphrase();
+        let passphrase = crypto::get_passphrase();
         let packed1 = create_single_pack(
             &passphrase,
             Path::new("../test/fixtures/lorem-ipsum.txt"),
@@ -842,7 +844,7 @@ mod tests {
         packpath: &Path,
     ) -> Result<PackChunksFile, Error> {
         let file_digest = Checksum::sha256_from_file(filepath).unwrap();
-        let mut chunks: Vec<Chunk> = managers::find_file_chunks(filepath, 32768)?;
+        let mut chunks: Vec<Chunk> = helpers::find_file_chunks(filepath, 32768)?;
         let mut pack_file = packpath.to_path_buf();
         pack_file.push(filepath.file_stem().unwrap());
         pack_file.set_extension("tar");
@@ -852,7 +854,7 @@ mod tests {
         }
         let mut encrypted = pack_file.clone();
         encrypted.set_extension("nacl");
-        let salt = managers::encrypt_file(passphrase, &pack_file, &encrypted).unwrap();
+        let salt = crypto::encrypt_file(passphrase, &pack_file, &encrypted).unwrap();
         std::fs::remove_file(pack_file).unwrap();
         let pack_file_path = encrypted.to_string_lossy().into_owned();
         // construct the list of chunks for the file record
@@ -888,7 +890,7 @@ mod tests {
             .returning(move |_| Ok(Some(dataset.clone())));
 
         // create realistic pack files but mock database records
-        let passphrase = managers::get_passphrase();
+        let passphrase = crypto::get_passphrase();
         let packed1 = create_single_pack(
             &passphrase,
             Path::new("../test/fixtures/lorem-ipsum.txt"),

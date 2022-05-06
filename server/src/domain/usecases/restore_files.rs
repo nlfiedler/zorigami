@@ -2,6 +2,7 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::Checksum;
+use crate::domain::helpers::crypto;
 use crate::domain::managers::restore::{Request, Restorer};
 use anyhow::Error;
 use std::cmp;
@@ -22,7 +23,7 @@ impl RestoreFiles {
 impl super::UseCase<(), Params> for RestoreFiles {
     fn call(&self, params: Params) -> Result<(), Error> {
         let mut request: Request = params.into();
-        request.passphrase = crate::domain::managers::get_passphrase();
+        request.passphrase = crypto::get_passphrase();
         self.restorer.enqueue(request)
     }
 }

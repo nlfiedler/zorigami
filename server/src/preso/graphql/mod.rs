@@ -7,6 +7,7 @@
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::data::sources::EntityDataSource;
 use crate::domain::entities::{self, Checksum, TreeReference};
+use crate::domain::helpers;
 use crate::domain::managers::process::Processor;
 use crate::domain::managers::restore::{self, Restorer};
 use crate::domain::managers::state::StateStore;
@@ -841,13 +842,12 @@ impl QueryRoot {
         dataset: String,
         digest: Checksum,
     ) -> FieldResult<entities::PackFile> {
-        use crate::domain::managers;
         use crate::domain::usecases::get_pack::{GetPack, Params};
         use crate::domain::usecases::UseCase;
         let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
-        let passphrase = managers::get_passphrase();
+        let passphrase = helpers::crypto::get_passphrase();
         let params: Params = Params::new(dataset, digest, passphrase);
         let result: entities::PackFile = usecase.call(params)?;
         Ok(result)

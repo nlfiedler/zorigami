@@ -2,7 +2,7 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, PackEntry, PackFile};
-use crate::domain::managers;
+use crate::domain::helpers::crypto;
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Context, Error};
 use log::debug;
@@ -51,7 +51,7 @@ impl<'a> super::UseCase<PackFile, Params<'a>> for GetPack {
             .prefix("pack")
             .suffix(".tar")
             .tempfile_in(&dataset.workspace)?;
-        managers::decrypt_file(&params.passphrase, &salt, encrypted.path(), tarball.path())?;
+        crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), tarball.path())?;
         // read the tar file entries
         let mut entries: Vec<PackEntry> = Vec::new();
         let attr = fs::metadata(&tarball)?;
@@ -106,6 +106,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::{Dataset, Pack, PackLocation};
+    use crate::domain::helpers::{self, pack};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use std::path::Path;
     use tempfile::tempdir;
@@ -178,14 +179,14 @@ mod tests {
     #[test]
     fn test_get_pack_zero_entries() -> Result<(), Error> {
         // build empty pack file
-        let mut builder = managers::PackBuilder::new(65536);
+        let mut builder = pack::PackBuilder::new(65536);
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi-pack.tar");
         builder.initialize(&packfile)?;
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
         let encrypted = outdir.path().join("multi-pack.salt");
-        let salt = managers::encrypt_file(passphrase, &packfile, &encrypted)?;
+        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
         let mut mock = MockRecordRepository::new();
@@ -230,8 +231,8 @@ mod tests {
     fn test_get_pack_multiple_entries() -> Result<(), Error> {
         // build average pack file
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let chunks = managers::find_file_chunks(&infile, 32768)?;
-        let mut builder = managers::PackBuilder::new(65536);
+        let chunks = helpers::find_file_chunks(&infile, 32768)?;
+        let mut builder = pack::PackBuilder::new(65536);
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi-pack.tar");
         builder.initialize(&packfile)?;
@@ -243,7 +244,7 @@ mod tests {
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
         let encrypted = outdir.path().join("multi-pack.salt");
-        let salt = managers::encrypt_file(passphrase, &packfile, &encrypted)?;
+        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
         let mut mock = MockRecordRepository::new();

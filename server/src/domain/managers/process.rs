@@ -8,6 +8,7 @@
 use super::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
+use crate::domain::helpers::crypto;
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
@@ -366,7 +367,7 @@ fn run_dataset(
     dataset: Dataset,
     schedule: Schedule,
 ) {
-    let passphrase = super::get_passphrase();
+    let passphrase = crypto::get_passphrase();
     info!("dataset {} to be backed up", &dataset.id);
     let start_time = SystemTime::now();
     let stop_time = schedule.stop_time(Utc::now());
