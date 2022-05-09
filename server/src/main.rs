@@ -15,7 +15,7 @@ use lazy_static::lazy_static;
 use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
-use server::domain::managers::process;
+use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
 use server::domain::managers::restore::{Restorer, RestorerImpl};
 use server::domain::managers::state::{self, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
@@ -46,9 +46,11 @@ lazy_static! {
     static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     // File restore implementation.
     static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new());
+    // Actual performer of the backups.
+    static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
     // Supervisor for managing the running of backups.
-    static ref PROCESSOR: Arc<dyn process::Processor> = {
-        Arc::new(process::ProcessorImpl::new(STATE_STORE.clone()))
+    static ref SCHEDULER: Arc<dyn Scheduler> = {
+        Arc::new(SchedulerImpl::new(STATE_STORE.clone(), BACKUP_PERFORMER.clone()))
     };
     // Path to the database files.
     static ref DB_PATH: PathBuf = {
@@ -83,9 +85,11 @@ async fn graphql(
     let source = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
     let state = STATE_STORE.clone();
-    let processor = PROCESSOR.clone();
+    let processor = SCHEDULER.clone();
     let restorer = FILE_RESTORER.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(datasource, state, processor, restorer));
+    let ctx = Arc::new(graphql::GraphContext::new(
+        datasource, state, processor, restorer,
+    ));
     let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
@@ -96,14 +100,14 @@ async fn graphql(
 // Start and stop the supervisor based on application state changes.
 fn manage_supervisor(state: &state::State, _previous: Option<&state::State>) {
     if state.supervisor == state::SupervisorState::Stopping {
-        if let Err(err) = PROCESSOR.stop() {
+        if let Err(err) = SCHEDULER.stop() {
             error!("error stopping supervisor: {}", err);
         }
     } else if state.supervisor == state::SupervisorState::Starting {
         let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-        if let Err(err) = PROCESSOR.start(dbase) {
+        if let Err(err) = SCHEDULER.start(dbase) {
             error!("error starting supervisor: {}", err);
         }
     }

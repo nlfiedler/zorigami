@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-use crate::domain::managers::process::Processor;
+use crate::domain::managers::backup::Scheduler;
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;
@@ -10,11 +10,11 @@ use std::sync::Arc;
 
 pub struct StartBackup {
     repo: Box<dyn RecordRepository>,
-    processor: Arc<dyn Processor>,
+    processor: Arc<dyn Scheduler>,
 }
 
 impl StartBackup {
-    pub fn new(repo: Box<dyn RecordRepository>, processor: Arc<dyn Processor>) -> Self {
+    pub fn new(repo: Box<dyn RecordRepository>, processor: Arc<dyn Scheduler>) -> Self {
         Self { repo, processor }
     }
 }
@@ -60,7 +60,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::Dataset;
-    use crate::domain::managers::process::MockProcessor;
+    use crate::domain::managers::backup::scheduler::MockScheduler;
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
     use std::path::Path;
@@ -73,7 +73,7 @@ mod tests {
         let mut repo = MockRecordRepository::new();
         repo.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
-        let mut processor = MockProcessor::new();
+        let mut processor = MockScheduler::new();
         processor.expect_start_backup().returning(|_| Ok(()));
         // act
         let usecase = StartBackup::new(Box::new(repo), Arc::new(processor));
@@ -90,7 +90,7 @@ mod tests {
         let mut repo = MockRecordRepository::new();
         repo.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
-        let processor = MockProcessor::new();
+        let processor = MockScheduler::new();
         // act
         let usecase = StartBackup::new(Box::new(repo), Arc::new(processor));
         let params = Params {
@@ -107,7 +107,7 @@ mod tests {
         let mut repo = MockRecordRepository::new();
         repo.expect_get_datasets()
             .returning(|| Err(anyhow!("oh no")));
-        let processor = MockProcessor::new();
+        let processor = MockScheduler::new();
         // act
         let usecase = StartBackup::new(Box::new(repo), Arc::new(processor));
         let params = Params {

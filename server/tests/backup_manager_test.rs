@@ -5,7 +5,10 @@ use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
-use server::domain::managers::backup::*;
+use server::domain::managers::backup::{
+    find_changed_files, take_snapshot, ChangedFile, OutOfTimeFailure, Performer, PerformerImpl,
+    Request, TreeWalker,
+};
 use server::domain::managers::state::{StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use std::collections::HashMap;
@@ -519,10 +522,19 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
+    let performer = PerformerImpl::new();
+    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    let passphrase = String::from("keyboard cat");
+    let request = Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let backup_opt = performer.backup(request)?;
     assert!(backup_opt.is_some());
     let first_sha1 = backup_opt.unwrap();
 
@@ -532,7 +544,14 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_snapshot(&snapshot)?;
 
     // run the backup again to make sure it is finished
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let request = Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let backup_opt = performer.backup(request)?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();
     assert_eq!(first_sha1, second_sha1);
@@ -586,11 +605,20 @@ fn test_backup_out_of_time() -> Result<(), Error> {
 
     // start the backup manager after the stop time has already passed; should
     // return an "out of time" error
+    let performer = PerformerImpl::new();
+    let passphrase = String::from("keyboard cat");
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let stop_time = Some(chrono::Utc::now() - chrono::Duration::minutes(5));
-    match perform_backup(&mut dataset, &dbase, &state, "keyboard cat", stop_time) {
+    let request = Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        stop_time,
+    );
+    match performer.backup(request) {
         Ok(_) => panic!("expected backup to return an error"),
         Err(err) => assert!(err.downcast::<OutOfTimeFailure>().is_ok()),
     }
@@ -633,10 +661,19 @@ fn test_backup_empty_file() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform a backup where there is only an empty file
+    let performer = PerformerImpl::new();
+    let passphrase = String::from("keyboard cat");
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let backup_opt = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let request = Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let backup_opt = performer.backup(request)?;
     // it did not blow up, so that counts as passing
     assert!(backup_opt.is_some());
     let counts = dbase.get_entity_counts().unwrap();

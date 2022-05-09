@@ -7,7 +7,7 @@ use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::schedule::Schedule;
 use server::domain::entities::{self, Checksum};
-use server::domain::managers::process::{Processor, ProcessorImpl};
+use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
 use server::domain::managers::restore::*;
 use server::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
@@ -70,7 +70,8 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let processor = ProcessorImpl::new(state.clone()).interval(100);
+    let performer: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
+    let processor = SchedulerImpl::new(state.clone(), performer).interval(100);
     let result = processor.start(dbase.clone());
     assert!(result.is_ok());
     state.wait_for_backup(BackupAction::Finish(dataset.id.clone()));

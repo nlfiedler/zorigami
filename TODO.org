@@ -1,16 +1,9 @@
 * Tasks
 ** Cleanup and Testing
-*** TODO organize the managers code
-**** DONE move =PackBuilder= into =domain/helpers/packs.rs=
-**** DONE move =find_file_chunks()= into =domain/helpers/mod.rs=
-**** DONE move =encrypt_file()= into =domain/helpers/crypto.rs=
-**** DONE move =decrypt_file()= into =domain/helpers/crypto.rs=
-**** DONE move =computer_bucket_name()= into =data/repositories/mod.rs=
-**** TODO move =process.rs= code into =backup.rs=
-**** TODO make a =Backupper= trait/impl like =Restorer= trait/impl
-**** TODO make the =perform_backup()= function module private
-**** TODO use the mock version of backupper to test the actor logic
-**** TODO add tests for =start_backup= to ensure repeatable behavior
+*** TODO change restore ~manager~ design for thorough testing
+**** TODO make =FileRestorer= into a trait and implementation
+**** TODO add tests for the restorer implementation itself
+**** TODO use mock =FileRestorer= to test =RestorerImpl= and =RestoreSupervisor=
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -254,10 +247,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Retrieve random pack files and verify integrity
 ** Architecture Review
 *** Rust dependency injection, is it helpful?
+**** https://github.com/AzureMarker/shaku
 **** https://github.com/mineichen/minfac
 **** https://github.com/austinjones/lifeline-rs (whole runtime message bus system)
 **** https://github.com/dmitryb-dev/waiter
-**** https://github.com/AzureMarker/shaku
 **** https://github.com/tobni/inject-rs
 *** Database per dataset directory
 **** Centralized configuration in a known location

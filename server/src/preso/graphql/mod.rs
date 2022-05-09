@@ -8,7 +8,7 @@ use crate::data::repositories::RecordRepositoryImpl;
 use crate::data::sources::EntityDataSource;
 use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::helpers;
-use crate::domain::managers::process::Processor;
+use crate::domain::managers::backup::Scheduler;
 use crate::domain::managers::restore::{self, Restorer};
 use crate::domain::managers::state::StateStore;
 use crate::domain::repositories::RecordRepository;
@@ -26,7 +26,7 @@ use std::sync::Arc;
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     appstate: Arc<dyn StateStore>,
-    processor: Arc<dyn Processor>,
+    processor: Arc<dyn Scheduler>,
     restorer: Arc<dyn Restorer>,
 }
 
@@ -34,7 +34,7 @@ impl GraphContext {
     pub fn new(
         datasource: Arc<dyn EntityDataSource>,
         appstate: Arc<dyn StateStore>,
-        processor: Arc<dyn Processor>,
+        processor: Arc<dyn Scheduler>,
         restorer: Arc<dyn Restorer>,
     ) -> Self {
         Self {
@@ -1413,7 +1413,7 @@ pub fn create_schema() -> Schema {
 mod tests {
     use super::*;
     use crate::data::sources::MockEntityDataSource;
-    use crate::domain::managers::process::MockProcessor;
+    use crate::domain::managers::backup::scheduler::MockScheduler;
     use crate::domain::managers::restore::MockRestorer;
     use crate::domain::managers::state::MockStateStore;
     use anyhow::anyhow;
@@ -1425,7 +1425,7 @@ mod tests {
         // if this turns out to be too limited, create a new builder
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let appstate = Arc::new(MockStateStore::new());
-        let processor = Arc::new(MockProcessor::new());
+        let processor = Arc::new(MockScheduler::new());
         let restorer = Arc::new(MockRestorer::new());
         Arc::new(GraphContext::new(datasource, appstate, processor, restorer))
     }
@@ -1618,7 +1618,7 @@ mod tests {
             .expect_get_state()
             .returning(|| state::State::default());
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockProcessor::new());
+        let processor = Arc::new(MockScheduler::new());
         let restorer = Arc::new(MockRestorer::new());
         let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
         // act
@@ -1660,7 +1660,7 @@ mod tests {
             .returning(move || Ok(datasets.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockProcessor::new());
+        let processor = Arc::new(MockScheduler::new());
         let restorer = Arc::new(MockRestorer::new());
         let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
         // act
@@ -1704,7 +1704,7 @@ mod tests {
             .returning(move || Ok(datasets.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockProcessor::new());
+        let processor = Arc::new(MockScheduler::new());
         let restorer = Arc::new(MockRestorer::new());
         let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
         // act

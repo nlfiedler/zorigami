@@ -5,7 +5,7 @@ use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
-use server::domain::managers::backup::*;
+use server::domain::managers::backup::{self, Performer, PerformerImpl};
 use server::domain::managers::restore::*;
 use server::domain::managers::state::{StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
@@ -52,12 +52,21 @@ async fn test_backup_restore() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
+    let performer = PerformerImpl::new();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let first_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?.unwrap();
+    let passphrase = String::from("keyboard cat");
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let first_backup = performer.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
     assert_eq!(counts.file, 1);
@@ -67,8 +76,14 @@ async fn test_backup_restore() -> Result<(), Error> {
     // perform the second backup
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let second_backup =
-        perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?.unwrap();
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let second_backup = performer.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 2);
     assert_eq!(counts.file, 2);
@@ -78,7 +93,14 @@ async fn test_backup_restore() -> Result<(), Error> {
     // perform the third backup
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
-    let third_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?.unwrap();
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let third_backup = performer.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 3);
     assert_eq!(counts.file, 3);
@@ -89,8 +111,14 @@ async fn test_backup_restore() -> Result<(), Error> {
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = fixture_path.path().join("SekienShifted.jpg");
     copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
-    let fourth_backup =
-        perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?.unwrap();
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let fourth_backup = performer.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
     assert_eq!(counts.file, 4);
@@ -282,10 +310,19 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
+    let performer = PerformerImpl::new();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let first_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let passphrase = String::from("keyboard cat");
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let first_backup = performer.backup(request)?;
     assert!(first_backup.is_some());
 
     // perform the second backup with a file that is not readable
@@ -295,8 +332,14 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
-    let second_backup =
-        perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?.unwrap();
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let second_backup = performer.backup(request)?.unwrap();
 
     // try to restore the file, it should fail
     let sut = RestorerImpl::new();
@@ -323,7 +366,14 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 
     // fix the file permissions and perform the third backup
     fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
-    let third_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let third_backup = performer.backup(request)?;
     assert!(third_backup.is_some());
 
     // restore the file from the third snapshot
@@ -385,6 +435,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
+    let performer = PerformerImpl::new();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
@@ -401,7 +452,15 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         fs::symlink_file(&target, &dest)?;
     }
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let first_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let passphrase = String::from("keyboard cat");
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let first_backup = performer.backup(request)?;
     assert!(first_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
@@ -424,7 +483,14 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &dest)?;
     }
-    let second_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let second_backup = performer.backup(request)?;
     assert!(second_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
@@ -502,13 +568,22 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
+    let performer = PerformerImpl::new();
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
     let dest: PathBuf = fixture_path.path().join("very-small.txt");
     let content = "keyboard cat".as_bytes().to_vec();
     assert!(fs::write(dest, content).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let first_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let passphrase = String::from("keyboard cat");
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let first_backup = performer.backup(request)?;
     assert!(first_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 0);
@@ -523,7 +598,14 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("very-small.txt");
     let content = "danger mouse".as_bytes().to_vec();
     assert!(fs::write(dest, content).is_ok());
-    let second_backup = perform_backup(&mut dataset, &dbase, &state, "keyboard cat", None)?;
+    let request = backup::Request::new(
+        dataset.clone(),
+        dbase.clone(),
+        state.clone(),
+        &passphrase,
+        None,
+    );
+    let second_backup = performer.backup(request)?;
     assert!(second_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 0);

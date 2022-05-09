@@ -2,13 +2,15 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 
-//! The `process` module spawns threads to perform backups, ensuring backups are
-//! performed for each dataset according to a schedule.
+//! The `scheduler` module spawns threads to perform backups, ensuring backups
+//! are performed for each dataset according to a schedule.
 
-use super::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::helpers::crypto;
+use crate::domain::managers::backup::{OutOfTimeFailure, Performer, Request};
+use crate::domain::managers::pretty_print_duration;
+use crate::domain::managers::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
@@ -22,11 +24,11 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 ///
-/// `Processor` manages a supervised actor which in turn spawns actors to
+/// `Scheduler` manages a supervised actor which in turn spawns actors to
 /// process backups according to their schedules.
 ///
 #[cfg_attr(test, automock)]
-pub trait Processor: Send + Sync {
+pub trait Scheduler: Send + Sync {
     /// Start a supervisor that will run scheduled backups.
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
 
@@ -38,11 +40,11 @@ pub trait Processor: Send + Sync {
 }
 
 ///
-/// Concrete implementation of `Processor` that uses the actix actor framework
+/// Concrete implementation of `Scheduler` that uses the actix actor framework
 /// to spawn threads and send messages to actors to manage the backups according
 /// to their schedules.
 ///
-pub struct ProcessorImpl {
+pub struct SchedulerImpl {
     // Arbiter manages the supervised actor that initiates backups.
     runner: Arbiter,
     // Application state to be provided to supervisor and runners.
@@ -51,6 +53,8 @@ pub struct ProcessorImpl {
     super_addr: Mutex<Option<Addr<BackupSupervisor>>>,
     // Sleep interval between checks for datasets ready to run.
     interval: u64,
+    // Performs the dataset backup.
+    performer: Arc<dyn Performer>,
 }
 
 #[cfg(test)]
@@ -58,15 +62,16 @@ static SUPERVISOR_INTERVAL: u64 = 100;
 #[cfg(not(test))]
 static SUPERVISOR_INTERVAL: u64 = 300_000;
 
-impl ProcessorImpl {
-    /// Construct a new instance of ProcessorImpl.
-    pub fn new(state: Arc<dyn StateStore>) -> Self {
+impl SchedulerImpl {
+    /// Construct a new instance of SchedulerImpl.
+    pub fn new(state: Arc<dyn StateStore>, performer: Arc<dyn Performer>) -> Self {
         // create an Arbiter to manage an event loop on a new thread
         Self {
             runner: Arbiter::new(),
             state: state.clone(),
             super_addr: Mutex::new(None),
             interval: SUPERVISOR_INTERVAL,
+            performer: performer.clone(),
         }
     }
 
@@ -78,15 +83,16 @@ impl ProcessorImpl {
     }
 }
 
-impl Processor for ProcessorImpl {
+impl Scheduler for SchedulerImpl {
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
         let mut su_addr = self.super_addr.lock().unwrap();
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
             let interval = self.interval;
+            let performer = self.performer.clone();
             let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                BackupSupervisor::new(repo, state, interval)
+                BackupSupervisor::new(repo, state, interval, performer)
             });
             *su_addr = Some(addr);
         }
@@ -95,7 +101,7 @@ impl Processor for ProcessorImpl {
 
     fn start_backup(&self, dataset: Dataset) -> Result<(), Error> {
         fn err_convert(err: SendError<Start>) -> Error {
-            anyhow!(format!("ProcessorImpl.start_backup(): {:?}", err))
+            anyhow!(format!("SchedulerImpl.start_backup(): {:?}", err))
         }
         let su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.deref() {
@@ -107,7 +113,7 @@ impl Processor for ProcessorImpl {
 
     fn stop(&self) -> Result<(), Error> {
         fn err_convert(err: SendError<Stop>) -> Error {
-            anyhow!(format!("ProcessorImpl.stop(): {:?}", err))
+            anyhow!(format!("SchedulerImpl.stop(): {:?}", err))
         }
         let mut su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.take() {
@@ -142,10 +148,17 @@ struct BackupSupervisor {
     runner: Arbiter,
     // Sleep interval between checks for datasets ready to run.
     interval: u64,
+    // Performs the dataset backup.
+    performer: Arc<dyn Performer>,
 }
 
 impl BackupSupervisor {
-    fn new(repo: Arc<dyn RecordRepository>, state: Arc<dyn StateStore>, interval: u64) -> Self {
+    fn new(
+        repo: Arc<dyn RecordRepository>,
+        state: Arc<dyn StateStore>,
+        interval: u64,
+        performer: Arc<dyn Performer>,
+    ) -> Self {
         // Create an Arbiter to manage an event loop on a new thread, keeping
         // the backup runners separate from the supervisor since they manage a
         // significant workload for an extended period of time.
@@ -154,6 +167,7 @@ impl BackupSupervisor {
             state,
             runner: Arbiter::new(),
             interval,
+            performer,
         }
     }
 
@@ -161,6 +175,7 @@ impl BackupSupervisor {
     fn start_due_datasets(&self) -> Result<(), Error> {
         let datasets = self.dbase.get_datasets()?;
         let state = self.state.clone();
+        let performer = self.performer.clone();
         for set in datasets {
             if let Some(schedule) = should_run(&self.dbase, &state, &set)? {
                 let msg = StartBackup {
@@ -168,6 +183,7 @@ impl BackupSupervisor {
                     state: state.clone(),
                     dataset: set,
                     schedule,
+                    performer: performer.clone(),
                 };
                 let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
                 if let Err(err) = addr.try_send(msg) {
@@ -181,12 +197,14 @@ impl BackupSupervisor {
     /// Begin the backup process for the given dataset if not already running.
     fn start_dataset_now(&self, dataset: Dataset) -> Result<(), Error> {
         let state = self.state.clone();
+        let performer = self.performer.clone();
         if let Some(schedule) = can_run(&state, &dataset)? {
             let msg = StartBackup {
                 dbase: self.dbase.clone(),
                 state: state.clone(),
                 dataset,
                 schedule,
+                performer: performer.clone(),
             };
             let addr = Actor::start_in_arbiter(&self.runner.handle(), |_| BackupRunner {});
             if let Err(err) = addr.try_send(msg) {
@@ -246,6 +264,7 @@ struct StartBackup {
     state: Arc<dyn StateStore>,
     dataset: Dataset,
     schedule: Schedule,
+    performer: Arc<dyn Performer>,
 }
 
 //
@@ -271,6 +290,7 @@ impl Handler<StartBackup> for BackupRunner {
                 msg.state,
                 msg.dataset.clone(),
                 msg.schedule.clone(),
+                msg.performer.clone(),
             );
         });
         debug!("backup: runner spawned backup process");
@@ -366,6 +386,7 @@ fn run_dataset(
     state: Arc<dyn StateStore>,
     dataset: Dataset,
     schedule: Schedule,
+    performer: Arc<dyn Performer>,
 ) {
     let passphrase = crypto::get_passphrase();
     info!("dataset {} to be backed up", &dataset.id);
@@ -373,29 +394,31 @@ fn run_dataset(
     let stop_time = schedule.stop_time(Utc::now());
     // reset any error state in the backup
     state.backup_event(BackupAction::Restart(dataset.id.clone()));
-    match super::backup::perform_backup(&dataset, &dbase, &state, &passphrase, stop_time) {
+    let dataset_id = dataset.id.clone();
+    let request = Request::new(dataset, dbase, state.clone(), passphrase, stop_time);
+    match performer.backup(request) {
         Ok(Some(checksum)) => {
             let end_time = SystemTime::now();
             let time_diff = end_time.duration_since(start_time);
-            let pretty_time = super::pretty_print_duration(time_diff);
+            let pretty_time = pretty_print_duration(time_diff);
             info!("created new snapshot {}", &checksum);
             info!(
                 "dataset {} backup complete after {}",
-                &dataset.id, pretty_time
+                &dataset_id, pretty_time
             );
         }
         Ok(None) => info!("no new snapshot required"),
-        Err(err) => match err.downcast::<super::backup::OutOfTimeFailure>() {
+        Err(err) => match err.downcast::<OutOfTimeFailure>() {
             Ok(_) => {
                 info!("backup window has reached its end");
                 // put the backup in the paused state for the time being
-                state.backup_event(BackupAction::Pause(dataset.id.clone()));
+                state.backup_event(BackupAction::Pause(dataset_id.clone()));
             }
             Err(err) => {
                 // here `err` is the original error
                 error!("could not perform backup: {}", err);
                 // put the backup in the error state so we try again
-                state.backup_event(BackupAction::Error(dataset.id.clone(), err.to_string()));
+                state.backup_event(BackupAction::Error(dataset_id.clone(), err.to_string()));
             }
         },
     }
@@ -406,18 +429,16 @@ mod tests {
     use super::*;
     use crate::domain::entities::schedule::{Schedule, TimeRange};
     use crate::domain::entities::{Checksum, Snapshot};
+    use crate::domain::managers::backup::MockPerformer;
     use crate::domain::managers::state::{StateStore, StateStoreImpl};
     use crate::domain::repositories::MockRecordRepository;
     use std::io;
     use std::path::Path;
-    use tempfile::tempdir;
 
     #[actix_rt::test]
-    async fn test_process_start_stop_restart() -> io::Result<()> {
+    async fn test_scheduler_start_stop_restart() -> io::Result<()> {
         // arrange
-        let outdir = tempdir()?;
-        // need a real path so the backup manager can create a workspace
-        let mut dataset = Dataset::new(outdir.path());
+        let mut dataset = Dataset::new(Path::new("/some/path"));
         dataset = dataset.add_schedule(Schedule::Daily(None));
         let dataset_id = dataset.id.clone();
         let datasets = vec![dataset];
@@ -427,16 +448,11 @@ mod tests {
         mock.expect_get_latest_snapshot()
             .withf(move |id| id == dataset_id)
             .returning(|_| Ok(None));
-        mock.expect_get_excludes().returning(move || Vec::new());
-        // Once the backup process starts inserting trees into the database, we
-        // know that the supervisor and runner have done their part, so give an
-        // error to cause the backup to stop.
-        mock.expect_insert_tree()
-            .returning(|_| Err(anyhow!("oh no")));
         let repo = Arc::new(mock);
         // act (start)
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        let sut = ProcessorImpl::new(state.clone());
+        let performer: Arc<dyn Performer> = Arc::new(MockPerformer::new());
+        let sut = SchedulerImpl::new(state.clone(), performer);
         let result = sut.start(repo.clone());
         thread::sleep(Duration::new(1, 0));
         // assert (start)
@@ -915,5 +931,60 @@ mod tests {
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[actix_rt::test]
+    async fn test_scheduler_start_backup() -> io::Result<()> {
+        // arrange
+        let dataset = Dataset::new(Path::new("/some/path"));
+        let dataset_copy1 = dataset.clone();
+        let dataset_copy2 = dataset.clone();
+        let dataset_id = dataset.id.clone();
+        let datasets = vec![dataset];
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(datasets.clone()));
+        mock.expect_get_latest_snapshot()
+            .withf(move |id| id == dataset_id)
+            .returning(|_| Ok(None));
+        //
+        // The expectations here are being called on another thread, so any
+        // failures there will go unnoticed, hence we call checkpoint() to make
+        // sure the mock was invoked as expected.
+        //
+        let mut perf = MockPerformer::new();
+        // make sure the mock was invoked exactly two times
+        perf.expect_backup().times(2).returning(|request| {
+            // indicate backup completed so it can be run more than once
+            request
+                .state
+                .backup_event(BackupAction::Finish(request.dataset.id.clone()));
+            Ok(None)
+        });
+        // act, assert
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let performer: Arc<MockPerformer> = Arc::new(perf);
+        // make sure the performer reference in the supervisor is dropped
+        {
+            let sut = SchedulerImpl::new(state.clone(), performer.clone());
+            let result = sut.start(Arc::new(mock));
+            assert!(result.is_ok());
+            thread::sleep(Duration::new(1, 0));
+            let result = sut.start_backup(dataset_copy1);
+            assert!(result.is_ok());
+            thread::sleep(Duration::new(1, 0));
+            let result = sut.start_backup(dataset_copy2);
+            assert!(result.is_ok());
+            thread::sleep(Duration::new(1, 0));
+            // shutdown the supervisor to release the performer reference
+            let result = sut.stop();
+            assert!(result.is_ok());
+            thread::sleep(Duration::new(1, 0));
+        }
+        // Do bad things with the arc so we can call checkpoint() without
+        // relying on clone(), which MockPerformce does not implement.
+        let mut perf = Arc::try_unwrap(performer).unwrap();
+        perf.checkpoint();
+        Ok(())
     }
 }
