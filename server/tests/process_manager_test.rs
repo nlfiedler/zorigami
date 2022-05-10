@@ -17,6 +17,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+    Box::new(FileRestorerImpl::new(dbase))
+}
+
 //
 // Test the full backup with a pack store that uses async calls.
 //
@@ -89,7 +93,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
         "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let snapshot = dbase.get_snapshot(&snapshot_sha1)?.unwrap();
-    let restorer = RestorerImpl::new();
+    let restorer = RestorerImpl::new(file_restorer_factory);
     let result = restorer.start(dbase.clone());
     assert!(result.is_ok());
     let result = restorer.enqueue(Request::new(

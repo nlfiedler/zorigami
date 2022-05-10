@@ -14,6 +14,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+    Box::new(FileRestorerImpl::new(dbase))
+}
+
 #[actix_rt::test]
 async fn test_backup_restore() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
@@ -135,7 +139,7 @@ async fn test_backup_restore() -> Result<(), Error> {
         "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
-    let sut = RestorerImpl::new();
+    let sut = RestorerImpl::new(file_restorer_factory);
     let result = sut.start(dbase.clone());
     assert!(result.is_ok());
     let result = sut.enqueue(Request::new(
@@ -342,7 +346,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let second_backup = performer.backup(request)?.unwrap();
 
     // try to restore the file, it should fail
-    let sut = RestorerImpl::new();
+    let sut = RestorerImpl::new(file_restorer_factory);
     let result = sut.start(dbase.clone());
     assert!(result.is_ok());
     let snapshot = dbase.get_snapshot(&second_backup)?.unwrap();
@@ -500,7 +504,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
 
     // restore the symlink from the first snapshot
     let snapshot = dbase.get_snapshot(&first_backup.unwrap())?.unwrap();
-    let sut = RestorerImpl::new();
+    let sut = RestorerImpl::new(file_restorer_factory);
     let result = sut.start(dbase);
     assert!(result.is_ok());
     let result = sut.enqueue(Request::new(
@@ -615,7 +619,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
 
     // restore the small file from the first snapshot
     let snapshot = dbase.get_snapshot(&first_backup.unwrap())?.unwrap();
-    let sut = RestorerImpl::new();
+    let sut = RestorerImpl::new(file_restorer_factory);
     let result = sut.start(dbase);
     assert!(result.is_ok());
     let result = sut.enqueue(Request::new(

@@ -150,7 +150,7 @@ pub trait RecordRepository: Send + Sync {
 /// Repository for pack files.
 ///
 #[cfg_attr(test, automock)]
-pub trait PackRepository {
+pub trait PackRepository: Send + Sync {
     /// Generate a unique bucket name for storing pack files.
     ///
     /// This function should be called for each call to `store_pack()` in order

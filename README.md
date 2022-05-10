@@ -291,10 +291,7 @@ this application, accept maybe for the association with time.
 
 ### July 2014
 
-Started as a project named *akashita*, with a basic
-[Python](https://www.python.org) implementation that uploaded tarballs to
-Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and
-`split` to produce "pack" files of a manageable size.
+Started as a project named [akashita](https://github.com/nlfiedler/akashita), with a basic [Python](https://www.python.org) implementation that uploaded tarballs to Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and `split` to produce "pack" files of a manageable size.
 
 ### February 2016
 

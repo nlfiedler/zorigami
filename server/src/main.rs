@@ -16,7 +16,7 @@ use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use server::domain::managers::restore::{Restorer, RestorerImpl};
+use server::domain::managers::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
 use server::domain::managers::state::{self, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
 use server::preso::graphql;
@@ -41,11 +41,15 @@ static DEFAULT_WEB_PATH: &str = "../web/";
 #[cfg(not(test))]
 static DEFAULT_WEB_PATH: &str = "./web/";
 
+fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+    Box::new(FileRestorerImpl::new(dbase))
+}
+
 lazy_static! {
     // Application state store.
     static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     // File restore implementation.
-    static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new());
+    static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new(file_restorer_factory));
     // Actual performer of the backups.
     static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
     // Supervisor for managing the running of backups.

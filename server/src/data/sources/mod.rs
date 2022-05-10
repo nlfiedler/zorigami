@@ -584,7 +584,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 /// Data source for pack files.
 ///
 #[cfg_attr(test, automock)]
-pub trait PackDataSource {
+pub trait PackDataSource: Send + Sync {
     /// Return `true` if this store is local to the system.
     fn is_local(&self) -> bool;
 

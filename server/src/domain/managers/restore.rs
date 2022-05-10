@@ -99,6 +99,11 @@ pub trait Restorer: Send + Sync {
 }
 
 ///
+/// Factory method for constructing a FileRestorer.
+///
+type FileRestorerFactory = fn(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer>;
+
+///
 /// Concrete implementation of `Restorer` that uses the actix actor framework to
 /// spawn threads and send messages to actors to manage the restore requests.
 ///
@@ -111,18 +116,34 @@ pub struct RestorerImpl {
     pending: Arc<Mutex<VecDeque<Request>>>,
     // Limited number of recently completed requests.
     completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
+    // Factory method for the FileRestorer implementation.
+    fetcher: FileRestorerFactory,
 }
 
 impl RestorerImpl {
     /// Construct a new instance of RestorerImpl.
-    pub fn new() -> Self {
+    pub fn new(fetcher: FileRestorerFactory) -> Self {
         // create an Arbiter to manage an event loop on a new thread
         Self {
             runner: Mutex::new(None),
             super_addr: Mutex::new(None),
             pending: Arc::new(Mutex::new(VecDeque::new())),
             completed: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
+            fetcher,
         }
+    }
+
+    /// Set the file restorer factory, for testing.
+    pub fn factory(&mut self, fetcher: FileRestorerFactory) -> Result<(), Error> {
+        self.fetcher = fetcher;
+        fn err_convert(err: SendError<SetFactory>) -> Error {
+            anyhow!(format!("RestorerImpl::factory(): {:?}", err))
+        }
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.as_ref() {
+            addr.try_send(SetFactory { fetcher }).map_err(err_convert)?;
+        }
+        Ok(())
     }
 
     /// Clear the completed requests list, for testing.
@@ -155,9 +176,10 @@ impl Restorer for RestorerImpl {
             // start supervisor within the arbiter created earlier
             let pending = self.pending.clone();
             let completed = self.completed.clone();
+            let fetcher = self.fetcher;
             let addr = actix::Supervisor::start_in_arbiter(
                 &runner.as_ref().unwrap().handle(),
-                move |_| RestoreSupervisor::new(repo, pending, completed),
+                move |_| RestoreSupervisor::new(repo, pending, completed, fetcher),
             );
             *su_addr = Some(addr);
         }
@@ -231,6 +253,8 @@ struct RestoreSupervisor {
     pending: Arc<Mutex<VecDeque<Request>>>,
     // List to which completed tasks are added (in the front).
     completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
+    // Factory method for the FileRestorer implementation.
+    fetcher: FileRestorerFactory,
 }
 
 impl RestoreSupervisor {
@@ -238,18 +262,20 @@ impl RestoreSupervisor {
         repo: Arc<dyn RecordRepository>,
         pending: Arc<Mutex<VecDeque<Request>>>,
         completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
+        fetcher: FileRestorerFactory,
     ) -> Self {
         Self {
             dbase: repo,
             pending,
             completed,
+            fetcher,
         }
     }
 
     fn process_queue(&mut self) -> Result<(), Error> {
         // Construct the pack fetcher that will keep track of which pack files
         // have been downloaded to avoid fetching the same one twice.
-        let mut fetcher = FileRestorer::new(self.dbase.clone());
+        let mut fetcher = (self.fetcher)(self.dbase.clone());
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
@@ -273,7 +299,7 @@ impl RestoreSupervisor {
     fn process_entry(
         &self,
         request: &mut Request,
-        fetcher: &mut FileRestorer,
+        fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         let tree = self
             .dbase
@@ -307,7 +333,7 @@ impl RestoreSupervisor {
         request: &mut Request,
         digest: Checksum,
         filepath: PathBuf,
-        fetcher: &mut FileRestorer,
+        fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         // fetch the packs for the file and assemble the chunks
         fetcher.fetch_file(&digest, &filepath, &request.passphrase)?;
@@ -321,7 +347,7 @@ impl RestoreSupervisor {
         request: &mut Request,
         digest: Checksum,
         path: PathBuf,
-        fetcher: &mut FileRestorer,
+        fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         let tree = self
             .dbase
@@ -388,6 +414,22 @@ impl Supervised for RestoreSupervisor {
 
 #[derive(Message)]
 #[rtype(result = "()")]
+struct SetFactory {
+    // Factory method for the FileRestorer implementation.
+    fetcher: FileRestorerFactory,
+}
+
+impl Handler<SetFactory> for RestoreSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, msg: SetFactory, _ctx: &mut Context<RestoreSupervisor>) {
+        debug!("restore: supervisor setting factory method");
+        self.fetcher = msg.fetcher;
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
 struct Stop();
 
 impl Handler<Stop> for RestoreSupervisor {
@@ -414,13 +456,38 @@ impl Handler<Restore> for RestoreSupervisor {
     }
 }
 
-struct FileRestorer {
+///
+/// Restores individual files and symbolic links. Maintains a list of the pack
+/// files that have been downloaded so far and retains chunks to avoid fetching
+/// the same pack file multiple times.
+///
+#[cfg_attr(test, automock)]
+pub trait FileRestorer: Send + Sync {
+    /// Prepare for restoring files by loading the given dataset.
+    fn load_dataset(&mut self, dataset_id: &str) -> Result<(), Error>;
+
+    /// Fetch the necessary packs and restore the given file.
+    fn fetch_file(
+        &mut self,
+        checksum: &Checksum,
+        filepath: &Path,
+        passphrase: &str,
+    ) -> Result<(), Error>;
+
+    /// Restore the named symbolic link given its contents.
+    fn restore_link(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error>;
+
+    /// Restore the named small file given its contents.
+    fn restore_small(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error>;
+}
+
+pub struct FileRestorerImpl {
     // Database connection for querying datasets.
     dbase: Arc<dyn RecordRepository>,
     // Identifier of the loaded data set, if any.
     dataset: Option<String>,
     // Pack repository for retrieving pack files.
-    stores: Option<Box<dyn PackRepository>>,
+    stores: Option<Arc<dyn PackRepository>>,
     // Base path to which files will be restored.
     basepath: Option<PathBuf>,
     // Temporary location where packs and chunks are downloaded.
@@ -429,8 +496,9 @@ struct FileRestorer {
     downloaded: HashSet<Checksum>,
 }
 
-impl FileRestorer {
-    fn new(dbase: Arc<dyn RecordRepository>) -> Self {
+impl FileRestorerImpl {
+    /// Construct an instance of FileRestorerImpl.
+    pub fn new(dbase: Arc<dyn RecordRepository>) -> Self {
         Self {
             dbase,
             dataset: None,
@@ -441,6 +509,46 @@ impl FileRestorer {
         }
     }
 
+    // Fetch a pack file.
+    fn fetch_pack(
+        &mut self,
+        pack_digest: &Checksum,
+        workspace: &Path,
+        passphrase: &str,
+    ) -> Result<(), Error> {
+        if !self.downloaded.contains(pack_digest) {
+            let stores = self.stores.as_ref().unwrap();
+            let saved_pack = self
+                .dbase
+                .get_pack(pack_digest)?
+                .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
+            // check the salt before downloading the pack, otherwise we waste
+            // time fetching it when we would not be able to decrypt it
+            let salt = saved_pack
+                .crypto_salt
+                .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
+            // retrieve the pack file
+            let mut encrypted = PathBuf::new();
+            encrypted.push(workspace);
+            encrypted.push(pack_digest.to_string());
+            debug!("restore: fetching pack {}", pack_digest);
+            stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
+            // decrypt and then unpack the contents
+            let mut tarball = encrypted.clone();
+            tarball.set_extension("tar");
+            crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
+            fs::remove_file(&encrypted)?;
+            verify_pack_digest(pack_digest, &tarball)?;
+            pack::extract_pack(&tarball, &workspace)?;
+            fs::remove_file(tarball)?;
+            // remember this pack as being downloaded
+            self.downloaded.insert(pack_digest.to_owned());
+        }
+        Ok(())
+    }
+}
+
+impl FileRestorer for FileRestorerImpl {
     fn load_dataset(&mut self, dataset_id: &str) -> Result<(), Error> {
         if let Some(id) = self.dataset.as_ref() {
             if id == dataset_id {
@@ -452,7 +560,7 @@ impl FileRestorer {
             .get_dataset(dataset_id)?
             .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", dataset_id)))?;
         self.dataset = Some(dataset_id.to_owned());
-        self.stores = Some(self.dbase.load_dataset_stores(&dataset)?);
+        self.stores = Some(Arc::from(self.dbase.load_dataset_stores(&dataset)?));
         fs::create_dir_all(&dataset.workspace)?;
         self.packpath = Some(tempfile::TempDir::new_in(dataset.workspace)?);
         self.basepath = Some(dataset.basepath);
@@ -513,43 +621,6 @@ impl FileRestorer {
         Ok(())
     }
 
-    fn fetch_pack(
-        &mut self,
-        pack_digest: &Checksum,
-        workspace: &Path,
-        passphrase: &str,
-    ) -> Result<(), Error> {
-        if !self.downloaded.contains(pack_digest) {
-            let stores = self.stores.as_ref().unwrap();
-            let saved_pack = self
-                .dbase
-                .get_pack(pack_digest)?
-                .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
-            // check the salt before downloading the pack, otherwise we waste
-            // time fetching it when we would not be able to decrypt it
-            let salt = saved_pack
-                .crypto_salt
-                .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
-            // retrieve the pack file
-            let mut encrypted = PathBuf::new();
-            encrypted.push(workspace);
-            encrypted.push(pack_digest.to_string());
-            debug!("restore: fetching pack {}", pack_digest);
-            stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
-            // decrypt and then unpack the contents
-            let mut tarball = encrypted.clone();
-            tarball.set_extension("tar");
-            crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
-            fs::remove_file(&encrypted)?;
-            verify_pack_digest(pack_digest, &tarball)?;
-            pack::extract_pack(&tarball, &workspace)?;
-            fs::remove_file(tarball)?;
-            // remember this pack as being downloaded
-            self.downloaded.insert(pack_digest.to_owned());
-        }
-        Ok(())
-    }
-
     fn restore_link(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error> {
         #[cfg(target_family = "unix")]
         use std::os::unix::ffi::OsStringExt;
@@ -581,7 +652,7 @@ impl FileRestorer {
     }
 }
 
-impl Drop for FileRestorer {
+impl Drop for FileRestorerImpl {
     fn drop(&mut self) {
         // quietly clean up temporary files
         if let Some(workspace) = self.packpath.take() {
@@ -622,10 +693,9 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::{Chunk, Dataset, File, Pack, PackLocation, Tree, TreeEntry};
-    use crate::domain::helpers::{self, pack};
+    use crate::domain::entities::{Dataset, Tree, TreeEntry};
     use crate::domain::managers;
-    use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
+    use crate::domain::repositories::MockRecordRepository;
     use std::io;
     use std::str::FromStr;
 
@@ -646,11 +716,16 @@ mod tests {
     #[actix_rt::test]
     async fn test_restorer_enqueue_then_fail() -> io::Result<()> {
         // arrange
-        let mut mock = MockRecordRepository::new();
-        mock.expect_get_dataset()
-            .returning(|_| Err(anyhow!("oh no!")));
+        let mock = MockRecordRepository::new();
         let repo = Arc::new(mock);
-        let sut = RestorerImpl::new();
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer
+                .expect_load_dataset()
+                .returning(|_| Err(anyhow!("oh no!")));
+            Box::new(restorer)
+        }
+        let sut = RestorerImpl::new(factory);
         // act
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
@@ -672,76 +747,12 @@ mod tests {
         Ok(())
     }
 
-    // Simplified pack builder that assumes all chunks will fit in a 64mb pack
-    // file. Returns the digest of the resulting file.
-    fn pack_chunks(chunks: &[Chunk], outfile: &Path) -> Result<Checksum, Error> {
-        let mut builder = pack::PackBuilder::new(67108864);
-        builder.initialize(outfile)?;
-        for chunk in chunks {
-            builder.add_chunk(chunk)?;
-        }
-        let _output = builder.finalize()?;
-        let digest = Checksum::sha256_from_file(outfile)?;
-        Ok(digest)
-    }
-
-    // A pack with one file containing one chunk.
-    struct PackChunkFile {
-        pack: Pack,
-        packpath: String,
-        file: File,
-    }
-
-    // create a pack containing one file with a single chunk
-    fn create_single_pack(
-        passphrase: &str,
-        filepath: &Path,
-        packpath: &Path,
-    ) -> Result<PackChunkFile, Error> {
-        let file_digest = Checksum::sha256_from_file(filepath)?;
-        let fs_file = fs::File::open(filepath)?;
-        let file_len = fs_file.metadata()?.len();
-        let mut chunk = Chunk::new(file_digest.clone(), 0, file_len as usize);
-        chunk = chunk.filepath(filepath);
-        let chunks = vec![chunk.clone()];
-        let mut pack_file = packpath.to_path_buf();
-        pack_file.push(filepath.file_stem().unwrap());
-        pack_file.set_extension("tar");
-        let pack_digest = pack_chunks(&chunks, &pack_file)?;
-        let mut encrypted = pack_file.clone();
-        encrypted.set_extension("nacl");
-        let salt = crypto::encrypt_file(passphrase, &pack_file, &encrypted)?;
-        std::fs::remove_file(pack_file)?;
-        let pack_file_path = encrypted.to_string_lossy().into_owned();
-        // create file record chose "chunk" digest is actually the pack digest
-        let file = File::new(
-            file_digest.clone(),
-            file_len,
-            vec![(0, pack_digest.clone())],
-        );
-        let object = pack_digest.to_string();
-        let location = PackLocation::new("store1", "bucket1", &object);
-        let mut pack = Pack::new(pack_digest, vec![location]);
-        pack.crypto_salt = Some(salt);
-        Ok(PackChunkFile {
-            pack,
-            packpath: pack_file_path,
-            file,
-        })
-    }
-
     #[actix_rt::test]
     async fn test_restorer_fail_then_succeed() -> io::Result<()> {
         // arrange
-        let tmpdir = tempfile::tempdir()?;
-        let dataset = Dataset::new(tmpdir.path());
+        let dataset = Dataset::new(Path::new("/home/base"));
         let dataset_id = dataset.id.clone();
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_dataset()
-            .returning(move |_| Ok(Some(dataset.clone())));
-        mock.expect_get_tree()
-            .withf(|digest| digest.to_string() == "sha1-deadbeef")
-            .returning(|_| Err(anyhow!("oh no")));
         let tree = Tree::new(
             vec![TreeEntry::new(
                 Path::new("../test/fixtures/lorem-ipsum.txt"),
@@ -755,35 +766,26 @@ mod tests {
             .withf(|digest| digest.to_string() == "sha1-cafebabe")
             .returning(move |_| Ok(Some(tree.clone())));
 
-        // create a realistic pack file but mock database records
         let passphrase = crypto::get_passphrase();
-        let packed1 = create_single_pack(
-            &passphrase,
-            Path::new("../test/fixtures/lorem-ipsum.txt"),
-            tmpdir.path(),
-        )
-        .unwrap();
-        let packed1_file = packed1.file.clone();
-        let packed1_pack = packed1.pack.clone();
-        mock.expect_load_dataset_stores().returning(move |_| {
-            let pack_file_path_clone = packed1.packpath.clone();
-            let mut mock_store = MockPackRepository::new();
-            mock_store
-                .expect_retrieve_pack()
-                .returning(move |_, outfile| {
-                    std::fs::rename(pack_file_path_clone.clone(), outfile).unwrap();
-                    Ok(())
-                });
-            Ok(Box::new(mock_store))
-        });
-        mock.expect_get_file()
-            .returning(move |_| Ok(Some(packed1_file.clone())));
-        mock.expect_get_pack()
-            .returning(move |_| Ok(Some(packed1_pack.clone())));
+
+        //
+        // Debugging the mocks can be tricky with the restorer running on a
+        // different thread and silently failing. Run the tests like so to get
+        // the output that would normally go to the log.
+        //
+        // RUST_LOG=debug cargo test -p server test_restorer_fail_then_succeed -- --nocapture
+        //
+        fn factory_fail(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer
+                .expect_load_dataset()
+                .returning(|_| Err(anyhow!("oh no!")));
+            Box::new(restorer)
+        }
 
         // act with failing request
         let repo = Arc::new(mock);
-        let sut = RestorerImpl::new();
+        let mut sut = RestorerImpl::new(factory_fail);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let result = sut.enqueue(managers::restore::Request::new(
@@ -803,10 +805,15 @@ mod tests {
         assert!(request.error_msg.as_ref().unwrap().contains("oh no"));
 
         // act with successful request
+        fn factory_pass(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer.expect_load_dataset().returning(|_| Ok(()));
+            restorer.expect_fetch_file().returning(|_, _, _| Ok(()));
+            Box::new(restorer)
+        }
         sut.reset_completed();
-        let mut filepath = tmpdir.path().to_path_buf();
-        filepath.push("lorem-ipsum.txt");
-        assert!(!filepath.exists());
+        let result = sut.factory(factory_pass);
+        assert!(result.is_ok());
         let result = sut.enqueue(managers::restore::Request::new(
             Checksum::SHA1("cafebabe".into()),
             String::from("lorem-ipsum.txt"),
@@ -821,169 +828,17 @@ mod tests {
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
         assert!(request.error_msg.is_none());
-        let digest_expected = Checksum::SHA256(String::from(
-            "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
-        ));
-        let digest_actual = Checksum::sha256_from_file(&filepath)?;
-        assert_eq!(digest_expected, digest_actual);
         Ok(())
-    }
-
-    // A pack with one file containing multiple chunks.
-    struct PackChunksFile {
-        pack: Pack,
-        packpath: String,
-        chunks: Vec<Chunk>,
-        file: File,
-    }
-
-    // create a pack containing one file with multiple chunks of 32kb
-    fn create_multi_pack(
-        passphrase: &str,
-        filepath: &Path,
-        packpath: &Path,
-    ) -> Result<PackChunksFile, Error> {
-        let file_digest = Checksum::sha256_from_file(filepath).unwrap();
-        let mut chunks: Vec<Chunk> = helpers::find_file_chunks(filepath, 32768)?;
-        let mut pack_file = packpath.to_path_buf();
-        pack_file.push(filepath.file_stem().unwrap());
-        pack_file.set_extension("tar");
-        let pack_digest = pack_chunks(&chunks, &pack_file).unwrap();
-        for chunk in chunks.iter_mut() {
-            chunk.packfile = Some(pack_digest.clone());
-        }
-        let mut encrypted = pack_file.clone();
-        encrypted.set_extension("nacl");
-        let salt = crypto::encrypt_file(passphrase, &pack_file, &encrypted).unwrap();
-        std::fs::remove_file(pack_file).unwrap();
-        let pack_file_path = encrypted.to_string_lossy().into_owned();
-        // construct the list of chunks for the file record
-        let mut file_chunks: Vec<(u64, Checksum)> = Vec::new();
-        let mut chunk_offset: u64 = 0;
-        for chunk in chunks.iter() {
-            file_chunks.push((chunk_offset, chunk.digest.clone()));
-            chunk_offset += chunk.length as u64;
-        }
-        let fs_file = fs::File::open(filepath)?;
-        let file_len = fs_file.metadata()?.len();
-        let file = File::new(file_digest.clone(), file_len, file_chunks);
-        let object = pack_digest.to_string();
-        let location = PackLocation::new("store1", "bucket1", &object);
-        let mut pack = Pack::new(pack_digest, vec![location]);
-        pack.crypto_salt = Some(salt);
-        Ok(PackChunksFile {
-            pack,
-            packpath: pack_file_path,
-            chunks,
-            file,
-        })
     }
 
     #[actix_rt::test]
     async fn test_restorer_restore_tree() -> io::Result<()> {
         // arrange
-        let tmpdir = tempfile::tempdir()?;
-        let dataset = Dataset::new(tmpdir.path());
+        let dataset = Dataset::new(Path::new("/home/town"));
         let dataset_id = dataset.id.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
-
-        // create realistic pack files but mock database records
-        let passphrase = crypto::get_passphrase();
-        let packed1 = create_single_pack(
-            &passphrase,
-            Path::new("../test/fixtures/lorem-ipsum.txt"),
-            tmpdir.path(),
-        )
-        .unwrap();
-        let packed1_file = packed1.file.clone();
-        let packed1_pack = packed1.pack.clone();
-        let file1_digest = packed1_file.digest.clone();
-        let pack1_digest = packed1_pack.digest.clone();
-        let pack1_digest_copy = packed1_pack.digest.clone();
-        let packed2 = create_single_pack(
-            &passphrase,
-            Path::new("../test/fixtures/washington-journal.txt"),
-            tmpdir.path(),
-        )
-        .unwrap();
-        let packed2_file = packed2.file.clone();
-        let packed2_pack = packed2.pack.clone();
-        let file2_digest = packed2_file.digest.clone();
-        let pack2_digest = packed2_pack.digest.clone();
-        let pack2_digest_copy = packed2_pack.digest.clone();
-        let packed3 = create_multi_pack(
-            &passphrase,
-            Path::new("../test/fixtures/SekienAkashita.jpg"),
-            tmpdir.path(),
-        )
-        .unwrap();
-        let packed3_file = packed3.file.clone();
-        // The image file should be broken into 3 chunks, which the rest of this
-        // test function assumes to be the case, so assert for certainty.
-        assert_eq!(packed3.chunks.len(), 3);
-        let packed3_chunks = packed3.chunks.clone();
-        let packed3_pack = packed3.pack.clone();
-        let file3_digest = packed3_file.digest.clone();
-        let chunk3_1_digest = packed3_chunks[0].digest.clone();
-        let chunk3_2_digest = packed3_chunks[1].digest.clone();
-        let chunk3_3_digest = packed3_chunks[2].digest.clone();
-        let packed3_chunk_1 = packed3_chunks[0].clone();
-        let packed3_chunk_2 = packed3_chunks[1].clone();
-        let packed3_chunk_3 = packed3_chunks[2].clone();
-        let pack3_digest = packed3_pack.digest.clone();
-        let pack3_digest_copy = packed3_pack.digest.clone();
-        mock.expect_load_dataset_stores().returning(move |_| {
-            let pack1_path = packed1.packpath.clone();
-            let packed1_digest = pack1_digest.clone().to_string();
-            let pack2_path = packed2.packpath.clone();
-            let packed2_digest = pack2_digest.clone().to_string();
-            let pack3_path = packed3.packpath.clone();
-            let packed3_digest = pack3_digest.clone().to_string();
-            let mut mock_store = MockPackRepository::new();
-            mock_store
-                .expect_retrieve_pack()
-                .returning(move |locations, outfile| {
-                    if locations[0].object == packed1_digest {
-                        std::fs::rename(pack1_path.clone(), outfile).unwrap();
-                    } else if locations[0].object == packed2_digest {
-                        std::fs::rename(pack2_path.clone(), outfile).unwrap();
-                    } else if locations[0].object == packed3_digest {
-                        std::fs::rename(pack3_path.clone(), outfile).unwrap();
-                    }
-                    Ok(())
-                });
-            Ok(Box::new(mock_store))
-        });
-        mock.expect_get_file()
-            .with(eq(file1_digest))
-            .returning(move |_| Ok(Some(packed1_file.clone())));
-        mock.expect_get_file()
-            .with(eq(file2_digest))
-            .returning(move |_| Ok(Some(packed2_file.clone())));
-        mock.expect_get_file()
-            .with(eq(file3_digest))
-            .returning(move |_| Ok(Some(packed3_file.clone())));
-        mock.expect_get_chunk()
-            .with(eq(chunk3_1_digest))
-            .returning(move |_| Ok(Some(packed3_chunk_1.clone())));
-        mock.expect_get_chunk()
-            .with(eq(chunk3_2_digest))
-            .returning(move |_| Ok(Some(packed3_chunk_2.clone())));
-        mock.expect_get_chunk()
-            .with(eq(chunk3_3_digest))
-            .returning(move |_| Ok(Some(packed3_chunk_3.clone())));
-        mock.expect_get_pack()
-            .with(eq(pack1_digest_copy))
-            .returning(move |_| Ok(Some(packed1_pack.clone())));
-        mock.expect_get_pack()
-            .with(eq(pack2_digest_copy))
-            .returning(move |_| Ok(Some(packed2_pack.clone())));
-        mock.expect_get_pack()
-            .with(eq(pack3_digest_copy))
-            .returning(move |_| Ok(Some(packed3_pack.clone())));
-
         let subtree = Tree::new(
             vec![
                 TreeEntry::new(
@@ -1027,24 +882,30 @@ mod tests {
             .withf(move |digest| digest.to_string() == roottree_str)
             .returning(move |_| Ok(Some(roottree.clone())));
 
+        //
+        // Debugging the mocks can be tricky with the restorer running on a
+        // different thread and silently failing. Run the tests like so to get
+        // the output that would normally go to the log.
+        //
+        // RUST_LOG=debug cargo test -p server test_restorer_restore_tree -- --nocapture
+        //
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer.expect_load_dataset().returning(|_| Ok(()));
+            restorer.expect_fetch_file().returning(|_, _, _| Ok(()));
+            Box::new(restorer)
+        }
+
         // act
         let repo = Arc::new(mock);
-        let sut = RestorerImpl::new();
+        let sut = RestorerImpl::new(factory);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let mut filepath1 = tmpdir.path().to_path_buf();
-        filepath1.push("lorem-ipsum.txt");
-        assert!(!filepath1.exists());
-        let mut filepath2 = tmpdir.path().to_path_buf();
-        filepath2.push("washington-journal.txt");
-        assert!(!filepath2.exists());
-        let mut filepath3 = tmpdir.path().to_path_buf();
-        filepath3.push("SekienAkashita.jpg");
-        assert!(!filepath3.exists());
+        let passphrase = crypto::get_passphrase();
         let result = sut.enqueue(managers::restore::Request::new(
             roottree_sha1,
             String::from("fixtures"),
-            tmpdir.path().to_path_buf(),
+            PathBuf::from("/home/town"),
             dataset_id.clone(),
             passphrase.clone(),
         ));
@@ -1056,24 +917,6 @@ mod tests {
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
         assert!(request.error_msg.is_none());
-        assert!(filepath1.exists());
-        let digest_expected = Checksum::SHA256(String::from(
-            "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
-        ));
-        let digest_actual = Checksum::sha256_from_file(&filepath1)?;
-        assert_eq!(digest_expected, digest_actual);
-        assert!(filepath2.exists());
-        let digest_expected = Checksum::SHA256(String::from(
-            "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
-        ));
-        let digest_actual = Checksum::sha256_from_file(&filepath2)?;
-        assert_eq!(digest_expected, digest_actual);
-        assert!(filepath3.exists());
-        let digest_expected = Checksum::SHA256(String::from(
-            "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed",
-        ));
-        let digest_actual = Checksum::sha256_from_file(&filepath3)?;
-        assert_eq!(digest_expected, digest_actual);
         Ok(())
     }
 }
