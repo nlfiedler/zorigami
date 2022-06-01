@@ -226,6 +226,7 @@ impl<'a> BackupDriver<'a> {
                 .record_completed_pack(self.dbase, &pack_digest, locations, salt)?;
             self.state
                 .backup_event(BackupAction::UploadPack(self.dataset.id.clone()));
+            fs::remove_file(outfile)?;
         }
         let count = self
             .record

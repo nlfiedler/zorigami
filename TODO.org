@@ -190,6 +190,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** TODO Support day-of-month in schedule
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
+** Point-in-time snapshots
+*** Backup procedure is file-by-file, which may yield broken snapshots
+**** e.g. database files can change during the backup, leading to invalid snapshots
+*** If available, use the OS functionality for FS snapshots
+**** ZFS has snapshot support
 ** More Functionality
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
