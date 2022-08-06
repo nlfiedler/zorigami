@@ -1,4 +1,6 @@
 * Tasks
+** TODO Update flutter dependencies
+** TODO Update to flutter 3
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -712,7 +714,7 @@ ps -ef | grep -i zorigami
 #+end_src
 *** base path: =/Users/nfiedler=
 *** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
-*** run daily at 4pm
+*** run daily at 6pm
 ** kohaku
 *** deploy using docker and ansible
 *** store credentials file as =/zeniba/shared/zorigami.json=

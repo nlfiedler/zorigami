@@ -611,8 +611,9 @@ mod tests {
         let source = GoogleStore::new("google1", &properties)?;
 
         // attempt to store an object in a bucket that exists but does not
-        // belong to this project
-        let bucket = "afd73b8b997a5452b94a6b7c564041b1".to_owned();
+        // belong to this project (yes, need to change this value whenever the
+        // bucket suddenly becomes available again)
+        let bucket = "df72e3b3-ce33-4c83-8f59-2e020296c8ab".to_owned();
         let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let location = source.store_database_sync(packfile, &bucket, &object)?;

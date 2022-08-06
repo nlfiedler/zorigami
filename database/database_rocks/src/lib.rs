@@ -146,7 +146,8 @@ impl database_core::Database for Database {
         // this only gets us started, we then have to check for the end of the range
         let iter = self.db.prefix_iterator(pre_bytes);
         let mut count = 0;
-        for (key, _value) in iter {
+        for item in iter {
+            let (key, _value) = item?;
             let pre = &key[..pre_bytes.len()];
             if pre != pre_bytes {
                 break;
@@ -182,7 +183,8 @@ impl database_core::Database for Database {
         // this only gets us started, we then have to check for the end of the range
         let iter = self.db.prefix_iterator(pre_bytes);
         let mut results: HashMap<String, Box<[u8]>> = HashMap::new();
-        for (key, value) in iter {
+        for item in iter {
+            let (key, value) = item?;
             let pre = &key[..pre_bytes.len()];
             if pre != pre_bytes {
                 break;

@@ -17,7 +17,7 @@ actix-rt = "2.6.0"
 actix-web = "4.0.1"
 anyhow = "1.0.55"
 base64 = "0.13"
-blob-uuid = "0.4.0"
+blob-uuid = "0.5.0"
 chrono = { version = "0.4", features = ["serde"] }
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
@@ -47,7 +47,7 @@ store_sftp = { path = "../stores/store_sftp" }
 tar = "0.4.38"
 tempfile = "3.2.0"
 thiserror = "1.0.30"
-uuid = { version = "0.8", features = ["serde", "v4", "v5"] }
+uuid = { version = "1.1.2", features = ["serde", "v4", "v5"] }
 whoami = "1.0"
 xid = "1.0.0"
 
@@ -56,4 +56,4 @@ xattr = "0.2.2"
 
 [dev-dependencies]
 mockall = "0.11.0"
-rocksdb = "0.18.0"
+rocksdb = "0.19.0"

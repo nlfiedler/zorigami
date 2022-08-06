@@ -461,7 +461,7 @@ impl PackRepository for PackRepositoryImpl {
 ///
 pub fn computer_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
-        Ok(uuid) => uuid.to_simple().to_string(),
+        Ok(uuid) => uuid.simple().to_string(),
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
             generate_ulid_string().to_lowercase()
@@ -479,7 +479,7 @@ pub fn computer_bucket_name(unique_id: &str) -> String {
 pub fn generate_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => {
-            let shorter = uuid.to_simple().to_string();
+            let shorter = uuid.simple().to_string();
             let mut ulid = generate_ulid_string();
             ulid.push_str(&shorter);
             ulid.to_lowercase()
