@@ -1,6 +1,4 @@
 * Tasks
-** TODO Update flutter dependencies
-** TODO Update to flutter 3
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this

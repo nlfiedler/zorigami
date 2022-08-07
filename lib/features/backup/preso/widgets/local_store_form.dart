@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -37,7 +37,7 @@ class LocalStoreForm extends PackStoreForm {
       children: <Widget>[
         FormBuilderTextField(
           name: 'key',
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
           ),
@@ -49,7 +49,7 @@ class LocalStoreForm extends PackStoreForm {
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'basepath',
@@ -57,7 +57,7 @@ class LocalStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder_open),
             labelText: 'Base Path',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
       ],
     );

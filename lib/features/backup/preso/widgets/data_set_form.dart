@@ -98,7 +98,9 @@ class DataSetForm extends StatefulWidget {
   }
 
   @override
-  _DataSetFormState createState() {
+  // ignore: no_logic_in_create_state
+  State<DataSetForm> createState() {
+    // moving this into _DataSetFormState() results in a null error
     final frequency = frequencyFromDataSet(dataset);
     final enableTimePickers = allowTimeRange(frequency);
     return _DataSetFormState(timePickersEnabled: enableTimePickers);
@@ -138,7 +140,7 @@ class _DataSetFormState extends State<DataSetForm> {
             icon: Icon(Icons.folder_open),
             labelText: 'Base Path',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'excludes',
@@ -154,9 +156,9 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Pack Size (MB)',
           ),
           validator: FormBuilderValidators.compose([
-            FormBuilderValidators.numeric(context),
-            FormBuilderValidators.min(context, 16),
-            FormBuilderValidators.max(context, 256),
+            FormBuilderValidators.numeric(),
+            FormBuilderValidators.min(16),
+            FormBuilderValidators.max(256),
           ]),
         ),
         FormBuilderCheckboxGroup<String>(
@@ -169,7 +171,7 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Pack Store(s)',
           ),
           // require at least one pack store is selected
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderRadioGroup(
           name: 'frequency',

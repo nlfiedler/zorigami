@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -49,7 +49,7 @@ class SftpStoreForm extends PackStoreForm {
       children: <Widget>[
         FormBuilderTextField(
           name: 'key',
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
           ),
@@ -61,7 +61,7 @@ class SftpStoreForm extends PackStoreForm {
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'remote_addr',
@@ -69,7 +69,7 @@ class SftpStoreForm extends PackStoreForm {
             icon: Icon(Icons.cloud),
             labelText: 'Address',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'username',
@@ -77,7 +77,7 @@ class SftpStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder_open),
             labelText: 'Username',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'password',

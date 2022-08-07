@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -49,7 +49,7 @@ class GoogleStoreForm extends PackStoreForm {
       children: <Widget>[
         FormBuilderTextField(
           name: 'key',
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
           ),
@@ -61,7 +61,7 @@ class GoogleStoreForm extends PackStoreForm {
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'credentials',
@@ -69,7 +69,7 @@ class GoogleStoreForm extends PackStoreForm {
             icon: Icon(Icons.attachment),
             labelText: 'Credentials File',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'project',
@@ -77,7 +77,7 @@ class GoogleStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder),
             labelText: 'Project ID',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'region',
@@ -92,12 +92,12 @@ class GoogleStoreForm extends PackStoreForm {
             icon: Icon(Icons.storage),
             labelText: 'Storage Class',
           ),
-          hint: Text('Select storage class'),
+          hint: const Text('Select storage class'),
           items: ['STANDARD', 'NEARLINE', 'COLDLINE', 'ARCHIVE']
               .map(
                 (sclass) => DropdownMenuItem(
                   value: sclass,
-                  child: Text('$sclass'),
+                  child: Text(sclass),
                 ),
               )
               .toList(),

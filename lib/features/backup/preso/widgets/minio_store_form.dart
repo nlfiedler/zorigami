@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -45,7 +45,7 @@ class MinioStoreForm extends PackStoreForm {
       children: <Widget>[
         FormBuilderTextField(
           name: 'key',
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             icon: Icon(Icons.vpn_key),
             labelText: 'Store Key',
           ),
@@ -57,7 +57,7 @@ class MinioStoreForm extends PackStoreForm {
             icon: Icon(Icons.label),
             labelText: 'Label',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'region',
@@ -65,7 +65,7 @@ class MinioStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder_open),
             labelText: 'Region',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'endpoint',
@@ -73,7 +73,7 @@ class MinioStoreForm extends PackStoreForm {
             icon: Icon(Icons.cloud),
             labelText: 'Endpoint',
           ),
-          validator: FormBuilderValidators.url(context),
+          validator: FormBuilderValidators.url(),
         ),
         FormBuilderTextField(
           name: 'access_key',
@@ -81,7 +81,7 @@ class MinioStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder_open),
             labelText: 'Access Key',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
           name: 'secret_key',
@@ -91,7 +91,7 @@ class MinioStoreForm extends PackStoreForm {
             icon: Icon(Icons.folder_open),
             labelText: 'Secret Key',
           ),
-          validator: FormBuilderValidators.required(context),
+          validator: FormBuilderValidators.required(),
         ),
       ],
     );
