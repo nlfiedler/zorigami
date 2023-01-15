@@ -134,7 +134,7 @@ On the build host:
 ```shell
 docker compose build --pull --build-arg BASE_URL=http://192.168.1.1:8080
 docker image rm 192.168.1.1:5000/zorigami
-docker image tag zorigami_app 192.168.1.1:5000/zorigami
+docker image tag zorigami-app 192.168.1.1:5000/zorigami
 docker push 192.168.1.1:5000/zorigami
 ```
 
