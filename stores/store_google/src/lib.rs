@@ -4,10 +4,13 @@
 extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
 use anyhow::{anyhow, Error};
+use base64::{engine::general_purpose, Engine as _};
 use std::collections::HashMap;
 use std::default::Default;
 use std::fmt;
 use std::path::Path;
+use storage1::hyper::client::HttpConnector;
+use storage1::hyper_rustls::HttpsConnector;
 use store_core::Coordinates;
 use uuid::Uuid;
 
@@ -53,7 +56,7 @@ impl GoogleStore {
         })
     }
 
-    async fn connect(&self) -> Result<storage1::Storage, Error> {
+    async fn connect(&self) -> Result<storage1::Storage<HttpsConnector<HttpConnector>>, Error> {
         let conn = storage1::hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_or_http()
@@ -69,7 +72,9 @@ impl GoogleStore {
         Ok(storage1::Storage::new(https_client, authenticator))
     }
 
-    async fn connect_fire(&self) -> Result<firestore1::Firestore, Error> {
+    async fn connect_fire(
+        &self,
+    ) -> Result<firestore1::Firestore<HttpsConnector<HttpConnector>>, Error> {
         let conn = firestore1::hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_or_http()
@@ -120,7 +125,7 @@ impl GoogleStore {
             Ok((_response, objdata)) => {
                 // ensure uploaded file matches local contents
                 if let Some(hash) = objdata.md5_hash.as_ref() {
-                    let returned = base64::decode(hash)?;
+                    let returned = general_purpose::STANDARD.decode(hash)?;
                     let expected = md5sum_file(packfile)?;
                     if !expected.eq(&returned) {
                         return Err(anyhow!("returned md5_hash does not match MD5 of pack file"));
@@ -433,7 +438,7 @@ impl GoogleStore {
 
 /// Ensure the named bucket exists.
 async fn create_bucket(
-    hub: &storage1::Storage,
+    hub: &storage1::Storage<HttpsConnector<HttpConnector>>,
     project_id: &str,
     name: &str,
     region: &Option<String>,

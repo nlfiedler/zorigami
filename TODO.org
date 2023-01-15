@@ -699,6 +699,7 @@ perform a pack pruning, the most recent database snapshot would be removed.
 **** Rust: fine-grained namespaces and visibility control
 * Deployments
 ** mac mini
+*** how to build: see =README.md= in ~Local Test Build~ section
 *** how to update
 **** installed in =~/Applications/Zorigami=
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=

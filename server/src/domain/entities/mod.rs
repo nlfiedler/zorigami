@@ -2,6 +2,7 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
+use base64::{engine::general_purpose, Engine as _};
 use chrono::prelude::*;
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
@@ -346,13 +347,13 @@ impl fmt::Display for TreeReference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TreeReference::LINK(value) => {
-                let encoded = base64::encode(value);
+                let encoded = general_purpose::STANDARD.encode(value);
                 write!(f, "link-{}", encoded)
             }
             TreeReference::TREE(digest) => write!(f, "tree-{}", digest),
             TreeReference::FILE(digest) => write!(f, "file-{}", digest),
             TreeReference::SMALL(contents) => {
-                let encoded = base64::encode(contents);
+                let encoded = general_purpose::STANDARD.encode(contents);
                 write!(f, "small-{}", encoded)
             }
         }
@@ -364,7 +365,7 @@ impl FromStr for TreeReference {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.starts_with("link-") {
-            let decoded = base64::decode(&s[5..])?;
+            let decoded = general_purpose::STANDARD.decode(&s[5..])?;
             Ok(TreeReference::LINK(decoded))
         } else if s.starts_with("tree-") {
             let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
@@ -373,7 +374,7 @@ impl FromStr for TreeReference {
             let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
             Ok(TreeReference::FILE(digest.expect("invalid file SHA256")))
         } else if s.starts_with("small-") {
-            let decoded = base64::decode(&s[6..])?;
+            let decoded = general_purpose::STANDARD.decode(&s[6..])?;
             Ok(TreeReference::SMALL(decoded))
         } else {
             Err(anyhow!(format!("not a recognized reference: {}", s)))
@@ -1177,8 +1178,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
+            ctime: Utc.timestamp_opt(0, 0).unwrap(),
+            mtime: Utc.timestamp_opt(0, 0).unwrap(),
             reference: tref1,
             xattrs: HashMap::new(),
         };
@@ -1190,8 +1191,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
+            ctime: Utc.timestamp_opt(0, 0).unwrap(),
+            mtime: Utc.timestamp_opt(0, 0).unwrap(),
             reference: tref2,
             xattrs: HashMap::new(),
         };
@@ -1203,8 +1204,8 @@ mod tests {
             gid: Some(100),
             user: Some(String::from("user")),
             group: Some(String::from("group")),
-            ctime: Utc.timestamp(0, 0),
-            mtime: Utc.timestamp(0, 0),
+            ctime: Utc.timestamp_opt(0, 0).unwrap(),
+            mtime: Utc.timestamp_opt(0, 0).unwrap(),
             reference: tref3,
             xattrs: HashMap::new(),
         };

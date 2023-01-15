@@ -66,8 +66,10 @@ pub struct TimeRange {
 impl TimeRange {
     /// Construct a new range using the given hour/minute values.
     pub fn new(start_hour: u32, start_min: u32, stop_hour: u32, stop_min: u32) -> Self {
-        let start_time = NaiveTime::from_hms(start_hour, start_min, 0);
-        let stop_time = NaiveTime::from_hms(stop_hour, stop_min, 0);
+        let start_time = NaiveTime::from_hms_opt(start_hour, start_min, 0)
+            .unwrap_or_else(|| NaiveTime::default());
+        let stop_time =
+            NaiveTime::from_hms_opt(stop_hour, stop_min, 0).unwrap_or_else(|| NaiveTime::default());
         Self {
             start: start_time.num_seconds_from_midnight(),
             stop: stop_time.num_seconds_from_midnight(),
@@ -265,7 +267,9 @@ mod tests {
         ];
         for (idx, values) in test_data.iter().enumerate() {
             let range = TimeRange::new(values.0, values.1, values.2, values.3);
-            let then = Utc.ymd(2003, 8, 30).and_hms(values.4, values.5, 0);
+            let then = Utc
+                .with_ymd_and_hms(2003, 8, 30, values.4, values.5, 0)
+                .unwrap();
             assert_eq!(range.within(then), values.6, "index: {}", idx);
         }
     }
@@ -295,17 +299,17 @@ mod tests {
         // overdue but not within the given range
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Daily(Some(range));
-        let then = Utc.ymd(2018, 10, 14).and_hms(9, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 10, 14, 9, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(!sched.within_range(then));
 
         // overdue and within the given range
-        let then = Utc.ymd(2018, 4, 26).and_hms(14, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 4, 26, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(sched.within_range(then));
 
         // overdue but not within the given range
-        let then = Utc.ymd(2018, 4, 26).and_hms(20, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 4, 26, 20, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(!sched.within_range(then));
     }
@@ -327,13 +331,13 @@ mod tests {
     fn test_weekly() {
         // overdue with no day of week
         let sched = Schedule::Weekly(None);
-        let then = Utc.ymd(2018, 5, 8).and_hms(9, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 8, 9, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(sched.within_range(then));
 
         // right day of week, no time range
         let sched = Schedule::Weekly(Some((DayOfWeek::Tue, None)));
-        let then = Utc.ymd(2018, 5, 8).and_hms(14, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 8, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(sched.within_range(then));
 
@@ -374,7 +378,7 @@ mod tests {
     fn test_monthly_day() {
         // monthly with no day or time range
         let sched = Schedule::Monthly(None);
-        let then = Utc.ymd(2018, 5, 8).and_hms(14, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 8, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
         assert!(sched.within_range(then));
 
@@ -409,15 +413,15 @@ mod tests {
     #[test]
     fn test_monthly_weeks() {
         // 2018-05-03 is the first Thursday of the month
-        let date1 = Utc.ymd(2018, 5, 3).and_hms(14, 10, 11);
+        let date1 = Utc.with_ymd_and_hms(2018, 5, 3, 14, 10, 11).unwrap();
         // 2018-05-08 is the second Tuesday of the month
-        let date2 = Utc.ymd(2018, 5, 8).and_hms(14, 10, 11);
+        let date2 = Utc.with_ymd_and_hms(2018, 5, 8, 14, 10, 11).unwrap();
         // 2018-05-20 is the third Sunday of the month
-        let date3 = Utc.ymd(2018, 5, 20).and_hms(14, 10, 11);
+        let date3 = Utc.with_ymd_and_hms(2018, 5, 20, 14, 10, 11).unwrap();
         // 2018-05-26 is the fourth Saturday of the month
-        let date4 = Utc.ymd(2018, 5, 26).and_hms(14, 10, 11);
+        let date4 = Utc.with_ymd_and_hms(2018, 5, 26, 14, 10, 11).unwrap();
         // 2018-05-30 is the fifth Wednesday of the month
-        let date5 = Utc.ymd(2018, 5, 30).and_hms(14, 10, 11);
+        let date5 = Utc.with_ymd_and_hms(2018, 5, 30, 14, 10, 11).unwrap();
         let test_data = vec![
             // first week
             (date1, DayOfMonth::First(DayOfWeek::Thu), true),
@@ -460,7 +464,7 @@ mod tests {
     #[test]
     fn test_monthly_weeks_range() {
         // 2018-05-31 is the fifth Thursday of the month
-        let then = Utc.ymd(2018, 5, 31).and_hms(14, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 31, 14, 10, 11).unwrap();
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Monthly(Some((DayOfMonth::Fifth(DayOfWeek::Thu), Some(range))));
         assert!(sched.past_due(then));
@@ -489,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_stop_time() {
-        let then = Utc.ymd(2018, 5, 31).and_hms(14, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 31, 14, 10, 11).unwrap();
 
         // schedules without a range have no stop time
         let sched = Schedule::Hourly;
@@ -529,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_stop_time_reverse() {
-        let then = Utc.ymd(2018, 5, 31).and_hms(21, 10, 11);
+        let then = Utc.with_ymd_and_hms(2018, 5, 31, 21, 10, 11).unwrap();
         let range = TimeRange::new(20, 0, 4, 0);
         let sched = Schedule::Daily(Some(range));
         let stop_time = sched.stop_time(then).unwrap();

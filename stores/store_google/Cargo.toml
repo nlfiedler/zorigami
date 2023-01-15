@@ -7,9 +7,9 @@ license = "UNLICENSED"
 
 [dependencies]
 anyhow = "1.0.55"
-base64 = "0.13"
-google-firestore1 = "3.1.0"
-google-storage1 = "3.1.0"
+base64 = "0.21.0"
+google-firestore1 = "4.0.1"
+google-storage1 = "4.0.1"
 md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }
