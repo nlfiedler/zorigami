@@ -701,19 +701,19 @@ perform a pack pruning, the most recent database snapshot would be removed.
 ** mac mini
 *** how to build: see =README.md= in ~Local Test Build~ section
 *** how to update
-**** installed in =~/Applications/Zorigami=
+1) =ps -ef | grep -i zorigami=
+2) stop: =launchctl kill SIGTERM gui/501/zorigami=
+3) =mv target/release/server ~/Applications/Zorigami=
+4) =rsync -vcr build/web ~/Applications/Zorigami/=
+5) enable: =launchctl enable gui/501/zorigami=
+6) start: =launchctl kickstart -p gui/501/zorigami=
+7) =ps -ef | grep -i zorigami=
+*** setup
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
-**** stop server: =launchctl kill SIGTERM gui/501/zorigami=
-**** enable, start, and verify server is running
-#+begin_src shell
-launchctl enable gui/501/zorigami
-launchctl kickstart -p gui/501/zorigami
-ps -ef | grep -i zorigami
-#+end_src
-*** base path: =/Users/nfiedler=
-*** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
-*** run daily at 6pm
+**** base path: =/Users/nfiedler=
+**** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
+**** run daily at 6pm
 ** kohaku
 *** deploy using docker and ansible
 *** store credentials file as =/zeniba/shared/zorigami.json=
