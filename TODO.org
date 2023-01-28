@@ -1,4 +1,144 @@
 * Tasks
+** Fix bucket reuse
+*** =PackRepositoryImpl= is getting recreated so counts are lost
+*** TODO change =name_count= to be a global instead of instance member
+** Statistics
+*** TODO change the file size cut points to be powers of two
+**** 1/8/16/32/64/128 kb and so on
+** Tree-scanning improvements
+*** TODO spawn multiple threads to checksum files concurrently
+** Chunking
+*** TODO maybe calculate chunk size based on file size distribution
+**** already collecting the data during the snapshot phase
+**** if there are many large files, then chunk sizes should be larger
+**** chunk sizes less than 1kb would be too much overhead to track
+**** chunk size minimum of 32kb for typical workloads, 64kb would be safer
+**** for backups, 1mb to 4mb chunk sizes is probably reasonable
+**** should store the computed chunk size in the database
+*** Main server stats as of 2023-01-14
+**** compressed database snapshot: 41,109,539
+**** Record counts
+| entity    |  count |
+|-----------+--------|
+| snapshots |    272 |
+| files     | 134950 |
+| trees     |  65312 |
+| chunks    |  56813 |
+| packs     |   4107 |
+| xattrs    |  18035 |
+**** File size distribution
+| Less than Size | Count |
+|----------------+-------|
+|             80 |  1418 |
+|           1024 | 14997 |
+|          10240 | 34084 |
+|         102400 | 42247 |
+|        1048576 | 23365 |
+|       10485760 | 31305 |
+|      104857600 |  1209 |
+|       infinity |   585 |
+**** File sizes by powers of two
+***** majority of files are less than 4mb
+#+begin_src shell
+$ find . -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}END{for (i in size) printf("%11d %5d\n", 2^i, size[i])}' | sort -n
+          0   121
+          1     2
+          8    11
+         16    74
+         32   963
+         64  1492
+        128  2956
+        256  2184
+        512  8730
+       1024 10525
+       2048 21755
+       4096  1296
+       8192  3071
+      16384  7231
+      32768 25297
+      65536  8580
+     131072  7497
+     262144  7061
+     524288  7401
+    1048576 18137
+    2097152 12139
+    4194304   949
+    8388608   242
+   16777216   328
+   33554432   443
+   67108864   402
+  134217728   225
+  268435456   166
+  536870912    55
+ 1073741824     7
+ 2147483648     3
+ 4294967296     2
+34359738368     1
+#+end_src
+*** Mac mini stats as of 2023-01-14
+**** compressed database snapshot: 791,955,794
+**** Record counts
+| entity    |  count |
+|-----------+--------|
+| snapshots |    279 |
+| files     | 740122 |
+| trees     | 126189 |
+| chunks    |   6687 |
+| packs     |    470 |
+| xattrs    |   4842 |
+**** File size distribution
+| Less than size |  Count |
+|----------------+--------|
+|             80 |  55321 |
+|           1024 | 160793 |
+|          10240 | 350121 |
+|         102400 |  78929 |
+|        1048576 |   7907 |
+|       10485760 |    848 |
+|      104857600 |    201 |
+|       infinity |      9 |
+**** File sizes by powers of two
+***** 654,129 saved files versus 607,152 counted files
+***** half of all files (305,012) are between 1kb and 4kb
+***** nearly all files (559,676) are 8b or less
+#+begin_src shell
+$ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -o -name node_modules -prune -o -name target -prune -o -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}END{for (i in size) printf("%10d %6d\n", 2^i, size[i])}' | sort -n
+         0   1164
+         1     92
+         2   2156
+         4    163
+         8    421
+        16  44117
+        32   4415
+        64   7535
+       128  12256
+       256  53875
+       512  74758
+      1024 100676
+      2048  93775
+      4096 110561
+      8192  53712
+     16384  22738
+     32768  12834
+     65536   6279
+    131072   3149
+    262144   1010
+    524288    512
+   1048576    373
+   2097152    169
+   4194304    152
+   8388608    165
+  16777216     39
+  33554432     39
+  67108864      8
+ 134217728      7
+ 268435456      2
+#+end_src
+** Consider if HMAC would be better for pack files
+*** combines verification of data integrity and authenticity
+*** consider the computational cost
+*** asuran backend is ~where blobs are addressed by an HMAC of their plaintext~
+*** c.f. https://en.wikipedia.org/wiki/HMAC
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -483,13 +623,17 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 ***** 10x the price of Google Cloud or Amazon Glacier
 ***** Command-line interface
 *** Open Source
+**** Asuran
+***** https://gitlab.com/asuran-rs/asuran/
+***** a library and cli for making backups
+***** stores all chunks in content-addressable stores
 **** Attic
 ***** https://attic-backup.org
 ***** Development stopped in 2015
 ***** Only supports SSH remote host
 ***** Command-line interface
 **** Borg
-***** https://borgbackup.readthedocs.io/en/stable/
+***** https://borgbackup.readthedocs.io/
 ***** Fork of Attic
 ***** Only supports SSH remote host
 ***** Command-line interface
@@ -546,11 +690,12 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** main server
 **** better pack file generation
 ***** average pack size ~before~ change: 68,647,434
-***** average pack size ~after~ change:
+***** average pack size ~after~ change: 67,688,886
 **** original database schema
 ***** compressed database seems to grow 8mb in 6 months
 ***** compressed database size: 61,920,768
-***** record counts as of 2022-03-17
+**** record counts over time
+***** as of 2022-03-17
 | entity    |  count |
 |-----------+--------|
 | snapshots |    576 |
@@ -559,6 +704,15 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 | chunks    | 190758 |
 | packs     |   4282 |
 | xattrs    |  19263 |
+***** as of 2023-01-14
+| entity    |  count |
+|-----------+--------|
+| snapshots |    272 |
+| files     | 134950 |
+| trees     |  65312 |
+| chunks    |  56813 |
+| packs     |   4107 |
+| xattrs    |  18035 |
 *** mac mini statistics
 **** original database schema
 ***** 2022-03-15

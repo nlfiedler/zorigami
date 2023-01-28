@@ -26,7 +26,7 @@ pub struct BackupDriver<'a> {
     stores: Box<dyn PackRepository>,
     stop_time: Option<DateTime<Utc>>,
     /// Preferred size of chunks in bytes.
-    chunk_size: u64,
+    chunk_size: u32,
     /// Builds a pack file comprised of compressed chunks.
     builder: pack::PackBuilder,
     /// Tracks files and chunks in the current pack.
@@ -99,7 +99,7 @@ impl<'a> BackupDriver<'a> {
         }
         let attr = fs::metadata(path)?;
         let file_size = attr.len();
-        let chunks = if file_size > self.chunk_size {
+        let chunks = if file_size > self.chunk_size as u64 {
             // split large files into chunks, add chunks to the list
             helpers::find_file_chunks(path, self.chunk_size)?
         } else {
@@ -270,14 +270,15 @@ impl<'a> BackupDriver<'a> {
 const DEFAULT_CHUNK_SIZE: u64 = 4_194_304;
 
 /// Compute the desired size for the chunks based on the pack size.
-fn calc_chunk_size(pack_size: u64) -> u64 {
+fn calc_chunk_size(pack_size: u64) -> u32 {
     // Use our default chunk size unless the desired pack size is so small that
     // the chunks would be a significant portion of the pack file.
-    if pack_size < DEFAULT_CHUNK_SIZE * 4 {
+    let chunk_size = if pack_size < DEFAULT_CHUNK_SIZE * 4 {
         pack_size / 4
     } else {
         DEFAULT_CHUNK_SIZE
-    }
+    };
+    chunk_size.try_into().map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
 }
 
 /// Tracks the files and chunks that comprise a pack, and provides functions for

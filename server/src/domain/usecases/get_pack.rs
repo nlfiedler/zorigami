@@ -276,27 +276,22 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let packfile = result.unwrap();
-        assert_eq!(packfile.length, 99840);
-        assert_eq!(packfile.content_length, 96714);
-        assert_eq!(packfile.smallest, 16121);
-        assert_eq!(packfile.largest, 58591);
-        assert_eq!(packfile.average, 32238);
-        assert_eq!(packfile.entries.len(), 3);
+        assert_eq!(packfile.length, 99328);
+        assert_eq!(packfile.content_length, 96748);
+        assert_eq!(packfile.smallest, 41825);
+        assert_eq!(packfile.largest, 54923);
+        assert_eq!(packfile.average, 48374);
+        assert_eq!(packfile.entries.len(), 2);
         assert_eq!(
             packfile.entries[0].name,
-            "sha256-5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d"
+            "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
         );
-        assert_eq!(packfile.entries[0].size, 22002);
+        assert_eq!(packfile.entries[0].size, 54923);
         assert_eq!(
             packfile.entries[1].name,
-            "sha256-13f6a4c6d42df2b76c138c13e86e1379c203445055c2b5f043a5f6c291fa520d"
+            "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
         );
-        assert_eq!(packfile.entries[1].size, 16121);
-        assert_eq!(
-            packfile.entries[2].name,
-            "sha256-0fe7305ba21a5a5ca9f89962c5a6f3e29cd3e2b36f00e565858e0012e5f8df36"
-        );
-        assert_eq!(packfile.entries[2].size, 58591);
+        assert_eq!(packfile.entries[1].size, 41825);
         Ok(())
     }
 }

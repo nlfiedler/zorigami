@@ -14,7 +14,7 @@ md-5 = "0.10.1"
 serde = "1.0"
 store_core = { path = "../store_core" }
 thiserror = "1.0.30"
-tokio = { version = "1.17", features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
+tokio = { version = "1.24.2", features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
 uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]

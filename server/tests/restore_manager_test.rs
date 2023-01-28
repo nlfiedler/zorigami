@@ -91,7 +91,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 2);
     assert_eq!(counts.file, 2);
-    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.chunk, 2);
     assert_eq!(counts.tree, 2);
 
     // perform the third backup
@@ -108,7 +108,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 3);
     assert_eq!(counts.file, 3);
-    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.chunk, 2);
     assert_eq!(counts.tree, 3);
 
     // perform the fourth backup with shifted larger file
@@ -126,7 +126,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
     assert_eq!(counts.file, 4);
-    assert_eq!(counts.chunk, 4);
+    assert_eq!(counts.chunk, 3);
     assert_eq!(counts.tree, 4);
 
     // restore the file from the first snapshot

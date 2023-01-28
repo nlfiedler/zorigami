@@ -211,7 +211,7 @@ mod tests {
         // build a pack file that becomes too full for more chunks
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let chunks = super::super::find_file_chunks(&infile, 16384)?;
-        assert_eq!(chunks.len(), 6);
+        assert_eq!(chunks.len(), 5);
         let mut builder = PackBuilder::new(65536);
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi-pack.tar");
@@ -227,7 +227,7 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(chunks_written, 5);
+        assert_eq!(chunks_written, 4);
         assert_eq!(builder.is_empty(), false);
         let result = builder.finalize()?;
         assert_eq!(result, packfile);
@@ -235,51 +235,42 @@ mod tests {
         assert_eq!(builder.is_empty(), true);
         // validate by extracting and checksumming all of the chunks
         let entries: Vec<String> = extract_pack(&packfile, outdir.path())?;
-        assert_eq!(entries.len(), 5);
+        assert_eq!(entries.len(), 4);
         assert_eq!(
             entries[0],
-            "sha256-103159aa68bb1ea98f64248c647b8fe9a303365d80cb63974a73bba8bc3167d7"
+            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
         );
         assert_eq!(
             entries[1],
-            "sha256-c95e0d6a53f61dc7b6039cfb8618f6e587fc6395780cf28169f4013463c89db3"
+            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
         );
         assert_eq!(
             entries[2],
-            "sha256-e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82"
+            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
         );
         assert_eq!(
             entries[3],
-            "sha256-bd1198535cdb87c5571378db08b6e886daf810873f5d77000a54795409464138"
-        );
-        assert_eq!(
-            entries[4],
-            "sha256-5c8251cce144b5291be3d4b161461f3e5ed441a7a24a1a65fdcc3d7b21bfc29d"
+            "sha256-bbd5b0b284d4e3c2098e92e8e2897e738c669113d06472560188d99a288872a3"
         );
         let part1sum = Checksum::sha256_from_file(&outdir.path().join(&entries[0]))?;
         assert_eq!(
             part1sum.to_string(),
-            "sha256-103159aa68bb1ea98f64248c647b8fe9a303365d80cb63974a73bba8bc3167d7"
+            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
         );
         let part2sum = Checksum::sha256_from_file(&outdir.path().join(&entries[1]))?;
         assert_eq!(
             part2sum.to_string(),
-            "sha256-c95e0d6a53f61dc7b6039cfb8618f6e587fc6395780cf28169f4013463c89db3"
+            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
         );
         let part3sum = Checksum::sha256_from_file(&outdir.path().join(&entries[2]))?;
         assert_eq!(
             part3sum.to_string(),
-            "sha256-e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82"
+            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
         );
         let part4sum = Checksum::sha256_from_file(&outdir.path().join(&entries[3]))?;
         assert_eq!(
             part4sum.to_string(),
-            "sha256-bd1198535cdb87c5571378db08b6e886daf810873f5d77000a54795409464138"
-        );
-        let part5sum = Checksum::sha256_from_file(&outdir.path().join(&entries[4]))?;
-        assert_eq!(
-            part5sum.to_string(),
-            "sha256-5c8251cce144b5291be3d4b161461f3e5ed441a7a24a1a65fdcc3d7b21bfc29d"
+            "sha256-bbd5b0b284d4e3c2098e92e8e2897e738c669113d06472560188d99a288872a3"
         );
         Ok(())
     }

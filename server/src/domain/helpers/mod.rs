@@ -2,6 +2,8 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Chunk};
+use fastcdc::v2020::FastCDC;
+use memmap2::Mmap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -11,20 +13,15 @@ pub mod pack;
 
 ///
 /// Find the chunk boundaries within the given file, using the FastCDC
-/// algorithm. The given `size` is the desired average size in bytes for the
-/// chunks, but they may be between half and twice that size.
+/// algorithm. The `avg_size` is the desired average size in bytes for the
+/// chunks, however the min/max sizes will be 0.25/4 times that size.
 ///
-pub fn find_file_chunks(infile: &Path, size: u64) -> io::Result<Vec<Chunk>> {
+pub fn find_file_chunks(infile: &Path, avg_size: u32) -> io::Result<Vec<Chunk>> {
     let file = fs::File::open(infile)?;
-    let mmap = unsafe {
-        memmap::MmapOptions::new()
-            .map(&file)
-            .expect("cannot create mmap?")
-    };
-    let avg_size = size as usize;
-    let min_size = avg_size / 2;
-    let max_size = avg_size * 2;
-    let chunker = fastcdc::FastCDC::new(&mmap[..], min_size, avg_size, max_size);
+    let mmap = unsafe { Mmap::map(&file).expect("cannot create memmap?") };
+    let min_size = avg_size / 4;
+    let max_size = avg_size * 4;
+    let chunker = FastCDC::new(&mmap[..], min_size, avg_size, max_size);
     let mut results = Vec::new();
     for entry in chunker {
         let end = entry.offset + entry.length;
@@ -44,42 +41,36 @@ mod tests {
     fn test_file_chunking_16k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 16384)?;
-        assert_eq!(results.len(), 6);
+        assert_eq!(results.len(), 5);
         assert_eq!(results[0].offset, 0);
-        assert_eq!(results[0].length, 22366);
+        assert_eq!(results[0].length, 21325);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-103159aa68bb1ea98f64248c647b8fe9a303365d80cb63974a73bba8bc3167d7"
+            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
         );
-        assert_eq!(results[1].offset, 22366);
-        assert_eq!(results[1].length, 8282);
+        assert_eq!(results[1].offset, 21325);
+        assert_eq!(results[1].length, 17140);
         assert_eq!(
             results[1].digest.to_string(),
-            "sha256-c95e0d6a53f61dc7b6039cfb8618f6e587fc6395780cf28169f4013463c89db3"
+            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
         );
-        assert_eq!(results[2].offset, 30648);
-        assert_eq!(results[2].length, 16303);
+        assert_eq!(results[2].offset, 38465);
+        assert_eq!(results[2].length, 28084);
         assert_eq!(
             results[2].digest.to_string(),
-            "sha256-e03c4de56410b680ef69d8f8cfe140c54bb33f295015b40462d260deb9a60b82"
+            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
         );
-        assert_eq!(results[3].offset, 46951);
-        assert_eq!(results[3].length, 18696);
+        assert_eq!(results[3].offset, 66549);
+        assert_eq!(results[3].length, 18217);
         assert_eq!(
             results[3].digest.to_string(),
-            "sha256-bd1198535cdb87c5571378db08b6e886daf810873f5d77000a54795409464138"
+            "sha256-bbd5b0b284d4e3c2098e92e8e2897e738c669113d06472560188d99a288872a3"
         );
-        assert_eq!(results[4].offset, 65647);
-        assert_eq!(results[4].length, 32768);
+        assert_eq!(results[4].offset, 84766);
+        assert_eq!(results[4].length, 24700);
         assert_eq!(
             results[4].digest.to_string(),
-            "sha256-5c8251cce144b5291be3d4b161461f3e5ed441a7a24a1a65fdcc3d7b21bfc29d"
-        );
-        assert_eq!(results[5].offset, 98415);
-        assert_eq!(results[5].length, 11051);
-        assert_eq!(
-            results[5].digest.to_string(),
-            "sha256-a566243537738371133ecff524501290f0621f786f010b45d20a9d5cf82365f8"
+            "sha256-ede34e1a6cb287766e857eb0ed45b9f4b5ad83bb93c597be880c3a2ac91cddbe"
         );
         Ok(())
     }
@@ -88,24 +79,18 @@ mod tests {
     fn test_file_chunking_32k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 32768)?;
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 2);
         assert_eq!(results[0].offset, 0);
-        assert_eq!(results[0].length, 32857);
+        assert_eq!(results[0].length, 66549);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d"
+            "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
         );
-        assert_eq!(results[1].offset, 32857);
-        assert_eq!(results[1].length, 16408);
+        assert_eq!(results[1].offset, 66549);
+        assert_eq!(results[1].length, 42917);
         assert_eq!(
             results[1].digest.to_string(),
-            "sha256-13f6a4c6d42df2b76c138c13e86e1379c203445055c2b5f043a5f6c291fa520d"
-        );
-        assert_eq!(results[2].offset, 49265);
-        assert_eq!(results[2].length, 60201);
-        assert_eq!(
-            results[2].digest.to_string(),
-            "sha256-0fe7305ba21a5a5ca9f89962c5a6f3e29cd3e2b36f00e565858e0012e5f8df36"
+            "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
         );
         Ok(())
     }
@@ -114,18 +99,12 @@ mod tests {
     fn test_file_chunking_64k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let results = find_file_chunks(&infile, 65536)?;
-        assert_eq!(results.len(), 2);
+        assert_eq!(results.len(), 1);
         assert_eq!(results[0].offset, 0);
-        assert_eq!(results[0].length, 32857);
+        assert_eq!(results[0].length, 109466);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-5a80871bad4588c7278d39707fe68b8b174b1aa54c59169d3c2c72f1e16ef46d"
-        );
-        assert_eq!(results[1].offset, 32857);
-        assert_eq!(results[1].length, 76609);
-        assert_eq!(
-            results[1].digest.to_string(),
-            "sha256-5420a3bcc7d57eaf5ca9bb0ab08a1bd3e4d89ae019b1ffcec39b1a5905641115"
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
         );
         Ok(())
     }

@@ -562,7 +562,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
     assert_eq!(counts.file, 1);
-    assert_eq!(counts.chunk, 3);
+    assert_eq!(counts.chunk, 2);
     assert_eq!(counts.tree, 1);
 
     Ok(())
