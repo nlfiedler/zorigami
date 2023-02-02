@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::data::sources::{
     EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
@@ -10,11 +10,21 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Context, Error, Result};
+use lazy_static::lazy_static;
 use log::{error, info, warn};
 use rusty_ulid::generate_ulid_string;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+lazy_static! {
+    // Name that will be returned by get_bucket_name(), unless of course it is
+    // blank, in which case a new name will be generated.
+    static ref BUCKET_NAME: Mutex<String> = Mutex::new("".into());
+    // Number of times get_bucket_name() has been called and returned the same
+    // bucket name. When the value is zero, a new name is generated.
+    static ref NAME_COUNT: Mutex<usize> = Mutex::new(0);
+}
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
 // using a `Box` instead, cloning it would involve adding fake clone operations
@@ -245,12 +255,6 @@ fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
 
 pub struct PackRepositoryImpl {
     sources: HashMap<Store, Box<dyn PackDataSource>>,
-    // Name that will be returned by get_bucket_name(), unless of course it is
-    // blank, in which case a new name will be generated.
-    bucket_name: Mutex<String>,
-    // Number of times get_bucket_name() has been called and returned the same
-    // bucket name. Used to produce new bucket names when appropriate.
-    name_count: Mutex<usize>,
 }
 
 impl PackRepositoryImpl {
@@ -263,26 +267,22 @@ impl PackRepositoryImpl {
             let source = builder.build_source(&store)?;
             sources.insert(store, source);
         }
-        Ok(Self {
-            sources,
-            bucket_name: Mutex::new("".into()),
-            name_count: Mutex::new(0),
-        })
+        Ok(Self { sources })
     }
 }
 
 impl PackRepository for PackRepositoryImpl {
     fn get_bucket_name(&self, computer_id: &str) -> String {
-        let mut count = self.name_count.lock().unwrap();
+        let mut count = NAME_COUNT.lock().unwrap();
         if *count == 0 {
-            let mut name = self.bucket_name.lock().unwrap();
+            let mut name = BUCKET_NAME.lock().unwrap();
             *name = generate_bucket_name(computer_id);
         }
         *count += 1;
         if *count > 127 {
             *count = 0;
         }
-        let name = self.bucket_name.lock().unwrap();
+        let name = BUCKET_NAME.lock().unwrap();
         name.clone()
     }
 
