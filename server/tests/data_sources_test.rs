@@ -423,14 +423,9 @@ fn test_put_get_snapshot() -> Result<(), Error> {
     let file_counts = entities::FileCounts {
         directories: 100,
         symlinks: 1000,
-        files_below_80: 1,
-        files_below_1k: 2,
-        files_below_10k: 3,
-        files_below_100k: 4,
-        files_below_1m: 5,
-        files_below_10m: 6,
-        files_below_100m: 7,
+        very_small_files: 1,
         very_large_files: 8,
+        file_sizes: HashMap::new(),
     };
     let snapshot = entities::Snapshot::new(Some(parent), tree, file_counts);
     datasource.put_snapshot(&snapshot).unwrap();

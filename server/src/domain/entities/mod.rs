@@ -641,26 +641,49 @@ impl File {
 pub struct FileCounts {
     pub directories: u32,
     pub symlinks: u32,
-    pub files_below_80: u32,
-    pub files_below_1k: u32,
-    pub files_below_10k: u32,
-    pub files_below_100k: u32,
-    pub files_below_1m: u32,
-    pub files_below_10m: u32,
-    pub files_below_100m: u32,
+    /// very small files are <= 80 bytes
+    pub very_small_files: u32,
+    /// very large files are >= 4 gb
     pub very_large_files: u32,
+    /// Mapping of file counts by log2 of their file size.
+    pub file_sizes: HashMap<u8, u32>,
 }
 
+// Size of a file that is smaller than the corresponding FileDef record. As
+// such, storing it directly in the tree would be appropriate.
+pub const FILE_SIZE_SMALL: u64 = 80;
+
 impl FileCounts {
+    /// Update the the file counts to track the given file size.
+    pub fn register_file(&mut self, size: u64) {
+        if size <= FILE_SIZE_SMALL {
+            self.very_small_files += 1;
+        } else if size > 4_294_967_295 {
+            self.very_large_files += 1;
+        } else {
+            // we determined above that the size fits in a u32
+            let power = f64::from(size as u32).log2().round() as u32;
+            // Convert the power-of-2 value to the smallest integer for storage
+            // efficiency (2^255 is already much larger than very_large_files).
+            // Use 64 as the maximum value for the preso layer to convert the
+            // value back to a number-string.
+            let bits: u8 = power.try_into().map_or(64 as u8, |v: u32| v as u8);
+            if let Some(value) = self.file_sizes.get_mut(&bits) {
+                *value += 1;
+            } else {
+                self.file_sizes.insert(bits, 1);
+            }
+        }
+
+    }
+
+    /// Return the total number of files tracked by this record.
     pub fn total_files(&self) -> u64 {
-        let mut count: u64 = self.files_below_80.into();
-        count += self.files_below_1k as u64;
-        count += self.files_below_10k as u64;
-        count += self.files_below_100k as u64;
-        count += self.files_below_1m as u64;
-        count += self.files_below_10m as u64;
-        count += self.files_below_100m as u64;
+        let mut count: u64 = self.very_small_files.into();
         count += self.very_large_files as u64;
+        for value in self.file_sizes.values() {
+            count += *value as u64;
+        }
         count
     }
 }
@@ -670,14 +693,9 @@ impl Default for FileCounts {
         Self {
             directories: 0,
             symlinks: 0,
-            files_below_80: 0,
-            files_below_1k: 0,
-            files_below_10k: 0,
-            files_below_100k: 0,
-            files_below_1m: 0,
-            files_below_10m: 0,
-            files_below_100m: 0,
+            very_small_files: 0,
             very_large_files: 0,
+            file_sizes: HashMap::new(),
         }
     }
 }
@@ -1227,19 +1245,21 @@ mod tests {
 
     #[test]
     fn test_file_counts() {
-        let counts = FileCounts {
-            directories: 100,
-            symlinks: 1000,
-            files_below_80: 1,
-            files_below_1k: 2,
-            files_below_10k: 3,
-            files_below_100k: 4,
-            files_below_1m: 5,
-            files_below_10m: 6,
-            files_below_100m: 7,
+        let mut counts = FileCounts {
+            directories: 65,
+            symlinks: 101,
+            very_small_files: 1,
             very_large_files: 8,
+            file_sizes: HashMap::new(),
         };
+        counts.register_file(83864);
+        counts.register_file(11273);
+        counts.register_file(131072);
+        counts.register_file(1048576);
+        counts.register_file(8388608);
+        counts.register_file(16777216);
+        counts.register_file(33554432);
         let actual = counts.total_files();
-        assert_eq!(actual, 36);
+        assert_eq!(actual, 16);
     }
 }

@@ -46,8 +46,8 @@ fn test_basic_snapshots() -> Result<(), Error> {
     let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
     assert!(snapshot2.parent.is_some());
     assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
-    assert_eq!(snapshot2.file_counts.files_below_10k, 1);
-    assert_eq!(snapshot2.file_counts.files_below_1m, 1);
+    assert_eq!(snapshot2.file_counts.file_sizes[&12], 1);
+    assert_eq!(snapshot2.file_counts.file_sizes[&17], 1);
     assert_eq!(snapshot2.file_counts.total_files(), 2);
     assert_ne!(snap1_sha, snap2_sha);
     assert_ne!(snapshot1.tree, snapshot2.tree);

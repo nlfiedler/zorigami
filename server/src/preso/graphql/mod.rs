@@ -176,6 +176,15 @@ impl entities::Tree {
     }
 }
 
+#[derive(GraphQLObject)]
+/// Number of files whose size is close to the given power of 2.
+struct FileSize {
+    /// File size category as a power of 2 (such as "1024", "1048576").
+    power: String,
+    /// Number of files in this size category.
+    count: BigInt,
+}
+
 #[juniper::graphql_object(description = "Number of files and directories in a snapshot.")]
 impl entities::FileCounts {
     fn directories(&self) -> BigInt {
@@ -186,32 +195,19 @@ impl entities::FileCounts {
         BigInt(self.symlinks as i64)
     }
 
-    fn files_below_80(&self) -> BigInt {
-        BigInt(self.files_below_80 as i64)
+    fn very_small_files(&self) -> BigInt {
+        BigInt(self.very_small_files as i64)
     }
 
-    fn files_below_1k(&self) -> BigInt {
-        BigInt(self.files_below_1k as i64)
-    }
-
-    fn files_below_10k(&self) -> BigInt {
-        BigInt(self.files_below_10k as i64)
-    }
-
-    fn files_below_100k(&self) -> BigInt {
-        BigInt(self.files_below_100k as i64)
-    }
-
-    fn files_below_1m(&self) -> BigInt {
-        BigInt(self.files_below_1m as i64)
-    }
-
-    fn files_below_10m(&self) -> BigInt {
-        BigInt(self.files_below_10m as i64)
-    }
-
-    fn files_below_100m(&self) -> BigInt {
-        BigInt(self.files_below_100m as i64)
+    fn file_sizes(&self) -> Vec<FileSize> {
+        let mut result: Vec<FileSize> = Vec::new();
+        for (bits, count) in self.file_sizes.iter() {
+            result.push(FileSize {
+                power: format!("{}", 2u64.pow(*bits as u32)),
+                count: BigInt(*count as i64),
+            });
+        }
+        result
     }
 
     fn very_large_files(&self) -> BigInt {
@@ -1857,7 +1853,10 @@ mod tests {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut file_counts: entities::FileCounts = Default::default();
-        file_counts.files_below_10k = 110;
+        file_counts.directories = 4;
+        file_counts.symlinks = 6;
+        file_counts.very_small_files = 100;
+        file_counts.very_large_files = 10;
         let snapshot = entities::Snapshot::new(None, tree_sha, file_counts);
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();
@@ -2420,7 +2419,6 @@ mod tests {
         )
         .unwrap();
         // assert
-        println!("errors: {:?}", errors);
         assert!(res.is_null());
         assert_eq!(errors.len(), 1);
         assert!(errors[0].error().message().contains("store does not exist"));
@@ -2549,7 +2547,6 @@ mod tests {
         )
         .unwrap();
         // assert
-        println!("errors: {:?}", errors);
         assert!(res.is_null());
         assert_eq!(errors.len(), 1);
         assert!(errors[0].error().message().contains("dataset without id"));

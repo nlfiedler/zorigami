@@ -658,11 +658,8 @@ fn read_link(path: &Path) -> Result<Vec<u8>, Error> {
 
 ///
 /// Create a `Tree` for the given path, recursively descending into child
-/// directories. Any new trees found, as identified by their hash digest, will
-/// be inserted into the database. The same is true for any files found, and
-/// their extended attributes. The return value itself will also be added to the
-/// database. The result will be that everything new will have been added as new
-/// records.
+/// directories. The returned tree entity will have already been added to the
+/// database, along with all of the nested trees.
 ///
 fn scan_tree(
     basepath: &Path,
@@ -702,8 +699,7 @@ fn scan_tree(
                                         }
                                     }
                                 } else if metadata.is_file() {
-                                    if metadata.len() <= 80 {
-                                        // file smaller than FileDef record
+                                    if metadata.len() <= entities::FILE_SIZE_SMALL {
                                         match fs::read(&path) {
                                             Ok(contents) => {
                                                 let tref = entities::TreeReference::SMALL(contents);
@@ -786,24 +782,7 @@ fn count_files(metadata: &fs::Metadata, file_counts: &mut entities::FileCounts) 
     } else if metadata.is_symlink() {
         file_counts.symlinks += 1;
     } else if metadata.is_file() {
-        let len = metadata.len();
-        if len <= 80 {
-            file_counts.files_below_80 += 1;
-        } else if len <= 1024 {
-            file_counts.files_below_1k += 1;
-        } else if len <= 10240 {
-            file_counts.files_below_10k += 1;
-        } else if len <= 102400 {
-            file_counts.files_below_100k += 1;
-        } else if len <= 1048576 {
-            file_counts.files_below_1m += 1;
-        } else if len <= 10485760 {
-            file_counts.files_below_10m += 1;
-        } else if len <= 104857600 {
-            file_counts.files_below_100m += 1;
-        } else {
-            file_counts.very_large_files += 1;
-        }
+        file_counts.register_file(metadata.len());
     }
 }
 

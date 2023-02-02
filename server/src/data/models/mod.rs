@@ -374,7 +374,10 @@ mod tests {
         let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
         let mut file_counts: FileCounts = Default::default();
         file_counts.directories = 5;
-        file_counts.files_below_10k = 10;
+        file_counts.register_file(1024);
+        file_counts.register_file(16384);
+        file_counts.register_file(16777216);
+        file_counts.register_file(1048576);
         let mut snapshot = Snapshot::new(Some(parent), tree, file_counts);
         snapshot = snapshot.end_time(Utc::now());
         // act
