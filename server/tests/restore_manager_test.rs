@@ -249,7 +249,6 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    println!("request: {:?}", request);
     assert!(request.error_msg.is_none());
     let digest_actual = Checksum::sha256_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
@@ -362,7 +361,6 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     // because it was never really backed up
     sut.wait_for_completed();
     let requests = sut.requests();
-    println!("requests: {:?}", requests);
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());

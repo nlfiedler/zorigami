@@ -108,7 +108,6 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     let requests = restorer.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    println!("request: {:?}", request);
     assert!(request.error_msg.is_none());
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
