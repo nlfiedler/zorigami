@@ -732,6 +732,7 @@ fn scan_tree(
     }
     // Process all of the files found in this directory.
     let mut file_entries = process_files(pending_files, dbase, pool);
+    file_count += file_entries.len() as u32;
     for entry in file_entries.drain(..) {
         entries.push(entry);
     }

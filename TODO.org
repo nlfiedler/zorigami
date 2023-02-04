@@ -1,4 +1,9 @@
 * Tasks
+** Thread pool improvement
+*** mini before: took snapshot ... with 555706 files after 3 minutes 2 seconds
+*** mini after:
+*** server before: took snapshot ... with 147769 files after 1 hours 20 minutes 14 seconds
+*** server after:
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -129,7 +134,7 @@ $ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -
 ** Consider if HMAC would be better for pack files
 *** combines verification of data integrity and authenticity
 *** consider the computational cost
-*** asuran backend is ~where blobs are addressed by an HMAC of their plaintext~
+*** asuran backend ~where blobs are addressed by an HMAC of their plaintext~
 *** c.f. https://en.wikipedia.org/wiki/HMAC
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
@@ -846,6 +851,7 @@ perform a pack pruning, the most recent database snapshot would be removed.
 * Deployments
 ** mac mini
 *** how to build: see =README.md= in ~Local Test Build~ section
+*** make sure =dbase= directory exists ahead of time?
 *** how to update
 1) =ps -ef | grep -i zorigami=
 2) stop: =launchctl kill SIGTERM gui/501/zorigami=
@@ -857,9 +863,10 @@ perform a pack pruning, the most recent database snapshot would be removed.
 *** setup
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
+**** pack store: =/Volumes/Zbackup=
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
-**** run daily at 6pm
+**** run daily at 9am
 ** kohaku
 *** deploy using docker and ansible
 *** store credentials file as =/zeniba/shared/zorigami.json=
