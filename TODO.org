@@ -1,17 +1,4 @@
 * Tasks
-** Tree-scanning improvements
-*** TODO spawn multiple threads to checksum files concurrently
-**** use =async_channel= crate to set up two mpms queues
-**** caller to =scan_tree()= sets up threads and two channels
-**** ~work~ queue: use =bounded= channel onto which =scan_tree()= places =PathBuf=
-**** ~result~ queue: use =unbounded= channel onto which workers place =TreeEntry=
-**** workers receive paths from ~work~ and place tree entries on ~result~
-**** =scan_tree()= receives both channels
-**** =scan_tree()= collects paths of files to be processed within =readdir= loop
-**** =scan_tree()= sends paths to ~work~ queue outside of =readdir= loop
-**** TODO =scan_tree()= waits for ~result~ queue to become empty; how will this work?
-***** merely being empty does not mean that all workers are done processing
-**** important that =scan_tree()= does not recurse while channels are populated
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase

@@ -7,6 +7,7 @@
 //! previous snapshot, building pack files, and sending them to the store.
 
 use crate::domain::entities;
+use crate::domain::helpers::thread_pool::ThreadPool;
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Error};
@@ -19,7 +20,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::SystemTime;
 
 mod driver;
@@ -242,7 +243,10 @@ pub fn take_snapshot(
     let actual_start_time = Utc::now();
     let exclusions = build_exclusions(basepath, &excludes);
     let mut file_counts: entities::FileCounts = Default::default();
-    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts)?;
+    let cpu_count = std::thread::available_parallelism()?.get();
+    let pool = ThreadPool::new(cpu_count);
+    debug!("take_snapshot: creating pool of {cpu_count} threads");
+    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
@@ -666,9 +670,11 @@ fn scan_tree(
     dbase: &Arc<dyn RecordRepository>,
     excludes: &GlobSet,
     file_counts: &mut entities::FileCounts,
+    pool: &ThreadPool,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
+    let mut pending_files: Vec<PathBuf> = Vec::new();
     match fs::read_dir(basepath) {
         Ok(readdir) => {
             for entry_result in readdir {
@@ -683,7 +689,8 @@ fn scan_tree(
                             Ok(metadata) => {
                                 count_files(&metadata, file_counts);
                                 if metadata.is_dir() {
-                                    let scan = scan_tree(&path, dbase, excludes, file_counts)?;
+                                    let scan =
+                                        scan_tree(&path, dbase, excludes, file_counts, pool)?;
                                     file_count += scan.file_count;
                                     let digest = scan.digest.clone();
                                     let tref = entities::TreeReference::TREE(digest);
@@ -710,16 +717,7 @@ fn scan_tree(
                                             }
                                         }
                                     } else {
-                                        match entities::Checksum::sha256_from_file(&path) {
-                                            Ok(digest) => {
-                                                let tref = entities::TreeReference::FILE(digest);
-                                                entries.push(process_path(&path, tref, dbase));
-                                                file_count += 1;
-                                            }
-                                            Err(err) => {
-                                                error!("could not read file: {:?}: {}", path, err)
-                                            }
-                                        }
+                                        pending_files.push(path);
                                     }
                                 }
                             }
@@ -732,16 +730,62 @@ fn scan_tree(
         }
         Err(err) => error!("read_dir error for {:?}: {}", basepath, err),
     }
+    // Process all of the files found in this directory.
+    let mut file_entries = process_files(pending_files, dbase, pool);
+    for entry in file_entries.drain(..) {
+        entries.push(entry);
+    }
     let tree = entities::Tree::new(entries, file_count);
     dbase.insert_tree(&tree)?;
     Ok(tree)
+}
+
+// Process the given set of files, returning the TreeEntry for each. Uses the
+// thread pool to compute the checksums of the files in parallel.
+fn process_files(
+    paths: Vec<PathBuf>,
+    dbase: &Arc<dyn RecordRepository>,
+    pool: &ThreadPool,
+) -> Vec<entities::TreeEntry> {
+    // list of results that are either successful (Some(TreeEntry)) or resulted
+    // in an error (None), paired with a condvar so the main thread can wait
+    let entries: Arc<(Mutex<Vec<Option<entities::TreeEntry>>>, Condvar)> =
+        Arc::new((Mutex::new(Vec::new()), Condvar::new()));
+    for path in paths.iter() {
+        let path = path.to_owned();
+        let dbase = dbase.clone();
+        let entries = entries.clone();
+        pool.execute(move || {
+            let entry = match entities::Checksum::sha256_from_file(&path) {
+                Ok(digest) => {
+                    let tref = entities::TreeReference::FILE(digest);
+                    Some(process_path(&path, tref, &dbase))
+                }
+                Err(err) => {
+                    error!("could not read file: {:?}: {}", path, err);
+                    None
+                }
+            };
+            let (lock, cvar) = &*entries;
+            let mut actual = lock.lock().unwrap();
+            actual.push(entry);
+            cvar.notify_all();
+        });
+    }
+    // wait for all of the entries to be processed
+    let (lock, cvar) = &*entries;
+    let mut actual = lock.lock().unwrap();
+    while actual.len() != paths.len() {
+        actual = cvar.wait(actual).unwrap();
+    }
+    // filter those entries that resulted in error (None)
+    actual.drain(..).filter_map(|e| e).collect()
 }
 
 ///
 /// Create a `TreeEntry` record for this path, which may include storing
 /// extended attributes in the database.
 ///
-#[allow(unused_variables)]
 fn process_path(
     fullpath: &Path,
     reference: entities::TreeReference,
@@ -789,11 +833,56 @@ fn count_files(metadata: &fs::Metadata, file_counts: &mut entities::FileCounts) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::repositories::MockRecordRepository;
     #[cfg(target_family = "unix")]
     use std::os::unix::fs;
     #[cfg(target_family = "windows")]
     use std::os::windows::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn test_process_path() {
+        // arrange
+        let mut mock = MockRecordRepository::new();
+        mock.expect_insert_xattr().returning(|_, _| Ok(()));
+        // act
+        let path = Path::new("../test/fixtures/washington-journal.txt");
+        let digest = entities::Checksum::sha256_from_file(&path).unwrap();
+        let tref = entities::TreeReference::FILE(digest);
+        let dbase: Arc<(dyn crate::domain::repositories::RecordRepository + 'static)> =
+            Arc::new(mock);
+        let entry = process_path(&path, tref, &dbase);
+        // assert
+        assert_eq!(entry.name, "washington-journal.txt");
+        let expected = entities::TreeReference::FILE(entities::Checksum::SHA256(
+            "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05".into(),
+        ));
+        assert_eq!(entry.reference, expected);
+    }
+
+    #[test]
+    fn test_process_files() {
+        // arrange
+        let mut mock = MockRecordRepository::new();
+        mock.expect_insert_xattr().returning(|_, _| Ok(()));
+        // act
+        let paths: Vec<PathBuf> = vec![
+            PathBuf::from("../test/fixtures/lorem-ipsum.txt"),
+            PathBuf::from("../test/fixtures/SekienAkashita.jpg"),
+            PathBuf::from("../test/fixtures/washington-journal.txt"),
+            PathBuf::from("../test/fixtures/zero-length.txt"),
+        ];
+        let dbase: Arc<(dyn crate::domain::repositories::RecordRepository + 'static)> =
+            Arc::new(mock);
+        let pool = ThreadPool::new(1);
+        let entries = process_files(paths, &dbase, &pool);
+        // assert
+        assert_eq!(entries.len(), 4);
+        assert!(entries.iter().any(|e| e.name == "lorem-ipsum.txt"));
+        assert!(entries.iter().any(|e| e.name == "SekienAkashita.jpg"));
+        assert!(entries.iter().any(|e| e.name == "washington-journal.txt"));
+        assert!(entries.iter().any(|e| e.name == "zero-length.txt"));
+    }
 
     #[test]
     fn test_build_exclusions() {

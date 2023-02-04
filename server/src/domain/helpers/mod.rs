@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Chunk};
 use fastcdc::v2020::FastCDC;
@@ -10,6 +10,7 @@ use std::path::Path;
 
 pub mod crypto;
 pub mod pack;
+pub mod thread_pool;
 
 ///
 /// Find the chunk boundaries within the given file, using the FastCDC
