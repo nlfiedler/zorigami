@@ -32,7 +32,7 @@ and produces consistent results when building the application.
 
 ```shell
 brew install dart
-pub global activate fvm
+dart pub global activate fvm
 fvm install stable
 fvm flutter config --enable-macos-desktop
 fvm flutter config --enable-web
@@ -152,7 +152,7 @@ How to create a new project and get the service account credentials file.
 1. Create a new project in Google Cloud Platform
 1. Navigate to the **Firestore** page under _DATABASES_
     * Do **not** select _Filestore_ under _STORAGE_, that is a different service
-1. Create the Firestore database (there can be only one)
+1. Create a _native_ Firestore database (there can be only one)
 1. Navigate to **APIs & Services**
 1. Open **Credentials** screen
 1. Click _CREATE CREDENTIALS_ and select _Service_ account
