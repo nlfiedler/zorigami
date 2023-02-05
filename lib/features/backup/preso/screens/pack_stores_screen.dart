@@ -51,7 +51,7 @@ class PackStoresScreen extends ConsumerWidget {
           },
         ),
       ),
-      drawer: NavigationDrawer(),
+      drawer: MyNavigationDrawer(),
     );
   }
 }

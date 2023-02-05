@@ -59,7 +59,7 @@ class DatabaseRestoreScreen extends ConsumerWidget {
           },
         ),
       ),
-      drawer: NavigationDrawer(),
+      drawer: MyNavigationDrawer(),
     );
   }
 }

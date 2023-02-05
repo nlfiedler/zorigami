@@ -13,7 +13,7 @@ class HomeScreen extends StatelessWidget {
         title: Text('ZORIGAMI'),
       ),
       body: DataSetsList(),
-      drawer: NavigationDrawer(),
+      drawer: MyNavigationDrawer(),
     );
   }
 }

@@ -39,7 +39,7 @@ class RestoreRequestsScreen extends ConsumerWidget {
               ],
             ),
             body: buildBody(context, state),
-            drawer: NavigationDrawer(),
+            drawer: MyNavigationDrawer(),
           );
         },
       ),

@@ -36,7 +36,7 @@ class DataSetsScreen extends ConsumerWidget {
               },
               child: Icon(Icons.add),
             ),
-            drawer: NavigationDrawer(),
+            drawer: MyNavigationDrawer(),
           );
         },
       ),
