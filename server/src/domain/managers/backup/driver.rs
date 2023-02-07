@@ -136,8 +136,7 @@ impl<'a> BackupDriver<'a> {
     /// files and chunks that have already been processed. Raises an error if
     /// time runs out.
     fn process_queue(&mut self) -> Result<(), Error> {
-        // would use first_key_value() but that is experimental in 1.59
-        while let Some(key) = self.file_chunks.keys().take(1).next() {
+        while let Some((key, _)) = self.file_chunks.first_key_value() {
             let filesum = key.to_owned();
             let mut chunks_processed = 0;
             let chunks = &self.file_chunks[key].to_owned();

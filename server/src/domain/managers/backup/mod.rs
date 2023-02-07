@@ -245,7 +245,7 @@ pub fn take_snapshot(
     let mut file_counts: entities::FileCounts = Default::default();
     let cpu_count = std::thread::available_parallelism()?.get();
     let pool = ThreadPool::new(cpu_count);
-    debug!("take_snapshot: creating pool of {cpu_count} threads");
+    info!("take_snapshot: creating pool of {cpu_count} threads");
     let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
