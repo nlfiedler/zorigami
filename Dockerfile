@@ -34,13 +34,13 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get -q update && \
     apt-get -q -y install unzip
 RUN dart pub global activate fvm
-RUN fvm install 3.0.5
+RUN fvm install 3.7.1
 WORKDIR /flutter
 COPY fonts fonts/
 COPY lib lib/
 COPY pubspec.yaml .
 COPY web web/
-RUN fvm use 3.0.5
+RUN fvm use 3.7.1
 RUN fvm flutter config --enable-web
 RUN fvm flutter pub get
 ENV BASE_URL ${BASE_URL}
