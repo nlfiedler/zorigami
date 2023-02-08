@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,12 +15,15 @@ final List<NewStoreItem> storeItems = [
   // nothing is created until the user selects something.
   NewStoreItem(title: 'Select Type', kind: null),
   NewStoreItem(title: 'Local', kind: StoreKind.local),
+  NewStoreItem(title: 'Amazon', kind: StoreKind.amazon),
   NewStoreItem(title: 'Google', kind: StoreKind.google),
   NewStoreItem(title: 'Minio', kind: StoreKind.minio),
   NewStoreItem(title: 'SFTP', kind: StoreKind.sftp),
 ];
 
 class PackStoreHeader extends ConsumerWidget {
+  const PackStoreHeader({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<CreatePackStoresBloc>(
@@ -29,7 +32,7 @@ class PackStoreHeader extends ConsumerWidget {
         listener: (context, state) {
           if (state is Submitted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Created new pack store')),
+              const SnackBar(content: Text('Created new pack store')),
             );
             BlocProvider.of<psb.PackStoresBloc>(context).add(
               psb.ReloadPackStores(),
@@ -42,18 +45,20 @@ class PackStoreHeader extends ConsumerWidget {
             );
           }
         },
-        child: PackStoreCreator(),
+        child: const PackStoreCreator(),
       ),
     );
   }
 }
 
 class PackStoreCreator extends StatefulWidget {
+  const PackStoreCreator({Key? key}) : super(key: key);
+
   @override
-  _PackStoreCreatorState createState() => _PackStoreCreatorState();
+  PackStoreCreatorState createState() => PackStoreCreatorState();
 }
 
-class _PackStoreCreatorState extends State<PackStoreCreator> {
+class PackStoreCreatorState extends State<PackStoreCreator> {
   NewStoreItem selectedItem = storeItems[0];
 
   @override
@@ -61,8 +66,8 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: <Widget>[
-        Text('Create new store:'),
-        SizedBox(width: 16),
+        const Text('Create new store:'),
+        const SizedBox(width: 16),
         DropdownButton<NewStoreItem>(
           value: selectedItem,
           onChanged: (item) {
@@ -87,7 +92,7 @@ class _PackStoreCreatorState extends State<PackStoreCreator> {
                     ),
                   );
                 },
-          child: Text('CREATE'),
+          child: const Text('CREATE'),
         ),
       ],
     );
@@ -107,7 +112,7 @@ class NewStoreItem {
 PackStore defaultPackStore(StoreKind kind) {
   switch (kind) {
     case StoreKind.local:
-      return PackStore(
+      return const PackStore(
         kind: StoreKind.local,
         key: 'auto-generated',
         label: 'local',
@@ -115,8 +120,20 @@ PackStore defaultPackStore(StoreKind kind) {
           'basepath': '.',
         },
       );
+    case StoreKind.amazon:
+      return const PackStore(
+        kind: StoreKind.amazon,
+        key: 'auto-generated',
+        label: 'amazon',
+        options: <String, dynamic>{
+          'region': 'us-east-1',
+          'access_key': 'AKIAIOSFODNN7EXAMPLE',
+          'secret_key': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+          'storage': 'STANDARD_IA',
+        },
+      );
     case StoreKind.google:
-      return PackStore(
+      return const PackStore(
         kind: StoreKind.google,
         key: 'auto-generated',
         label: 'google',
@@ -128,7 +145,7 @@ PackStore defaultPackStore(StoreKind kind) {
         },
       );
     case StoreKind.minio:
-      return PackStore(
+      return const PackStore(
         kind: StoreKind.minio,
         key: 'auto-generated',
         label: 'minio',
@@ -140,7 +157,7 @@ PackStore defaultPackStore(StoreKind kind) {
         },
       );
     case StoreKind.sftp:
-      return PackStore(
+      return const PackStore(
         kind: StoreKind.sftp,
         key: 'auto-generated',
         label: 'sftp',

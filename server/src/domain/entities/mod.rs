@@ -157,6 +157,7 @@ impl Chunk {
 /// StoreType identifies a kind of store.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum StoreType {
+    AMAZON,
     GOOGLE,
     LOCAL,
     MINIO,
@@ -166,6 +167,7 @@ pub enum StoreType {
 impl ToString for StoreType {
     fn to_string(&self) -> String {
         match self {
+            StoreType::AMAZON => String::from("amazon"),
             StoreType::GOOGLE => String::from("google"),
             StoreType::LOCAL => String::from("local"),
             StoreType::MINIO => String::from("minio"),
@@ -179,6 +181,7 @@ impl FromStr for StoreType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "amazon" => Ok(StoreType::AMAZON),
             "google" => Ok(StoreType::GOOGLE),
             "local" => Ok(StoreType::LOCAL),
             "minio" => Ok(StoreType::MINIO),
@@ -1083,21 +1086,37 @@ mod tests {
 
     #[test]
     fn test_storetype_fromstr() {
+        // amazon
+        let result = StoreType::from_str("amazon");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::AMAZON);
+        assert_eq!(stype.to_string(), "amazon");
+        // local
         let result = StoreType::from_str("local");
         assert!(result.is_ok());
         let stype = result.unwrap();
         assert_eq!(stype, StoreType::LOCAL);
         assert_eq!(stype.to_string(), "local");
+        // google
+        let result = StoreType::from_str("google");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::GOOGLE);
+        assert_eq!(stype.to_string(), "google");
+        // minio
         let result = StoreType::from_str("minio");
         assert!(result.is_ok());
         let stype = result.unwrap();
         assert_eq!(stype, StoreType::MINIO);
         assert_eq!(stype.to_string(), "minio");
+        // sftp
         let result = StoreType::from_str("sftp");
         assert!(result.is_ok());
         let stype = result.unwrap();
         assert_eq!(stype, StoreType::SFTP);
         assert_eq!(stype.to_string(), "sftp");
+        // not a supported store type
         let result = StoreType::from_str("foobar");
         assert!(result.is_err());
     }

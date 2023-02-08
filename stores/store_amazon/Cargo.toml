@@ -1,5 +1,5 @@
 [package]
-name = "store_minio"
+name = "store_amazon"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2021"

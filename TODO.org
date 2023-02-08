@@ -1,9 +1,59 @@
 * Tasks
-** Thread pool improvement
-*** mini before: took snapshot ... with 555706 files after 3 minutes 2 seconds
-*** mini after:
-*** server before: took snapshot ... with 147769 files after 1 hours 20 minutes 14 seconds
-*** server after:
+** TODO check on server backup
+*** DONE make sure =/safe/packs= is populated
+*** DONE make sure cloud storage is populated
+*** TODO see if a rename was stored in firestore
+** TODO Measure thread pool improvement (~took snapshot~)
+*** mini parallelism is 8
+*** server parallelism is 4
+*** mini before: 555706 files after 3 minutes 2 seconds (original)
+*** mini after: 556625 files after 1 minutes 27 seconds (initial)
+*** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
+*** server before: 147769 files after 1 hours 20 minutes (original)
+*** server after: 147769 files after 52 minutes (initial)
+*** server after: ... (subsequent)
+** TODO Develop support for Amazon S3/Glacier
+*** DONE find out how =rusoto_s3= can define the storage class
+**** set =storage_class= on =rusoto_s3::PutObjectRequest=
+*** DONE find solution to the ~rename~ feature used in google store
+**** need a means of tracking bucket collisions and the rename value
+**** https://aws.amazon.com/dynamodb/
+*** DONE fork =store_minio= to =store_amazon=, there will be incompatible changes
+*** DONE find out what S3 uses for storage class names (e.g. =STANDARD=)
+**** c.f. https://docs.aws.amazon.com/cli/latest/reference/s3api/put-object.html
+**** option =--storage-class= takes a ~string~ of one of the following
+| Name                |
+|---------------------|
+| STANDARD            |
+| REDUCED_REDUNDANCY  |
+| STANDARD_IA         |
+| ONEZONE_IA          |
+| INTELLIGENT_TIERING |
+| GLACIER             |
+| DEEP_ARCHIVE        |
+| OUTPOSTS            |
+| GLACIER_IR          |
+*** DONE make sure AWS credentials are working and S3 is ready to use
+*** DONE add the storage class argument to amazon configuration
+*** DONE ensure storage class is passed to S3 on put object
+*** DONE remove the ~endpoint~ argument for amazon store
+*** DONE try running the =store_amazon= tests against S3
+*** DONE add new widgets and such for ~amazon~ pack store
+*** DONE make sure buckets are created in the correct region
+*** TODO devise solution for limited number of S3 buckets
+*** TODO add support for bucket renames using DynamoDB (https://crates.io/crates/rusoto_dynamodb)
+**** TODO learn how to create a table
+**** TODO learn how to insert records
+**** TODO learn how to query records
+*** notes about S3 and Glacier
+**** ~S3 Stardard-IA~ wants ~128kb~ or larger objects, no less than ~30~ days
+**** ~S3 Glacier~ wants ~128kb~ or larger objects, no less than ~90~ days
+**** ~S3 Glacier~ automatically creates indices for easy listing of archives
+**** ~S3 Standard - Infrequent Access~ is nearly same price as Google ~Nearline storage~
+**** ~S3 Glacier Instant Retrieval~ is same price as Google ~Coldline storage~
+** TODO Rewrite packing to use low-overhead format
+*** using tar involves a lot of overhead for each entry
+*** compute before and after metrics for comparison
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -133,7 +183,7 @@ $ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -
 #+end_src
 ** Consider if HMAC would be better for pack files
 *** combines verification of data integrity and authenticity
-*** consider the computational cost
+*** consider the computational cost (computes everything twice)
 *** asuran backend ~where blobs are addressed by an HMAC of their plaintext~
 *** c.f. https://en.wikipedia.org/wiki/HMAC
 ** Replace Time Machine
@@ -183,6 +233,10 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
+** Bucket re-use
+*** rather than hard-coded number of objects, should be determined by pack stores
+*** some pack stores will expect 10's of thousands of objects per bucket
+*** could consider how frequently new packs are created (1 per day vs hundreds)
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
@@ -285,7 +339,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remote pack store interaction
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
-**** probably minio and/or S3 have similar default limits
+**** probably minio and S3 have similar default limits
 **** the API generally offers a means of paging to get everything in chunks
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
@@ -327,6 +381,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** TODO Support day-of-month in schedule
 **** TODO Support week-of-month in schedule
 **** TODO Support time-range in schedule
+** Filters for excluding files by size
+*** allow adding rules on a dataset to ignore files that are too small/large
 ** Point-in-time snapshots
 *** Backup procedure is file-by-file, which may yield broken snapshots
 **** e.g. database files can change during the backup, leading to invalid snapshots
@@ -518,25 +574,9 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** must invalidate all of the snapshots effected by the missing store
 *** TODO Permit moving from one store to another
 **** would mean downloading the packs and uploading them to the new store
-*** TODO Support Amazon S3
-**** Minio seems to have no bucket limit (higher than 100)
-**** Need to limit number of remote buckets to 100
-**** Bucket limit: catch the error and handle by re-using another bucket
-*** TODO Support Amazon Glacier
-**** Need to limit number of remote buckets to 1000
-**** Use S3 to store the database-to-archive mapping of each snapshot
-**** Offer user option to use "expedited" retrievals so they go faster
-*** TODO Support Amazon Cloud Drive
 *** TODO Support Microsoft Azure blob storage
-*** TODO Support Backblaze B2
-*** TODO Support [[https://wiki.openstack.org/wiki/Swift][OpenStack Swift]]
-*** TODO Support Wasabi
-*** TODO Support Google Drive
-*** TODO Support Google Cloud Coldline
-*** TODO Support Dropbox
-*** TODO Support Oracle Cloud Storage
-*** TODO Support IBM Cloud Storage
-*** TODO Support Rackspace Cloud Files
+**** buckets are called ~containers~ and objects are called ~blobs~
+**** c.f. https://crates.io/crates/azure_storage_blobs
 *** TODO Consider how to backup and restore FIFO, BLK, and CHR "files"
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)
@@ -683,6 +723,16 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** the application will never store the actual password anywhere
 *** will need to prompt the user when a different passphrase is needed
 * Technical Information
+** Error Handling
+*** what happens to file errors during scanning?
+**** any errors during scan result in the entry being completely ignored
+**** they will be processed again on the next scan
+*** what happens to file errors during packing?
+**** if metadata or opening file fails, recorded as having zero length
+**** if packing file fails, overall backup will fail
+*** what happens when file contents change between scanning and packing?
+**** changed file is stored using the original checksum
+**** file will subsequently be backed up again next time
 ** Data Growth
 *** main server
 **** better pack file generation
@@ -851,7 +901,6 @@ perform a pack pruning, the most recent database snapshot would be removed.
 * Deployments
 ** mac mini
 *** how to build: see =README.md= in ~Local Test Build~ section
-*** make sure =dbase= directory exists ahead of time?
 *** how to update
 1) =ps -ef | grep -i zorigami=
 2) stop: =launchctl kill SIGTERM gui/501/zorigami=
@@ -860,6 +909,7 @@ perform a pack pruning, the most recent database snapshot would be removed.
 5) enable: =launchctl enable gui/501/zorigami=
 6) start: =launchctl kickstart -p gui/501/zorigami=
 7) =ps -ef | grep -i zorigami=
+*** may need to =enable= and =kickstart= twice for some reason
 *** setup
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
@@ -873,15 +923,17 @@ perform a pack pruning, the most recent database snapshot would be removed.
 *** data sets
 **** shared files
 :base_path: /datasets
-:pack_size: 64mb
 :excludes: (none)
+:pack_size: 64mb
 :pack_stores: all
-:schedule: daily, 11:30pm to 6:00am
+:schedule: daily, 11:30pm to 5:30am
 *** pack stores
 **** local
+:label: safe
 :path: /packstore
 **** cloud
+:label: google
 :credentials: /datasets/zorigami.json
-:project_id: zorigami
+:project_id: zorigami-376823
 :region: us-west1
 :storage: NEARLINE

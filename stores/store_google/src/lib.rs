@@ -549,9 +549,17 @@ mod tests {
         let source = GoogleStore::new("google1", &properties)?;
 
         // store an object
-        let bucket = "747267d56e7057118a9aa40c24c1730f".to_owned();
-        let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
+        let bucket = xid::new().to_string();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.store, "google1");
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // store another object to ensure create bucket works repeatedly
+        let object = "489492a49220c814f49487efb12adfbc372aa3f8".to_owned();
+        let packfile = Path::new("../../test/fixtures/washington-journal.txt");
         let location = source.store_pack_sync(packfile, &bucket, &object)?;
         assert_eq!(location.store, "google1");
         assert_eq!(location.bucket, bucket);
@@ -574,12 +582,12 @@ mod tests {
         assert!(result.is_ok());
         let md5sum = store_core::md5sum_file(&outfile)?;
         #[cfg(target_family = "unix")]
-        assert_eq!(md5sum, "40756e6058736e2485119410c2014380");
+        assert_eq!(md5sum, "4b9772cf2c623ad529900f0ffe4e8ded");
         #[cfg(target_family = "windows")]
         assert_eq!(
             // this checksum is wrong and will need to be fixed
             md5sum,
-            "40756e6058736e2485119410c2014380"
+            "4b9772cf2c623ad529900f0ffe4e8ded"
         );
 
         // remove all objects from all buckets, and the buckets, too

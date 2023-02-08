@@ -22,6 +22,7 @@ use std::{
     sync::Mutex,
 };
 
+mod amazon;
 mod google;
 mod local;
 mod minio;
@@ -651,6 +652,7 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
         // repeatedly constructing the same thing. The lru crate would be perfect
         // for managing the cache.
         let source: Box<dyn PackDataSource> = match store.store_type {
+            StoreType::AMAZON => Box::new(amazon::AmazonPackSource::new(&store)?),
             StoreType::LOCAL => Box::new(local::LocalPackSource::new(&store)?),
             StoreType::GOOGLE => Box::new(google::GooglePackSource::new(&store)?),
             StoreType::MINIO => Box::new(minio::MinioPackSource::new(&store)?),

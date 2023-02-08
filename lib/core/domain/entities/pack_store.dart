@@ -1,9 +1,9 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 
-enum StoreKind { google, local, minio, sftp }
+enum StoreKind { amazon, google, local, minio, sftp }
 
 class PackStore extends Equatable {
   /// The `key` is unique among all pack stores.
@@ -18,7 +18,7 @@ class PackStore extends Equatable {
   /// Map of names and values for configuring this pack store.
   final Map<String, dynamic> options;
 
-  PackStore({
+  const PackStore({
     required this.key,
     required this.label,
     required this.kind,
@@ -33,11 +33,13 @@ class PackStore extends Equatable {
 }
 
 String packStoreTitle(PackStore store) {
-  return store.label + ' :: ' + prettyKind(store.kind);
+  return '${store.label} :: ${prettyKind(store.kind)}';
 }
 
 String packStoreSubtitle(PackStore store) {
   switch (store.kind) {
+    case StoreKind.amazon:
+      return store.options['region'];
     case StoreKind.google:
       return store.options['project'];
     case StoreKind.local:
@@ -53,10 +55,12 @@ String packStoreSubtitle(PackStore store) {
 
 String prettyKind(StoreKind kind) {
   switch (kind) {
-    case StoreKind.local:
-      return 'local disk';
+    case StoreKind.amazon:
+      return 'remote amazon';
     case StoreKind.google:
       return 'remote google';
+    case StoreKind.local:
+      return 'local disk';
     case StoreKind.minio:
       return 'remote minio';
     case StoreKind.sftp:

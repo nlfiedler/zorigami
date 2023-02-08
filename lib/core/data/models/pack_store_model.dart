@@ -1,10 +1,10 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 
 class PackStoreModel extends PackStore {
-  PackStoreModel({
+  const PackStoreModel({
     required String key,
     required String label,
     required StoreKind kind,
@@ -49,7 +49,9 @@ class PackStoreModel extends PackStore {
 }
 
 StoreKind decodeKind(String kind) {
-  if (kind == 'google') {
+  if (kind == 'amazon') {
+    return StoreKind.amazon;
+  } else if (kind == 'google') {
     return StoreKind.google;
   } else if (kind == 'local') {
     return StoreKind.local;
@@ -64,6 +66,8 @@ StoreKind decodeKind(String kind) {
 
 String encodeKind(StoreKind kind) {
   switch (kind) {
+    case StoreKind.amazon:
+      return 'amazon';
     case StoreKind.google:
       return 'google';
     case StoreKind.local:
@@ -82,7 +86,9 @@ Map<String, dynamic> decodeOptions(List<dynamic> options) {
     return <String, dynamic>{};
   }
   final Map<String, dynamic> results = {};
-  options.forEach((e) => results[e['name']] = e['value']);
+  for (var e in options) {
+    results[e['name']] = e['value'];
+  }
   return results;
 }
 

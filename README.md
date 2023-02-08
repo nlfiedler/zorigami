@@ -145,6 +145,18 @@ docker compose down
 docker compose up --build -d
 ```
 
+## Amazon S3 Setup
+
+1. Create user that will act on behalf of zorigami
+1. Give specific permissions, not assign to a group
+1. Add **AmazonS3FullAccess** permission (search for _s3_)
+1. Add **AmazonDynamoDBFullAccess** permission (search for _dynamo_)
+1. View the newly created user
+1. Find the **Security credentials** tab
+1. Add a new **Access key** for this user
+1. Select _Application running outside AWS_ when asked
+1. Download the `.csv` file of the newly created key
+
 ## Google Cloud Setup
 
 How to create a new project and get the service account credentials file.

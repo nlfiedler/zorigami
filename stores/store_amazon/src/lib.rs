@@ -1,40 +1,40 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
-    CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
-    GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, StreamingBody, S3,
+    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, DeleteBucketRequest,
+    DeleteObjectRequest, GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client,
+    StreamingBody, S3,
 };
 use std::collections::HashMap;
 use std::path::Path;
 use store_core::Coordinates;
 
 ///
-/// A pack store implementation that uses the Amazon S3 protocol to connect to a
-/// Minio storage server.
+/// A pack store implementation for Amazon S3/Glacier.
 ///
 #[derive(Clone, Debug)]
-pub struct MinioStore {
+pub struct AmazonStore {
     store_id: String,
     region: String,
-    endpoint: String,
+    storage: String,
     access_key: String,
     secret_key: String,
 }
 
-impl MinioStore {
-    /// Validate the given store and construct a minio pack source.
+impl AmazonStore {
+    /// Validate the given store and construct an s3 pack source.
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
         let region = props
             .get("region")
             .ok_or_else(|| anyhow!("missing region property"))?;
-        let endpoint = props
-            .get("endpoint")
-            .ok_or_else(|| anyhow!("missing endpoint property"))?;
+        let storage = props
+            .get("storage")
+            .ok_or_else(|| anyhow!("missing storage property"))?;
         let access_key = props
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
@@ -44,7 +44,7 @@ impl MinioStore {
         Ok(Self {
             store_id: store_id.to_owned(),
             region: region.to_owned(),
-            endpoint: endpoint.to_owned(),
+            storage: storage.to_owned(),
             access_key: access_key.to_owned(),
             secret_key: secret_key.to_owned(),
         })
@@ -55,10 +55,8 @@ impl MinioStore {
         // Credentials are picked up in a variety of ways, see the rusoto docs:
         // https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         //
-        let region = Region::Custom {
-            name: self.region.clone(),
-            endpoint: self.endpoint.clone(),
-        };
+        use std::str::FromStr;
+        let region = Region::from_str(&self.region).unwrap_or(Region::default());
         let client = rusoto_core::request::HttpClient::new().unwrap();
         let creds = rusoto_credential::StaticProvider::new(
             self.access_key.clone(),
@@ -87,7 +85,7 @@ impl MinioStore {
     ) -> Result<Coordinates, Error> {
         let client = self.connect();
         // the bucket must exist before receiving objects
-        create_bucket(&client, bucket).await?;
+        create_bucket(&client, bucket, &self.region).await?;
         //
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
@@ -98,6 +96,7 @@ impl MinioStore {
             .map_ok(|b| Bytes::from(b));
         let req = PutObjectRequest {
             bucket: bucket.to_owned(),
+            storage_class: Some(self.storage.clone()),
             key: object.to_owned(),
             content_length: Some(meta.len() as i64),
             body: Some(StreamingBody::new(read_stream)),
@@ -269,9 +268,13 @@ impl MinioStore {
 }
 
 /// Ensure the named bucket exists.
-async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
+async fn create_bucket(client: &S3Client, bucket: &str, region: &str) -> Result<(), Error> {
+    let config = CreateBucketConfiguration {
+        location_constraint: Some(region.to_owned()),
+    };
     let request = CreateBucketRequest {
         bucket: bucket.to_owned(),
+        create_bucket_configuration: Some(config),
         ..Default::default()
     };
     // wait for the future(s) to complete
@@ -279,8 +282,8 @@ async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     // certain error conditions are okay
     match result {
         Err(e) => match e {
-            RusotoError::Service(se) => match se {
-                CreateBucketError::BucketAlreadyExists(_) => Ok(()),
+            RusotoError::Service(ref se) => match se {
+                CreateBucketError::BucketAlreadyExists(_) => Err(anyhow!(format!("{}", e))),
                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
             },
             _ => Err(anyhow!(format!("{}", e))),
@@ -314,9 +317,9 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_new_minio_store_region() {
+    fn test_new_amazon_store_region() {
         let props = HashMap::new();
-        let result = MinioStore::new("minio123", &props);
+        let result = AmazonStore::new("amazon123", &props);
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
         assert!(err_string.contains("missing region property"));
@@ -324,44 +327,47 @@ mod tests {
     }
 
     #[test]
-    fn test_new_minio_store_ok() {
+    fn test_new_amazon_store_ok() {
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("region".to_owned(), "us-west2".to_owned());
-        properties.insert("endpoint".to_owned(), "localhost:9000".to_owned());
-        properties.insert("access_key".to_owned(), "minio".to_owned());
-        properties.insert("secret_key".to_owned(), "shminio".to_owned());
-        let result = MinioStore::new("minio123", &properties);
+        properties.insert("storage".to_owned(), "STANDARD_IA".to_owned());
+        properties.insert("access_key".to_owned(), "amazon".to_owned());
+        properties.insert("secret_key".to_owned(), "shamazon".to_owned());
+        let result = AmazonStore::new("amazon123", &properties);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_minio_store_roundtrip() -> Result<(), Error> {
+    fn test_amazon_store_roundtrip() -> Result<(), Error> {
+        //
+        // N.B. the rusoto crate will pick up environment variables, such as
+        // AWS_REGION, which can lead to false successes when running the tests
+        //
         // set up the environment and remote connection
         dotenv().ok();
-        let endp_var = env::var("MINIO_ENDPOINT");
-        if endp_var.is_err() {
-            // bail out silently if minio is not available
+        let region_var = env::var("AWS_REGION");
+        if region_var.is_err() {
+            // bail out silently if amazon is not configured
             return Ok(());
         }
-        let endpoint = endp_var?;
-        let region = env::var("MINIO_REGION")?;
-        let access_key = env::var("MINIO_ACCESS_KEY")?;
-        let secret_key = env::var("MINIO_SECRET_KEY")?;
+        let region = region_var?;
+        let access_key = env::var("AWS_ACCESS_KEY")?;
+        let secret_key = env::var("AWS_SECRET_KEY")?;
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("region".to_owned(), region);
-        properties.insert("endpoint".to_owned(), endpoint);
+        properties.insert("storage".to_owned(), "STANDARD_IA".into());
         properties.insert("access_key".to_owned(), access_key);
         properties.insert("secret_key".to_owned(), secret_key);
-        let source = MinioStore::new("minioone", &properties)?;
+        let source = AmazonStore::new("amazonone", &properties)?;
 
         // store an object
         let bucket = xid::new().to_string();
         let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let location = source.store_pack_sync(packfile, &bucket, &object)?;
-        assert_eq!(location.store, "minioone");
+        assert_eq!(location.store, "amazonone");
         assert_eq!(location.bucket, bucket);
         assert_eq!(location.object, object);
 
@@ -369,7 +375,7 @@ mod tests {
         let object = "489492a49220c814f49487efb12adfbc372aa3f8".to_owned();
         let packfile = Path::new("../../test/fixtures/washington-journal.txt");
         let location = source.store_pack_sync(packfile, &bucket, &object)?;
-        assert_eq!(location.store, "minioone");
+        assert_eq!(location.store, "amazonone");
         assert_eq!(location.bucket, bucket);
         assert_eq!(location.object, object);
 

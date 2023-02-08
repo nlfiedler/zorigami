@@ -7,10 +7,10 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 
-class GoogleStoreForm extends PackStoreForm {
+class AmazonStoreForm extends PackStoreForm {
   final PackStore store;
 
-  GoogleStoreForm({Key? key, required this.store}) : super(key: key);
+  AmazonStoreForm({Key? key, required this.store}) : super(key: key);
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {
@@ -19,26 +19,25 @@ class GoogleStoreForm extends PackStoreForm {
     return {
       'key': store.key,
       'label': store.label,
-      'credentials': store.options['credentials'],
-      'project': store.options['project'],
       'region': region,
       'storage': storage,
+      'access_key': store.options['access_key'],
+      'secret_key': store.options['secret_key'],
     };
   }
 
   @override
   PackStore storeFromState(FormBuilderState state) {
-    final String region = state.value['region'];
     final String storage = state.value['storage'];
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
-      kind: StoreKind.google,
+      kind: StoreKind.amazon,
       options: {
-        'credentials': state.value['credentials'],
-        'project': state.value['project'],
-        'region': region.isEmpty ? null : region,
+        'region': state.value['region'],
         'storage': storage.isEmpty ? null : storage,
+        'access_key': state.value['access_key'],
+        'secret_key': state.value['secret_key'],
       },
     );
   }
@@ -64,27 +63,12 @@ class GoogleStoreForm extends PackStoreForm {
           validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
-          name: 'credentials',
-          decoration: const InputDecoration(
-            icon: Icon(Icons.attachment),
-            labelText: 'Credentials File',
-          ),
-          validator: FormBuilderValidators.required(),
-        ),
-        FormBuilderTextField(
-          name: 'project',
-          decoration: const InputDecoration(
-            icon: Icon(Icons.folder),
-            labelText: 'Project ID',
-          ),
-          validator: FormBuilderValidators.required(),
-        ),
-        FormBuilderTextField(
           name: 'region',
           decoration: const InputDecoration(
-            icon: Icon(Icons.location_on),
+            icon: Icon(Icons.folder_open),
             labelText: 'Region',
           ),
+          validator: FormBuilderValidators.required(),
         ),
         FormBuilderDropdown(
           name: 'storage',
@@ -93,7 +77,7 @@ class GoogleStoreForm extends PackStoreForm {
             labelText: 'Storage Class',
             hintText: 'Select storage class',
           ),
-          items: ['STANDARD', 'NEARLINE', 'COLDLINE', 'ARCHIVE']
+          items: ['STANDARD', 'STANDARD_IA', 'GLACIER_IR']
               .map(
                 (sclass) => DropdownMenuItem(
                   value: sclass,
@@ -101,6 +85,24 @@ class GoogleStoreForm extends PackStoreForm {
                 ),
               )
               .toList(),
+        ),
+        FormBuilderTextField(
+          name: 'access_key',
+          decoration: const InputDecoration(
+            icon: Icon(Icons.folder_open),
+            labelText: 'Access Key',
+          ),
+          validator: FormBuilderValidators.required(),
+        ),
+        FormBuilderTextField(
+          name: 'secret_key',
+          obscureText: true,
+          maxLines: 1,
+          decoration: const InputDecoration(
+            icon: Icon(Icons.folder_open),
+            labelText: 'Secret Key',
+          ),
+          validator: FormBuilderValidators.required(),
         ),
       ],
     );

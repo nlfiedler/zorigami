@@ -39,6 +39,7 @@ serde_json = "1.0.79"
 sha-1 = "0.10.0"
 sha2 = "0.10.2"
 sodiumoxide = "0.2.7"
+store_amazon = { path = "../stores/store_amazon" }
 store_core = { path = "../stores/store_core" }
 store_google = { path = "../stores/store_google" }
 store_local = { path = "../stores/store_local" }

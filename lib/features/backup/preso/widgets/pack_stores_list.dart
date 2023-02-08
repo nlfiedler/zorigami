@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,6 +10,7 @@ import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart'
     as epsb;
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/providers.dart';
+import 'package:zorigami/features/backup/preso/widgets/amazon_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/google_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/local_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
@@ -19,13 +20,13 @@ import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 class PackStoresList extends ConsumerStatefulWidget {
   final List<PackStore> stores;
 
-  PackStoresList({Key? key, required this.stores}) : super(key: key);
+  const PackStoresList({Key? key, required this.stores}) : super(key: key);
 
   @override
-  _PackStoresListState createState() => _PackStoresListState();
+  PackStoresListState createState() => PackStoresListState();
 }
 
-class _PackStoresListState extends ConsumerState<PackStoresList> {
+class PackStoresListState extends ConsumerState<PackStoresList> {
   late List<ExpansionItem> items;
 
   @override
@@ -37,7 +38,7 @@ class _PackStoresListState extends ConsumerState<PackStoresList> {
         final subtitle = packStoreSubtitle(e);
         final headerValue = Card(
           child: ListTile(
-            leading: Icon(Icons.archive),
+            leading: const Icon(Icons.archive),
             title: Text(title),
             subtitle: Text(subtitle),
           ),
@@ -62,27 +63,24 @@ class _PackStoresListState extends ConsumerState<PackStoresList> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Container(
-        child: BlocProvider<epsb.EditPackStoresBloc>(
-          create: (_) =>
-              ref.read(editPackStoresBlocProvider),
-          child: ExpansionPanelList(
-            expansionCallback: (int index, bool isExpanded) {
-              setState(() {
-                items[index].isExpanded = !isExpanded;
-              });
-            },
-            children: items.map<ExpansionPanel>((ExpansionItem item) {
-              return ExpansionPanel(
-                canTapOnHeader: true,
-                headerBuilder: (BuildContext context, bool isExpanded) {
-                  return item.headerValue;
-                },
-                body: item.expandedValue,
-                isExpanded: item.isExpanded,
-              );
-            }).toList(),
-          ),
+      child: BlocProvider<epsb.EditPackStoresBloc>(
+        create: (_) => ref.read(editPackStoresBlocProvider),
+        child: ExpansionPanelList(
+          expansionCallback: (int index, bool isExpanded) {
+            setState(() {
+              items[index].isExpanded = !isExpanded;
+            });
+          },
+          children: items.map<ExpansionPanel>((ExpansionItem item) {
+            return ExpansionPanel(
+              canTapOnHeader: true,
+              headerBuilder: (BuildContext context, bool isExpanded) {
+                return item.headerValue;
+              },
+              body: item.expandedValue,
+              isExpanded: item.isExpanded,
+            );
+          }).toList(),
         ),
       ),
     );
@@ -150,27 +148,27 @@ class PackStoreListDetails extends StatelessWidget {
               initialValue: storeForm.initialValuesFrom(store),
               autovalidateMode: AutovalidateMode.always,
               // not convinced this enabled is effective
-              enabled: !(state is epsb.Submitting),
+              enabled: state is! epsb.Submitting,
               child: storeForm,
             ),
             ButtonBar(
               children: <Widget>[
                 TextButton.icon(
-                  icon: Icon(Icons.analytics_outlined),
+                  icon: const Icon(Icons.analytics_outlined),
                   label: const Text('TEST'),
                   onPressed: (state is epsb.Submitting)
                       ? null
                       : () => testPack(context, storeForm),
                 ),
                 ElevatedButton.icon(
-                  icon: Icon(Icons.save),
+                  icon: const Icon(Icons.save),
                   label: const Text('SAVE'),
                   onPressed: (state is epsb.Submitting)
                       ? null
                       : () => savePack(context, storeForm),
                 ),
                 TextButton.icon(
-                  icon: Icon(Icons.delete),
+                  icon: const Icon(Icons.delete),
                   label: const Text('DELETE'),
                   onPressed: (state is epsb.Submitting)
                       ? null
@@ -204,6 +202,9 @@ class ExpansionItem {
 PackStoreForm? buildStoreForm(PackStore store) {
   if (store.kind == StoreKind.local) {
     return LocalStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.amazon) {
+    return AmazonStoreForm(store: store);
   }
   if (store.kind == StoreKind.google) {
     return GoogleStoreForm(store: store);
