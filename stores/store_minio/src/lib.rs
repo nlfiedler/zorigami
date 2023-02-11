@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
@@ -11,7 +11,7 @@ use rusoto_s3::{
 };
 use std::collections::HashMap;
 use std::path::Path;
-use store_core::Coordinates;
+use store_core::{CollisionError, Coordinates};
 
 ///
 /// A pack store implementation that uses the Amazon S3 protocol to connect to a
@@ -280,7 +280,7 @@ async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
     match result {
         Err(e) => match e {
             RusotoError::Service(se) => match se {
-                CreateBucketError::BucketAlreadyExists(_) => Ok(()),
+                CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
             },
             _ => Err(anyhow!(format!("{}", e))),
@@ -335,6 +335,59 @@ mod tests {
     }
 
     #[test]
+    fn test_minio_collision_error() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let endp_var = env::var("MINIO_ENDPOINT");
+        if endp_var.is_err() {
+            // bail out silently if minio is not available
+            return Ok(());
+        }
+        let endpoint = endp_var?;
+        let region = env::var("MINIO_REGION")?;
+        let access_key_1 = env::var("MINIO_ACCESS_KEY_1")?;
+        let secret_key_1 = env::var("MINIO_SECRET_KEY_1")?;
+
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), region);
+        properties.insert("endpoint".to_owned(), endpoint);
+        properties.insert("access_key".to_owned(), access_key_1);
+        properties.insert("secret_key".to_owned(), secret_key_1);
+        let source1 = MinioStore::new("minioone", &properties)?;
+
+        // store an object
+        let bucket = xid::new().to_string();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source1.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.store, "minioone");
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // store another object to the same bucket but as a different user
+        //
+        // apparently this is not an issue out of the box, as minio allows
+        // different access keys to modify any buckets and objects; the
+        // bucket create operation returns "already owned by you" error
+        let access_key_2 = env::var("MINIO_ACCESS_KEY_2")?;
+        let secret_key_2 = env::var("MINIO_SECRET_KEY_2")?;
+        properties.insert("access_key".to_owned(), access_key_2);
+        properties.insert("secret_key".to_owned(), secret_key_2);
+        let source2 = MinioStore::new("miniotwo", &properties)?;
+        let object = "489492a49220c814f49487efb12adfbc372aa3f8".to_owned();
+        let packfile = Path::new("../../test/fixtures/washington-journal.txt");
+        let location = source2.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.store, "miniotwo");
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // do _NOT_ remove all buckets and objects, other test needs them;
+        // tests are run concurrently, only one can clean up everything
+        Ok(())
+    }
+
+    #[test]
     fn test_minio_store_roundtrip() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
@@ -345,8 +398,8 @@ mod tests {
         }
         let endpoint = endp_var?;
         let region = env::var("MINIO_REGION")?;
-        let access_key = env::var("MINIO_ACCESS_KEY")?;
-        let secret_key = env::var("MINIO_SECRET_KEY")?;
+        let access_key = env::var("MINIO_ACCESS_KEY_1")?;
+        let secret_key = env::var("MINIO_SECRET_KEY_1")?;
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();

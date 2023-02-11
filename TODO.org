@@ -1,17 +1,18 @@
 * Tasks
-** TODO check on server backup
-*** DONE make sure =/safe/packs= is populated
-*** DONE make sure cloud storage is populated
-*** TODO see if a rename was stored in firestore
-** TODO Measure thread pool improvement (~took snapshot~)
-*** mini parallelism is 8
-*** server parallelism is 4
-*** mini before: 555706 files after 3 minutes 2 seconds (original)
-*** mini after: 556625 files after 1 minutes 27 seconds (initial)
-*** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
-*** server before: 147769 files after 1 hours 20 minutes (original)
-*** server after: 147769 files after 52 minutes (initial)
-*** server after: ... (subsequent)
+** DONE devise general bucket collision solution
+*** pack store must detect collision error in either =CreateBucket= or =PutObject=
+*** pack repo will generate a new bucket name and try again
+*** DONE change =minio= container to have two users for testing
+*** DONE add bucket collision error type to =store_core=
+*** DONE add tests to pack stores for detecting bucket collisions
+*** DONE add =get_new_bucket_name()= to =PackRepository= that forces a new bucket name
+*** DONE change pack repo =store_pack_retry()= to handle collisions
+*** DONE change =store_google= to return =CollisionError= versus =ForbiddenError=
+*** DONE add pack repo test with mock source that returns bucket collision error
+** TODO devise solution for limited number of S3 buckets
+*** need to re-use buckets to avoid hard limits on number of buckets per account
+*** pack stores will detect and assign object to a different bucket
+*** pack store returns the pack location with changed coordinates
 ** TODO Develop support for Amazon S3/Glacier
 *** DONE find out how =rusoto_s3= can define the storage class
 **** set =storage_class= on =rusoto_s3::PutObjectRequest=
@@ -40,20 +41,24 @@
 *** DONE try running the =store_amazon= tests against S3
 *** DONE add new widgets and such for ~amazon~ pack store
 *** DONE make sure buckets are created in the correct region
-*** TODO devise solution for limited number of S3 buckets
-*** TODO add support for bucket renames using DynamoDB (https://crates.io/crates/rusoto_dynamodb)
-**** TODO learn how to create a table
-**** TODO learn how to insert records
-**** TODO learn how to query records
-*** notes about S3 and Glacier
-**** ~S3 Stardard-IA~ wants ~128kb~ or larger objects, no less than ~30~ days
-**** ~S3 Glacier~ wants ~128kb~ or larger objects, no less than ~90~ days
-**** ~S3 Glacier~ automatically creates indices for easy listing of archives
-**** ~S3 Standard - Infrequent Access~ is nearly same price as Google ~Nearline storage~
-**** ~S3 Glacier Instant Retrieval~ is same price as Google ~Coldline storage~
-** TODO Rewrite packing to use low-overhead format
+*** TODO =store_amazon= must use DynamoDB for database bucket renames
+**** like =store_google=, must manage case of computer id bucket name not being available
+*** TODO set up local server for testing with source tree minus =tmp= and =target=
+**** use a separate account/user/keys from the ~zorigami-test~ to keep it safe from the unit tests
+** TODO doc: add to =NOTES.md= about the database bucket collision solution
+*** only applies to the database bucket because its mapping must be stored outside the database
+*** pack store collisions can be handled by renaming and storing the new bucket name in the database
+** TODO Change pack file and database backup file format
 *** using tar involves a lot of overhead for each entry
+*** [[https://en.wikipedia.org/wiki/7z][7z]] is an open format that is better than zip, offers AES256 encryption
+*** DONE evaluate the encryption method used in the =zip= crate/format
+**** AES present since 2003 (but not AES-256?)
+**** =zip= create does not (yet) support encryption
+**** check on file size limits (original zip has 4gb limits, zip64 is much higher)
+*** TODO try https://crates.io/crates/sevenz-rust for pack files
+*** TODO try https://crates.io/crates/sevenz-rust for database backup
 *** compute before and after metrics for comparison
+** TODO add =to_uuid()= to =Configuration= entity that calls =blob_uuid::to_uuid()=
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -418,6 +423,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO Repair missing pack files in pack stores
 **** expose the GraphQL operation via the graphical interface
 ** More Information
+*** TODO track start and finish time for a backup
+**** account for time when backup is paused due to schedule
 *** TODO show differences between any two snapshots
 **** collect the paths and sizes of all new/changed files
 **** somehow show all of that information in a scalable fashion
@@ -723,6 +730,16 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** the application will never store the actual password anywhere
 *** will need to prompt the user when a different passphrase is needed
 * Technical Information
+** Parallelism
+*** shortening snapshot time
+**** mini parallelism is 8
+**** server parallelism is 4
+**** mini before: 555706 files after 3 minutes 2 seconds (original)
+**** mini after: 556625 files after 1 minutes 27 seconds (initial)
+**** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
+**** server before: 147769 files after 1 hours 20 minutes (original)
+**** server after: 147769 files after 52 minutes (initial)
+**** server after: 148142 files after 52 minutes (subsequent)
 ** Error Handling
 *** what happens to file errors during scanning?
 **** any errors during scan result in the entry being completely ignored

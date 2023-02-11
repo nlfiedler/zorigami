@@ -12,7 +12,7 @@ use rusoto_s3::{
 };
 use std::collections::HashMap;
 use std::path::Path;
-use store_core::Coordinates;
+use store_core::{CollisionError, Coordinates};
 
 ///
 /// A pack store implementation for Amazon S3/Glacier.
@@ -283,7 +283,7 @@ async fn create_bucket(client: &S3Client, bucket: &str, region: &str) -> Result<
     match result {
         Err(e) => match e {
             RusotoError::Service(ref se) => match se {
-                CreateBucketError::BucketAlreadyExists(_) => Err(anyhow!(format!("{}", e))),
+                CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
             },
             _ => Err(anyhow!(format!("{}", e))),
@@ -335,6 +335,40 @@ mod tests {
         properties.insert("secret_key".to_owned(), "shamazon".to_owned());
         let result = AmazonStore::new("amazon123", &properties);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_amazon_bucket_collision() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let region_var = env::var("AWS_REGION");
+        if region_var.is_err() {
+            // bail out silently if amazon is not configured
+            return Ok(());
+        }
+        let region = region_var?;
+        let access_key = env::var("AWS_ACCESS_KEY")?;
+        let secret_key = env::var("AWS_SECRET_KEY")?;
+
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), region);
+        properties.insert("storage".to_owned(), "STANDARD_IA".into());
+        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("secret_key".to_owned(), secret_key);
+        let source = AmazonStore::new("amazonone", &properties)?;
+
+        // store an object in a bucket that already exists and belongs to
+        // another AWS account (surprise, mybucketname is already taken)
+        let bucket = "mybucketname".to_owned();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let result = source.store_pack_sync(packfile, &bucket, &object);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.downcast::<CollisionError>().is_ok());
+
+        Ok(())
     }
 
     #[test]

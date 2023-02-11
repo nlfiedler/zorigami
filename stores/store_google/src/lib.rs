@@ -7,25 +7,11 @@ use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
 use std::collections::HashMap;
 use std::default::Default;
-use std::fmt;
 use std::path::Path;
 use storage1::hyper::client::HttpConnector;
 use storage1::hyper_rustls::HttpsConnector;
-use store_core::Coordinates;
+use store_core::{CollisionError, Coordinates};
 use uuid::Uuid;
-
-///
-/// Raised when the cloud service responds with 403 indicating a bucket with the
-/// same name already exists but belongs to another project.
-///
-#[derive(thiserror::Error, Debug)]
-pub struct ForbiddenError;
-
-impl fmt::Display for ForbiddenError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "bucket collision")
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct GoogleStore {
@@ -143,7 +129,7 @@ impl GoogleStore {
                             if let Some(code) = errobj.get("code") {
                                 if let Some(num) = code.as_u64() {
                                     if num == 403 {
-                                        return Err(Error::from(ForbiddenError {}));
+                                        return Err(Error::from(CollisionError {}));
                                     }
                                 }
                             }
@@ -384,7 +370,7 @@ impl GoogleStore {
                 match self.store_pack(packfile, &bucket_name, object).await {
                     Ok(coords) => return Ok(coords),
                     Err(err) => {
-                        match err.downcast::<ForbiddenError>() {
+                        match err.downcast::<CollisionError>() {
                             Ok(_) => {
                                 // There was a collision, simply generate a new
                                 // name and hope that it will work. Type 4 UUID
@@ -602,7 +588,43 @@ mod tests {
     }
 
     #[test]
-    fn test_google_store_bucket_collision() -> Result<(), Error> {
+    fn test_google_collision_error() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let creds_var = env::var("GOOGLE_CREDENTIALS");
+        if creds_var.is_err() {
+            // bail out silently if google is not configured
+            return Ok(());
+        }
+        let credentials = creds_var?;
+        let project_id = env::var("GOOGLE_PROJECT_ID")?;
+        let region = env::var("GOOGLE_REGION")?;
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("credentials".to_owned(), credentials);
+        properties.insert("project".to_owned(), project_id);
+        // use standard storage class for testing since it is cheaper when
+        // performing frequent downloads and deletions
+        properties.insert("storage".to_owned(), "STANDARD".to_owned());
+        properties.insert("region".to_owned(), region);
+        let source = GoogleStore::new("google1", &properties)?;
+
+        // attempt to store an object in a bucket that exists but does not
+        // belong to this project (yes, need to change this value whenever the
+        // bucket suddenly becomes available again)
+        let bucket = "df72e3b3-ce33-4c83-8f59-2e020296c8ab".to_owned();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let result = source.store_pack_sync(packfile, &bucket, &object);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.downcast::<CollisionError>().is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_google_database_bucket_collision() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
         let creds_var = env::var("GOOGLE_CREDENTIALS");

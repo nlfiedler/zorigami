@@ -35,8 +35,8 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     }
     let minio_endpoint = endp_var?;
     let minio_region = env::var("MINIO_REGION")?;
-    let minio_access_key = env::var("MINIO_ACCESS_KEY")?;
-    let minio_secret_key = env::var("MINIO_SECRET_KEY")?;
+    let minio_access_key = env::var("MINIO_ACCESS_KEY_1")?;
+    let minio_secret_key = env::var("MINIO_SECRET_KEY_1")?;
 
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;

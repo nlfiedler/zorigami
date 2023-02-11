@@ -16,6 +16,7 @@ use rusty_ulid::generate_ulid_string;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use store_core::CollisionError;
 
 lazy_static! {
     // Name that will be returned by get_bucket_name(), unless of course it is
@@ -269,6 +270,52 @@ impl PackRepositoryImpl {
         }
         Ok(Self { sources })
     }
+
+    // Use the old bucket name to generate a new one.
+    fn get_new_bucket_name(&self, bucket_name: &str) -> String {
+        let mut count = NAME_COUNT.lock().unwrap();
+        *count = 0;
+        let mut name = BUCKET_NAME.lock().unwrap();
+        *name = generate_new_bucket_name(bucket_name);
+        name.clone()
+    }
+
+    // Try to store the pack file up to three times before giving up.
+    fn store_pack_retry(
+        &self,
+        source: &Box<dyn PackDataSource>,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> anyhow::Result<PackLocation, Error> {
+        let mut retries = 3;
+        let mut bucket_name: String = bucket.to_owned();
+        // Loop a few times if the pack store (typically a network operation)
+        // fails, in case it is successful on retry. If there is a bucket
+        // collision, generate a new bucket name for that store (and each one
+        // after), returning the updated pack location.
+        loop {
+            let result = source.store_pack(packfile, &bucket_name, object);
+            match source.store_pack(packfile, &bucket_name, object) {
+                Ok(coords) => return Ok(coords),
+                Err(err) => match err.downcast::<CollisionError>() {
+                    Ok(_) => {
+                        bucket_name = self.get_new_bucket_name(&bucket_name);
+                    }
+                    Err(_) => {
+                        if result.is_ok() {
+                            return result;
+                        }
+                        retries -= 1;
+                        if retries == 0 {
+                            return result;
+                        }
+                        warn!("pack store failed, will retry: {:?}", result);
+                    }
+                },
+            }
+        }
+    }
 }
 
 impl PackRepository for PackRepositoryImpl {
@@ -298,7 +345,9 @@ impl PackRepository for PackRepositoryImpl {
                 "pack store {} ({}) failed for {}/{}",
                 store.id, store.label, bucket, object
             );
-            let loc = store_pack_retry(source, packfile, bucket, object).context(ctx)?;
+            let loc = self
+                .store_pack_retry(source, packfile, bucket, object)
+                .context(ctx)?;
             results.push(loc.into())
         }
         Ok(results)
@@ -469,14 +518,12 @@ pub fn computer_bucket_name(unique_id: &str) -> String {
     }
 }
 
-///
-/// Generate a suitable bucket name, using a ULID and the given unique ID.
-///
-/// The unique ID is assumed to be a shorted version of the UUID returned from
-/// `generate_unique_id()`, and will be converted back to a full UUID for the
-/// purposes of generating a bucket name consisting only of lowercase letters.
-///
-pub fn generate_bucket_name(unique_id: &str) -> String {
+// Generate a suitable bucket name, using a ULID and the given unique ID.
+//
+// The unique ID is assumed to be a shorted version of the UUID returned from
+// `generate_unique_id()`, and will be converted back to a full UUID for the
+// purposes of generating a bucket name consisting only of lowercase letters.
+fn generate_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => {
             let shorter = uuid.simple().to_string();
@@ -489,6 +536,16 @@ pub fn generate_bucket_name(unique_id: &str) -> String {
             generate_ulid_string().to_lowercase()
         }
     }
+}
+
+// Split the given bucket name apart and generate a new prefix such that the new
+// name will be different and possibly work-around a collision error.
+fn generate_new_bucket_name(bucket_name: &str) -> String {
+    // ULID as ASCII is 26 characters long, computer id is everything else
+    let suffix = &bucket_name[26..];
+    let mut ulid = generate_ulid_string();
+    ulid.push_str(suffix);
+    ulid.to_lowercase()
 }
 
 // Determine if the named bucket is referenced by any of the packs.
@@ -556,27 +613,6 @@ fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, 
     Ok(objects.len() as u32)
 }
 
-// Try to store the pack file up to three times before giving up.
-fn store_pack_retry(
-    source: &Box<dyn PackDataSource>,
-    packfile: &Path,
-    bucket: &str,
-    object: &str,
-) -> anyhow::Result<PackLocation, Error> {
-    let mut retries = 0;
-    loop {
-        let result = source.store_pack(packfile, bucket, object);
-        if result.is_ok() {
-            return result;
-        }
-        retries += 1;
-        if retries == 3 {
-            return result;
-        }
-        warn!("pack store failed, will retry: {:?}", result);
-    }
-}
-
 // Try to store the database archive up to three times before giving up.
 fn store_database_retry(
     source: &Box<dyn PackDataSource>,
@@ -584,14 +620,14 @@ fn store_database_retry(
     bucket: &str,
     object: &str,
 ) -> anyhow::Result<PackLocation, Error> {
-    let mut retries = 0;
+    let mut retries = 3;
     loop {
         let result = source.store_database(packfile, bucket, object);
         if result.is_ok() {
             return result;
         }
-        retries += 1;
-        if retries == 3 {
+        retries -= 1;
+        if retries == 0 {
             return result;
         }
         warn!("database store failed, will retry: {:?}", result);
@@ -756,6 +792,75 @@ mod tests {
         }
         let last1 = repo.get_bucket_name(&computer_id);
         assert_ne!(actual, last1);
+    }
+
+    #[test]
+    fn test_get_new_bucket_name() {
+        // arrange
+        let mut builder = MockPackSourceBuilder::new();
+        builder
+            .expect_build_source()
+            .returning(|_| Ok(Box::new(MockPackDataSource::new())));
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
+        let first = repo.get_bucket_name(&computer_id);
+        // assert
+        assert!(!first.is_empty());
+        let second = repo.get_new_bucket_name(&first);
+        assert_ne!(first, second);
+        assert_eq!(first.len(), second.len());
+        assert_eq!(&first[26..], &second[26..]);
+    }
+
+    #[test]
+    fn test_store_pack_collision() {
+        // arrange
+        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
+        let bucket_name = generate_bucket_name(&computer_id);
+        let name_clone = bucket_name.clone();
+        let mut builder = MockPackSourceBuilder::new();
+        builder.expect_build_source().returning(move |_| {
+            let mut source = MockPackDataSource::new();
+            let name1 = name_clone.clone();
+            let name2 = name_clone.clone();
+            source
+                .expect_store_pack()
+                .with(always(), eq(name1), always())
+                .returning(|_, _, _| Err(Error::from(CollisionError {})));
+            source
+                .expect_store_pack()
+                .with(always(), ne(name2), always())
+                .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
+            Ok(Box::new(source))
+        });
+        let stores = vec![Store {
+            id: "localtmp".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties: HashMap::new(),
+        }];
+        // act
+        let result = PackRepositoryImpl::new(stores, Box::new(builder));
+        assert!(result.is_ok());
+        let repo = result.unwrap();
+        let input_file = PathBuf::from("/home/planet/important.txt");
+        let result = repo.store_pack(&input_file, &bucket_name, "object1");
+        // assert
+        assert!(result.is_ok());
+        let locations = result.unwrap();
+        assert_eq!(locations.len(), 1);
+        let location = &locations[0];
+        assert_ne!(location.bucket, bucket_name);
+        assert_eq!(&location.bucket[26..], &bucket_name[26..]);
     }
 
     #[test]

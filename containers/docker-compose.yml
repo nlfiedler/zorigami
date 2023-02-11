@@ -1,0 +1,29 @@
+#
+# Define containers used in automated testing.
+#
+version: '3.7'
+
+services:
+  sftp:
+    image: atmoz/sftp
+    container_name: zorigami_sftp
+    ports:
+      - "2222:22"
+    command: foo:pass:::upload
+    restart: always
+  minio:
+    image: minio/minio
+    container_name: zorigami_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: Passw0rd!
+    command: "server --console-address :9001 /data"
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3

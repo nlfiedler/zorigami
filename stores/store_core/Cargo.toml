@@ -8,6 +8,7 @@ license = "UNLICENSED"
 [dependencies]
 anyhow = "1.0.55"
 md-5 = "0.10.1"
+thiserror = "1.0.30"
 
 [dev-dependencies]
 mockall = "0.11.0"

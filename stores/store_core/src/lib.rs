@@ -1,10 +1,11 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 
 //! Defines the traits and types for all pack stores.
 
 use anyhow::Error;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -64,6 +65,19 @@ impl Coordinates {
             bucket: bucket.to_owned(),
             object: object.to_owned(),
         }
+    }
+}
+
+///
+/// Raised when the cloud service indicates that a bucket with the same name
+/// already exists but belongs to another project.
+///
+#[derive(thiserror::Error, Debug)]
+pub struct CollisionError;
+
+impl fmt::Display for CollisionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bucket collision")
     }
 }
 
