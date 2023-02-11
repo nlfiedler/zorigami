@@ -1,31 +1,5 @@
 # NOTES
 
-### Ransomware protection
-
-> CloudBerry Backup detects encryption changes in files and prevents existing
-> backups from being overwritten until an administrator confirms if there is an
-> issue.
-
-Arq backup describes this as:
-
-> Ransomware protection - point-in-time recovery of files
-
-https://ruderich.org/simon/notes/append-only-backups-with-restic-and-rclone
-
-> One issue with most backup solutions is that an attacker controlling the local
-> system can also wipe its old backups. To prevent this the backup must permit
-> append-only backups (also called add-only backups).
-
-They change the SSH config to run the backup command with "append only" flag.
-
-## Interface
-
-* Web browser
-* Desktop application
-* System tray icon/menu
-* Browse by snapshot, then folders and files
-* Move through snapshots for a particular path
-
 ## Architecture
 
 * HTTP backend as GraphQL server
@@ -38,7 +12,6 @@ They change the SSH config to run the backup command with "append only" flag.
 
 * Backend written in Rust, uses Juniper GraphQL server
 * Front-end written in Flutter, uses Angel GraphQL client
-* Desktop application written in Flutter
 * Key/Value store is RocksDB
 * Storage implementations support local, SFTP, Google, Amazon, etc
 
@@ -79,7 +52,7 @@ They change the SSH config to run the backup command with "append only" flag.
     - Small files are combined into pack files
 * Pack files are stored remotely
 * Database is used to store metadata
-    - Database is saved just like any other file set
+    - Database is saved in special bucket
 
 ### Computer UUID
 
@@ -216,7 +189,7 @@ Sync with peers for multi-host chunk deduplication.
 Uses a content-defined chunking (a.k.a. content-dependent chunking) algorithm to
 determine suitable chunk boundaries, and stores each unique chunk once based on
 the SHA256 digest of the chunk. In particular, uses
-[FastCDC](https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf)
+[FastCDC](https://crates.io/crates/fastcdc)
 which is much faster than Rabin-based fingerprinting, and somewhat faster than
 Gear. This avoids the shortcomings of fixed-size chunking due to boundary
 shifting.
@@ -308,3 +281,9 @@ Remove the snapshot record to be deleted, then garbage collect.
     - Linux gnome-keyring
 * If an environment variable is set, can use that
     - c.f. https://forum.duplicacy.com/t/passwords-credentials-and-environment-variables/1094
+
+### Bucket Collision
+
+Generated bucket names are random and long but collisions with existing buckets owned by other accounts can still happen. As a result, the pack repository will generate a new name and try again. The updated bucket name is returned as the _pack location_ that is stored in the database.
+
+For the database backups, the bucket rename solution is different, and relies on the cloud service provider to offer a per-account database of some sort. When a bucket collision occurs when storing the database snapshot, the pack source (not repository) will use the cloud services to record a new name, and use that name each time thereafter. This is not possible for all pack sources, such as Minio, which does not offer other services. It is assumed that Minio, as well as the local and SFTP pack sources, can reliably use whatever bucket names they need.

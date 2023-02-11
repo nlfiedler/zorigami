@@ -1,14 +1,4 @@
 * Tasks
-** DONE devise general bucket collision solution
-*** pack store must detect collision error in either =CreateBucket= or =PutObject=
-*** pack repo will generate a new bucket name and try again
-*** DONE change =minio= container to have two users for testing
-*** DONE add bucket collision error type to =store_core=
-*** DONE add tests to pack stores for detecting bucket collisions
-*** DONE add =get_new_bucket_name()= to =PackRepository= that forces a new bucket name
-*** DONE change pack repo =store_pack_retry()= to handle collisions
-*** DONE change =store_google= to return =CollisionError= versus =ForbiddenError=
-*** DONE add pack repo test with mock source that returns bucket collision error
 ** TODO devise solution for limited number of S3 buckets
 *** need to re-use buckets to avoid hard limits on number of buckets per account
 *** pack stores will detect and assign object to a different bucket
@@ -45,20 +35,17 @@
 **** like =store_google=, must manage case of computer id bucket name not being available
 *** TODO set up local server for testing with source tree minus =tmp= and =target=
 **** use a separate account/user/keys from the ~zorigami-test~ to keep it safe from the unit tests
-** TODO doc: add to =NOTES.md= about the database bucket collision solution
-*** only applies to the database bucket because its mapping must be stored outside the database
-*** pack store collisions can be handled by renaming and storing the new bucket name in the database
 ** TODO Change pack file and database backup file format
 *** using tar involves a lot of overhead for each entry
 *** [[https://en.wikipedia.org/wiki/7z][7z]] is an open format that is better than zip, offers AES256 encryption
 *** DONE evaluate the encryption method used in the =zip= crate/format
 **** AES present since 2003 (but not AES-256?)
-**** =zip= create does not (yet) support encryption
+**** =zip= crate does not (yet) support encryption
 **** check on file size limits (original zip has 4gb limits, zip64 is much higher)
 *** TODO try https://crates.io/crates/sevenz-rust for pack files
 *** TODO try https://crates.io/crates/sevenz-rust for database backup
 *** compute before and after metrics for comparison
-** TODO add =to_uuid()= to =Configuration= entity that calls =blob_uuid::to_uuid()=
+*** TODO doc: update =NOTES.md= regarding pack file format
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -556,6 +543,19 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Hidden
 **** System
 ** More Better
+*** Ransomware protection
+**** descriptions of what this means
+***** CloudBerry
+: CloudBerry Backup detects encryption changes in files and prevents existing
+: backups from being overwritten until an administrator confirms if there is an
+: issue.
+***** Arq:
+: Ransomware protection - point-in-time recovery of files
+***** https://ruderich.org/simon/notes/append-only-backups-with-restic-and-rclone
+: One issue with most backup solutions is that an attacker controlling the local
+: system can also wipe its old backups. To prevent this the backup must permit
+: append-only backups (also called add-only backups).
+****** They change the SSH config to run the backup command with "append only" flag.
 *** TODO Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
 *** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
