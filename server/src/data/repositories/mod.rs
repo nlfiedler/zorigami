@@ -295,22 +295,18 @@ impl PackRepositoryImpl {
         // collision, generate a new bucket name for that store (and each one
         // after), returning the updated pack location.
         loop {
-            let result = source.store_pack(packfile, &bucket_name, object);
             match source.store_pack(packfile, &bucket_name, object) {
                 Ok(coords) => return Ok(coords),
                 Err(err) => match err.downcast::<CollisionError>() {
                     Ok(_) => {
                         bucket_name = self.get_new_bucket_name(&bucket_name);
                     }
-                    Err(_) => {
-                        if result.is_ok() {
-                            return result;
-                        }
+                    Err(e) => {
                         retries -= 1;
                         if retries == 0 {
-                            return result;
+                            return Err(e);
                         }
-                        warn!("pack store failed, will retry: {:?}", result);
+                        warn!("pack store failed, will retry: {:?}", e);
                     }
                 },
             }
