@@ -1,8 +1,4 @@
 * Tasks
-** TODO devise solution for limited number of S3 buckets
-*** need to re-use buckets to avoid hard limits on number of buckets per account
-*** pack stores will detect and assign object to a different bucket
-*** pack store returns the pack location with changed coordinates
 ** TODO Develop support for Amazon S3/Glacier
 *** DONE find out how =rusoto_s3= can define the storage class
 **** set =storage_class= on =rusoto_s3::PutObjectRequest=
@@ -33,7 +29,8 @@
 *** DONE make sure buckets are created in the correct region
 *** TODO =store_amazon= must use DynamoDB for database bucket renames
 **** like =store_google=, must manage case of computer id bucket name not being available
-*** TODO set up local server for testing with source tree minus =tmp= and =target=
+*** TODO set up local server for testing with full source tree
+**** excludes: =.git, **/.tmp, **/tmp, **/target=
 **** use a separate account/user/keys from the ~zorigami-test~ to keep it safe from the unit tests
 ** TODO Change pack file and database backup file format
 *** using tar involves a lot of overhead for each entry
@@ -42,9 +39,14 @@
 **** AES present since 2003 (but not AES-256?)
 **** =zip= crate does not (yet) support encryption
 **** check on file size limits (original zip has 4gb limits, zip64 is much higher)
+*** DONE evaluate how =sevenz-rust= handles the password
+**** uses the coder salt and padding to hash password
+*** =sevenz-rust= does not yet write with encryption
 *** TODO try https://crates.io/crates/sevenz-rust for pack files
 *** TODO try https://crates.io/crates/sevenz-rust for database backup
-*** compute before and after metrics for comparison
+*** TODO compute before and after metrics for comparison
+*** TODO remove =tar= and =flate2= dependencies
+*** TODO maybe can remove =sodiumoxide= crate
 *** TODO doc: update =NOTES.md= regarding pack file format
 ** Chunking
 *** TODO maybe calculate chunk size based on file size distribution

@@ -4,6 +4,7 @@
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
+use lazy_static::lazy_static;
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, DeleteBucketRequest,
@@ -11,8 +12,28 @@ use rusoto_s3::{
     StreamingBody, S3,
 };
 use std::collections::HashMap;
+use std::fmt;
 use std::path::Path;
+use std::sync::Mutex;
 use store_core::{CollisionError, Coordinates};
+
+lazy_static! {
+    // Names of all existing S3 buckets. Populated and used only when too many
+    // buckets have been created.
+    static ref BUCKET_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+}
+
+///
+/// Raised when S3 indicates the account has too many buckets.
+///
+#[derive(thiserror::Error, Debug)]
+pub struct TooManyBucketsError;
+
+impl fmt::Display for TooManyBucketsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "too many buckets")
+    }
+}
 
 ///
 /// A pack store implementation for Amazon S3/Glacier.
@@ -77,6 +98,36 @@ impl AmazonStore {
         block_on(self.store_pack(packfile, bucket, object)).and_then(std::convert::identity)
     }
 
+    // Try to create the named bucket.
+    //
+    // If that fails due to too many buckets, select one of the existing buckets
+    // at random and use that instead.
+    //
+    // Returns the name of the bucket that was created or selected.
+    async fn try_create_bucket(&self, client: &S3Client, bucket: &str) -> Result<String, Error> {
+        match create_bucket(&client, bucket, &self.region).await {
+            Err(err) => match err.downcast::<TooManyBucketsError>() {
+                Ok(_) => {
+                    let mut names = BUCKET_NAMES.lock().unwrap();
+                    if names.is_empty() {
+                        // The mutex is held during the time of requesting the
+                        // list of buckets, which is acceptable. Note also that
+                        // the list of buckets is never updated again, as that
+                        // is assumed to be acceptable as well (normally never
+                        // remove any buckets so the list remains static).
+                        *names = self.list_buckets().await?;
+                    }
+                    use rand::{thread_rng, Rng};
+                    let mut rng = thread_rng();
+                    let idx = rng.gen_range(0..names.len());
+                    Ok(names[idx].to_owned())
+                }
+                Err(err) => Err(err),
+            },
+            Ok(()) => Ok(bucket.to_owned()),
+        }
+    }
+
     pub async fn store_pack(
         &self,
         packfile: &Path,
@@ -84,8 +135,9 @@ impl AmazonStore {
         object: &str,
     ) -> Result<Coordinates, Error> {
         let client = self.connect();
-        // the bucket must exist before receiving objects
-        create_bucket(&client, bucket, &self.region).await?;
+        // a bucket must exist before receiving objects; note that the bucket
+        // may be renamed if there are too many buckets already
+        let bucket_name = self.try_create_bucket(&client, bucket).await?;
         //
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
@@ -95,7 +147,7 @@ impl AmazonStore {
             .into_stream()
             .map_ok(|b| Bytes::from(b));
         let req = PutObjectRequest {
-            bucket: bucket.to_owned(),
+            bucket: bucket_name.clone(),
             storage_class: Some(self.storage.clone()),
             key: object.to_owned(),
             content_length: Some(meta.len() as i64),
@@ -113,8 +165,7 @@ impl AmazonStore {
                 return Err(anyhow!("returned e_tag does not match MD5 of pack file"));
             }
         }
-        let loc = Coordinates::new(&self.store_id, bucket, object);
-        Ok(loc)
+        Ok(Coordinates::new(&self.store_id, &bucket_name, object))
     }
 
     pub fn retrieve_pack_sync(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
@@ -279,14 +330,23 @@ async fn create_bucket(client: &S3Client, bucket: &str, region: &str) -> Result<
     };
     // wait for the future(s) to complete
     let result = client.create_bucket(request).await;
-    // certain error conditions are okay
+    // certain error conditions are okay while others need to be detected and
+    // converted to discrete error types
     match result {
         Err(e) => match e {
             RusotoError::Service(ref se) => match se {
                 CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
             },
-            _ => Err(anyhow!(format!("{}", e))),
+            RusotoError::Unknown(ref bhr) => {
+                // rusoto_s3 does not recognize many errors very well
+                if bhr.status.as_u16() == 400 && bhr.body_as_str().contains("TooManyBuckets") {
+                    Err(Error::from(TooManyBucketsError {}))
+                } else {
+                    Err(e.into())
+                }
+            }
+            _ => Err(e.into()),
         },
         Ok(_) => Ok(()),
     }
