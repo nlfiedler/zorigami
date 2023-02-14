@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
@@ -11,7 +11,6 @@ use std::path::Path;
 use storage1::hyper::client::HttpConnector;
 use storage1::hyper_rustls::HttpsConnector;
 use store_core::{CollisionError, Coordinates};
-use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct GoogleStore {
@@ -376,7 +375,7 @@ impl GoogleStore {
                                 // name and hope that it will work. Type 4 UUID
                                 // works well since it conforms to Google's
                                 // bucket naming conventions.
-                                bucket_name = Uuid::new_v4().to_string();
+                                bucket_name = uuid::Uuid::new_v4().to_string();
                                 self.save_bucket_name(bucket, &bucket_name).await?;
                             }
                             Err(err) => return Err(err),
@@ -668,7 +667,7 @@ mod tests {
         assert_eq!(&databases[0], &object);
 
         // remove database mapping for test reproduction
-        source.delete_bucket_name("afd73b8b997a5452b94a6b7c564041b1")?;
+        source.delete_bucket_name(&bucket)?;
         Ok(())
     }
 }
