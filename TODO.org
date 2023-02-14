@@ -27,8 +27,7 @@
 *** DONE try running the =store_amazon= tests against S3
 *** DONE add new widgets and such for ~amazon~ pack store
 *** DONE make sure buckets are created in the correct region
-*** TODO =store_amazon= must use DynamoDB for database bucket renames
-**** like =store_google=, must manage case of computer id bucket name not being available
+*** DONE =store_amazon= must use DynamoDB for database bucket renames
 *** TODO set up local server for testing with full source tree
 **** excludes: =.git, **/.tmp, **/tmp, **/target=
 **** use a separate account/user/keys from the ~zorigami-test~ to keep it safe from the unit tests

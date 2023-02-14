@@ -6,6 +6,11 @@ use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
 use lazy_static::lazy_static;
 use rusoto_core::{Region, RusotoError};
+use rusoto_dynamodb::{
+    AttributeDefinition, AttributeValue, CreateTableError, CreateTableInput, DeleteItemInput,
+    DescribeTableInput, DynamoDb, DynamoDbClient, GetItemError, GetItemInput, KeySchemaElement,
+    ProvisionedThroughput, PutItemInput,
+};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, DeleteBucketRequest,
     DeleteObjectRequest, GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client,
@@ -14,6 +19,7 @@ use rusoto_s3::{
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Mutex;
 use store_core::{CollisionError, Coordinates};
 
@@ -22,6 +28,9 @@ lazy_static! {
     // buckets have been created.
     static ref BUCKET_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 }
+
+// Name of the table in DynomaDB for tracking bucket renames.
+const RENAMES_TABLE: &str = "zori_renames";
 
 ///
 /// Raised when S3 indicates the account has too many buckets.
@@ -72,11 +81,6 @@ impl AmazonStore {
     }
 
     fn connect(&self) -> S3Client {
-        //
-        // Credentials are picked up in a variety of ways, see the rusoto docs:
-        // https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
-        //
-        use std::str::FromStr;
         let region = Region::from_str(&self.region).unwrap_or(Region::default());
         let client = rusoto_core::request::HttpClient::new().unwrap();
         let creds = rusoto_credential::StaticProvider::new(
@@ -86,6 +90,18 @@ impl AmazonStore {
             None,
         );
         S3Client::new_with(client, creds, region)
+    }
+
+    fn connect_dynamo(&self) -> DynamoDbClient {
+        let region = Region::from_str(&self.region).unwrap_or(Region::default());
+        let client = rusoto_core::request::HttpClient::new().unwrap();
+        let creds = rusoto_credential::StaticProvider::new(
+            self.access_key.clone(),
+            self.secret_key.clone(),
+            None,
+            None,
+        );
+        DynamoDbClient::new_with(client, creds, region)
     }
 
     pub fn store_pack_sync(
@@ -287,34 +303,208 @@ impl AmazonStore {
         }
     }
 
+    /// Record the new name of the bucket.
+    async fn save_bucket_name(&self, original: &str, renamed: &str) -> Result<(), Error> {
+        let client = self.connect_dynamo();
+        // ensure the renames table exists
+        let mut create_input = CreateTableInput::default();
+        create_input.table_name = RENAMES_TABLE.into();
+        create_input.attribute_definitions = vec![AttributeDefinition {
+            attribute_name: "original".into(),
+            attribute_type: "S".into(),
+        }];
+        create_input.key_schema = vec![KeySchemaElement {
+            attribute_name: "original".into(),
+            key_type: "HASH".into(),
+        }];
+        create_input.provisioned_throughput = Some(ProvisionedThroughput {
+            read_capacity_units: 5,
+            write_capacity_units: 5,
+        });
+        let result = client.create_table(create_input).await;
+        let created_result: Result<bool, Error> = if let Err(err) = result {
+            match err {
+                RusotoError::Service(ref se) => match se {
+                    CreateTableError::ResourceInUse(_) => Ok(false),
+                    _ => Err(err.into()),
+                },
+                _ => Err(err.into()),
+            }
+        } else {
+            Ok(true)
+        };
+
+        // Wait for the new table to become ACTIVE, allowing for errors as the
+        // describe table request may fail initially while the table is not yet
+        // ready to be queried.
+        if created_result? {
+            let mut retries = 10;
+            let delay = std::time::Duration::from_millis(1000);
+            loop {
+                let mut describe_input = DescribeTableInput::default();
+                describe_input.table_name = RENAMES_TABLE.into();
+                match client.describe_table(describe_input).await {
+                    Ok(output) => {
+                        if let Some(table) = output.table {
+                            if let Some(status) = table.table_status {
+                                if status == "ACTIVE" {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        retries -= 1;
+                        if retries == 0 {
+                            return Err(err.into());
+                        }
+                        std::thread::sleep(delay);
+                    }
+                }
+            }
+        }
+
+        // insert table entry that maps `original` to `renamed`
+        let mut put_input = PutItemInput::default();
+        put_input.table_name = RENAMES_TABLE.into();
+        let mut item: HashMap<String, AttributeValue> = HashMap::new();
+        let mut value = AttributeValue::default();
+        value.s = Some(original.into());
+        item.insert("original".into(), value);
+        let mut value = AttributeValue::default();
+        value.s = Some(renamed.into());
+        item.insert("renamed".into(), value);
+        put_input.item = item;
+        client.put_item(put_input).await?;
+        Ok(())
+    }
+
+    /// Retrieve the renamed value for the original bucket.
+    async fn get_bucket_name(&self, original: &str) -> Result<Option<String>, Error> {
+        let client = self.connect_dynamo();
+        let mut get_input = GetItemInput::default();
+        get_input.table_name = RENAMES_TABLE.into();
+        let mut key: HashMap<String, AttributeValue> = HashMap::new();
+        let mut value = AttributeValue::default();
+        value.s = Some(original.into());
+        key.insert("original".into(), value);
+        get_input.key = key;
+        match client.get_item(get_input).await {
+            Ok(output) => {
+                if let Some(items) = output.item {
+                    if let Some(value) = items.get("renamed") {
+                        return Ok(value.s.to_owned());
+                    }
+                }
+                Ok(None)
+            }
+            Err(err) => match err {
+                RusotoError::Service(ref se) => match se {
+                    GetItemError::ResourceNotFound(_) => Ok(None),
+                    _ => Err(err.into()),
+                },
+                _ => Err(err.into()),
+            },
+        }
+    }
+
+    // for testing purposes only
+    #[allow(dead_code)]
+    fn delete_bucket_name(&self, original: &str) -> Result<(), Error> {
+        block_on(async {
+            let client = self.connect_dynamo();
+            let mut delete_input = DeleteItemInput::default();
+            delete_input.table_name = RENAMES_TABLE.into();
+            let mut key: HashMap<String, AttributeValue> = HashMap::new();
+            let mut value = AttributeValue::default();
+            value.s = Some(original.into());
+            key.insert("original".into(), value);
+            delete_input.key = key;
+            client.delete_item(delete_input).await?;
+            Ok(())
+        })
+        .and_then(std::convert::identity)
+    }
+
     pub fn store_database_sync(
         &self,
         packfile: &Path,
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        self.store_pack_sync(packfile, bucket, object)
+        block_on(self.store_database(packfile, bucket, object)).and_then(std::convert::identity)
     }
 
-    // pub async fn store_database(
-    //     &self,
-    //     packfile: &Path,
-    //     bucket: &str,
-    //     object: &str,
-    // ) -> Result<Coordinates, Error> {
-    //     self.store_pack(packfile, bucket, object)
-    // }
+    pub async fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+            // If the renamed bucket fails for some reason, then report it
+            // immediately, do not attempt to generate a new name again.
+            self.store_pack(packfile, &renamed, object).await
+        } else {
+            // Store the database in the same manner as any pack file, using the
+            // given bucket and object names. If there is a collision with an
+            // existing bucket that belongs to a different project, generate a
+            // new random bucket name and try that instead. Loop until it works
+            // or fails in some other manner.
+            let mut bucket_name = bucket.to_owned();
+            loop {
+                match self.store_pack(packfile, &bucket_name, object).await {
+                    Ok(coords) => return Ok(coords),
+                    Err(err) => {
+                        match err.downcast::<CollisionError>() {
+                            Ok(_) => {
+                                // There was a collision, simply generate a new
+                                // name and hope that it will work. Type 4 UUID
+                                // works well since it conforms to Amazon's
+                                // bucket naming conventions.
+                                bucket_name = uuid::Uuid::new_v4().to_string();
+                                self.save_bucket_name(bucket, &bucket_name).await?;
+                            }
+                            Err(err) => return Err(err),
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     pub fn retrieve_database_sync(
         &self,
         location: &Coordinates,
         outfile: &Path,
     ) -> Result<(), Error> {
-        self.retrieve_pack_sync(location, outfile)
+        block_on(self.retrieve_database(location, outfile)).and_then(std::convert::identity)
+    }
+
+    pub async fn retrieve_database(
+        &self,
+        location: &Coordinates,
+        outfile: &Path,
+    ) -> Result<(), Error> {
+        if let Some(renamed) = self.get_bucket_name(&location.bucket).await? {
+            let mut adjusted = location.clone();
+            adjusted.bucket = renamed;
+            self.retrieve_pack(&adjusted, outfile).await
+        } else {
+            self.retrieve_pack(location, outfile).await
+        }
     }
 
     pub fn list_databases_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        self.list_objects_sync(bucket)
+        block_on(self.list_databases(bucket)).and_then(std::convert::identity)
+    }
+
+    pub async fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+            self.list_objects(&renamed).await
+        } else {
+            self.list_objects(bucket).await
+        }
     }
 }
 
@@ -506,6 +696,53 @@ mod tests {
             }
             source.delete_bucket_sync(&bucket)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_amazon_database_bucket_collision() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let region_var = env::var("AWS_REGION");
+        if region_var.is_err() {
+            // bail out silently if amazon is not configured
+            return Ok(());
+        }
+        let region = region_var?;
+        let access_key = env::var("AWS_ACCESS_KEY")?;
+        let secret_key = env::var("AWS_SECRET_KEY")?;
+
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), region);
+        properties.insert("storage".to_owned(), "STANDARD_IA".into());
+        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("secret_key".to_owned(), secret_key);
+        let source = AmazonStore::new("amazon1", &properties)?;
+
+        // store an object in a bucket that already exists and belongs to
+        // another AWS account (surprise, mybucketname is already taken)
+        let bucket = "mybucketname".to_owned();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_database_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.store, "amazon1");
+        assert_ne!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // retrieve the database file using the original coordinates
+        let location = Coordinates::new("amazon1", &bucket, &object);
+        let outdir = tempdir()?;
+        let outfile = outdir.path().join("restored.txt");
+        source.retrieve_database_sync(&location, &outfile)?;
+
+        // list available databases
+        let databases = source.list_databases_sync(&bucket)?;
+        assert_eq!(databases.len(), 1);
+        assert_eq!(&databases[0], &object);
+
+        // remove database mapping for test reproduction
+        source.delete_bucket_name(&bucket)?;
         Ok(())
     }
 }
