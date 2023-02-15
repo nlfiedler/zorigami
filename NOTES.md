@@ -6,14 +6,14 @@
 * Web frontend as GraphQL client
 * Desktop application as GraphQL client
 * Key/Value store for metadata
-* Local or Remote file store(s) for pack storage
+* Local or Remote store for pack storage
 
 ## Design
 
 * Backend written in Rust, uses Juniper GraphQL server
 * Front-end written in Flutter, uses Angel GraphQL client
 * Key/Value store is RocksDB
-* Storage implementations support local, SFTP, Google, Amazon, etc
+* Pack storage supports local, Amazon, Google, Minio, SFTP
 
 ## Use Cases
 
@@ -81,28 +81,23 @@
 * UUID makes it easy to find buckets associated with this computer and user
 * UUID may change after (re)installation and this is okay
     - Pack records contain the fully-qualified locations regardless of UUID
+* Database snapshots saved to bucket whose name is the computer UUID
+    - Cloud-based pack stores handle bucket collision using remote database
+    - Amazon pack store using DynamoDB, Google uses Firestore
 
 ### Pack Files
 
 * contains raw file content
 * default pack file size of 64MB
-    - allow configuring pack file size, since it is inconsequential
-    - should restrict pack files to between 16 to 256 MB in size
 * pack file format
-    - plain tar file
+    - [7z](https://en.wikipedia.org/wiki/7z) compressed archive file
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
-    - compressed using zlib
     - encrypted with libsodium using passphrase
 
 ### Database Schema
 
-The database is a key/value store (technically a log-structured merge tree)
-provided by [RocksDB](https://rocksdb.org). The records are all stored using
-[CBOR](https://cbor.io) unless noted otherwise, in which case they are probably
-JSON. The records consist of key/value pairs with shortened names, to keep
-storage consumption to a minimum. Each record key has a prefix that indicates
-what type of record it is, such as `chunk/` for chunk records, and so on.
+The database is a key/value store provided by [RocksDB](https://rocksdb.org). The records are all stored using [CBOR](https://cbor.io) unless noted otherwise, most likely JSON. The records consist of key/value pairs with abbreviated names to minimize storage use. Each record key has a prefix that indicates what type of record it is, such as `chunk/` for chunk records.
 
 #### Primary Database
 
@@ -200,6 +195,10 @@ When the peer(s) are available, sync with their chunk/pack database to get
 recent records. If there are conflicts (which seems unlikely given the pack
 would have to have the exact same chunks) resolve by keeping the pack record
 that has the most recent `upload_time`.
+
+### Database Snapshots
+
+Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is compressed into a 7z archive and uploaded to the pack store in the special bucket.
 
 ### Procedure
 

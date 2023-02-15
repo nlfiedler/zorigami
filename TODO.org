@@ -1,54 +1,42 @@
 * Tasks
-** TODO Develop support for Amazon S3/Glacier
-*** DONE find out how =rusoto_s3= can define the storage class
-**** set =storage_class= on =rusoto_s3::PutObjectRequest=
-*** DONE find solution to the ~rename~ feature used in google store
-**** need a means of tracking bucket collisions and the rename value
-**** https://aws.amazon.com/dynamodb/
-*** DONE fork =store_minio= to =store_amazon=, there will be incompatible changes
-*** DONE find out what S3 uses for storage class names (e.g. =STANDARD=)
-**** c.f. https://docs.aws.amazon.com/cli/latest/reference/s3api/put-object.html
-**** option =--storage-class= takes a ~string~ of one of the following
-| Name                |
-|---------------------|
-| STANDARD            |
-| REDUCED_REDUNDANCY  |
-| STANDARD_IA         |
-| ONEZONE_IA          |
-| INTELLIGENT_TIERING |
-| GLACIER             |
-| DEEP_ARCHIVE        |
-| OUTPOSTS            |
-| GLACIER_IR          |
-*** DONE make sure AWS credentials are working and S3 is ready to use
-*** DONE add the storage class argument to amazon configuration
-*** DONE ensure storage class is passed to S3 on put object
-*** DONE remove the ~endpoint~ argument for amazon store
-*** DONE try running the =store_amazon= tests against S3
-*** DONE add new widgets and such for ~amazon~ pack store
-*** DONE make sure buckets are created in the correct region
-*** DONE =store_amazon= must use DynamoDB for database bucket renames
-*** TODO set up local server for testing with full source tree
-**** excludes: =.git, **/.tmp, **/tmp, **/target=
-**** use a separate account/user/keys from the ~zorigami-test~ to keep it safe from the unit tests
-** TODO Change pack file and database backup file format
+** DONE Replace tar with 7z
 *** using tar involves a lot of overhead for each entry
 *** [[https://en.wikipedia.org/wiki/7z][7z]] is an open format that is better than zip, offers AES256 encryption
-*** DONE evaluate the encryption method used in the =zip= crate/format
-**** AES present since 2003 (but not AES-256?)
-**** =zip= crate does not (yet) support encryption
-**** check on file size limits (original zip has 4gb limits, zip64 is much higher)
-*** DONE evaluate how =sevenz-rust= handles the password
-**** uses the coder salt and padding to hash password
-*** =sevenz-rust= does not yet write with encryption
-*** TODO try https://crates.io/crates/sevenz-rust for pack files
-*** TODO try https://crates.io/crates/sevenz-rust for database backup
-*** TODO compute before and after metrics for comparison
-*** TODO remove =tar= and =flate2= dependencies
-*** TODO maybe can remove =sodiumoxide= crate
-*** TODO doc: update =NOTES.md= regarding pack file format
-** Chunking
-*** TODO maybe calculate chunk size based on file size distribution
+*** zip uses AES encryption (not AES-256)
+*** do _not_ use 7z encryption since using a salt is more secure
+*** DONE try https://crates.io/crates/sevenz-rust for pack files
+*** DONE try https://crates.io/crates/sevenz-rust for database backup
+*** DONE remove =tar= and =flate2= dependencies
+*** DONE doc: update =NOTES.md= regarding pack file and database snapshot formats
+*** DONE fork sevenz-rust and fix issue #9
+** TODO collect before and after metrics for comparison
+*** =test_pack_builder_single= unit test
+| when   | size |
+|--------+------|
+| before | 6656 |
+| after  | 3572 |
+*** grep the log output for =complete for= to get ~packs~ and ~files~
+*** before (using gzip compressed chunks tar file)
+| system | packs |  files | files/pack |
+|--------+-------+--------+------------|
+| mini   |    82 | 335675 |       4093 |
+| kohaku |  3974 | 132682 |         33 |
+*** after (using 7z to compress and archive)
+| system | packs | files | files/pack |
+|--------+-------+-------+------------|
+| mini   |       |       |            |
+| kohaku |       |       |            |
+** TODO Support Microsoft Azure blob storage
+*** buckets are called ~containers~ and objects are called ~blobs~
+*** any number of containers, any number of blobs
+*** prices similar to Amazon S3 and Google Cloud Storage
+*** container names conform to same rules as S3 and Google
+*** blob naming rules are very generous
+*** configuration parameters must include ~account~ name
+*** c.f. https://learn.microsoft.com/en-us/azure/storage/blobs/blob-upload-function-trigger-javascript
+*** c.f. https://crates.io/crates/azure_storage_blobs
+** Dynamic chunk size calculation
+*** maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
 **** if there are many large files, then chunk sizes should be larger
 **** chunk sizes less than 1kb would be too much overhead to track
@@ -174,11 +162,6 @@ $ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -
  134217728      7
  268435456      2
 #+end_src
-** Consider if HMAC would be better for pack files
-*** combines verification of data integrity and authenticity
-*** consider the computational cost (computes everything twice)
-*** asuran backend ~where blobs are addressed by an HMAC of their plaintext~
-*** c.f. https://en.wikipedia.org/wiki/HMAC
 ** Replace Time Machine
 *** TODO develop as a macOS app that bundles the =server= and starts at login
 **** consider if =launchd= is needed for this
@@ -226,9 +209,9 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
-** Bucket re-use
-*** rather than hard-coded number of objects, should be determined by pack stores
-*** some pack stores will expect 10's of thousands of objects per bucket
+** Dynamic bucket allocation
+*** hard-coded value of 128 is pretty low for local pack stores
+*** cloud-based pack stores can accommodate many objects per bucket
 *** could consider how frequently new packs are created (1 per day vs hundreds)
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
@@ -236,6 +219,7 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
+*** design mechanism for changing the passphrase but keeping old ones for decrypting packs
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
@@ -582,9 +566,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** must invalidate all of the snapshots effected by the missing store
 *** TODO Permit moving from one store to another
 **** would mean downloading the packs and uploading them to the new store
-*** TODO Support Microsoft Azure blob storage
-**** buckets are called ~containers~ and objects are called ~blobs~
-**** c.f. https://crates.io/crates/azure_storage_blobs
 *** TODO Consider how to backup and restore FIFO, BLK, and CHR "files"
 **** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
 **** c.f. https://github.com/avz/node-mkfifo (for FIFO)

@@ -1,15 +1,14 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::Chunk;
 use anyhow::{anyhow, Error};
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
+use sevenz_rust::{SevenZArchiveEntry, SevenZWriter};
 use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use tar::{Archive, Builder, Header};
+use std::sync::Mutex;
 
 /// Builds a tar file one chunk at a time, with each chunk compressed
 /// separately, with the overall size being not much larger than a set size.
@@ -18,8 +17,8 @@ pub struct PackBuilder {
     target_size: u64,
     /// Compressed bytes written to the pack so far.
     bytes_packed: u64,
-    /// Tar file builder.
-    builder: Option<Builder<File>>,
+    /// 7z file writer.
+    builder: Option<SevenZWriter<File>>,
     /// Path of the output file.
     filepath: Option<PathBuf>,
     /// Number of chunks added to the pack.
@@ -54,7 +53,7 @@ impl PackBuilder {
     pub fn initialize(&mut self, outfile: &Path) -> Result<(), Error> {
         self.filepath = Some(outfile.to_path_buf());
         let file = File::create(outfile)?;
-        let builder = Builder::new(file);
+        let builder = SevenZWriter::new(file)?;
         self.builder = Some(builder);
         Ok(())
     }
@@ -71,43 +70,27 @@ impl PackBuilder {
             .ok_or_else(|| anyhow!("chunk requires a filepath"))?;
         let mut infile = File::open(filepath)?;
         infile.seek(io::SeekFrom::Start(chunk.offset as u64))?;
-        let mut handle = infile.take(chunk.length as u64);
-        let buffer: Vec<u8> = Vec::new();
-        let mut encoder = GzEncoder::new(buffer, flate2::Compression::default());
-        io::copy(&mut handle, &mut encoder)?;
-        let compressed = encoder.finish()?;
-        let compressed_size = compressed.len() as u64;
-        let mut header = Header::new_gnu();
-        header.set_size(compressed_size);
-        // set the date so the tar file produces the same results for the same
-        // inputs every time; the date for chunks is completely irrelevant
-        header.set_mtime(0);
-        header.set_cksum();
+        let handle = infile.take(chunk.length as u64);
         let builder = self
             .builder
             .as_mut()
             .ok_or_else(|| anyhow!("must call initialize() first"))?;
-        let filename = chunk.digest.to_string();
-        builder.append_data(&mut header, filename, &compressed[..])?;
-        self.bytes_packed += compressed_size;
-        // Account for the overhead of each tar file entry, which can be
-        // significant if there are many (thousands) small files added to a
-        // single pack, pushing the pack from the desired size (e.g. 64mb) to
-        // something much larger (99mb). The actual overhead for a zero-byte
-        // file is more than 1500 bytes but 1024 is closer to the average
-        // overhead for a typical file set (about 800 bytes).
-        self.bytes_packed += 1024;
+        let mut entry: SevenZArchiveEntry = Default::default();
+        entry.name = chunk.digest.to_string();
+        entry.has_stream = true;
+        entry.is_directory = false;
+        let result = builder.push_archive_entry(entry, Some(handle))?;
+        self.bytes_packed += result.compressed_size;
         self.chunks_packed += 1;
         Ok(self.bytes_packed >= self.target_size)
     }
 
     /// Flush pending writes and close the pack file.
     pub fn finalize(&mut self) -> Result<PathBuf, Error> {
-        let _output = self
-            .builder
+        self.builder
             .take()
             .ok_or_else(|| anyhow!("must call initialize() first"))?
-            .into_inner()?;
+            .finish()?;
         let filepath = self
             .filepath
             .take()
@@ -123,24 +106,18 @@ impl PackBuilder {
 /// directory, with the names being the original SHA256 of the chunk (with a
 /// "sha256-" prefix).
 ///
-pub fn extract_pack(infile: &Path, outdir: &Path) -> io::Result<Vec<String>> {
+pub fn extract_pack(infile: &Path, outdir: &Path) -> Result<Vec<String>, Error> {
     fs::create_dir_all(outdir)?;
-    let mut results = Vec::new();
-    let file = File::open(infile)?;
-    let mut ar = Archive::new(file);
-    for entry in ar.entries()? {
-        let file = entry?;
-        let fp = file.path()?;
-        // we know the names are valid UTF-8, we created them
-        let filename = String::from(fp.to_str().unwrap());
-        let mut output_path = outdir.to_path_buf();
-        output_path.push(&filename);
-        let mut output = File::create(output_path)?;
-        let mut decoder = GzDecoder::new(file);
-        io::copy(&mut decoder, &mut output)?;
-        results.push(filename);
-    }
-    Ok(results)
+    let results = Mutex::new(Vec::new());
+    sevenz_rust::decompress_file_with_extract_fn(infile, outdir, |entry, reader, path| {
+        let file = File::create(&path)
+            .map_err(|e| sevenz_rust::Error::FileOpen(e, path.to_string_lossy().to_string()))?;
+        let mut writer = std::io::BufWriter::new(file);
+        std::io::copy(reader, &mut writer).map_err(sevenz_rust::Error::io)?;
+        results.lock().unwrap().push(entry.name.clone());
+        Ok(true)
+    })?;
+    Ok(results.into_inner().unwrap())
 }
 
 #[cfg(test)]
@@ -194,15 +171,11 @@ mod tests {
         assert_eq!(result, packfile);
         // simple validation that works on any platform (checksums of plain text on
         // Windows will vary due to end-of-line characters)
-        let infile = File::open(packfile)?;
-        let mut ar = Archive::new(&infile);
-        for entry in ar.entries()? {
-            let file = entry?;
-            let fp = file.path()?;
-            let fp_as_str = fp.to_str().unwrap();
-            assert_eq!(fp_as_str.len(), 71);
-            assert!(fp_as_str.starts_with("sha256-"));
-        }
+        sevenz_rust::decompress_file_with_extract_fn(packfile, outdir, |entry, _, _| {
+            assert_eq!(entry.name.len(), 71);
+            assert!(entry.name.starts_with("sha256-"));
+            Ok(true)
+        })?;
         Ok(())
     }
 
