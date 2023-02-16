@@ -43,6 +43,16 @@ pub fn md5sum_file(infile: &Path) -> Result<String, Error> {
     Ok(result)
 }
 
+/// Compute the MD5 digest of the given blob of data.
+pub fn md5sum_blob<T: AsRef<[u8]>>(data: T) -> Result<String, Error> {
+    use md5::{Digest, Md5};
+    let mut hasher = Md5::new();
+    hasher.update(data);
+    let digest = hasher.finalize();
+    let result = format!("{:x}", digest);
+    Ok(result)
+}
+
 ///
 /// Remote coordinates for a pack file, naming the store, bucket, and object by
 /// which the pack file can be retrieved.
@@ -96,6 +106,19 @@ mod tests {
             // this checksum is wrong and will need to be fixed
             md5sum,
             "40756e6058736e2485119410c2014380"
+        );
+    }
+
+    #[test]
+    fn test_md5sum_blob() {
+        let md5sum = md5sum_blob(b"hello world").unwrap();
+        #[cfg(target_family = "unix")]
+        assert_eq!(md5sum, "5eb63bbbe01eeed093cb22bb8f5acdc3");
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            // this checksum is wrong and will need to be fixed
+            md5sum,
+            "5eb63bbbe01eeed093cb22bb8f5acdc3"
         );
     }
 }
