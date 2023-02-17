@@ -78,6 +78,9 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     let processor = SchedulerImpl::new(state.clone(), performer).interval(100);
     let result = processor.start(dbase.clone());
     assert!(result.is_ok());
+    // n.b. If the tests seem to be hanging here, check that the store_minio
+    // tests are passing, there could be an issue with the access keys; be sure
+    // to define new access keys if the minio docker container is rebuilt.
     state.wait_for_backup(BackupAction::Finish(dataset.id.clone()));
 
     // restore a file from backup
