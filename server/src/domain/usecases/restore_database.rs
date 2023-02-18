@@ -4,6 +4,7 @@
 use crate::domain::managers::state::{StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Error};
+use log::{debug, error, info, log_enabled, Level};
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
@@ -20,14 +21,22 @@ impl RestoreDatabase {
 
 impl super::UseCase<String, Params> for RestoreDatabase {
     fn call(&self, params: Params) -> Result<String, Error> {
+        if log_enabled!(Level::Debug) {
+            if let Ok(datasets) = self.repo.get_datasets() {
+                debug!("datasets before: {:?}", datasets);
+            }
+        }
         // Signal the supervisor to stop and wait for that to happen.
+        info!("stopping backup supervisor...");
         params.state.supervisor_event(SupervisorAction::Stop);
         params.state.wait_for_supervisor(SupervisorAction::Stopped);
         let result = if let Some(store) = self.repo.get_store(&params.store_id)? {
+            info!("found store {}", store.id);
             let pack_repo = self.repo.build_pack_repo(&store)?;
             let config = self.repo.get_configuration()?;
             let archive_file = tempfile::NamedTempFile::new()?;
             let archive_path = archive_file.into_temp_path();
+            info!("retrieving latest database snapshot...");
             pack_repo.retrieve_latest_database(&config.computer_id, &archive_path)?;
             // By this point we can safely assume that the backup supervisor has
             // completely shut down and released its reference to the database.
@@ -36,13 +45,26 @@ impl super::UseCase<String, Params> for RestoreDatabase {
             // in progress, in which case the user will need to either wait or
             // stop the backup before trying again. Of course, a running backup
             // would be unlikely given the use case scenario.
+            info!("restoring database from backup...");
             self.repo.restore_from_backup(&archive_path)
         } else {
             Err(anyhow!("no pack stores defined"))
         };
         // Signal the processor to start a new backup supervisor.
+        info!("starting backup supervisor again...");
         params.state.supervisor_event(SupervisorAction::Start);
-        result.map(|_| String::from("ok"))
+        info!("database restore complete");
+        if log_enabled!(Level::Debug) {
+            if let Ok(datasets) = self.repo.get_datasets() {
+                debug!("datasets after: {:?}", datasets);
+            }
+        }
+        if let Err(err) = result {
+            error!("database restore failed: {}", err);
+            Err(err)
+        } else {
+            result.map(|_| String::from("ok"))
+        }
     }
 }
 
