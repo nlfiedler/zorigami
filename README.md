@@ -8,7 +8,7 @@ A backup and restore application.
 * Maintains multiple versions, not just the most recent
 * Efficiency: compression, de-duplication, block-level incremental backup
 * Encryption: all remotely stored data is encrypted with libsodium
-* Service agnostic: SFTP, Amazon, Google
+* Service agnostic: SFTP, Amazon, Azure, Google, Minio
 * Full restore or file-level restore
 * Restore to dissimilar hardware
 * Local and Cloud storage
@@ -156,6 +156,25 @@ docker compose up --build -d
 1. Add a new **Access key** for this user
 1. Select _Application running outside AWS_ when asked
 1. Download the `.csv` file of the newly created key
+
+## Azure Blob Storage
+
+How to create a new storage account and get the access key.
+
+1. From the Azure portal, find **Storage accounts** and select it
+1. Find and click the **Create** button
+1. Create a new resource group, choose a storage account name
+1. Select a suitable region
+1. Select the lowest cost redundancy (LRS)
+1. Click the **Advanced** button
+1. Select the _Cool_ option under **Access tier**
+1. Click the **Networking** button and review the default selections
+1. Click the **Data protection** button and turn off the _soft delete_ options
+1. Click the **Encryption** button and review the default selections
+1. Click the **Review** button and then click **Create**
+1. Once the deployment is done, click the button to view the resource.
+1. Find the **Access keys** option on the left panel
+1. Copy the _Storage account name_ and _Key_ value from **key1**
 
 ## Google Cloud Setup
 

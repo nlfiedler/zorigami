@@ -11,6 +11,7 @@ import 'package:zorigami/features/backup/preso/bloc/edit_pack_stores_bloc.dart'
 import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart';
 import 'package:zorigami/features/backup/preso/bloc/providers.dart';
 import 'package:zorigami/features/backup/preso/widgets/amazon_store_form.dart';
+import 'package:zorigami/features/backup/preso/widgets/azure_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/google_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/local_store_form.dart';
 import 'package:zorigami/features/backup/preso/widgets/minio_store_form.dart';
@@ -205,6 +206,9 @@ PackStoreForm? buildStoreForm(PackStore store) {
   }
   if (store.kind == StoreKind.amazon) {
     return AmazonStoreForm(store: store);
+  }
+  if (store.kind == StoreKind.azure) {
+    return AzureStoreForm(store: store);
   }
   if (store.kind == StoreKind.google) {
     return GoogleStoreForm(store: store);

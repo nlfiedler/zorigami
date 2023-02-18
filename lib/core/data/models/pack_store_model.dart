@@ -51,6 +51,8 @@ class PackStoreModel extends PackStore {
 StoreKind decodeKind(String kind) {
   if (kind == 'amazon') {
     return StoreKind.amazon;
+  } else if (kind == 'azure') {
+    return StoreKind.azure;
   } else if (kind == 'google') {
     return StoreKind.google;
   } else if (kind == 'local') {
@@ -68,6 +70,8 @@ String encodeKind(StoreKind kind) {
   switch (kind) {
     case StoreKind.amazon:
       return 'amazon';
+    case StoreKind.azure:
+      return 'azure';
     case StoreKind.google:
       return 'google';
     case StoreKind.local:

@@ -142,6 +142,7 @@ pub struct ChunkDef {
 #[serde(remote = "StoreType")]
 pub enum StoreTypeDef {
     AMAZON,
+    AZURE,
     GOOGLE,
     LOCAL,
     MINIO,

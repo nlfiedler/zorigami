@@ -2,15 +2,17 @@
 // Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
-use azure_storage::StorageCredentials;
-use azure_storage_blobs::prelude::ClientBuilder;
-use bytes::Bytes;
-use futures::{FutureExt, TryStreamExt};
+use azure_core::StatusCode;
+use azure_storage::{CloudLocation, ErrorKind, StorageCredentials};
+use azure_storage_blobs::prelude::{
+    AccessTier, BlobBlockType, BlockId, BlockList, ClientBuilder, PublicAccess,
+};
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{Read, Write};
 use std::path::Path;
-use store_core::{CollisionError, Coordinates};
+use store_core::Coordinates;
 
 ///
 /// A pack store implementation that uses Azure blob storage.
@@ -20,6 +22,8 @@ pub struct AzureStore {
     store_id: String,
     account: String,
     access_key: String,
+    access_tier: Option<String>,
+    custom_uri: Option<String>,
 }
 
 impl AzureStore {
@@ -31,18 +35,30 @@ impl AzureStore {
         let access_key = props
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
+        let custom_uri = props.get("custom_uri");
+        let access_tier = props.get("access_tier");
         Ok(Self {
             store_id: store_id.to_owned(),
             account: account.to_owned(),
             access_key: access_key.to_owned(),
+            custom_uri: custom_uri.cloned(),
+            access_tier: access_tier.cloned(),
         })
     }
 
     fn connect(&self) -> ClientBuilder {
         let account = self.account.clone();
         let access_key = self.access_key.clone();
-        let storage_credentials = StorageCredentials::Key(account.clone(), access_key);
-        ClientBuilder::new(account, storage_credentials)
+        let credentials = StorageCredentials::Key(account.clone(), access_key);
+        if let Some(uri) = &self.custom_uri {
+            let location = CloudLocation::Custom {
+                uri: uri.to_owned(),
+                credentials,
+            };
+            ClientBuilder::with_location(location)
+        } else {
+            ClientBuilder::new(account, credentials)
+        }
     }
 
     pub fn store_pack_sync(
@@ -61,62 +77,62 @@ impl AzureStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        let builder = self.connect();
         // the container must exist before receiving blobs
-        // create_container(&builder, bucket).await?;
+        let builder = self.connect();
+        create_container(builder, bucket).await?;
+        //
+        // Process the pack file by uploading it in 8mb chunks as "blocks", then
+        // assembling the "blob" from the list of blocks ("block list"). Blocks
+        // larger than 5mb will benefit from the "high throughput" feature of
+        // the Azure storage API.
+        //
+        let builder = self.connect();
         let blob_client = builder.blob_client(bucket, object);
-        //
-        // Process the pack file by uploading it in 4mb chunks as "blocks", then
-        // assembling the "blob" from the list of blocks ("block list").
-        //
-        let meta = std::fs::metadata(packfile)?;
-        let file_handle = File::open(packfile)?;
-        let mut reader = BufReader::with_capacity(4194304, file_handle);
+        let mut file_handle = File::open(packfile)?;
+        let block_size: usize = 8388608;
+        let mut block_list: Vec<BlobBlockType> = Vec::new();
         loop {
-            let length = {
-                let buffer = reader.fill_buf()?;
-                // let md5digest = md5(buffer); TODO
-                let bytes_read = buffer.len();
-                let block_id = "TODO";
-                // TODO: https://github.com/Azure/azure-sdk-for-rust/issues/1219
-                let response = blob_client
-                    .put_block(block_id, &buffer[0..bytes_read])
-                    //.hash(md5digest) TODO
-                    .into_future()
-                    .await?;
-                bytes_read
-            };
-            if length == 0 {
+            // blob API wants to take ownership of the data, so allocate a new
+            // buffer for every put_block call (i.e. cannot use BufReader)
+            let mut data = Vec::with_capacity(block_size);
+            let mut take_handle = file_handle.take(block_size as u64);
+            let read_bytes = take_handle.read_to_end(&mut data)?;
+            if read_bytes == 0 {
                 break;
             }
-            reader.consume(length);
+            file_handle = take_handle.into_inner();
+            if data.is_empty() {
+                break;
+            }
+            // block identifiers must all have the same length, and be less than
+            // 64 bytes, otherwise only uniqueness matters; n.b. the client will
+            // perform the base64 encoding
+            let block_id = xid::new().to_string();
+            let data_ref: &[u8] = data.as_ref();
+            let md5 = md5sum_blob(data_ref)?;
+            let hash = azure_storage_blobs::prelude::Hash::MD5(md5);
+            let response = blob_client
+                .put_block(block_id.clone(), data)
+                .hash(hash)
+                .await?;
+            if let Some(content_md5) = response.content_md5 {
+                if content_md5.as_slice() != &md5 {
+                    return Err(anyhow!("returned MD5 does not match"));
+                }
+            }
+            block_list.push(BlobBlockType::Uncommitted(BlockId::new(block_id)));
         }
-
-        // TODO: call =put_block_list()= with the list of block identifiers given to =put_block()=
-        // TODO: call =content_md5()= on =PutBlockListBuilder= so azure will compute md5 and compare
-
-        // let meta = std::fs::metadata(packfile)?;
-        // let read_stream = tokio::fs::read(packfile.to_owned())
-        //     .into_stream()
-        //     .map_ok(|b| Bytes::from(b));
-        // let req = PutObjectRequest {
-        //     bucket: bucket.to_owned(),
-        //     key: object.to_owned(),
-        //     content_length: Some(meta.len() as i64),
-        //     body: Some(StreamingBody::new(read_stream)),
-        //     ..Default::default()
-        // };
-        // // wait for the future(s) to complete
-        // let result = client.put_object(req).await?;
-        // if let Some(ref etag) = result.e_tag {
-        //     // compute MD5 of file and compare to returned e_tag
-        //     let md5 = store_core::md5sum_file(packfile)?;
-        //     // AWS S3 quotes the etag values for some reason
-        //     let stripped_etag = etag.trim_matches('"');
-        //     if !md5.eq(stripped_etag) {
-        //         return Err(anyhow!("returned e_tag does not match MD5 of pack file"));
-        //     }
-        // }
+        let mut builder = blob_client.put_block_list(BlockList { blocks: block_list });
+        if let Some(tier) = &self.access_tier {
+            if tier.to_lowercase() == "hot" {
+                builder = builder.access_tier(AccessTier::Hot);
+            } else if tier.to_lowercase() == "cool" {
+                builder = builder.access_tier(AccessTier::Cool);
+            } else if tier.to_lowercase() == "archive" {
+                builder = builder.access_tier(AccessTier::Archive);
+            }
+        }
+        builder.await?;
         let loc = Coordinates::new(&self.store_id, bucket, object);
         Ok(loc)
     }
@@ -126,28 +142,17 @@ impl AzureStore {
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        let client = self.connect();
-        let request = GetObjectRequest {
-            bucket: location.bucket.clone(),
-            key: location.object.clone(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        let result = client.get_object(request).await?;
-        let stream = result.body.ok_or_else(|| {
-            anyhow!(format!(
-                "failed to retrieve object {} from bucket {}",
-                location.object.clone(),
-                location.bucket.clone()
-            ))
-        })?;
-        let mut file = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(outfile)
-            .await?;
-        let mut body = stream.into_async_read();
-        tokio::io::copy(&mut body, &mut file).await?;
+        let builder = self.connect();
+        let client = builder.blob_client(&location.bucket, &location.object);
+        let mut file_handle = File::create(outfile)?;
+        // n.b. this uses the default chunk size of 1MB, which enables the
+        // pipeline to handle intermittent connection failures with retry,
+        // rather than restarting the whole blob on a failure.
+        let mut stream = client.get().into_stream();
+        while let Some(value) = stream.next().await {
+            let data = value?.data.collect().await?;
+            file_handle.write(&data)?;
+        }
         Ok(())
     }
 
@@ -156,15 +161,22 @@ impl AzureStore {
     }
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // wait for the future(s) to complete
-        let result = client.list_buckets().await?;
         let mut results = Vec::new();
-        if let Some(buckets) = result.buckets {
-            for bucket in buckets {
-                if let Some(name) = bucket.name {
-                    results.push(name);
+        let builder = self.connect();
+        let blob_service = builder.blob_service_client();
+        let mut pageable = blob_service.list_containers().into_stream();
+        loop {
+            if let Some(result) = pageable.next().await {
+                match result {
+                    Ok(response) => {
+                        for container in response.containers {
+                            results.push(container.name);
+                        }
+                    }
+                    Err(err) => return Err(err.into()),
                 }
+            } else {
+                break;
             }
         }
         Ok(results)
@@ -175,29 +187,26 @@ impl AzureStore {
     }
 
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // default AWS S3 max-keys is 1,000
-        let mut request = ListObjectsV2Request {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        };
+        use azure_storage_blobs::container::operations::BlobItem::Blob;
+        let builder = self.connect();
+        let client = builder.container_client(bucket);
         let mut results = Vec::new();
+        let mut pageable = client.list_blobs().into_stream();
         loop {
-            // we will be re-using the request, so clone it each time
-            // wait for the future(s) to complete
-            let result = client.list_objects_v2(request.clone()).await?;
-            if let Some(contents) = result.contents {
-                for entry in contents {
-                    if let Some(key) = entry.key {
-                        results.push(key);
+            if let Some(result) = pageable.next().await {
+                match result {
+                    Ok(response) => {
+                        for blob_item in response.blobs.items {
+                            if let Blob(blob) = blob_item {
+                                results.push(blob.name);
+                            }
+                        }
                     }
+                    Err(err) => return Err(err.into()),
                 }
-            }
-            // check if there are more results to be fetched
-            if result.next_continuation_token.is_none() {
+            } else {
                 break;
             }
-            request.continuation_token = result.next_continuation_token;
         }
         Ok(results)
     }
@@ -207,14 +216,9 @@ impl AzureStore {
     }
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteObjectRequest {
-            bucket: bucket.to_owned(),
-            key: object.to_owned(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        client.delete_object(request).await?;
+        let builder = self.connect();
+        let client = builder.blob_client(bucket, object);
+        client.delete().await?;
         Ok(())
     }
 
@@ -223,21 +227,10 @@ impl AzureStore {
     }
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteBucketRequest {
-            bucket: bucket.to_owned(),
-            expected_bucket_owner: None,
-        };
-        // wait for the future(s) to complete
-        let result = client.delete_bucket(request).await;
-        // certain error conditions are okay
-        match result {
-            Err(e) => match e {
-                RusotoError::Unknown(_) => Ok(()),
-                _ => Err(anyhow!(format!("{}", e))),
-            },
-            Ok(_) => Ok(()),
-        }
+        let builder = self.connect();
+        let client = builder.container_client(bucket);
+        client.delete().await?;
+        Ok(())
     }
 
     pub fn store_database_sync(
@@ -271,33 +264,25 @@ impl AzureStore {
     }
 }
 
-/// Ensure the named bucket exists.
-// async fn create_container(client: &S3Client, bucket: &str) -> Result<(), Error> {
-//
-// container
-//         .create()
-//         .public_access(PublicAccess::None)
-//         .await
-//         .expect("container already present");
-//
-//     let request = CreateBucketRequest {
-//         bucket: bucket.to_owned(),
-//         ..Default::default()
-//     };
-//     // wait for the future(s) to complete
-//     let result = client.create_container(request).await;
-//     // certain error conditions are okay
-//     match result {
-//         Err(e) => match e {
-//             RusotoError::Service(se) => match se {
-//                 CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
-//                 CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
-//             },
-//             _ => Err(anyhow!(format!("{}", e))),
-//         },
-//         Ok(_) => Ok(()),
-//     }
-// }
+/// Ensure the named container exists.
+async fn create_container(builder: ClientBuilder, container: &str) -> Result<(), Error> {
+    let client = builder.container_client(container);
+    // certain error conditions are okay
+    match client.create().public_access(PublicAccess::None).await {
+        Err(e) => match e.kind() {
+            #[allow(unused_variables)]
+            ErrorKind::HttpResponse { status, error_code } => {
+                if *status == StatusCode::Conflict {
+                    Ok(())
+                } else {
+                    Err(e.into())
+                }
+            }
+            _ => Err(e.into()),
+        },
+        Ok(_) => Ok(()),
+    }
+}
 
 /// Run the given future on a newly created single-threaded runtime if possible,
 /// otherwise raise an error if this thread already has a runtime.
@@ -316,6 +301,14 @@ fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
     }
 }
 
+fn md5sum_blob<T: AsRef<[u8]>>(data: T) -> Result<[u8; 16], Error> {
+    use md5::{Digest, Md5};
+    let mut hasher = Md5::new();
+    hasher.update(data);
+    let digest = hasher.finalize();
+    Ok(digest.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,22 +317,20 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_new_azure_store_region() {
+    fn test_new_azure_store_account() {
         let props = HashMap::new();
         let result = AzureStore::new("azure123", &props);
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
-        assert!(err_string.contains("missing region property"));
+        assert!(err_string.contains("missing account property"));
         // could check all of the others, I guess?
     }
 
     #[test]
     fn test_new_azure_store_ok() {
         let mut properties: HashMap<String, String> = HashMap::new();
-        properties.insert("region".to_owned(), "us-west2".to_owned());
-        properties.insert("endpoint".to_owned(), "localhost:9000".to_owned());
-        properties.insert("access_key".to_owned(), "azure".to_owned());
-        properties.insert("secret_key".to_owned(), "shazure".to_owned());
+        properties.insert("account".to_owned(), "zorigami-test".to_owned());
+        properties.insert("access_key".to_owned(), "azure-access-key".to_owned());
         let result = AzureStore::new("azure123", &properties);
         assert!(result.is_ok());
     }
@@ -355,11 +346,19 @@ mod tests {
         }
         let account = acct_var?;
         let access_key = env::var("AZURE_STORAGE_ACCESS_KEY")?;
+        let custom_uri = env::var("AZURE_STORAGE_URI");
+        let access_tier = env::var("AZURE_STORAGE_ACCESS_TIER");
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("account".to_owned(), account);
         properties.insert("access_key".to_owned(), access_key);
+        if let Ok(uri) = custom_uri {
+            properties.insert("custom_uri".to_owned(), uri);
+        }
+        if let Ok(tier) = access_tier {
+            properties.insert("access_tier".to_owned(), tier);
+        }
         let source = AzureStore::new("azure1", &properties)?;
 
         // store an object

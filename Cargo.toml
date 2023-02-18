@@ -9,6 +9,7 @@ members = [
     "database/database_rocks",
     "server",
     "stores/store_amazon",
+    "stores/store_azure",
     "stores/store_core",
     "stores/store_google",
     "stores/store_local",

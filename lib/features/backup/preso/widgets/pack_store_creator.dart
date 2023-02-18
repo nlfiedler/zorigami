@@ -16,6 +16,7 @@ final List<NewStoreItem> storeItems = [
   NewStoreItem(title: 'Select Type', kind: null),
   NewStoreItem(title: 'Local', kind: StoreKind.local),
   NewStoreItem(title: 'Amazon', kind: StoreKind.amazon),
+  NewStoreItem(title: 'Azure', kind: StoreKind.azure),
   NewStoreItem(title: 'Google', kind: StoreKind.google),
   NewStoreItem(title: 'Minio', kind: StoreKind.minio),
   NewStoreItem(title: 'SFTP', kind: StoreKind.sftp),
@@ -130,6 +131,18 @@ PackStore defaultPackStore(StoreKind kind) {
           'access_key': 'AKIAIOSFODNN7EXAMPLE',
           'secret_key': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
           'storage': 'STANDARD_IA',
+        },
+      );
+    case StoreKind.azure:
+      return const PackStore(
+        kind: StoreKind.azure,
+        key: 'auto-generated',
+        label: 'azure',
+        options: <String, dynamic>{
+          'account': 'my-storage',
+          'access_key': 'AKIAIOSFODNN7EXAMPLE',
+          'access_tier': 'Cool',
+          'custom_uri': '',
         },
       );
     case StoreKind.google:

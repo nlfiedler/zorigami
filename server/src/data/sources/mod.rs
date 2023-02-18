@@ -14,6 +14,7 @@ use crate::domain::entities::{
 use anyhow::Error;
 use database_core::Database;
 use database_rocks;
+use log::debug;
 #[cfg(test)]
 use mockall::automock;
 use std::str::FromStr;
@@ -23,6 +24,7 @@ use std::{
 };
 
 mod amazon;
+mod azure;
 mod google;
 mod local;
 mod minio;
@@ -550,11 +552,13 @@ impl EntityDataSource for EntityDataSourceImpl {
         let tmpdb = outdir.path().join("zoritempura");
         let mut db = self.database.lock().unwrap();
         let db_path = db.get_path().to_path_buf();
+        debug!("restore_from_backup opening tmp db in {:?}", tmpdb);
         *db = database_rocks::Database::new(tmpdb)?;
         drop(db);
         database_rocks::Database::restore_from_backup(path, &db_path)?;
         let mut db = self.database.lock().unwrap();
-        *db = database_rocks::Database::new(db_path)?;
+        *db = database_rocks::Database::new(&db_path)?;
+        debug!("restore_from_backup open new db in {:?}", db_path);
         Ok(())
     }
 
@@ -653,6 +657,7 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
         // for managing the cache.
         let source: Box<dyn PackDataSource> = match store.store_type {
             StoreType::AMAZON => Box::new(amazon::AmazonPackSource::new(&store)?),
+            StoreType::AZURE => Box::new(azure::AzurePackSource::new(&store)?),
             StoreType::LOCAL => Box::new(local::LocalPackSource::new(&store)?),
             StoreType::GOOGLE => Box::new(google::GooglePackSource::new(&store)?),
             StoreType::MINIO => Box::new(minio::MinioPackSource::new(&store)?),

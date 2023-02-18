@@ -28,8 +28,6 @@ class GoogleStoreForm extends PackStoreForm {
 
   @override
   PackStore storeFromState(FormBuilderState state) {
-    final String region = state.value['region'];
-    final String storage = state.value['storage'];
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
@@ -37,8 +35,8 @@ class GoogleStoreForm extends PackStoreForm {
       options: {
         'credentials': state.value['credentials'],
         'project': state.value['project'],
-        'region': region.isEmpty ? null : region,
-        'storage': storage.isEmpty ? null : storage,
+        'region': state.value['region'],
+        'storage': state.value['storage'],
       },
     );
   }

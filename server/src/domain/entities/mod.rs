@@ -158,6 +158,7 @@ impl Chunk {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum StoreType {
     AMAZON,
+    AZURE,
     GOOGLE,
     LOCAL,
     MINIO,
@@ -168,6 +169,7 @@ impl ToString for StoreType {
     fn to_string(&self) -> String {
         match self {
             StoreType::AMAZON => String::from("amazon"),
+            StoreType::AZURE => String::from("azure"),
             StoreType::GOOGLE => String::from("google"),
             StoreType::LOCAL => String::from("local"),
             StoreType::MINIO => String::from("minio"),
@@ -182,6 +184,7 @@ impl FromStr for StoreType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "amazon" => Ok(StoreType::AMAZON),
+            "azure" => Ok(StoreType::AZURE),
             "google" => Ok(StoreType::GOOGLE),
             "local" => Ok(StoreType::LOCAL),
             "minio" => Ok(StoreType::MINIO),
@@ -286,7 +289,7 @@ impl Default for Dataset {
 
 impl fmt::Display for Dataset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "dataset-{}", self.id)
+        write!(f, "dataset-{}:{:?}", self.id, self.basepath)
     }
 }
 
@@ -1092,6 +1095,12 @@ mod tests {
         let stype = result.unwrap();
         assert_eq!(stype, StoreType::AMAZON);
         assert_eq!(stype.to_string(), "amazon");
+        // azure
+        let result = StoreType::from_str("azure");
+        assert!(result.is_ok());
+        let stype = result.unwrap();
+        assert_eq!(stype, StoreType::AZURE);
+        assert_eq!(stype.to_string(), "azure");
         // local
         let result = StoreType::from_str("local");
         assert!(result.is_ok());

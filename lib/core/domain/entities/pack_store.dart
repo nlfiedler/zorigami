@@ -3,7 +3,7 @@
 //
 import 'package:equatable/equatable.dart';
 
-enum StoreKind { amazon, google, local, minio, sftp }
+enum StoreKind { amazon, azure, google, local, minio, sftp }
 
 class PackStore extends Equatable {
   /// The `key` is unique among all pack stores.
@@ -40,6 +40,8 @@ String packStoreSubtitle(PackStore store) {
   switch (store.kind) {
     case StoreKind.amazon:
       return store.options['region'];
+    case StoreKind.azure:
+      return store.options['account'];
     case StoreKind.google:
       return store.options['project'];
     case StoreKind.local:
@@ -57,6 +59,8 @@ String prettyKind(StoreKind kind) {
   switch (kind) {
     case StoreKind.amazon:
       return 'remote amazon';
+    case StoreKind.azure:
+      return 'remote azure';
     case StoreKind.google:
       return 'remote google';
     case StoreKind.local:

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -7,43 +7,39 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 
-class SftpStoreForm extends PackStoreForm {
+class AzureStoreForm extends PackStoreForm {
   final PackStore store;
 
-  SftpStoreForm({Key? key, required this.store}) : super(key: key);
+  AzureStoreForm({Key? key, required this.store}) : super(key: key);
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {
-    final password = store.options['password'] ?? '';
-    final basepath = store.options['basepath'] ?? '';
+    final custom_uri = store.options['custom_uri'] ?? '';
     return {
       'key': store.key,
       'label': store.label,
-      'remote_addr': store.options['remote_addr'],
-      'username': store.options['username'],
-      'password': password,
-      'basepath': basepath,
+      'account': store.options['account'],
+      'access_key': store.options['access_key'],
+      'custom_uri': custom_uri,
+      'access_tier': store.options['access_tier'],
     };
   }
 
   @override
   PackStore storeFromState(FormBuilderState state) {
     final Map<String, dynamic> options = {
-      'remote_addr': state.value['remote_addr'],
-      'username': state.value['username'],
+      'account': state.value['account'],
+      'access_key': state.value['access_key'],
+      'access_tier': state.value['access_tier'],
     };
-    final String password = state.value['password'];
-    if (password.isNotEmpty) {
-      options['password'] = password;
-    }
-    final String basepath = state.value['basepath'];
-    if (basepath.isNotEmpty) {
-      options['basepath'] = basepath;
+    final String custom_uri = state.value['custom_uri'];
+    if (custom_uri.isNotEmpty) {
+      options['custom_uri'] = custom_uri;
     }
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
-      kind: StoreKind.sftp,
+      kind: StoreKind.azure,
       options: options,
     );
   }
@@ -69,35 +65,42 @@ class SftpStoreForm extends PackStoreForm {
           validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
-          name: 'remote_addr',
+          name: 'account',
           decoration: const InputDecoration(
-            icon: Icon(Icons.cloud),
-            labelText: 'Address',
+            icon: Icon(Icons.account_box),
+            labelText: 'Account',
           ),
           validator: FormBuilderValidators.required(),
         ),
         FormBuilderTextField(
-          name: 'username',
+          name: 'access_key',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
-            labelText: 'Username',
+            labelText: 'Access Key',
           ),
           validator: FormBuilderValidators.required(),
         ),
-        FormBuilderTextField(
-          name: 'password',
-          obscureText: true,
-          maxLines: 1,
+        FormBuilderDropdown(
+          name: 'access_tier',
           decoration: const InputDecoration(
-            icon: Icon(Icons.folder_open),
-            labelText: 'Password',
+            icon: Icon(Icons.storage),
+            labelText: 'Access Tier',
+            hintText: 'Select access tier',
           ),
+          items: ['Hot', 'Cool']
+              .map(
+                (sclass) => DropdownMenuItem(
+                  value: sclass,
+                  child: Text(sclass),
+                ),
+              )
+              .toList(),
         ),
         FormBuilderTextField(
-          name: 'basepath',
+          name: 'custom_uri',
           decoration: const InputDecoration(
-            icon: Icon(Icons.folder_open),
-            labelText: 'Base Path',
+            icon: Icon(Icons.link),
+            labelText: 'Custom URI',
           ),
         ),
       ],

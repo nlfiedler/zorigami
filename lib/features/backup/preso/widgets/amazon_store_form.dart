@@ -28,14 +28,13 @@ class AmazonStoreForm extends PackStoreForm {
 
   @override
   PackStore storeFromState(FormBuilderState state) {
-    final String storage = state.value['storage'];
     return PackStore(
       key: state.value['key'],
       label: state.value['label'],
       kind: StoreKind.amazon,
       options: {
         'region': state.value['region'],
-        'storage': storage.isEmpty ? null : storage,
+        'storage': state.value['storage'],
         'access_key': state.value['access_key'],
         'secret_key': state.value['secret_key'],
       },

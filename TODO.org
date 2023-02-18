@@ -1,14 +1,4 @@
 * Tasks
-** DONE Replace tar with 7z
-*** using tar involves a lot of overhead for each entry
-*** [[https://en.wikipedia.org/wiki/7z][7z]] is an open format that is better than zip, offers AES256 encryption
-*** zip uses AES encryption (not AES-256)
-*** do _not_ use 7z encryption since using a salt is more secure
-*** DONE try https://crates.io/crates/sevenz-rust for pack files
-*** DONE try https://crates.io/crates/sevenz-rust for database backup
-*** DONE remove =tar= and =flate2= dependencies
-*** DONE doc: update =NOTES.md= regarding pack file and database snapshot formats
-*** DONE fork sevenz-rust and fix issue #9
 ** TODO collect before and after metrics for comparison
 *** =test_pack_builder_single= unit test
 | when   | size |
@@ -16,25 +6,29 @@
 | before | 6656 |
 | after  | 3572 |
 *** grep the log output for =complete for= to get ~packs~ and ~files~
-*** before (using gzip compressed chunks tar file)
+*** before (using gzip compressed chunks in tar)
+**** backup complete after 40 minutes (local and S3)
 | system | packs |  files | files/pack |
 |--------+-------+--------+------------|
 | mini   |    82 | 335675 |       4093 |
 | kohaku |  3974 | 132682 |         33 |
 *** after (using 7z to compress and archive)
-| system | packs | files | files/pack |
-|--------+-------+-------+------------|
-| mini   |       |       |            |
-| kohaku |       |       |            |
-** TODO Support Microsoft Azure blob storage
-*** buckets are called ~containers~ and objects are called ~blobs~
-*** any number of containers, any number of blobs
-*** prices similar to Amazon S3 and Google Cloud Storage
-*** container names conform to same rules as S3 and Google
-*** blob naming rules are very generous
-*** configuration parameters must include ~account~ name
-*** c.f. https://learn.microsoft.com/en-us/azure/storage/blobs/blob-upload-function-trigger-javascript
-*** c.f. https://crates.io/crates/azure_storage_blobs
+**** backup complete after 1 hours 6 minutes (local only)
+**** average pack size 68,148,273
+| system | packs |  files | files/pack |
+|--------+-------+--------+------------|
+| mini   |    67 | 332289 |       4959 |
+| kohaku |       |        |            |
+** TODO Use version ~0.2.4~ of =sevenz=
+** TODO Test database restore from Amazon
+*** need to use a new collection, old one has gzipped database snapshots
+** TODO Test file restore from Amazon
+*** need to use a new collection, old one has tar pack files
+** DONE Test file restore from Azure
+** TODO Set up mini backup to use Azure (=zorigamini=) and local
+** Concurrent pack file creation
+*** consider how to produce pack files concurrently
+*** mac mini is keeping a single CPU core busy at 95%, while reading ~2mb/sec
 ** Dynamic chunk size calculation
 *** maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -128,7 +122,7 @@ $ find . -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}EN
 **** File sizes by powers of two
 ***** 654,129 saved files versus 607,152 counted files
 ***** half of all files (305,012) are between 1kb and 4kb
-***** nearly all files (559,676) are 8b or less
+***** nearly all files (559,676) are 8kb or less
 #+begin_src shell
 $ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -o -name node_modules -prune -o -name target -prune -o -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}END{for (i in size) printf("%10d %6d\n", 2^i, size[i])}' | sort -n
          0   1164
@@ -216,6 +210,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
+** Investigate file checksum collision
+*** how likely is it for two different files to have the same checksum?
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
@@ -239,6 +235,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** maybe consider a means of countering this error at runtime
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
 ** Loose GraphQL tasks
+*** TODO where do errors go?
+**** database restore was failing but frontend reported nothing
 *** TODO schema custom types need some unit tests
 **** especially the schedule validation code
 *** TODO probably should use a better client cache
@@ -424,6 +422,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** https://github.com/austinjones/lifeline-rs (whole runtime message bus system)
 **** https://github.com/dmitryb-dev/waiter
 **** https://github.com/tobni/inject-rs
+*** Actor framework review, is actix still good?
+**** https://github.com/slawlor/ractor aims to be like Erlang
+**** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -898,6 +899,11 @@ perform a pack pruning, the most recent database snapshot would be removed.
 **** Rust: streamlined error handling
 **** Rust: fine-grained namespaces and visibility control
 * Deployments
+** local test
+*** setup
+**** base path: =/Users/nfiedler/projects/zorigami=
+**** excludes: =.git, **/tmp, **/.tmp, **/target=
+**** run hourly
 ** mac mini
 *** how to build: see =README.md= in ~Local Test Build~ section
 *** how to update
@@ -908,14 +914,17 @@ perform a pack pruning, the most recent database snapshot would be removed.
 5) enable: =launchctl enable gui/501/zorigami=
 6) start: =launchctl kickstart -p gui/501/zorigami=
 7) =ps -ef | grep -i zorigami=
-*** may need to =enable= and =kickstart= twice for some reason
+*** may need to =enable= and =kickstart= twice due to code signing error
+#+begin_src
+Termination Reason: CODESIGNING 4 Launch Constraint Violation
+#+end_src
 *** setup
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
 **** pack store: =/Volumes/Zbackup=
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
-**** run daily at 9am
+**** run hourly
 ** kohaku
 *** deploy using docker and ansible
 *** store credentials file as =/zeniba/shared/zorigami.json=

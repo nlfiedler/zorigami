@@ -662,9 +662,23 @@ mod tests {
         source.retrieve_database_sync(&location, &outfile)?;
 
         // list available databases
-        let databases = source.list_databases_sync(&bucket)?;
-        assert_eq!(databases.len(), 1);
-        assert_eq!(&databases[0], &object);
+        let mut retries = 10;
+        let delay = std::time::Duration::from_millis(1000);
+        loop {
+            // Firestore is eventually consistent, so try a few times
+            let databases = source.list_databases_sync(&bucket)?;
+            if databases.is_empty() {
+                retries -= 1;
+                if retries == 0 {
+                    panic!("list_databases test failed after several tries");
+                }
+                std::thread::sleep(delay);
+            } else {
+                assert_eq!(databases.len(), 1);
+                assert_eq!(&databases[0], &object);
+                break;
+            }
+        }
 
         // remove database mapping for test reproduction
         source.delete_bucket_name(&bucket)?;
