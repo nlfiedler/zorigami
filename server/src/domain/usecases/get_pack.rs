@@ -10,7 +10,6 @@ use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::fs;
-use std::sync::Mutex;
 
 pub struct GetPack {
     repo: Box<dyn RecordRepository>,
@@ -50,22 +49,22 @@ impl<'a> super::UseCase<PackFile, Params<'a>> for GetPack {
         // decrypt
         let archive = tempfile::Builder::new()
             .prefix("pack")
-            .suffix(".7z")
+            .suffix(".tar")
             .tempfile_in(&dataset.workspace)?;
         crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), archive.path())?;
         // read the archive file entries
-        let entries: Mutex<Vec<PackEntry>> = Mutex::new(Vec::new());
+        let mut entries: Vec<PackEntry> = Vec::new();
         let attr = fs::metadata(&archive)?;
         let file_size = attr.len();
-        let outdir = tempfile::tempdir()?;
-        sevenz_rust::decompress_file_with_extract_fn(archive, outdir, |entry, _, _| {
-            entries
-                .lock()
-                .unwrap()
-                .push(PackEntry::new(entry.name.clone(), entry.size()));
-            Ok(true)
-        })?;
-        Ok(PackFile::new(file_size, entries.into_inner().unwrap()))
+        let file = fs::File::open(&archive)?;
+        let mut ar = tar::Archive::new(file);
+        for maybe_entry in ar.entries()? {
+            let entry = maybe_entry?;
+            // we know the names are valid UTF-8, we created them
+            let path = String::from(entry.path()?.to_str().unwrap());
+            entries.push(PackEntry::new(path, entry.size()));
+        }
+        Ok(PackFile::new(file_size, entries))
     }
 }
 
@@ -182,7 +181,7 @@ mod tests {
         // build empty pack file
         let mut builder = pack::PackBuilder::new(65536);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-pack.7z");
+        let packfile = outdir.path().join("multi-pack.tar");
         builder.initialize(&packfile)?;
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
@@ -220,7 +219,7 @@ mod tests {
         assert!(result.is_ok());
         let packfile = result.unwrap();
         assert_eq!(packfile.entries.len(), 0);
-        assert_eq!(packfile.length, 44);
+        assert_eq!(packfile.length, 1024);
         assert_eq!(packfile.content_length, 0);
         assert_eq!(packfile.smallest, 0);
         assert_eq!(packfile.largest, 0);
@@ -235,7 +234,7 @@ mod tests {
         let chunks = helpers::find_file_chunks(&infile, 32768)?;
         let mut builder = pack::PackBuilder::new(1048576);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-pack.7z");
+        let packfile = outdir.path().join("multi-pack.tar");
         builder.initialize(&packfile)?;
         for chunk in chunks.iter() {
             if builder.add_chunk(chunk)? {
@@ -277,22 +276,22 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let packfile = result.unwrap();
-        assert_eq!(packfile.length, 96963);
-        assert_eq!(packfile.content_length, 109466);
-        assert_eq!(packfile.smallest, 42917);
-        assert_eq!(packfile.largest, 66549);
-        assert_eq!(packfile.average, 54733);
+        assert_eq!(packfile.length, 99328);
+        assert_eq!(packfile.content_length, 96748);
+        assert_eq!(packfile.smallest, 41825);
+        assert_eq!(packfile.largest, 54923);
+        assert_eq!(packfile.average, 48374);
         assert_eq!(packfile.entries.len(), 2);
         assert_eq!(
             packfile.entries[0].name,
             "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
         );
-        assert_eq!(packfile.entries[0].size, 66549);
+        assert_eq!(packfile.entries[0].size, 54923);
         assert_eq!(
             packfile.entries[1].name,
             "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
         );
-        assert_eq!(packfile.entries[1].size, 42917);
+        assert_eq!(packfile.entries[1].size, 41825);
         Ok(())
     }
 }

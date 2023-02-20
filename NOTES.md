@@ -90,10 +90,10 @@
 * contains raw file content
 * default pack file size of 64MB
 * pack file format
-    - [7z](https://en.wikipedia.org/wiki/7z) compressed archive file
+    - tar file whose entries are compressed with gzip
     - entry names are the chunk hash digest plus prefix
     - entry dates are always UTC epoch to yield consistent results
-    - encrypted with libsodium using passphrase
+    - encrypted with key derived from passphrase and random salt
 
 ### Database Schema
 
@@ -198,7 +198,7 @@ that has the most recent `upload_time`.
 
 ### Database Snapshots
 
-Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is compressed into a 7z archive and uploaded to the pack store in the special bucket.
+Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed tar and uploaded to the pack store in the special bucket.
 
 ### Procedure
 

@@ -215,20 +215,43 @@ impl RecordRepository for RecordRepositoryImpl {
         let backup_path = self.datasource.create_backup(None)?;
         let file = tempfile::NamedTempFile::new()?;
         let path = file.into_temp_path();
-        sevenz_rust::compress_to_path(&backup_path, &path)?;
+        create_tar(&backup_path, &path)?;
         Ok(path)
     }
 
     fn restore_from_backup(&self, path: &Path) -> Result<(), Error> {
         let tempdir = tempfile::tempdir()?;
         let temppath = tempdir.path().to_path_buf();
-        sevenz_rust::decompress_file(path, &temppath)?;
+        extract_tar(path, &temppath)?;
         self.datasource.restore_from_backup(Some(temppath))
     }
 
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
         self.datasource.get_entity_counts()
     }
+}
+
+///
+/// Create a gzip compressed tar file for the given directory structure.
+///
+fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
+    let file = std::fs::File::create(outfile)?;
+    let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    builder.append_dir_all(".", basepath)?;
+    let _output = builder.into_inner()?;
+    Ok(())
+}
+
+///
+/// Extract the contents of the gzip compressed tar file to the given directory.
+///
+fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
+    let file = std::fs::File::open(infile)?;
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut ar = tar::Archive::new(decoder);
+    ar.unpack(outdir)?;
+    Ok(())
 }
 
 pub struct PackRepositoryImpl {
@@ -1715,5 +1738,47 @@ mod tests {
         // assert
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 3);
+    }
+
+    #[test]
+    fn test_tar_file() -> Result<(), Error> {
+        let outdir = tempfile::tempdir()?;
+        let packfile = outdir.path().join("filename.tz");
+        create_tar(Path::new("../test/fixtures"), &packfile)?;
+        extract_tar(&packfile, outdir.path())?;
+
+        let file = outdir.path().join("SekienAkashita.jpg");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+        );
+        let file = outdir.path().join("lorem-ipsum.txt");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        #[cfg(target_family = "unix")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+        );
+        // line endings differ
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
+        );
+        let file = outdir.path().join("washington-journal.txt");
+        let chksum = Checksum::sha256_from_file(&file)?;
+        #[cfg(target_family = "unix")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
+        );
+        #[cfg(target_family = "windows")]
+        assert_eq!(
+            chksum.to_string(),
+            "sha256-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
+        );
+
+        Ok(())
     }
 }

@@ -1,32 +1,5 @@
 * Tasks
-** TODO collect before and after metrics for comparison
-*** =test_pack_builder_single= unit test
-| when   | size |
-|--------+------|
-| before | 6656 |
-| after  | 3572 |
-*** grep the log output for =complete for= to get ~packs~ and ~files~
-*** before (using gzip compressed chunks in tar)
-**** backup complete after 40 minutes (local and S3)
-| system | packs |  files | files/pack |
-|--------+-------+--------+------------|
-| mini   |    82 | 335675 |       4093 |
-| kohaku |  3974 | 132682 |         33 |
-*** after (using 7z to compress and archive)
-**** backup complete after 1 hours 6 minutes (local only)
-**** average pack size 68,148,273
-| system | packs |  files | files/pack |
-|--------+-------+--------+------------|
-| mini   |    65 | 336632 |       5179 |
-| kohaku |       |        |            |
-** DONE Set up mini backup to use Azure (=zorigamini=) and local
-** DONE Test database restore from Azure
-** TODO Test file restore from Azure, fails
-*** trying to restore =devscripts/LICENSE= and get ~Io(Custom { kind: InvalidInput, error: "dist overflow" }, "")~
 ** TODO Test database restore from Amazon
-*** need to run a new backup, old one has gzipped database snapshots
-** TODO Test file restore from Amazon
-*** need to run a new backup, old one has tar pack files
 ** TODO when testing azure pack store with wrong account name, ui hangs
 ** TODO when restoring database from azure pack store with wrong account name, hangs
 ** TODO web ui barfs when configured for wrong backend address

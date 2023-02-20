@@ -23,6 +23,8 @@ The format for pack files going forward will be 7z. While it takes twice as long
 
 The pack files contain more chunks per pack, but it takes twice as long to create them.
 
+Decision was reversed due to a data corruption bug in the `sevenz-rust` crate.
+
 ## Links
 
 * [7z](https://en.wikipedia.org/wiki/7z)

@@ -3,12 +3,13 @@
 //
 use crate::domain::entities::Chunk;
 use anyhow::{anyhow, Error};
-use sevenz_rust::{SevenZArchiveEntry, SevenZWriter};
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
 use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use tar::{Archive, Builder, Header};
 
 /// Builds a tar file one chunk at a time, with each chunk compressed
 /// separately, with the overall size being not much larger than a set size.
@@ -18,7 +19,7 @@ pub struct PackBuilder {
     /// Compressed bytes written to the pack so far.
     bytes_packed: u64,
     /// 7z file writer.
-    builder: Option<SevenZWriter<File>>,
+    builder: Option<Builder<File>>,
     /// Path of the output file.
     filepath: Option<PathBuf>,
     /// Number of chunks added to the pack.
@@ -53,7 +54,7 @@ impl PackBuilder {
     pub fn initialize(&mut self, outfile: &Path) -> Result<(), Error> {
         self.filepath = Some(outfile.to_path_buf());
         let file = File::create(outfile)?;
-        let builder = SevenZWriter::new(file)?;
+        let builder = Builder::new(file);
         self.builder = Some(builder);
         Ok(())
     }
@@ -70,17 +71,32 @@ impl PackBuilder {
             .ok_or_else(|| anyhow!("chunk requires a filepath"))?;
         let mut infile = File::open(filepath)?;
         infile.seek(io::SeekFrom::Start(chunk.offset as u64))?;
-        let handle = infile.take(chunk.length as u64);
+        let mut handle = infile.take(chunk.length as u64);
+        let buffer: Vec<u8> = Vec::new();
+        let mut encoder = GzEncoder::new(buffer, flate2::Compression::default());
+        io::copy(&mut handle, &mut encoder)?;
+        let compressed = encoder.finish()?;
+        let compressed_size = compressed.len() as u64;
+        let mut header = Header::new_gnu();
+        header.set_size(compressed_size);
+        // set the date so the tar file produces the same results for the same
+        // inputs every time; the date for chunks is completely irrelevant
+        header.set_mtime(0);
+        header.set_cksum();
         let builder = self
             .builder
             .as_mut()
             .ok_or_else(|| anyhow!("must call initialize() first"))?;
-        let mut entry: SevenZArchiveEntry = Default::default();
-        entry.name = chunk.digest.to_string();
-        entry.has_stream = true;
-        entry.is_directory = false;
-        let result = builder.push_archive_entry(entry, Some(handle))?;
-        self.bytes_packed += result.compressed_size;
+        let filename = chunk.digest.to_string();
+        builder.append_data(&mut header, filename, &compressed[..])?;
+        self.bytes_packed += compressed_size;
+        // Account for the overhead of each tar file entry, which can be
+        // significant if there are many (thousands) small files added to a
+        // single pack, pushing the pack from the desired size (e.g. 64mb) to
+        // something much larger (99mb). The actual overhead for a zero-byte
+        // file is more than 1500 bytes but 1024 is closer to the average
+        // overhead for a typical file set (about 800 bytes).
+        self.bytes_packed += 1024;
         self.chunks_packed += 1;
         Ok(self.bytes_packed >= self.target_size)
     }
@@ -108,16 +124,22 @@ impl PackBuilder {
 ///
 pub fn extract_pack(infile: &Path, outdir: &Path) -> Result<Vec<String>, Error> {
     fs::create_dir_all(outdir)?;
-    let results = Mutex::new(Vec::new());
-    sevenz_rust::decompress_file_with_extract_fn(infile, outdir, |entry, reader, path| {
-        let file = File::create(&path)
-            .map_err(|e| sevenz_rust::Error::FileOpen(e, path.to_string_lossy().to_string()))?;
-        let mut writer = std::io::BufWriter::new(file);
-        std::io::copy(reader, &mut writer).map_err(sevenz_rust::Error::io)?;
-        results.lock().unwrap().push(entry.name.clone());
-        Ok(true)
-    })?;
-    Ok(results.into_inner().unwrap())
+    let mut results = Vec::new();
+    let file = File::open(infile)?;
+    let mut ar = Archive::new(file);
+    for entry in ar.entries()? {
+        let file = entry?;
+        let fp = file.path()?;
+        // we know the names are valid UTF-8, we created them
+        let filename = String::from(fp.to_str().unwrap());
+        let mut output_path = outdir.to_path_buf();
+        output_path.push(&filename);
+        let mut output = File::create(output_path)?;
+        let mut decoder = GzDecoder::new(file);
+        io::copy(&mut decoder, &mut output)?;
+        results.push(filename);
+    }
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -171,11 +193,15 @@ mod tests {
         assert_eq!(result, packfile);
         // simple validation that works on any platform (checksums of plain text on
         // Windows will vary due to end-of-line characters)
-        sevenz_rust::decompress_file_with_extract_fn(packfile, outdir, |entry, _, _| {
-            assert_eq!(entry.name.len(), 71);
-            assert!(entry.name.starts_with("sha256-"));
-            Ok(true)
-        })?;
+        let infile = File::open(packfile)?;
+        let mut ar = Archive::new(&infile);
+        for entry in ar.entries()? {
+            let file = entry?;
+            let fp = file.path()?;
+            let fp_as_str = fp.to_str().unwrap();
+            assert_eq!(fp_as_str.len(), 71);
+            assert!(fp_as_str.starts_with("sha256-"));
+        }
         Ok(())
     }
 
@@ -244,6 +270,47 @@ mod tests {
         assert_eq!(
             part4sum.to_string(),
             "sha256-bbd5b0b284d4e3c2098e92e8e2897e738c669113d06472560188d99a288872a3"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_builder_jpg() -> Result<(), Error> {
+        // build a pack file with a jpeg image
+        let chunks = [Chunk::new(
+            Checksum::SHA256(
+                "aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6".to_owned(),
+            ),
+            0,
+            1272254,
+        )
+        .filepath(Path::new("../test/fixtures/C++98-tutorial.pdf"))];
+        let mut builder = PackBuilder::new(4194304);
+        let outdir = tempdir()?;
+        fs::create_dir_all(&outdir)?;
+        let packfile = outdir.path().join("bigger-pack.tar");
+        builder.initialize(&packfile)?;
+        let mut chunks_written = 0;
+        for chunk in chunks.iter() {
+            chunks_written += 1;
+            if builder.add_chunk(chunk)? {
+                panic!("should not have happened");
+            }
+        }
+        assert_eq!(chunks_written, 1);
+        let result = builder.finalize()?;
+        assert_eq!(result, packfile);
+        // validate by extracting and hashing all of the chunks
+        let entries: Vec<String> = extract_pack(&packfile, outdir.path())?;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0],
+            "sha256-aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6"
+        );
+        let part4sum = Checksum::sha256_from_file(&outdir.path().join(&entries[0]))?;
+        assert_eq!(
+            part4sum.to_string(),
+            "sha256-aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6"
         );
         Ok(())
     }
