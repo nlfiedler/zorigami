@@ -335,6 +335,32 @@ mod tests {
     }
 
     #[test]
+    fn test_minio_wrong_account() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let endp_var = env::var("MINIO_ENDPOINT");
+        if endp_var.is_err() {
+            // bail out silently if minio is not available
+            return Ok(());
+        }
+        let endpoint = endp_var?;
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), "us-west-2".into());
+        properties.insert("endpoint".to_owned(), endpoint);
+        properties.insert("access_key".to_owned(), "not_access_key".into());
+        properties.insert("secret_key".to_owned(), "not_secret_key".into());
+        let source = MinioStore::new("minio2", &properties)?;
+        // act
+        let result = source.list_buckets_sync();
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("InvalidAccessKeyId"));
+        Ok(())
+    }
+
+    #[test]
     fn test_minio_collision_error() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();

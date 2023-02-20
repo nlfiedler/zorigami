@@ -588,6 +588,24 @@ mod tests {
     }
 
     #[test]
+    fn test_amazon_wrong_account() -> Result<(), Error> {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), "us-west-2".into());
+        properties.insert("storage".to_owned(), "STANDARD_IA".into());
+        properties.insert("access_key".to_owned(), "not_access_key".into());
+        properties.insert("secret_key".to_owned(), "not_secret_key".into());
+        let source = AmazonStore::new("amazon2", &properties)?;
+        // act
+        let result = source.list_buckets_sync();
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("InvalidAccessKeyId"));
+        Ok(())
+    }
+
+    #[test]
     fn test_amazon_bucket_collision() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();

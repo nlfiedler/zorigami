@@ -203,6 +203,32 @@ mod tests {
     }
 
     #[test]
+    fn test_sftp_wrong_account() -> Result<(), Error> {
+        // set up the environment and remote connection
+        dotenv().ok();
+        let addr_var = env::var("SFTP_ADDR");
+        if addr_var.is_err() {
+            // bail out silently if sftp is not configured
+            return Ok(());
+        }
+        let address = addr_var.unwrap();
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("remote_addr".to_owned(), address);
+        properties.insert("username".to_owned(), "charlie".into());
+        properties.insert("password".to_owned(), "secret123".into());
+        properties.insert("basepath".to_owned(), "/".into());
+        let source = SftpStore::new("sftpone", &properties)?;
+        // act
+        let result = source.list_buckets();
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("Authentication failed"));
+        Ok(())
+    }
+
+    #[test]
     fn test_sftp_store_roundtrip() {
         // set up the environment and remote connection
         dotenv().ok();

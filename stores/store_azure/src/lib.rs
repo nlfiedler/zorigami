@@ -2,7 +2,7 @@
 // Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
-use azure_core::StatusCode;
+use azure_core::{RetryOptions, StatusCode};
 use azure_storage::{CloudLocation, ErrorKind, StorageCredentials};
 use azure_storage_blobs::prelude::{
     AccessTier, BlobBlockType, BlockId, BlockList, ClientBuilder, PublicAccess,
@@ -24,6 +24,7 @@ pub struct AzureStore {
     access_key: String,
     access_tier: Option<AccessTier>,
     custom_uri: Option<String>,
+    retry_options: Option<RetryOptions>,
 }
 
 impl AzureStore {
@@ -36,23 +37,27 @@ impl AzureStore {
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
         let custom_uri = props.get("custom_uri");
-        let access_tier = props.get("access_tier").map(|tier| {
-            if tier.to_lowercase() == "hot" {
-                Some(AccessTier::Hot)
-            } else if tier.to_lowercase() == "cool" {
-                Some(AccessTier::Cool)
-            } else if tier.to_lowercase() == "archive" {
-                Some(AccessTier::Archive)
-            } else {
-                None
-            }
-        }).flatten();
+        let access_tier = props
+            .get("access_tier")
+            .map(|tier| {
+                if tier.to_lowercase() == "hot" {
+                    Some(AccessTier::Hot)
+                } else if tier.to_lowercase() == "cool" {
+                    Some(AccessTier::Cool)
+                } else if tier.to_lowercase() == "archive" {
+                    Some(AccessTier::Archive)
+                } else {
+                    None
+                }
+            })
+            .flatten();
         Ok(Self {
             store_id: store_id.to_owned(),
             account: account.to_owned(),
             access_key: access_key.to_owned(),
             custom_uri: custom_uri.cloned(),
             access_tier,
+            retry_options: None,
         })
     }
 
@@ -60,7 +65,7 @@ impl AzureStore {
         let account = self.account.clone();
         let access_key = self.access_key.clone();
         let credentials = StorageCredentials::Key(account.clone(), access_key);
-        if let Some(uri) = &self.custom_uri {
+        let mut cb = if let Some(uri) = &self.custom_uri {
             let location = CloudLocation::Custom {
                 uri: uri.to_owned(),
                 credentials,
@@ -68,7 +73,11 @@ impl AzureStore {
             ClientBuilder::with_location(location)
         } else {
             ClientBuilder::new(account, credentials)
+        };
+        if let Some(ref retry) = self.retry_options {
+            cb = cb.retry(retry.to_owned());
         }
+        cb
     }
 
     pub fn store_pack_sync(
@@ -321,13 +330,30 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_new_azure_store_account() {
+    fn test_new_azure_store_params() {
         let props = HashMap::new();
         let result = AzureStore::new("azure123", &props);
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
         assert!(err_string.contains("missing account property"));
         // could check all of the others, I guess?
+    }
+
+    #[test]
+    fn test_azure_wrong_account() -> Result<(), Error> {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("account".into(), "zoragamincorrect".into());
+        properties.insert("access_key".into(), "kbMB+UABej9Y/dvLlKh05deDDSiS0TyraeUkDdCserQuLz9JgNEoK/EfOeaEiv8JHHhLAyflMRTb+ASt1Q7JCQ==".into());
+        let mut source = AzureStore::new("azure2", &properties)?;
+        source.retry_options = Some(RetryOptions::none());
+        // act
+        let result = source.list_buckets_sync();
+        // assert
+        assert!(result.is_err());
+        let err_string = result.err().unwrap().to_string();
+        assert!(err_string.contains("failed to execute `reqwest` request"));
+        Ok(())
     }
 
     #[test]

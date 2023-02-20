@@ -1,9 +1,5 @@
 * Tasks
-** TODO Test database restore from Amazon
-** TODO when testing azure pack store with wrong account name, ui hangs
-** TODO when restoring database from azure pack store with wrong account name, hangs
-** TODO web ui barfs when configured for wrong backend address
-*** happens when ~environment_config~ is invoked with the wrong =BASE_URL=
+** TODO web ui barfs when backend is unreachable
 ** TODO need a ~refresh~ button on the snapshots listing, like file restore page
 ** Concurrent pack file creation
 *** consider how to produce pack files concurrently
@@ -275,6 +271,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** configuration panel
 ***** snapshot browser
 ** Improved error handling
+*** Detect cloud credential issues and display friendly message
+**** errors from cloud providers can be cryptic, need to detect and decipher for the user
 *** Collect and present errors encountered during the backup
 **** e.g. all the "permission denied" and such
 *** Data set input validation
@@ -905,7 +903,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
 **** pack store: =/Volumes/Zbackup=
-**** pack store: azure, =zorigamini=
+**** pack store: ~amazon~
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
 **** run hourly
