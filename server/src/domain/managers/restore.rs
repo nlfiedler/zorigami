@@ -187,10 +187,7 @@ impl Restorer for RestorerImpl {
     }
 
     fn enqueue(&self, request: Request) -> Result<(), Error> {
-        debug!(
-            "restore: enqueuing request {}/{}",
-            request.tree, request.entry
-        );
+        debug!("enqueuing request {}/{}", request.tree, request.entry);
         let mut queue = self.pending.lock().unwrap();
         queue.push_back(request);
         let su_addr = self.super_addr.lock().unwrap();
@@ -200,7 +197,7 @@ impl Restorer for RestorerImpl {
             }
             addr.try_send(Restore()).map_err(err_convert)
         } else {
-            error!("restore: must call start() first");
+            error!("must call start() first");
             Err(anyhow!("must call start() first"))
         }
     }
@@ -280,10 +277,7 @@ impl RestoreSupervisor {
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
-            debug!(
-                "restore: processing request {}/{}",
-                request.tree, request.entry
-            );
+            debug!("processing request {}/{}", request.tree, request.entry);
             let mut req = request.clone();
             if let Err(error) = fetcher.load_dataset(&request.dataset) {
                 self.set_error(error, &mut req);
@@ -552,6 +546,7 @@ impl FileRestorerImpl {
             fs::remove_file(&encrypted)?;
             verify_pack_digest(pack_digest, &tarball)?;
             pack::extract_pack(&tarball, &workspace)?;
+            debug!("pack extracted");
             fs::remove_file(tarball)?;
             // remember this pack as being downloaded
             self.downloaded.insert(pack_digest.to_owned());
