@@ -219,7 +219,7 @@ impl Actor for BackupSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        debug!("backup: supervisor started");
+        debug!("supervisor started");
         self.state.supervisor_event(SupervisorAction::Started);
         ctx.run_interval(Duration::from_millis(self.interval), |this, _ctx| {
             trace!("supervisor interval fired");
@@ -228,11 +228,20 @@ impl Actor for BackupSupervisor {
             }
         });
     }
+
+    fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
+        debug!("supervisor stopping");
+        Running::Stop
+    }
+
+    fn stopped(&mut self, _ctx: &mut Context<Self>) {
+        debug!("supervisor stopped");
+    }
 }
 
 impl Supervised for BackupSupervisor {
     fn restarting(&mut self, _ctx: &mut Context<BackupSupervisor>) {
-        debug!("backup: supervisor restarting");
+        debug!("supervisor restarting");
     }
 }
 
@@ -240,7 +249,7 @@ impl Handler<Start> for BackupSupervisor {
     type Result = ();
 
     fn handle(&mut self, msg: Start, _ctx: &mut Context<BackupSupervisor>) {
-        debug!("backup: supervisor received start message");
+        debug!("supervisor received Start message");
         if let Err(err) = self.start_dataset_now(msg.dataset) {
             error!("failed to check datasets: {}", err);
         }
@@ -251,7 +260,7 @@ impl Handler<Stop> for BackupSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Stop, ctx: &mut Context<BackupSupervisor>) {
-        debug!("backup: supervisor received stop message");
+        debug!("supervisor received Stop message");
         self.state.supervisor_event(SupervisorAction::Stopped);
         ctx.stop();
     }
@@ -280,7 +289,7 @@ impl Handler<StartBackup> for BackupRunner {
     type Result = ();
 
     fn handle(&mut self, msg: StartBackup, ctx: &mut Context<BackupRunner>) {
-        debug!("backup: runner received start backup message");
+        debug!("runner received StartBackup message");
         thread::spawn(move || {
             // Allow the backup process to run an async runtime of its own, if
             // necessary, possibly with a threaded future executor, by spawning
@@ -293,7 +302,7 @@ impl Handler<StartBackup> for BackupRunner {
                 msg.performer.clone(),
             );
         });
-        debug!("backup: runner spawned backup process");
+        debug!("runner spawned backup process");
         ctx.stop();
     }
 }
@@ -309,12 +318,12 @@ fn can_run(state: &Arc<dyn StateStore>, set: &Dataset) -> Result<Option<Schedule
     if let Some(backup) = backup_state {
         // not errored, not poused, and no end time means it is still running
         if !backup.had_error() && !backup.is_paused() && backup.end_time().is_none() {
-            debug!("backup: dataset {} still in progress", &set.id);
+            debug!("dataset {} still in progress", &set.id);
             return Ok(None);
         }
     } else {
         // maybe the application restarted after a crash
-        debug!("backup: reset missing state to start");
+        debug!("reset missing state to start");
         state.backup_event(BackupAction::Start(set.id.clone()));
     }
     Ok(Some(Schedule::Hourly))
@@ -361,12 +370,12 @@ fn should_run(
                     } else if !backup.is_paused() {
                         // not error and not paused means it is still running
                         maybe_run = false;
-                        debug!("backup: dataset {} already in progress", &set.id);
+                        debug!("dataset {} already in progress", &set.id);
                     }
                 }
             } else if maybe_run {
                 // maybe the application restarted after a crash
-                debug!("backup: reset missing state to start");
+                debug!("reset missing state to start");
                 state.backup_event(BackupAction::Start(set.id.clone()));
             }
             if maybe_run {
@@ -436,6 +445,7 @@ mod tests {
     use std::path::Path;
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn test_scheduler_start_stop_restart() -> io::Result<()> {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
@@ -449,22 +459,21 @@ mod tests {
             .withf(move |id| id == dataset_id)
             .returning(|_| Ok(None));
         let repo = Arc::new(mock);
-        // act (start)
+        // start
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         let performer: Arc<dyn Performer> = Arc::new(MockPerformer::new());
         let sut = SchedulerImpl::new(state.clone(), performer);
         let result = sut.start(repo.clone());
-        thread::sleep(Duration::new(1, 0));
-        // assert (start)
         assert!(result.is_ok());
-        // act (stop)
+        state.wait_for_supervisor(SupervisorAction::Started);
+        // stop
         let result = sut.stop();
-        // assert (stop)
         assert!(result.is_ok());
-        // act (start again)
+        state.wait_for_supervisor(SupervisorAction::Stopped);
+        // restart
         let result = sut.start(repo);
-        // assert (start again)
         assert!(result.is_ok());
+        state.wait_for_supervisor(SupervisorAction::Started);
         Ok(())
     }
 
@@ -934,6 +943,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn test_scheduler_start_backup() -> io::Result<()> {
         // arrange
         let dataset = Dataset::new(Path::new("/some/path"));
@@ -982,7 +992,7 @@ mod tests {
             thread::sleep(Duration::new(1, 0));
         }
         // Do bad things with the arc so we can call checkpoint() without
-        // relying on clone(), which MockPerformce does not implement.
+        // relying on clone(), which MockPerformer does not implement.
         let mut perf = Arc::try_unwrap(performer).unwrap();
         perf.checkpoint();
         Ok(())

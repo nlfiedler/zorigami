@@ -17,13 +17,21 @@
 **** average pack size 68,148,273
 | system | packs |  files | files/pack |
 |--------+-------+--------+------------|
-| mini   |    67 | 332289 |       4959 |
+| mini   |    65 | 336632 |       5179 |
 | kohaku |       |        |            |
+** DONE Set up mini backup to use Azure (=zorigamini=) and local
+** DONE Test database restore from Azure
+** TODO Test file restore from Azure, fails
+*** trying to restore =devscripts/LICENSE= and get ~Io(Custom { kind: InvalidInput, error: "dist overflow" }, "")~
 ** TODO Test database restore from Amazon
-*** need to use a new collection, old one has gzipped database snapshots
+*** need to run a new backup, old one has gzipped database snapshots
 ** TODO Test file restore from Amazon
-*** need to use a new collection, old one has tar pack files
-** TODO Set up mini backup to use Azure (=zorigamini=) and local
+*** need to run a new backup, old one has tar pack files
+** TODO when testing azure pack store with wrong account name, ui hangs
+** TODO when restoring database from azure pack store with wrong account name, hangs
+** TODO web ui barfs when configured for wrong backend address
+*** happens when ~environment_config~ is invoked with the wrong =BASE_URL=
+** TODO need a ~refresh~ button on the snapshots listing, like file restore page
 ** Concurrent pack file creation
 *** consider how to produce pack files concurrently
 *** mac mini is keeping a single CPU core busy at 95%, while reading ~2mb/sec
@@ -214,6 +222,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
 *** design mechanism for changing the passphrase but keeping old ones for decrypting packs
+** Make error message text selectable/copyable
+*** file restore status shows an error message that cannot be selected and copied to the clipboard
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
@@ -423,6 +433,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Actor framework review, is actix still good?
 **** https://github.com/slawlor/ractor aims to be like Erlang
 **** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
+*** Flutter/Rust bridge, call Rust from Dart
+**** c.f. https://github.com/fzyzcjy/flutter_rust_bridge
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -920,6 +932,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
 **** pack store: =/Volumes/Zbackup=
+**** pack store: azure, =zorigamini=
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
 **** run hourly

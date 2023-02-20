@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 
 //! The `state` module manages the application state.
@@ -39,6 +39,14 @@ pub trait StateStore: Send + Sync {
     /// This function will block the current **thread** of execution.
     fn wait_for_supervisor(&self, action: SupervisorAction);
 
+    /// Dispatch a restorer related action to the store.
+    fn restorer_event(&self, action: RestorerAction);
+
+    /// Wait for the given restorer action to have been received.
+    ///
+    /// This function will block the current **thread** of execution.
+    fn wait_for_restorer(&self, action: RestorerAction);
+
     /// Get a copy of the current state.
     fn get_state(&self) -> State;
 
@@ -60,6 +68,8 @@ pub struct StateStoreImpl {
     backup_var: Arc<(Mutex<BackupAction>, Condvar)>,
     // Used to allow callers to wait for supervisor events.
     super_var: Arc<(Mutex<SupervisorAction>, Condvar)>,
+    // Used to allow callers to wait for restorer events.
+    restore_var: Arc<(Mutex<RestorerAction>, Condvar)>,
 }
 
 impl StateStoreImpl {
@@ -72,10 +82,12 @@ impl StateStoreImpl {
             Condvar::new(),
         ));
         let super_var = Arc::new((Mutex::new(SupervisorAction::Stopped), Condvar::new()));
+        let restore_var = Arc::new((Mutex::new(RestorerAction::Stopped), Condvar::new()));
         Self {
             store: Mutex::new(store),
             backup_var,
             super_var,
+            restore_var,
         }
     }
 }
@@ -114,6 +126,26 @@ impl StateStore for StateStoreImpl {
 
     fn wait_for_supervisor(&self, action: SupervisorAction) {
         let pair = self.super_var.clone();
+        let (lock, cvar) = &*pair;
+        let mut actual = lock.lock().unwrap();
+        while *actual != action {
+            actual = cvar.wait(actual).unwrap();
+        }
+    }
+
+    fn restorer_event(&self, action: RestorerAction) {
+        let mut store = self.store.lock().unwrap();
+        let _ = store.dispatch(action.clone());
+        drop(store);
+        let pair = self.restore_var.clone();
+        let (lock, cvar) = &*pair;
+        let mut actual = lock.lock().unwrap();
+        *actual = action;
+        cvar.notify_all();
+    }
+
+    fn wait_for_restorer(&self, action: RestorerAction) {
+        let pair = self.restore_var.clone();
         let (lock, cvar) = &*pair;
         let mut actual = lock.lock().unwrap();
         while *actual != action {
@@ -177,6 +209,22 @@ pub enum BackupAction {
 ///
 #[derive(Clone, Debug, PartialEq)]
 pub enum SupervisorAction {
+    /// Signal subscribers that the supervisor should be started.
+    Start,
+    /// Indicates that the supervisor has in fact started.
+    Started,
+    /// Signal subscribers that the supervisor should be stopped.
+    Stop,
+    /// Indicates that the supervisor has in fact stopped.
+    Stopped,
+}
+
+///
+/// Actions, both imperative and informative, related to the supervisor that
+/// manages the file restore processes.
+///
+#[derive(Clone, Debug, PartialEq)]
+pub enum RestorerAction {
     /// Signal subscribers that the supervisor should be started.
     Start,
     /// Indicates that the supervisor has in fact started.
@@ -273,13 +321,30 @@ pub enum SupervisorState {
 }
 
 ///
+/// State of the supervisor process that manages file restores.
+///
+#[derive(Clone, Debug, PartialEq)]
+pub enum RestorerState {
+    /// Supervisor is in the process of starting.
+    Starting,
+    /// Supervisor has been instructed to start.
+    Started,
+    /// Supervisor is in the process of stopping.
+    Stopping,
+    /// Supervisor has not been started or was stopped.
+    Stopped,
+}
+
+///
 /// The entire state of the application.
 ///
 pub struct State {
     /// Backup progress is tracked by the dataset identifier.
     backups: HashMap<String, BackupState>,
-    /// Requested state of the supervisor process.
+    /// Requested state of the backup supervisor process.
     pub supervisor: SupervisorState,
+    /// Requested state of the restore supervisor process.
+    pub restorer: RestorerState,
     /// Collection of subscribers to the application state.
     subscribers: HashMap<String, Subscription<State>>,
 }
@@ -299,6 +364,7 @@ impl Default for State {
         Self {
             backups: HashMap::new(),
             supervisor: SupervisorState::Stopped,
+            restorer: RestorerState::Stopped,
             subscribers: HashMap::new(),
         }
     }
@@ -309,6 +375,7 @@ impl Clone for State {
         Self {
             backups: self.backups.clone(),
             supervisor: self.supervisor.clone(),
+            restorer: self.restorer.clone(),
             subscribers: self.subscribers.clone(),
         }
     }
@@ -389,6 +456,25 @@ impl Reducer<SupervisorAction> for State {
             }
             SupervisorAction::Stopped => {
                 self.supervisor = SupervisorState::Stopped;
+            }
+        }
+    }
+}
+
+impl Reducer<RestorerAction> for State {
+    fn reduce(&mut self, action: RestorerAction) {
+        match action {
+            RestorerAction::Start => {
+                self.restorer = RestorerState::Starting;
+            }
+            RestorerAction::Started => {
+                self.restorer = RestorerState::Started;
+            }
+            RestorerAction::Stop => {
+                self.restorer = RestorerState::Stopping;
+            }
+            RestorerAction::Stopped => {
+                self.restorer = RestorerState::Stopped;
             }
         }
     }
@@ -591,5 +677,33 @@ mod tests {
         sut.wait_for_supervisor(SupervisorAction::Stopped);
         let state = sut.get_state();
         assert_eq!(state.supervisor, SupervisorState::Stopped);
+    }
+
+    #[test]
+    fn test_wait_for_restorer() {
+        let sut = Arc::new(StateStoreImpl::new());
+        // assert initial state is "stopped"
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Stopped);
+        // change restorer to starting
+        sut.restorer_event(RestorerAction::Start);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Starting);
+        // spawn a thread that sends the started event later
+        let sut_clone = sut.clone();
+        std::thread::spawn(move || {
+            let delay = std::time::Duration::from_millis(250);
+            std::thread::sleep(delay);
+            sut_clone.restorer_event(RestorerAction::Started);
+        });
+        // wait on the current thread for the action to arrive
+        sut.wait_for_restorer(RestorerAction::Started);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Started);
+        // wait for an action that has already arrived
+        sut.restorer_event(RestorerAction::Stopped);
+        sut.wait_for_restorer(RestorerAction::Stopped);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Stopped);
     }
 }

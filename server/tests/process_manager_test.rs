@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::Error;
 use dotenv::dotenv;
@@ -96,7 +96,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
         "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let snapshot = dbase.get_snapshot(&snapshot_sha1)?.unwrap();
-    let restorer = RestorerImpl::new(file_restorer_factory);
+    let restorer = RestorerImpl::new(state, file_restorer_factory);
     let result = restorer.start(dbase.clone());
     assert!(result.is_ok());
     let result = restorer.enqueue(Request::new(

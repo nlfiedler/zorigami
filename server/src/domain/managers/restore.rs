@@ -1,8 +1,9 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::helpers::{crypto, pack};
+use crate::domain::managers::state::{RestorerAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
@@ -79,7 +80,7 @@ impl cmp::Eq for Request {}
 ///
 #[cfg_attr(test, automock)]
 pub trait Restorer: Send + Sync {
-    /// Start a supervisor that will run scheduled backups.
+    /// Start a supervisor that will run a file restore process.
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
 
     /// Add the given request to the queue to be processed.
@@ -108,8 +109,10 @@ type FileRestorerFactory = fn(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileR
 /// spawn threads and send messages to actors to manage the restore requests.
 ///
 pub struct RestorerImpl {
-    // Arbiter manages the supervised actor that initiates backups.
-    runner: Mutex<Option<Arbiter>>,
+    // Arbiter manages the supervised actor that initiates restores.
+    runner: Arbiter,
+    // Application state to be provided to supervisor and runners.
+    state: Arc<dyn StateStore>,
     // Address of the supervisor actor, if it has been started.
     super_addr: Mutex<Option<Addr<RestoreSupervisor>>>,
     // Queue of incoming requests to be processed.
@@ -122,10 +125,11 @@ pub struct RestorerImpl {
 
 impl RestorerImpl {
     /// Construct a new instance of RestorerImpl.
-    pub fn new(fetcher: FileRestorerFactory) -> Self {
+    pub fn new(state: Arc<dyn StateStore>, fetcher: FileRestorerFactory) -> Self {
         // create an Arbiter to manage an event loop on a new thread
         Self {
-            runner: Mutex::new(None),
+            runner: Arbiter::new(),
+            state: state.clone(),
             super_addr: Mutex::new(None),
             pending: Arc::new(Mutex::new(VecDeque::new())),
             completed: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
@@ -167,20 +171,16 @@ impl RestorerImpl {
 
 impl Restorer for RestorerImpl {
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
-        let mut runner = self.runner.lock().unwrap();
-        if runner.is_none() {
-            *runner = Some(Arbiter::new());
-        }
         let mut su_addr = self.super_addr.lock().unwrap();
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
+            let state = self.state.clone();
             let pending = self.pending.clone();
             let completed = self.completed.clone();
             let fetcher = self.fetcher;
-            let addr = actix::Supervisor::start_in_arbiter(
-                &runner.as_ref().unwrap().handle(),
-                move |_| RestoreSupervisor::new(repo, pending, completed, fetcher),
-            );
+            let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
+                RestoreSupervisor::new(repo, state, pending, completed, fetcher)
+            });
             *su_addr = Some(addr);
         }
         Ok(())
@@ -236,19 +236,18 @@ impl Restorer for RestorerImpl {
         }
         let mut su_addr = self.super_addr.lock().unwrap();
         if let Some(addr) = su_addr.take() {
-            addr.try_send(Stop()).map_err(err_convert)?;
+            addr.try_send(Stop()).map_err(err_convert)
+        } else {
+            Ok(())
         }
-        let mut runner = self.runner.lock().unwrap();
-        if let Some(runr) = runner.take() {
-            runr.stop();
-        }
-        Ok(())
     }
 }
 
 struct RestoreSupervisor {
     // Database connection for querying datasets.
     dbase: Arc<dyn RecordRepository>,
+    // Application state for signaling changes in restore status.
+    state: Arc<dyn StateStore>,
     // Queue of incoming requests to be processed.
     pending: Arc<Mutex<VecDeque<Request>>>,
     // List to which completed tasks are added (in the front).
@@ -260,12 +259,14 @@ struct RestoreSupervisor {
 impl RestoreSupervisor {
     fn new(
         repo: Arc<dyn RecordRepository>,
+        state: Arc<dyn StateStore>,
         pending: Arc<Mutex<VecDeque<Request>>>,
         completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
         fetcher: FileRestorerFactory,
     ) -> Self {
         Self {
             dbase: repo,
+            state,
             pending,
             completed,
             fetcher,
@@ -402,13 +403,23 @@ impl Actor for RestoreSupervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Self::Context) {
-        debug!("restore: supervisor started");
+        debug!("supervisor started");
+        self.state.restorer_event(RestorerAction::Started);
+    }
+
+    fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
+        debug!("supervisor stopping");
+        Running::Stop
+    }
+
+    fn stopped(&mut self, _ctx: &mut Context<Self>) {
+        debug!("supervisor stopped");
     }
 }
 
 impl Supervised for RestoreSupervisor {
     fn restarting(&mut self, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore: supervisor restarting");
+        debug!("supervisor restarting");
     }
 }
 
@@ -423,7 +434,7 @@ impl Handler<SetFactory> for RestoreSupervisor {
     type Result = ();
 
     fn handle(&mut self, msg: SetFactory, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore: supervisor setting factory method");
+        debug!("supervisor received SetFactory message");
         self.fetcher = msg.fetcher;
     }
 }
@@ -436,7 +447,8 @@ impl Handler<Stop> for RestoreSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Stop, ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore: supervisor received stop message");
+        debug!("supervisor received Stop message");
+        self.state.restorer_event(RestorerAction::Stopped);
         ctx.stop();
     }
 }
@@ -449,7 +461,7 @@ impl Handler<Restore> for RestoreSupervisor {
     type Result = ();
 
     fn handle(&mut self, _msg: Restore, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("restore: supervisor received restore message");
+        debug!("supervisor received Restore message");
         if let Err(err) = self.process_queue() {
             error!("supervisor error processing queue: {}", err);
         }
@@ -531,7 +543,7 @@ impl FileRestorerImpl {
             let mut encrypted = PathBuf::new();
             encrypted.push(workspace);
             encrypted.push(pack_digest.to_string());
-            debug!("restore: fetching pack {}", pack_digest);
+            debug!("fetching pack {}", pack_digest);
             stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
             // decrypt and then unpack the contents
             let mut tarball = encrypted.clone();
@@ -695,6 +707,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::{Dataset, Tree, TreeEntry};
     use crate::domain::managers;
+    use crate::domain::managers::state::StateStoreImpl;
     use crate::domain::repositories::MockRecordRepository;
     use std::io;
     use std::str::FromStr;
@@ -714,6 +727,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn test_restorer_enqueue_then_fail() -> io::Result<()> {
         // arrange
         let mock = MockRecordRepository::new();
@@ -725,7 +739,8 @@ mod tests {
                 .returning(|_| Err(anyhow!("oh no!")));
             Box::new(restorer)
         }
-        let sut = RestorerImpl::new(factory);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let sut = RestorerImpl::new(state, factory);
         // act
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
@@ -748,6 +763,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn test_restorer_fail_then_succeed() -> io::Result<()> {
         // arrange
         let dataset = Dataset::new(Path::new("/home/base"));
@@ -785,7 +801,8 @@ mod tests {
 
         // act with failing request
         let repo = Arc::new(mock);
-        let mut sut = RestorerImpl::new(factory_fail);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let mut sut = RestorerImpl::new(state, factory_fail);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let result = sut.enqueue(managers::restore::Request::new(
@@ -832,6 +849,7 @@ mod tests {
     }
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn test_restorer_restore_tree() -> io::Result<()> {
         // arrange
         let dataset = Dataset::new(Path::new("/home/town"));
@@ -898,7 +916,8 @@ mod tests {
 
         // act
         let repo = Arc::new(mock);
-        let sut = RestorerImpl::new(factory);
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let sut = RestorerImpl::new(state, factory);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let passphrase = crypto::get_passphrase();
@@ -917,6 +936,32 @@ mod tests {
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
         assert!(request.error_msg.is_none());
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restorer_start_stop_restart() -> io::Result<()> {
+        // arrange
+        fn factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            Box::new(FileRestorerImpl::new(dbase))
+        }
+        let mock = MockRecordRepository::new();
+        let repo = Arc::new(mock);
+        // start
+        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+        let sut = RestorerImpl::new(state.clone(), factory);
+        let result = sut.start(repo.clone());
+        state.wait_for_restorer(RestorerAction::Started);
+        assert!(result.is_ok());
+        // stop
+        let result = sut.stop();
+        assert!(result.is_ok());
+        state.wait_for_restorer(RestorerAction::Stopped);
+        // restart
+        let result = sut.start(repo);
+        state.wait_for_restorer(RestorerAction::Started);
+        assert!(result.is_ok());
         Ok(())
     }
 }

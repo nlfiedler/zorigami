@@ -1,7 +1,7 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
-use crate::domain::managers::state::{StateStore, SupervisorAction};
+use crate::domain::managers::state::{RestorerAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Error};
 use log::{debug, error, info, log_enabled, Level};
@@ -26,10 +26,13 @@ impl super::UseCase<String, Params> for RestoreDatabase {
                 debug!("datasets before: {:?}", datasets);
             }
         }
-        // Signal the supervisor to stop and wait for that to happen.
+        // Signal the supervisors to stop and wait for that to happen.
         info!("stopping backup supervisor...");
         params.state.supervisor_event(SupervisorAction::Stop);
         params.state.wait_for_supervisor(SupervisorAction::Stopped);
+        info!("stopping restore supervisor...");
+        params.state.restorer_event(RestorerAction::Stop);
+        params.state.wait_for_restorer(RestorerAction::Stopped);
         let result = if let Some(store) = self.repo.get_store(&params.store_id)? {
             info!("found store {}", store.id);
             let pack_repo = self.repo.build_pack_repo(&store)?;
@@ -50,19 +53,21 @@ impl super::UseCase<String, Params> for RestoreDatabase {
         } else {
             Err(anyhow!("no pack stores defined"))
         };
-        // Signal the processor to start a new backup supervisor.
-        info!("starting backup supervisor again...");
-        params.state.supervisor_event(SupervisorAction::Start);
-        info!("database restore complete");
-        if log_enabled!(Level::Debug) {
-            if let Ok(datasets) = self.repo.get_datasets() {
-                debug!("datasets after: {:?}", datasets);
-            }
-        }
         if let Err(err) = result {
             error!("database restore failed: {}", err);
             Err(err)
         } else {
+            // Signal the processor to start a new backup supervisor.
+            info!("starting backup supervisor again...");
+            params.state.supervisor_event(SupervisorAction::Start);
+            info!("starting restore supervisor again...");
+            params.state.restorer_event(RestorerAction::Start);
+            info!("database restore complete");
+            if log_enabled!(Level::Debug) {
+                if let Ok(datasets) = self.repo.get_datasets() {
+                    debug!("datasets after: {:?}", datasets);
+                }
+            }
             result.map(|_| String::from("ok"))
         }
     }
@@ -147,6 +152,18 @@ mod tests {
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Stop))
+            .return_const(());
+        stater
+            .expect_wait_for_restorer()
+            .with(eq(RestorerAction::Stopped))
+            .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Start))
+            .return_const(());
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act
         let usecase = RestoreDatabase::new(Box::new(mock));
@@ -198,6 +215,18 @@ mod tests {
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Stop))
+            .return_const(());
+        stater
+            .expect_wait_for_restorer()
+            .with(eq(RestorerAction::Stopped))
+            .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Start))
+            .return_const(());
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act
         let usecase = RestoreDatabase::new(Box::new(mock));
@@ -228,6 +257,18 @@ mod tests {
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
+            .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Stop))
+            .return_const(());
+        stater
+            .expect_wait_for_restorer()
+            .with(eq(RestorerAction::Stopped))
+            .return_const(());
+        stater
+            .expect_restorer_event()
+            .with(eq(RestorerAction::Start))
             .return_const(());
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act

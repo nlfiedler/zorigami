@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 
 //! The main application binary that starts the web server and spawns the
@@ -7,7 +7,9 @@
 
 use actix_cors::Cors;
 use actix_files::{Files, NamedFile};
-use actix_web::{http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result};
+use actix_web::{
+    error::InternalError, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result,
+};
 use env_logger;
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
@@ -49,7 +51,9 @@ lazy_static! {
     // Application state store.
     static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     // File restore implementation.
-    static ref FILE_RESTORER: Arc<dyn Restorer> = Arc::new(RestorerImpl::new(file_restorer_factory));
+    static ref FILE_RESTORER: Arc<dyn Restorer> = {
+        Arc::new(RestorerImpl::new(STATE_STORE.clone(), file_restorer_factory))
+    };
     // Actual performer of the backups.
     static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
     // Supervisor for managing the running of backups.
@@ -86,7 +90,8 @@ async fn graphql(
     st: web::Data<Arc<graphql::Schema>>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
-    let source = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
+    let source = EntityDataSourceImpl::new(DB_PATH.as_path())
+        .map_err(|e| InternalError::new(e, http::StatusCode::INTERNAL_SERVER_ERROR))?;
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
     let state = STATE_STORE.clone();
     let processor = SCHEDULER.clone();
@@ -101,18 +106,38 @@ async fn graphql(
         .body(body))
 }
 
-// Start and stop the supervisor based on application state changes.
-fn manage_supervisor(state: &state::State, _previous: Option<&state::State>) {
+// Start and stop the supervisor(s) based on application state changes.
+fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
     if state.supervisor == state::SupervisorState::Stopping {
         if let Err(err) = SCHEDULER.stop() {
             error!("error stopping supervisor: {}", err);
         }
     } else if state.supervisor == state::SupervisorState::Starting {
-        let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
-        let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-        if let Err(err) = SCHEDULER.start(dbase) {
-            error!("error starting supervisor: {}", err);
+        match EntityDataSourceImpl::new(DB_PATH.as_path()) {
+            Ok(datasource) => {
+                let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+                let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+                if let Err(err) = SCHEDULER.start(dbase) {
+                    error!("error starting supervisor: {}", err);
+                }
+            }
+            Err(err) => error!("error opening database: {}", err),
+        }
+    }
+    if state.restorer == state::RestorerState::Stopping {
+        if let Err(err) = FILE_RESTORER.stop() {
+            error!("error stopping restorer: {}", err);
+        }
+    } else if state.restorer == state::RestorerState::Starting {
+        match EntityDataSourceImpl::new(DB_PATH.as_path()) {
+            Ok(datasource) => {
+                let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+                let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+                if let Err(err) = FILE_RESTORER.start(dbase) {
+                    error!("error starting file restorer: {}", err);
+                }
+            }
+            Err(err) => error!("error opening database: {}", err),
         }
     }
 }
@@ -157,15 +182,10 @@ async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     env_logger::init();
-    STATE_STORE.subscribe("super-manager", manage_supervisor);
+    STATE_STORE.subscribe("super-manager", manage_supervisors);
     STATE_STORE.subscribe("backup-logger", log_state_changes);
     STATE_STORE.supervisor_event(state::SupervisorAction::Start);
-    let datasource = EntityDataSourceImpl::new(DB_PATH.as_path()).unwrap();
-    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-    if let Err(err) = FILE_RESTORER.start(dbase) {
-        error!("error starting file restorer: {}", err);
-    }
+    STATE_STORE.restorer_event(state::RestorerAction::Start);
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
     let addr = format!("{}:{}", host, port);
