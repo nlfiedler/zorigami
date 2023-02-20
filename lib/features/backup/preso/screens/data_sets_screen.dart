@@ -20,6 +20,16 @@ class DataSetsScreen extends ConsumerWidget {
           return Scaffold(
             appBar: AppBar(
               title: Text('DATA SETS'),
+              actions: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh',
+                  onPressed: () {
+                    BlocProvider.of<DataSetsBloc>(context)
+                        .add(ReloadDataSets());
+                  },
+                ),
+              ],
             ),
             body: buildBody(context, state),
             floatingActionButton: FloatingActionButton(

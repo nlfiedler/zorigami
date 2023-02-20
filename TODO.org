@@ -1,6 +1,4 @@
 * Tasks
-** TODO web ui barfs when backend is unreachable
-** TODO need a ~refresh~ button on the snapshots listing, like file restore page
 ** Concurrent pack file creation
 *** consider how to produce pack files concurrently
 *** mac mini is keeping a single CPU core busy at 95%, while reading ~2mb/sec
@@ -271,6 +269,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** configuration panel
 ***** snapshot browser
 ** Improved error handling
+*** webui: change =ServerFailure= to capture original error cause, not just as a string
+**** add factory function that detects common types of errors and produces more helpful failure messages
+**** e.g. backend is not responding on home screen, shows ugly stack trace
 *** Detect cloud credential issues and display friendly message
 **** errors from cloud providers can be cryptic, need to detect and decipher for the user
 *** Collect and present errors encountered during the backup
@@ -282,7 +283,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Consider a structured design for error types and handling
 **** c.f. https://fettblog.eu/rust-enums-wrapping-errors/
 *** Look at https://github.com/dtolnay/thiserror for defining error types
-*** May improve error handling and reporting
 ** Initial Configuration
 *** Walk user through pack store and data set creation
 *** Offer path for restoring database from existing pack store
