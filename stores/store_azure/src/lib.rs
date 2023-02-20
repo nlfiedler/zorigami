@@ -22,7 +22,7 @@ pub struct AzureStore {
     store_id: String,
     account: String,
     access_key: String,
-    access_tier: Option<String>,
+    access_tier: Option<AccessTier>,
     custom_uri: Option<String>,
 }
 
@@ -36,13 +36,23 @@ impl AzureStore {
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
         let custom_uri = props.get("custom_uri");
-        let access_tier = props.get("access_tier");
+        let access_tier = props.get("access_tier").map(|tier| {
+            if tier.to_lowercase() == "hot" {
+                Some(AccessTier::Hot)
+            } else if tier.to_lowercase() == "cool" {
+                Some(AccessTier::Cool)
+            } else if tier.to_lowercase() == "archive" {
+                Some(AccessTier::Archive)
+            } else {
+                None
+            }
+        }).flatten();
         Ok(Self {
             store_id: store_id.to_owned(),
             account: account.to_owned(),
             access_key: access_key.to_owned(),
             custom_uri: custom_uri.cloned(),
-            access_tier: access_tier.cloned(),
+            access_tier,
         })
     }
 
@@ -124,13 +134,7 @@ impl AzureStore {
         }
         let mut builder = blob_client.put_block_list(BlockList { blocks: block_list });
         if let Some(tier) = &self.access_tier {
-            if tier.to_lowercase() == "hot" {
-                builder = builder.access_tier(AccessTier::Hot);
-            } else if tier.to_lowercase() == "cool" {
-                builder = builder.access_tier(AccessTier::Cool);
-            } else if tier.to_lowercase() == "archive" {
-                builder = builder.access_tier(AccessTier::Archive);
-            }
+            builder = builder.access_tier(*tier);
         }
         builder.await?;
         let loc = Coordinates::new(&self.store_id, bucket, object);
