@@ -31,6 +31,12 @@ pub trait StateStore: Send + Sync {
     /// This function will block the current **thread** of execution.
     fn wait_for_backup(&self, action: BackupAction);
 
+    /// Ensure the supervisor is running, starting it if necessary.
+    fn start_supervisor(&self);
+
+    /// Ensure the supervisor is not running, stopping it if necessary.
+    fn stop_supervisor(&self);
+
     /// Dispatch a supervisor related action to the store.
     fn supervisor_event(&self, action: SupervisorAction);
 
@@ -38,6 +44,12 @@ pub trait StateStore: Send + Sync {
     ///
     /// This function will block the current **thread** of execution.
     fn wait_for_supervisor(&self, action: SupervisorAction);
+
+    /// Ensure the restorer is running, starting it if necessary.
+    fn start_restorer(&self);
+
+    /// Ensure the restorer is not running, stopping it if necessary.
+    fn stop_restorer(&self);
 
     /// Dispatch a restorer related action to the store.
     fn restorer_event(&self, action: RestorerAction);
@@ -113,6 +125,24 @@ impl StateStore for StateStoreImpl {
         }
     }
 
+    fn start_supervisor(&self) {
+        let store = self.store.lock().unwrap();
+        if store.supervisor != SupervisorState::Started {
+            drop(store);
+            self.supervisor_event(SupervisorAction::Start);
+            self.wait_for_supervisor(SupervisorAction::Started);
+        }
+    }
+
+    fn stop_supervisor(&self) {
+        let store = self.store.lock().unwrap();
+        if store.supervisor != SupervisorState::Stopped {
+            drop(store);
+            self.supervisor_event(SupervisorAction::Stop);
+            self.wait_for_supervisor(SupervisorAction::Stopped);
+        }
+    }
+
     fn supervisor_event(&self, action: SupervisorAction) {
         let mut store = self.store.lock().unwrap();
         let _ = store.dispatch(action.clone());
@@ -130,6 +160,24 @@ impl StateStore for StateStoreImpl {
         let mut actual = lock.lock().unwrap();
         while *actual != action {
             actual = cvar.wait(actual).unwrap();
+        }
+    }
+
+    fn start_restorer(&self) {
+        let store = self.store.lock().unwrap();
+        if store.restorer != RestorerState::Started {
+            drop(store);
+            self.restorer_event(RestorerAction::Start);
+            self.wait_for_restorer(RestorerAction::Started);
+        }
+    }
+
+    fn stop_restorer(&self) {
+        let store = self.store.lock().unwrap();
+        if store.restorer != RestorerState::Stopped {
+            drop(store);
+            self.restorer_event(RestorerAction::Stop);
+            self.wait_for_restorer(RestorerAction::Stopped);
         }
     }
 
@@ -616,12 +664,48 @@ mod tests {
         sut.supervisor_event(SupervisorAction::Started);
         let state = sut.get_state();
         assert_eq!(state.supervisor, SupervisorState::Started);
+        // start an already started supervisor process
+        sut.start_supervisor();
+        sut.start_supervisor();
+        sut.start_supervisor();
         sut.supervisor_event(SupervisorAction::Stop);
         let state = sut.get_state();
         assert_eq!(state.supervisor, SupervisorState::Stopping);
         sut.supervisor_event(SupervisorAction::Stopped);
         let state = sut.get_state();
         assert_eq!(state.supervisor, SupervisorState::Stopped);
+        // stop an already stopped supervisor process
+        sut.stop_supervisor();
+        sut.stop_supervisor();
+        sut.stop_supervisor();
+    }
+
+    #[test]
+    fn test_restorer_start_stop() {
+        let sut = StateStoreImpl::new();
+        // assert initial state is "stopped"
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Stopped);
+        sut.restorer_event(RestorerAction::Start);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Starting);
+        sut.restorer_event(RestorerAction::Started);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Started);
+        // start an already started restorer process
+        sut.start_restorer();
+        sut.start_restorer();
+        sut.start_restorer();
+        sut.restorer_event(RestorerAction::Stop);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Stopping);
+        sut.restorer_event(RestorerAction::Stopped);
+        let state = sut.get_state();
+        assert_eq!(state.restorer, RestorerState::Stopped);
+        // stop an already stopped restorer process
+        sut.stop_restorer();
+        sut.stop_restorer();
+        sut.stop_restorer();
     }
 
     #[test]

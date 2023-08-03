@@ -28,11 +28,9 @@ impl super::UseCase<String, Params> for RestoreDatabase {
         }
         // Signal the supervisors to stop and wait for that to happen.
         info!("stopping backup supervisor...");
-        params.state.supervisor_event(SupervisorAction::Stop);
-        params.state.wait_for_supervisor(SupervisorAction::Stopped);
+        params.state.stop_supervisor();
         info!("stopping restore supervisor...");
-        params.state.restorer_event(RestorerAction::Stop);
-        params.state.wait_for_restorer(RestorerAction::Stopped);
+        params.state.stop_restorer();
         let result = if let Some(store) = self.repo.get_store(&params.store_id)? {
             info!("found store {}", store.id);
             let pack_repo = self.repo.build_pack_repo(&store)?;
@@ -141,24 +139,14 @@ mod tests {
         mock.expect_restore_from_backup().returning(|_| Ok(()));
         let mut stater = MockStateStore::new();
         stater
-            .expect_supervisor_event()
-            .with(eq(SupervisorAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_supervisor()
-            .with(eq(SupervisorAction::Stopped))
+            .expect_stop_supervisor()
             .return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
         stater
-            .expect_restorer_event()
-            .with(eq(RestorerAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_restorer()
-            .with(eq(RestorerAction::Stopped))
+            .expect_stop_restorer()
             .return_const(());
         stater
             .expect_restorer_event()
@@ -204,24 +192,14 @@ mod tests {
             .returning(|_| Err(anyhow!("no database archives available")));
         let mut stater = MockStateStore::new();
         stater
-            .expect_supervisor_event()
-            .with(eq(SupervisorAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_supervisor()
-            .with(eq(SupervisorAction::Stopped))
+            .expect_stop_supervisor()
             .return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
         stater
-            .expect_restorer_event()
-            .with(eq(RestorerAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_restorer()
-            .with(eq(RestorerAction::Stopped))
+            .expect_stop_restorer()
             .return_const(());
         stater
             .expect_restorer_event()
@@ -247,24 +225,14 @@ mod tests {
             .returning(move |_| Ok(None));
         let mut stater = MockStateStore::new();
         stater
-            .expect_supervisor_event()
-            .with(eq(SupervisorAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_supervisor()
-            .with(eq(SupervisorAction::Stopped))
+            .expect_stop_supervisor()
             .return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
         stater
-            .expect_restorer_event()
-            .with(eq(RestorerAction::Stop))
-            .return_const(());
-        stater
-            .expect_wait_for_restorer()
-            .with(eq(RestorerAction::Stopped))
+            .expect_stop_restorer()
             .return_const(());
         stater
             .expect_restorer_event()
