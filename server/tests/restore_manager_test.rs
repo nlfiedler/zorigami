@@ -399,6 +399,118 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     Ok(())
 }
 
+//
+// TODO: this would be testing the efficient restore of a file that already exists
+//       at the target location and its checksum matches the one being restored
+//
+// #[actix_rt::test]
+// async fn test_backup_restore_over_existing() -> Result<(), Error> {
+//     // create the database
+//     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+//     fs::create_dir_all(&db_base)?;
+//     let db_path = tempfile::tempdir_in(&db_base)?;
+//     let datasource = EntityDataSourceImpl::new(db_path.path()).unwrap();
+//     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+//     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+//     // create a local pack store
+//     let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+//     fs::create_dir_all(&pack_base)?;
+//     let pack_path = tempfile::tempdir_in(&pack_base)?;
+//     let mut local_props: HashMap<String, String> = HashMap::new();
+//     local_props.insert(
+//         "basepath".to_owned(),
+//         pack_path.into_path().to_string_lossy().into(),
+//     );
+//     let store = entities::Store {
+//         id: "local123".to_owned(),
+//         store_type: entities::StoreType::LOCAL,
+//         label: "my local".to_owned(),
+//         properties: local_props,
+//     };
+//     dbase.put_store(&store)?;
+
+//     // create a dataset
+//     let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+//     fs::create_dir_all(&fixture_base)?;
+//     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+//     let mut dataset = entities::Dataset::new(fixture_path.path());
+//     dataset = dataset.add_store("local123");
+//     dbase.put_dataset(&dataset)?;
+//     let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
+//     dbase.put_computer_id(&dataset.id, &computer_id)?;
+
+//     // perform the first backup
+//     let performer = PerformerImpl::new();
+//     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
+//     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
+//     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+//     let passphrase = String::from("keyboard cat");
+//     let request = backup::Request::new(
+//         dataset.clone(),
+//         dbase.clone(),
+//         state.clone(),
+//         &passphrase,
+//         None,
+//     );
+//     let first_backup = performer.backup(request)?;
+//     assert!(first_backup.is_some());
+//     let first_backup_sum = first_backup.unwrap();
+
+//     // try to restore the file, it should do nothing since it already exists
+//     let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
+//     let result = sut.start(dbase.clone());
+//     assert!(result.is_ok());
+//     let snapshot = dbase.get_snapshot(&first_backup_sum)?.unwrap();
+//     let result = sut.enqueue(Request::new(
+//         snapshot.tree,
+//         String::from("lorem-ipsum.txt"),
+//         PathBuf::from("lorem-ipsum.txt"),
+//         dataset.id.to_owned(),
+//         "keyboard cat".into(),
+//     ));
+//     assert!(result.is_ok());
+//     sut.wait_for_completed();
+//     let requests = sut.requests();
+//     assert_eq!(requests.len(), 1);
+//     let request = &requests[0];
+//     assert!(request.error_msg.is_none());
+//     assert_eq!(request.files_restored, 0);
+
+//     // TODO: modify the target file
+//     // fix the file permissions and perform the third backup
+//     // fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
+//     // let request = backup::Request::new(
+//     //     dataset.clone(),
+//     //     dbase.clone(),
+//     //     state.clone(),
+//     //     &passphrase,
+//     //     None,
+//     // );
+//     // let third_backup = performer.backup(request)?;
+//     // assert!(third_backup.is_some());
+
+//     // TODO: restore the file from the first snapshot, should overwrite modified target
+//     // sut.reset_completed();
+//     // let snapshot = dbase.get_snapshot(&third_backup.unwrap())?.unwrap();
+//     // let result = sut.enqueue(Request::new(
+//     //     snapshot.tree,
+//     //     String::from("washington-journal.txt"),
+//     //     PathBuf::from("washington-journal.txt"),
+//     //     dataset.id.to_owned(),
+//     //     "keyboard cat".into(),
+//     // ));
+//     // assert!(result.is_ok());
+//     // // assert success
+//     // sut.wait_for_completed();
+//     // let requests = sut.requests();
+//     // assert_eq!(requests.len(), 1);
+//     // let request = &requests[0];
+//     // assert!(request.error_msg.is_none());
+//     // assert_eq!(request.files_restored, 1);
+//     Ok(())
+// }
+
 #[actix_rt::test]
 async fn test_backup_restore_symlink() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();

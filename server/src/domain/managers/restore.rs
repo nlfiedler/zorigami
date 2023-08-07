@@ -8,7 +8,7 @@ use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use log::{debug, error};
+use log::{debug, error, info};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::cmp;
@@ -171,6 +171,7 @@ impl RestorerImpl {
 
 impl Restorer for RestorerImpl {
     fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
+        debug!("restorer starting...");
         let mut su_addr = self.super_addr.lock().unwrap();
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
@@ -187,7 +188,11 @@ impl Restorer for RestorerImpl {
     }
 
     fn enqueue(&self, request: Request) -> Result<(), Error> {
-        debug!("enqueuing request {}/{}", request.tree, request.entry);
+        info!(
+            "enqueue request for {} into {}",
+            request.entry,
+            request.filepath.display()
+        );
         let mut queue = self.pending.lock().unwrap();
         queue.push_back(request);
         let su_addr = self.super_addr.lock().unwrap();
@@ -218,6 +223,7 @@ impl Restorer for RestorerImpl {
     }
 
     fn cancel(&self, request: Request) -> bool {
+        info!("cancel request for {}/{}", request.tree, request.entry);
         let mut queue = self.pending.lock().unwrap();
         let position = queue.iter().position(|r| r == &request);
         if let Some(idx) = position {
@@ -277,12 +283,14 @@ impl RestoreSupervisor {
         // Process all of the requests in the queue using the one fetcher, in
         // the hopes that there may be some overlap of the pack files.
         while let Some(request) = self.pop_incoming() {
-            debug!("processing request {}/{}", request.tree, request.entry);
+            info!("processing request {}/{}", request.tree, request.entry);
             let mut req = request.clone();
             if let Err(error) = fetcher.load_dataset(&request.dataset) {
+                error!("process_queue: error loading dataset: {}", error);
                 self.set_error(error, &mut req);
             } else {
                 if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
+                    error!("process_queue: error processing entry: {}", error);
                     self.set_error(error, &mut req);
                 }
             }
@@ -305,16 +313,16 @@ impl RestoreSupervisor {
                 let filepath = request.filepath.clone();
                 match &entry.reference {
                     TreeReference::LINK(contents) => {
-                        fetcher.restore_link(contents, filepath)?;
+                        fetcher.restore_link(contents, &filepath)?;
                     }
                     TreeReference::TREE(digest) => {
-                        self.process_tree(request, digest.to_owned(), filepath, fetcher)?;
+                        self.process_tree(request, digest.to_owned(), &filepath, fetcher)?;
                     }
                     TreeReference::FILE(digest) => {
-                        self.process_file(request, digest.to_owned(), filepath, fetcher)?;
+                        self.process_file(request, digest.to_owned(), &filepath, fetcher)?;
                     }
                     TreeReference::SMALL(contents) => {
-                        fetcher.restore_small(contents, filepath)?;
+                        fetcher.restore_small(contents, &filepath)?;
                     }
                 }
                 break;
@@ -327,10 +335,11 @@ impl RestoreSupervisor {
         &self,
         request: &mut Request,
         digest: Checksum,
-        filepath: PathBuf,
+        filepath: &PathBuf,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         // fetch the packs for the file and assemble the chunks
+        debug!("restoring file {}, {}", digest, filepath.display());
         fetcher.fetch_file(&digest, &filepath, &request.passphrase)?;
         // update the count of files restored so far
         request.files_restored += 1;
@@ -341,7 +350,7 @@ impl RestoreSupervisor {
         &self,
         request: &mut Request,
         digest: Checksum,
-        path: PathBuf,
+        path: &PathBuf,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         let tree = self
@@ -353,16 +362,44 @@ impl RestoreSupervisor {
             filepath.push(&entry.name);
             match &entry.reference {
                 TreeReference::LINK(contents) => {
-                    fetcher.restore_link(contents, filepath)?;
+                    if let Err(error) = fetcher.restore_link(contents, &filepath) {
+                        error!(
+                            "process_tree: error restoring link {}: {}",
+                            filepath.display(),
+                            error
+                        );
+                    }
                 }
                 TreeReference::TREE(digest) => {
-                    self.process_tree(request, digest.to_owned(), filepath, fetcher)?;
+                    if let Err(error) =
+                        self.process_tree(request, digest.to_owned(), &filepath, fetcher)
+                    {
+                        error!(
+                            "process_tree: error processing tree {}: {}",
+                            filepath.display(),
+                            error
+                        );
+                    }
                 }
                 TreeReference::FILE(digest) => {
-                    self.process_file(request, digest.to_owned(), filepath, fetcher)?;
+                    if let Err(error) =
+                        self.process_file(request, digest.to_owned(), &filepath, fetcher)
+                    {
+                        error!(
+                            "process_tree: error processing file {}: {}",
+                            filepath.display(),
+                            error
+                        );
+                    }
                 }
                 TreeReference::SMALL(contents) => {
-                    fetcher.restore_small(contents, filepath)?;
+                    if let Err(error) = fetcher.restore_small(contents, &filepath) {
+                        error!(
+                            "process_tree: error restoring small {}: {}",
+                            filepath.display(),
+                            error
+                        );
+                    }
                 }
             }
         }
@@ -481,10 +518,10 @@ pub trait FileRestorer: Send + Sync {
     ) -> Result<(), Error>;
 
     /// Restore the named symbolic link given its contents.
-    fn restore_link(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error>;
+    fn restore_link(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error>;
 
     /// Restore the named small file given its contents.
-    fn restore_small(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error>;
+    fn restore_small(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error>;
 }
 
 pub struct FileRestorerImpl {
@@ -580,6 +617,7 @@ impl FileRestorer for FileRestorerImpl {
         filepath: &Path,
         passphrase: &str,
     ) -> Result<(), Error> {
+        info!("restoring file from {} to {}", checksum, filepath.display());
         let workspace = self.packpath.as_ref().unwrap().path().to_path_buf();
         fs::create_dir_all(&workspace)?;
         // look up the file record to get chunks
@@ -598,6 +636,11 @@ impl FileRestorer for FileRestorerImpl {
             let mut outfile = self.basepath.clone().unwrap();
             outfile.push(filepath);
             let chunk_paths: Vec<&Path> = vec![&cpath];
+            debug!(
+                "assembling 1-chunk file {} from {:?}",
+                outfile.display(),
+                &saved_file
+            );
             assemble_chunks(&chunk_paths, &outfile)?;
         } else {
             // look up chunk records to get pack record(s)
@@ -623,12 +666,14 @@ impl FileRestorer for FileRestorerImpl {
             let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
             let mut outfile = self.basepath.clone().unwrap();
             outfile.push(filepath);
+            debug!("assembling N-chunk file {}", outfile.display());
             assemble_chunks(&chunk_paths, &outfile)?;
         }
         Ok(())
     }
 
-    fn restore_link(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error> {
+    fn restore_link(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error> {
+        info!("restoring symbolic link: {}", filepath.display());
         #[cfg(target_family = "unix")]
         use std::os::unix::ffi::OsStringExt;
         #[cfg(target_family = "windows")]
@@ -651,7 +696,8 @@ impl FileRestorer for FileRestorerImpl {
         Ok(())
     }
 
-    fn restore_small(&self, contents: &[u8], filepath: PathBuf) -> Result<(), Error> {
+    fn restore_small(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error> {
+        info!("restoring small file: {}", filepath.display());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
         fs::write(&outfile, contents)?;
@@ -685,12 +731,13 @@ fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
 // Copy the chunk files to the given output location. The chunk files are left
 // in place and must be removed by the caller.
 fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
+    use anyhow::Context;
     if let Some(parent) = outfile.parent() {
-        fs::create_dir_all(parent)?;
-        let mut file = fs::File::create(outfile)?;
+        fs::create_dir_all(parent).context("assemble_chunks fs::create_dir_all")?;
+        let mut file = fs::File::create(outfile).context("assemble_chunks File::create")?;
         for infile in chunks {
-            let mut cfile = fs::File::open(infile)?;
-            std::io::copy(&mut cfile, &mut file)?;
+            let mut cfile = fs::File::open(infile).context("assemble_chunks File::open")?;
+            std::io::copy(&mut cfile, &mut file).context("assemble_chunks io::copy")?;
         }
         return Ok(());
     }

@@ -17,7 +17,7 @@ rusoto_credential = "0.48.0"
 rusoto_dynamodb = "0.48.0"
 rusoto_s3 = "0.48.0"
 store_core = { path = "../store_core" }
-tempfile = "3.2"
+tempfile = "3.7.1"
 thiserror = "1.0.30"
 tokio = { version = "1.24.2", features = ["fs", "rt-multi-thread", "time"] }
 uuid = { version = "1.1.2", features = ["v4"] }

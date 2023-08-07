@@ -10,7 +10,7 @@ dotenv = "0.15.0"
 anyhow = "1.0.55"
 ssh2 = "0.9.4"
 store_core = { path = "../store_core" }
-tempfile = "3.1.0"
+tempfile = "3.7.1"
 
 [target.'cfg(windows)'.dependencies]
 openssl = { version = "0.10" }

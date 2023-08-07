@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 
 //! Manages instances of RocksDB associated with file paths.
@@ -65,13 +65,14 @@ impl database_core::Database for Database {
     /// If `path` is `None`, the default behavior is to add the extension
     /// `.backup` to the database path.
     fn create_backup(&self, path: Option<PathBuf>) -> Result<PathBuf, Error> {
-        let backup_opts = BackupEngineOptions::default();
         let backup_path = path.unwrap_or_else(|| {
             let mut backup_path: PathBuf = PathBuf::from(self.db.path());
             backup_path.set_extension("backup");
             backup_path
         });
-        let mut backup_engine = BackupEngine::open(&backup_opts, &backup_path)?;
+        let backup_opts = BackupEngineOptions::new(&backup_path)?;
+        let env = rocksdb::Env::new()?;
+        let mut backup_engine = BackupEngine::open(&backup_opts, &env)?;
         backup_engine.create_new_backup_flush(&self.db, true)?;
         backup_engine.purge_old_backups(1)?;
         Ok(backup_path)
@@ -101,13 +102,14 @@ impl database_core::Database for Database {
             }
         }
         drop(db_refs);
-        let backup_opts = BackupEngineOptions::default();
         let backup_path = path.unwrap_or_else(|| {
             let mut backup_path: PathBuf = PathBuf::from(db_path);
             backup_path.set_extension("backup");
             backup_path
         });
-        let mut backup_engine = BackupEngine::open(&backup_opts, backup_path).unwrap();
+        let backup_opts = BackupEngineOptions::new(&backup_path)?;
+        let env = rocksdb::Env::new()?;
+        let mut backup_engine = BackupEngine::open(&backup_opts, &env).unwrap();
         let restore_option = rocksdb::backup::RestoreOptions::default();
         backup_engine.restore_from_latest_backup(db_path, db_path, &restore_option)?;
         Ok(())

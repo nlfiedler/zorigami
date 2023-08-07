@@ -79,7 +79,7 @@ impl<'a> BackupDriver<'a> {
                 // file disappeared out from under us, record it as
                 // having zero length; file restore will handle it
                 // without any problem
-                error!("file {:?} went missing during backup", changed.path);
+                error!("file {} went missing during backup", changed.path.display());
                 let file = entities::File::new(changed.digest, 0, vec![]);
                 self.dbase.insert_file(&file)?;
             }

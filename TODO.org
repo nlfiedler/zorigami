@@ -1,7 +1,65 @@
 * Tasks
-** Concurrent pack file creation
-*** consider how to produce pack files concurrently
-*** mac mini is keeping a single CPU core busy at 95%, while reading ~2mb/sec
+** Missing files from backup
+*** some files are missing from the packs and cannot be restored
+*** missing files found so far (snapshot 7/31/2023):
+- Pictures/christina/2023-07-plusmore/DSCF0025.JPG
+- Pictures/christina/2023-07-plusmore/DSCF0052.JPG
+- Pictures/christina/2023-07-plusmore/DSCF0088.JPG
+- Pictures/christina/2023-07-plusmore/DSCF0152.JPG
+- Pictures/christina/2023-07-plusmore/DSCF0173.JPG
+- Pictures/christina/2023-07-plusmore/DSCF0234.JPG
+- Pictures/christina/2023-07-videos/DSCF0116.AVI
+- tanuki/assets/blobstore/2023/05/21/2215/01h106dakr177a8c105etsr3fw.jpg
+- Antonia/Downloads/Quicken Data/Quicken Data.qdfm/Contents/Quicken State/DRAT#15967 Fixed
+*** missing ~tanuki~ resource error:
+#+begin_src
+process_tree: error processing file tanuki/assets/blobstore/2023/05/21/2215/01h106dakr177a8c105etsr3fw.jpg: missing file: SHA256("e390da5ca7b3bcb53de5201915b2c617a2cef419c8660772f835651bb452fb0f")
+#+end_src
+*** missing ~Quicken Data~ file error:
+#+begin_src
+Antonia/Downloads/Quicken Data/Quicken Data.qdfm/Contents/Quicken State/DRAT#15967 Fixed: No such file or directory (os error 2)
+#+end_src
+** Database Integrity
+*** support database integrity checks
+**** ensure all referenced records actually exist
+**** like git fsck, start at the top and traverse everything
+**** find and report dangling objects
+**** an automated scan could be run on occasion
+*** support repairing the broken database
+**** missing file records mean an entire snapshot is invalid
+***** fix by changing the next snapshots ~parent~ to be the parent of the invalid snapshot
+***** if the invalid snapshot is the most recent snapshot, change the latest snapshot record
+**** files missing from a pack file means the file record must be deleted so it can be saved again
+** Improve backup reliability
+*** document the details of the scan and backup process
+**** what database records are created when?
+**** what ensures that the database records are reliable?
+**** if a snapshot is marked as complete, what does that guarantee?
+*** consider how to collect and record information to ensure reliability
+**** perhaps record files only after they are packed and uploaded
+**** perhaps record file status as enum of =SCANNED=, =PACKED=, and =UPLOADED=
+**** perhaps scan/backup needs to consider if file was actually saved properly previously
+**** if existing file record is present, ensure the chunk/pack records also exist
+**** if a single pack upload fails, the entire snapshot is discarded
+*** consider capturing all failed file backups in the database
+**** attempt to process the failed files during subsequent backups
+** webui bugs and improvements
+*** most recent restore request is not shown in the list
+*** copy button next to checksum in tree display to copy digest to clipboard
+*** scrolling snapshot directory with lots of entries (239) sometimes becomes unresponsive
+**** scrolling no longer responds
+**** navigation, selection no longer respond
+**** probably an error is ocurring and it's invisible in production
+*** snapshot time range shows stop time of the most recent snapshot on all snapshots
+*** web ui should refresh restore requests page every few seconds
+** Efficient restore
+*** if restoring a file over an existing target, skip if checksum of target matches records
+*** an integration test exists in =restore_manager_test.rs= that is commented out
+** Partial restore
+*** using latest snapshot, examine current data set and restore all missing/modified data
+*** provide lots of logging and frequent webui status updates
+** Improved backup management
+*** add ~manual~ frequency that turns off automatic backup
 ** Dynamic chunk size calculation
 *** maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -194,6 +252,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
+*** neat way to getting filenames in a streamlined manner
+**** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
 **** note that using =Cow= helps to minimize copying
@@ -269,6 +329,29 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** configuration panel
 ***** snapshot browser
 ** Improved error handling
+*** webui: database restore fails to get archive, should display a sensible error
+**** cause 1: include mismatching instance identifier
+**** cause 2: wrong user owns the files
+**** response from backend looks like:
+#+begin_src javascript
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "database archive retrieval",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "restoreDatabase"
+      ]
+    }
+  ]
+}
+#+end_src
 *** webui: change =ServerFailure= to capture original error cause, not just as a string
 **** add factory function that detects common types of errors and produces more helpful failure messages
 **** e.g. backend is not responding on home screen, shows ugly stack trace
@@ -386,12 +469,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** for a given snapshot
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
-** Database Integrity
-*** support database integrity checks
-**** ensure all referenced records actually exist
-**** like git fsck, start at the top and traverse everything
-**** find and report dangling objects
-**** an automated scan could be run on occasion
 ** Pack file integrity
 *** Retrieve random pack files and verify integrity
 ** Architecture Review
@@ -406,6 +483,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
 *** Flutter/Rust bridge, call Rust from Dart
 **** c.f. https://github.com/fzyzcjy/flutter_rust_bridge
+**** c.f. https://www.zaynetro.com/post/flutter-rust-bridge-2023/
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -485,17 +563,13 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Inform user that this pack store configuration is only temporary
 **** Select database to retrieve based on computer UUID
 **** Instruct user to restore as usual from dataset(s)
-*** TODO Restore symbolic links (currently does nothing with =TreeReference::LINK=)
 *** TODO Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
 **** TODO File extended attributes
 *** TODO Restore directories from snapshot
-**** TODO Directory mode
-**** TODO Directory user/group
-**** TODO Directory extended attributes
-**** TODO Restore multiple files efficiently
-**** TODO Restore a directory tree efficiently
+**** restoring an empty directory does nothing, should create the directory
+**** restore directory mode bits, user/group ownership, extended attributes
 *** TODO Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere
 *** TODO Support snapshots consisting only of mode/owner changes
@@ -905,7 +979,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** pack store: =/Volumes/Zbackup=
 **** pack store: ~amazon~
 **** base path: =/Users/nfiedler=
-**** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target=
+**** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target, fvm=
 **** run hourly
 ** kohaku
 *** deploy using docker and ansible
