@@ -56,7 +56,7 @@ FROM debian:latest
 RUN apt-get -q update && \
     apt-get -q -y install ca-certificates
 WORKDIR /zorigami
-COPY --from=builder /build/target/release/server zorigami
+COPY --from=builder /build/target/release/zorigami zorigami
 COPY --from=healthy /health/target/release/healthcheck .
 COPY --from=flutter /flutter/build/web web/
 VOLUME /database

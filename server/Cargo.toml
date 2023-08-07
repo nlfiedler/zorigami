@@ -9,6 +9,10 @@ readme = "README.md"
 keywords = ["backup", "archival"]
 license = "UNLICENSED"
 
+[[bin]]
+name = "zorigami"
+path = "src/main.rs"
+
 [dependencies]
 actix = "0.13.0"
 actix-cors = "0.6.0"
