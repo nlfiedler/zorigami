@@ -681,27 +681,35 @@ impl FileRestorer for FileRestorerImpl {
         let target = std::ffi::OsString::from_vec(contents.to_owned());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
-        fs::remove_file(&outfile)?;
-        // cfg! macro will not work in this OS-specific import case
-        {
-            #[cfg(target_family = "unix")]
-            use std::os::unix::fs;
-            #[cfg(target_family = "windows")]
-            use std::os::windows::fs;
-            #[cfg(target_family = "unix")]
-            fs::symlink(&target, &outfile)?;
-            #[cfg(target_family = "windows")]
-            fs::symlink_file(&target, &outfile)?;
+        if let Some(parent) = outfile.parent() {
+            fs::create_dir_all(parent)?;
+            fs::remove_file(&outfile)?;
+            // cfg! macro will not work in this OS-specific import case
+            {
+                #[cfg(target_family = "unix")]
+                use std::os::unix::fs;
+                #[cfg(target_family = "windows")]
+                use std::os::windows::fs;
+                #[cfg(target_family = "unix")]
+                fs::symlink(&target, &outfile)?;
+                #[cfg(target_family = "windows")]
+                fs::symlink_file(&target, &outfile)?;
+            }
+            return Ok(());
         }
-        Ok(())
+        Err(anyhow!(format!("no parent for: {:?}", outfile)))
     }
 
     fn restore_small(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error> {
         info!("restoring small file: {}", filepath.display());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
-        fs::write(&outfile, contents)?;
-        Ok(())
+        if let Some(parent) = outfile.parent() {
+            fs::create_dir_all(parent)?;
+            fs::write(&outfile, contents)?;
+            return Ok(());
+        }
+        Err(anyhow!(format!("no parent for: {:?}", outfile)))
     }
 }
 
