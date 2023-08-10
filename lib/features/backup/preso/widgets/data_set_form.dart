@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -32,7 +32,7 @@ final frequencyMonthly = FrequencyOption(
 
 // Only allow hourly and daily frequencies for the time being.
 final List<FrequencyOption> frequencies = [
-  // frequencyManual,
+  frequencyManual,
   frequencyHourly,
   frequencyDaily,
   // frequencyWeekly,
@@ -261,9 +261,7 @@ List<String> buildInitialStores(DataSet dataset, List<PackStore> stores) {
 
 FrequencyOption frequencyFromDataSet(DataSet dataset) {
   if (dataset.schedules.isEmpty) {
-    // for now, only allow hourly and daily frequencies
-    // return frequencyManual;
-    return frequencyHourly;
+    return frequencyManual;
   }
   switch (dataset.schedules[0].frequency) {
     case Frequency.hourly:
@@ -271,11 +269,11 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
     case Frequency.daily:
       return frequencyDaily;
     case Frequency.weekly:
-      // for now, only allow hourly and daily frequencies
+      // for now, only allow certain frequencies
       // return frequencyWeekly;
       return frequencyDaily;
     case Frequency.monthly:
-      // for now, only allow hourly and daily frequencies
+      // for now, only allow certain frequencies
       // return frequencyMonthly;
       return frequencyDaily;
     default:
