@@ -1369,6 +1369,28 @@ impl MutationRoot {
         Ok(result)
     }
 
+    /// Change the store from old to new for all matching pack records.
+    ///
+    /// This is a dangerous action and should be used very carefully.
+    fn reassign_packs(
+        executor: &Executor,
+        source_id: String,
+        target_id: String,
+    ) -> FieldResult<i32> {
+        use crate::domain::usecases::reassign_packs::{Params, ReassignPacks};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = ReassignPacks::new(Box::new(repo));
+        let params: Params = Params::new(source_id, target_id);
+        let result: u64 = usecase.call(params)?;
+        // let's hope we never update more than 2 billion pack records
+        let result_i32: i32 = result
+            .try_into()
+            .map_or(2_147_483_647 as i32, |v: u64| v as i32);
+        Ok(result_i32)
+    }
+
     /// Restore any missing packs, copying from the other pack store.
     fn restore_packs(
         executor: &Executor,

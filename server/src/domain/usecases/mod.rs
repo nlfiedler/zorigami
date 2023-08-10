@@ -19,6 +19,7 @@ pub mod new_dataset;
 pub mod new_store;
 pub mod prune_extra;
 pub mod query_restores;
+pub mod reassign_packs;
 pub mod restore_database;
 pub mod restore_files;
 pub mod restore_missing;
