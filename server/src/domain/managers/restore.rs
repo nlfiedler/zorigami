@@ -8,7 +8,7 @@ use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::cmp;
@@ -339,7 +339,6 @@ impl RestoreSupervisor {
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         // fetch the packs for the file and assemble the chunks
-        debug!("restoring file {}, {}", digest, filepath.display());
         fetcher.fetch_file(&digest, &filepath, &request.passphrase)?;
         // update the count of files restored so far
         request.files_restored += 1;
@@ -643,6 +642,15 @@ impl FileRestorer for FileRestorerImpl {
             );
             assemble_chunks(&chunk_paths, &outfile)?;
         } else {
+            if saved_file.chunks.len() > 120 {
+                // For very large files, give some indication that we will be
+                // busy for a while downloading all of the pack files.
+                warn!(
+                    "retrieving packs for large file {} with {} chunks",
+                    filepath.display(),
+                    saved_file.chunks.len()
+                );
+            }
             // look up chunk records to get pack record(s)
             for (_offset, chunk) in &saved_file.chunks {
                 let chunk_rec = self
@@ -741,10 +749,13 @@ fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
 fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
     use anyhow::Context;
     if let Some(parent) = outfile.parent() {
-        fs::create_dir_all(parent).context("assemble_chunks fs::create_dir_all")?;
-        let mut file = fs::File::create(outfile).context("assemble_chunks File::create")?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("assemble_chunks fs::create_dir_all({})", parent.display()))?;
+        let mut file = fs::File::create(outfile)
+            .with_context(|| format!("assemble_chunks File::create({})", outfile.display()))?;
         for infile in chunks {
-            let mut cfile = fs::File::open(infile).context("assemble_chunks File::open")?;
+            let mut cfile = fs::File::open(infile)
+                .with_context(|| format!("assemble_chunks File::open({})", infile.display()))?;
             std::io::copy(&mut cfile, &mut file).context("assemble_chunks io::copy")?;
         }
         return Ok(());

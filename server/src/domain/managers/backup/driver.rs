@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities;
 use crate::domain::helpers::{self, crypto, pack};
@@ -7,7 +7,7 @@ use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
-use log::{error, info};
+use log::{error, warn};
 use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -120,7 +120,7 @@ impl<'a> BackupDriver<'a> {
             // For very large files, give some indication that we will be busy
             // for a while processing that one file since it requires many pack
             // files to completely finish this one file.
-            info!(
+            warn!(
                 "packing large file {} with {} chunks",
                 path.to_string_lossy(),
                 chunks.len()
@@ -277,7 +277,9 @@ fn calc_chunk_size(pack_size: u64) -> u32 {
     } else {
         DEFAULT_CHUNK_SIZE
     };
-    chunk_size.try_into().map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
+    chunk_size
+        .try_into()
+        .map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
 }
 
 /// Tracks the files and chunks that comprise a pack, and provides functions for
