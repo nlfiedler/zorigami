@@ -1,7 +1,8 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -12,7 +13,7 @@ class TreeViewer extends StatelessWidget {
   final String rootTree;
   final DataSet dataset;
 
-  TreeViewer({
+  const TreeViewer({
     Key? key,
     required this.dataset,
     required this.rootTree,
@@ -20,40 +21,38 @@ class TreeViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: BlocConsumer<TreeBrowserBloc, TreeBrowserState>(
-        listener: (context, state) {
-          if (state is Loaded) {
-            if (state.restoresEnqueued) {
-              final content = Text('File restores enqueued');
-              // must show snackbar outside of builder
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: content),
-              );
-            }
-          }
-        },
-        builder: (context, state) {
-          if (state is Empty) {
-            // kick off the initial remote request
-            BlocProvider.of<TreeBrowserBloc>(context).add(
-              LoadTree(digest: rootTree),
+    return BlocConsumer<TreeBrowserBloc, TreeBrowserState>(
+      listener: (context, state) {
+        if (state is Loaded) {
+          if (state.restoresEnqueued) {
+            const content = Text('File restores enqueued');
+            // must show snackbar outside of builder
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: content),
             );
           }
-          if (state is Error) {
-            return Text('Error: ' + state.message);
-          }
-          if (state is Loaded) {
-            return Column(
-              children: <Widget>[
-                TreePath(dataset: dataset, state: state),
-                Expanded(child: TreeTable(state: state)),
-              ],
-            );
-          }
-          return Center(child: CircularProgressIndicator());
-        },
-      ),
+        }
+      },
+      builder: (context, state) {
+        if (state is Empty) {
+          // kick off the initial remote request
+          BlocProvider.of<TreeBrowserBloc>(context).add(
+            LoadTree(digest: rootTree),
+          );
+        }
+        if (state is Error) {
+          return Text('Error: ${state.message}');
+        }
+        if (state is Loaded) {
+          return Column(
+            children: <Widget>[
+              TreePath(dataset: dataset, state: state),
+              Expanded(child: TreeTable(state: state)),
+            ],
+          );
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
     );
   }
 }
@@ -62,10 +61,11 @@ class TreePath extends StatelessWidget {
   final DataSet dataset;
   final Loaded state;
 
-  TreePath({
+  const TreePath({
+    Key? key,
     required this.dataset,
     required this.state,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +74,7 @@ class TreePath extends StatelessWidget {
       child: Row(
         children: <Widget>[
           ElevatedButton.icon(
-            icon: Icon(Icons.arrow_upward),
+            icon: const Icon(Icons.arrow_upward),
             label: const Text('Up'),
             onPressed: state.path.isNotEmpty
                 ? () => BlocProvider.of<TreeBrowserBloc>(context).add(
@@ -82,9 +82,9 @@ class TreePath extends StatelessWidget {
                     )
                 : null,
           ),
-          SizedBox(width: 16.0),
+          const SizedBox(width: 16.0),
           ElevatedButton.icon(
-            icon: Icon(Icons.restore),
+            icon: const Icon(Icons.restore),
             label: const Text('Put Back'),
             onPressed: state.selections.isNotEmpty
                 ? () {
@@ -94,12 +94,12 @@ class TreePath extends StatelessWidget {
                   }
                 : null,
           ),
-          SizedBox(width: 56.0),
+          const SizedBox(width: 56.0),
           Text('${state.tree.entries.length} entries'),
-          SizedBox(width: 16.0),
+          const SizedBox(width: 16.0),
           Text(
             ' / ${state.path.join(' / ')}',
-            style: TextStyle(fontFamily: 'RobotoMono'),
+            style: const TextStyle(fontFamily: 'RobotoMono'),
           ),
         ],
       ),
@@ -110,10 +110,10 @@ class TreePath extends StatelessWidget {
 class TreeTable extends StatefulWidget {
   final Loaded state;
 
-  TreeTable({Key? key, required this.state}) : super(key: key);
+  const TreeTable({Key? key, required this.state}) : super(key: key);
 
   @override
-  _TreeTableState createState() => _TreeTableState();
+  State<TreeTable> createState() => _TreeTableState();
 }
 
 class _TreeTableState extends State<TreeTable> {
@@ -125,18 +125,22 @@ class _TreeTableState extends State<TreeTable> {
 
   @override
   Widget build(BuildContext context) {
-    final mono = TextStyle(fontFamily: 'RobotoMono');
+    const mono = TextStyle(fontFamily: 'RobotoMono');
     final List<DataRow> rows = List.of(widget.state.tree.entries.map((e) {
       final name = DataCell(
-        Row(
-          children: [
-            Icon(e.reference.type == EntryType.tree
-                ? Icons.folder_open
-                : Icons.insert_drive_file),
-            SizedBox(width: 8.0),
-            Text(e.name, style: mono),
-          ],
-        ),
+        Tooltip(
+            message: e.reference.type == EntryType.tree
+                ? 'Navigate to folder'
+                : 'Copy digest to clipboard',
+            child: Row(
+              children: [
+                Icon(e.reference.type == EntryType.tree
+                    ? Icons.folder_open
+                    : Icons.insert_drive_file),
+                const SizedBox(width: 8.0),
+                Text(e.name, style: mono),
+              ],
+            )),
         onTap: e.reference.type == EntryType.tree
             ? () {
                 if (e.reference.type == EntryType.tree) {
@@ -145,16 +149,19 @@ class _TreeTableState extends State<TreeTable> {
                   );
                 }
               }
-            : null,
+            : () async {
+                await Clipboard.setData(ClipboardData(text: e.reference.value));
+                // would like to show a Snackbar but we are in an async fn
+              },
       );
       final date = DataCell(Text(
         DateFormat.yMd().add_jm().format(e.modTime.toLocal()),
       ));
       final ref = DataCell(Text(e.reference.value, style: mono));
-      final onSelectChanged =
-          (selected) => BlocProvider.of<TreeBrowserBloc>(context).add(
-                SetSelection(entry: e, selected: selected),
-              );
+      onSelectChanged(selected) =>
+          BlocProvider.of<TreeBrowserBloc>(context).add(
+            SetSelection(entry: e, selected: selected),
+          );
       final selected = widget.state.selections.contains(e);
       return DataRow(
         cells: [name, date, ref],
@@ -166,7 +173,7 @@ class _TreeTableState extends State<TreeTable> {
     // the sort is modifying the tree nested within the bloc state
     final List<DataColumn> columns = [
       DataColumn(
-        label: Text('Name'),
+        label: const Text('Name'),
         onSort: (columnIndex, sortAscending) {
           setState(() {
             if (columnIndex == _sortColumnIndex) {
@@ -182,7 +189,7 @@ class _TreeTableState extends State<TreeTable> {
         },
       ),
       DataColumn(
-        label: Text('Date'),
+        label: const Text('Date'),
         onSort: (columnIndex, sortAscending) {
           setState(() {
             if (columnIndex == _sortColumnIndex) {
@@ -198,7 +205,7 @@ class _TreeTableState extends State<TreeTable> {
         },
       ),
       DataColumn(
-        label: Text('Reference'),
+        label: const Text('Reference'),
         onSort: (columnIndex, sortAscending) {
           setState(() {
             if (columnIndex == _sortColumnIndex) {
