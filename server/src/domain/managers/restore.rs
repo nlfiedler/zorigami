@@ -294,6 +294,7 @@ impl RestoreSupervisor {
                     self.set_error(error, &mut req);
                 }
             }
+            info!("completed request {}/{}", request.tree, request.entry);
             self.push_completed(req);
         }
         Ok(())
