@@ -8,8 +8,8 @@ A backup and restore application.
 * Maintains multiple versions, not just the most recent
 * Efficiency: compression, de-duplication, block-level incremental backup
 * Encryption: all remotely stored data is encrypted with libsodium
-* Service agnostic: SFTP, Amazon, Azure, Google, Minio
-* Full restore or file-level restore
+* Service agnostic: SFTP, Amazon, Azure, Google, MinIO
+* Directory tree and individual file restore
 * Restore to dissimilar hardware
 * Local and Cloud storage
 * Scheduled backups
@@ -245,72 +245,6 @@ cargo lichking check
 However, need to look for "gpl" manually in the `list` output, as most licenses
 that are compatible with MIT/Apache are also compatible with GPL.
 
-## Metrics
-
-### macOS APFS
-
-The directory `node_modules` containing `13,161` files, totaling `331M`. Backup
-produced `7` pack files, `32M` in size, totaling `222M`, containing the `9,498`
-unique files (verified with `fdupes -rm`). Database files totaling `7.2M` in
-size.
-
-### Linux ext4
-
-The directory `node_modules` containing `13,164` files, totaling `333M`. Backup
-produced `7` pack files, `32M` in size, totaling `227M`, containing the `9,501`
-unique files (verified with `fdupes -rm`). Database files totaling `7.2M` in
-size.
-
-### Linux ZFS
-
-* Intel Xeon E3-1220 v5 @ 3.00GHz
-* 32 GB RAM
-* ZFS 5 disk pool (raidz1)
-* 305,567 MB of disk usage
-* 123,586 files
-* 2.47 MB average file size
-* 12,947 duplicates, 69,165 MB (confirmed with `fdupes -rm`)
-* 10,015 lines of log output at DEBUG level
-* 0 errors
-
-#### Snap-shotting
-
-* 1 hours, 22 minutes, 29 seconds
-* 25 files per second
-* database: 54 MB
-* database overhead: 0.02%
-
-#### Pack-building
-
-* 2 hours, 48 minutes, 10 seconds
-* 11 files per second
-* USB attached slow disk
-* Mostly I/O bound
-* 8 MB chunk sizes
-* 3,373 pack files, 110,639 files
-* pack store: 239,803 MB
-* ZFS dataset: 307,992 MB
-* Pack file overhead: 0.4%
-* Size difference due largely to duplicate files
-
-### Local and SFTP
-
-* Linux ZFS system as above
-* Snapshot: 1 hours, 11 minutes, 59 seconds
-* 124,079 files
-* Packing: 20 hours, 25 minutes, 43 seconds
-* 4 MB chunk sizes
-* 64 MB pack sizes
-* 3,627 packs, 111,130 files
-* pack store: 239,880 MB
-* ZFS dataset: 307,205 MB
-* database: 67 MB
-
-### Local and Minio
-
-* Mostly same as above
-* Packing: 9 hours, 56 minutes, 9 seconds
-
 ## Origin of the name
 
 A zorigami is a clock possessed by a spirit, as described on the
@@ -322,7 +256,7 @@ this application, accept maybe for the association with time.
 
 ### July 2014
 
-Started as a project named [akashita](https://github.com/nlfiedler/akashita), with a basic [Python](https://www.python.org) implementation that uploaded tarballs to Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and `split` to produce "pack" files of a manageable size.
+Started as a project named [akashita](https://github.com/nlfiedler/akashita), with a basic [Python](https://www.python.org) implementation that uploaded tarballs to Amazon Glacier. Used ZFS commands to create a snapshot of the dataset, then `tar` and `split` to produce "pack" files of a manageable size.
 
 ### February 2016
 

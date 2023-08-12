@@ -4,16 +4,15 @@
 
 * HTTP backend as GraphQL server
 * Web frontend as GraphQL client
-* Desktop application as GraphQL client
 * Key/Value store for metadata
 * Local or Remote store for pack storage
 
 ## Design
 
 * Backend written in Rust, uses Juniper GraphQL server
-* Front-end written in Flutter, uses Angel GraphQL client
+* Front-end written in Flutter, uses Zino & Co GraphQL client
 * Key/Value store is RocksDB
-* Pack storage supports local, Amazon, Google, Minio, SFTP
+* Pack storage supports local, Amazon, Azure, Google, MinIO, SFTP
 
 ## Use Cases
 
@@ -54,6 +53,14 @@
 * Database is used to store metadata
     - Database is saved in special bucket
 
+### Definitions
+
+| Name | Description                                              |
+| ---- | -------------------------------------------------------- |
+| UUID | Universally Unique IDentifier                            |
+| ULID | Universally Unique Lexicographically Sortable Identifier |
+| XID  | sortable 12-byte unique identifier                       |
+
 ### Computer UUID
 
 1. Use type 5, with URL namespace
@@ -77,13 +84,15 @@
         + https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html
     - conforms to Amazon S3 bucket name restrictions
         + https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+    - conforms to Azure blob storage name restrictions
+        + https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
 * ULID contains the time, so no need for a timestamp
 * UUID makes it easy to find buckets associated with this computer and user
 * UUID may change after (re)installation and this is okay
     - Pack records contain the fully-qualified locations regardless of UUID
 * Database snapshots saved to bucket whose name is the computer UUID
     - Cloud-based pack stores handle bucket collision using remote database
-    - Amazon pack store using DynamoDB, Google uses Firestore
+        + Amazon pack store uses DynamoDB, Google uses Firestore
 
 ### Pack Files
 
@@ -108,7 +117,7 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - computer UUID
     - peers: list of peer installations for chunk deduplication
 * dataset records:
-    - key: `dataset/` + ULID
+    - key: `dataset/` + XID
     - base path
     - schedule/frequency
     - ignore patterns
@@ -121,7 +130,7 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - key: `computer/` + dataset-id
     - computer UUID
 * store records:
-    - key: `store/` + ULID
+    - key: `store/` + XID
     - store type
     - user-defined label
     - list of name/value pairs for configuration
@@ -153,7 +162,7 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
 * database snapshots (identical to pack records)
     - key: `dbase/` + SHA256 of pack file (with "sha256-" prefix)
     - coordinates:
-        + store ULID
+        + store XID
         + remote bucket/vault name
         + remote object/archive name
     - upload_time: date/time of successful upload, for conflict resolution
@@ -172,7 +181,7 @@ Sync with peers for multi-host chunk deduplication.
 * pack records
     - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
     - coordinates:
-        + store ULID
+        + store XID
         + remote bucket/vault name
         + remote object/archive name
     - upload_time: date/time of successful upload, for conflict resolution
@@ -285,4 +294,4 @@ Remove the snapshot record to be deleted, then garbage collect.
 
 Generated bucket names are random and long but collisions with existing buckets owned by other accounts can still happen. As a result, the pack repository will generate a new name and try again. The updated bucket name is returned as the _pack location_ that is stored in the database.
 
-For the database backups, the bucket rename solution is different, and relies on the cloud service provider to offer a per-account database of some sort. When a bucket collision occurs when storing the database snapshot, the pack source (not repository) will use the cloud services to record a new name, and use that name each time thereafter. This is not possible for all pack sources, such as Minio, which does not offer other services. It is assumed that Minio, as well as the local and SFTP pack sources, can reliably use whatever bucket names they need.
+For the database backups, the bucket rename solution is different, and relies on the cloud service provider to offer a per-account database of some sort. When a bucket collision occurs when storing the database snapshot, the pack source (not repository) will use the cloud services to record a new name, and use that name each time thereafter. This is not possible for all pack sources, such as MinIO, which does not offer other services. It is assumed that MinIO, as well as the local and SFTP pack sources, can reliably use whatever bucket names they need.
