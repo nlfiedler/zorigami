@@ -1,7 +1,25 @@
 * Tasks
-** Missing files from backup
-*** some files are missing from the packs and cannot be restored
-*** missing files found so far (snapshot 7/31/2023):
+** DONE Test full restore on ~yubaba~ from snapshot ~7/31/2023~
+*** using snapshot ~7/31/2023~ [18/18]
+- [X] Antonia
+- [X] Applications
+- [X] Artwork
+- [X] Books
+- [X] Certificates
+- [X] Correspondence
+- [X] Documents
+- [X] Historical
+- [X] Medical
+- [X] Movies
+- [X] Nathan
+- [X] Performances
+- [X] Pictures
+- [X] Projects
+- [X] Receipts
+- [X] Sounds
+- [X] tanuki
+- [X] Writings
+*** files whose chunks are missing from their packs
 - Pictures/christina/2023-07-plusmore/DSCF0025.JPG
 - Pictures/christina/2023-07-plusmore/DSCF0052.JPG
 - Pictures/christina/2023-07-plusmore/DSCF0088.JPG
@@ -9,57 +27,190 @@
 - Pictures/christina/2023-07-plusmore/DSCF0173.JPG
 - Pictures/christina/2023-07-plusmore/DSCF0234.JPG
 - Pictures/christina/2023-07-videos/DSCF0116.AVI
+- Pictures/old_macbook/Photos Library.photoslibrary/Masters/2010/Dec 28, 2010_2/IMG_0062.JPG
+- Pictures/old_macbook/Photos Library.photoslibrary/Masters/2011/Nov 14, 2011/IMG_1211.JPG
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Masters/2010/Dec 28, 2010_2/IMG_0062.JPG
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Masters/2011/Nov 14, 2011/IMG_1211.JPG
+- tanuki/assets/blobstore/2015/04/14/0315/01ce1qda00xdh84x7n2exx05sd.jpg
+- tanuki/assets/blobstore/2020/01/21/0430/01dz35vdfn3p5kqvkr69n3b5sz.jpg
+*** files whose records are missing from the database
 - tanuki/assets/blobstore/2023/05/21/2215/01h106dakr177a8c105etsr3fw.jpg
+*** files that could not be restored: =No such file or directory (os error 2)=
 - Antonia/Downloads/Quicken Data/Quicken Data.qdfm/Contents/Quicken State/DRAT#15967 Fixed
-*** missing ~tanuki~ resource error:
-#+begin_src
-process_tree: error processing file tanuki/assets/blobstore/2023/05/21/2215/01h106dakr177a8c105etsr3fw.jpg: missing file: SHA256("e390da5ca7b3bcb53de5201915b2c617a2cef419c8660772f835651bb452fb0f")
-#+end_src
-*** missing ~Quicken Data~ file error:
-#+begin_src
-Antonia/Downloads/Quicken Data/Quicken Data.qdfm/Contents/Quicken State/DRAT#15967 Fixed: No such file or directory (os error 2)
-#+end_src
+- Pictures/old_macbook/Photos Library.photoslibrary/Data
+- Pictures/old_macbook/Photos Library.photoslibrary/Modified
+- Pictures/old_macbook/Photos Library.photoslibrary/Originals
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Data
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/BigBlobs.apdb
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Faces.db
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/History.apdb
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/ImageProxies.apdb
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Library.apdb
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Properties.apdb
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Modified
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Originals
+** DONE Test fresh backup to new store, examine logs
+*** DONE clear the database on ~yubaba~
+*** DONE find a destination for the packs (need ~300gb)
+*** DONE configure ~yubaba~ to backup =/zeniba/shared= to =minio= on ~kohaku~
+*** DONE analyze the logs for any issues (save the log for further analysis)
+** DONE Test full restore again on ~yubaba~ from ~minio~ pack store
+*** using snapshot ~8/11/2023~ [18/18]
+- [X] Antonia
+- [X] Applications
+- [X] Artwork
+- [X] Books
+- [X] Certificates
+- [X] Correspondence
+- [X] Documents
+- [X] Historical
+- [X] Medical
+- [X] Movies
+- [X] Nathan
+- [X] Performances
+- [X] Pictures
+- [X] Projects
+- [X] Receipts
+- [X] Sounds
+- [X] tanuki
+- [X] Writings
+*** files missing from pack
+- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Masters/2015/04/08/20150408-101641/IMG_5257.JPG
+- tanuki/assets/blobstore/2017/03/01/1745/01ce1qd6v61e2aqv9ysq1500b2.jpg
+- tanuki/assets/blobstore/2020/05/20/0245/01e8qzpn1m3ay9fr083pyshrgc.jpg
+- tanuki/assets/blobstore/2020/12/14/0130/01esfeczsjcznn83t40zrgn47v.jpeg
+- tanuki/assets/blobstore/2022/08/28/2230/01gbk9hv4gwsb7tnes2rah6hfj.jpg
+- tanuki/assets/blobstore/2022/08/28/2230/01gbk9kqc5c9zb7pjsj7187dcz.jpg
+- tanuki/assets/blobstore/2022/08/28/2230/01gbk9mefj9nw0mw9hvh8ys2eg.jpg
+- tanuki/assets/blobstore/2022/08/28/2230/01gbk9nrgwrrqr7v18ryxdtyj5.jpg
+** DONE Reproduce pack build failure on ~yubaba~; did not fail
+*** minio coordinates
+| endpoint                | access key           | secret key                               |
+|-------------------------+----------------------+------------------------------------------|
+| http://192.168.1.2:9000 | 5vdLrP2iZUAxZzhvNcYe | RfZ1AoKj5nWdSROC5z4rzDPJRP7YfbCkUnJBqa8A |
+*** DONE clear minio packs
+*** DONE deploy zorigami
+*** DONE start a full backup
+** TODO Test full backup and restore on ~yubaba~ using ~minio~
+*** create the dataset, set to ~hourly~, once it starts, set to ~manual~
+*** using the one snapshot [0/18]
+- [ ] Antonia
+- [ ] Applications
+- [ ] Artwork
+- [ ] Books
+- [ ] Certificates
+- [ ] Correspondence
+- [ ] Documents
+- [ ] Historical
+- [ ] Medical
+- [ ] Movies
+- [ ] Nathan
+- [ ] Performances
+- [ ] Pictures
+- [ ] Projects
+- [ ] Receipts
+- [ ] Sounds
+- [ ] tanuki
+- [ ] Writings
+** TODO write unit tests for =PackRecord=
+** TODO convert =take_snapshot()= to a use case with unit tests
+**** tests in =backup_manager_test.rs= will move to this new use case
+** TODO try to find the packs that contain the missing files
+*** TODO write a query that searches all pack files to find a chunk by its digest
+*** TODO find which files have chunks that are missing from their packs
+*** missing file records
+- e390da5ca7b3bcb53de5201915b2c617a2cef419c8660772f835651bb452fb0f
+*** missing chunks from packs
+- tanuki/assets/blobstore/2015/04/14/0315/01ce1qda00xdh84x7n2exx05sd.jpg
+- tanuki/assets/blobstore/2020/01/21/0430/01dz35vdfn3p5kqvkr69n3b5sz.jpg
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
 **** like git fsck, start at the top and traverse everything
 **** find and report dangling objects
-**** an automated scan could be run on occasion
+**** TODO finish writing =verify_snapshot= use case tests
+**** TODO add GraphQL query to invoke =VerifySnapshot= usecase
+**** TODO run the test on ~chihiro~ instance, should find at least one missing file record
 *** support repairing the broken database
 **** missing file records mean an entire snapshot is invalid
 ***** fix by changing the next snapshots ~parent~ to be the parent of the invalid snapshot
 ***** if the invalid snapshot is the most recent snapshot, change the latest snapshot record
-**** files missing from a pack file means the file record must be deleted so it can be saved again
+**** files missing from a pack file means an entire snapshot is invalid
+*** add option to delete all snapshots and start again
+**** remove all records that are _not_ stores and datasets
+- latest/
+- chunk/
+- pack/
+- file/
+- xattr/
+- dbase/
+- tree/
+**** delete all stored pack files from all stores?
 ** Improve backup reliability
 *** document the details of the scan and backup process
 **** what database records are created when?
 **** what ensures that the database records are reliable?
 **** if a snapshot is marked as complete, what does that guarantee?
 *** consider how to collect and record information to ensure reliability
-**** perhaps record files only after they are packed and uploaded
-**** perhaps record file status as enum of =SCANNED=, =PACKED=, and =UPLOADED=
-**** perhaps scan/backup needs to consider if file was actually saved properly previously
 **** if existing file record is present, ensure the chunk/pack records also exist
-**** if a single pack upload fails, the entire snapshot is discarded
 *** consider capturing all failed file backups in the database
 **** attempt to process the failed files during subsequent backups
+*** run a verification step after the backup is complete
+*** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
+**** should show the start time, not simply ~still running~
+**** show number of files packed, number of packs uploaded (what info logging shows now)
 ** webui bugs and improvements
-*** most recent restore request is not shown in the list
-*** copy button next to checksum in tree display to copy digest to clipboard
+*** setting start/stop time for dataset has broken (time input cannot be dismissed)
 *** scrolling snapshot directory with lots of entries (239) sometimes becomes unresponsive
 **** scrolling no longer responds
 **** navigation, selection no longer respond
 **** probably an error is ocurring and it's invisible in production
 *** snapshot time range shows stop time of the most recent snapshot on all snapshots
 *** web ui should refresh restore requests page every few seconds
+*** fix all the stateful widgets to use the new convention
+**** replace the specific return type of =createState()= with the generic version
+#+begin_src dart
+class TagSelector extends StatefulWidget {
+  const TagSelector({Key? key}) : super(key: key);
+
+  @override
+  State<TagSelector> createState() => _TagSelectorState();
+}
+#+end_src
+*** snapshots display should not have > button when there are no snapshots
+** Restore improvements
+*** request being processed needs to be returned by =requests()= somehow
+**** it is neither ~pending~ nor ~completed~ so it is not returned in queries
+**** if the restore supervisor crashes, the in-progress request is lost
+**** add a new type that manages the ~pending~ and ~completed~ lists
+***** have =Restorer= create this type and pass a =Arc<Mutext>= to supervisor
+***** add function for moving the first ~pending~ request to ~processing~
+***** add function for updating status of ~processing~ request
+***** add function for moving ~processing~ request to the ~completed~ set
+***** add function like =requests()= that combines all 3 sets into one for queries
+*** restore can hang on pack retrieval for a long time
+**** log output
+#+begin_src
+[2023-08-08T15:34:54Z DEBUG server::domain::managers::restore] fetching pack sha256-9624d9d7cb9dfc37740c121fdbe15f456b6b2153d5b46b3e43feea1cd8db5cbf
+[... long time later ...]
+[2023-08-08T15:51:20Z WARN  server::data::repositories] pack retrieval failed, will try another source: Err(Token retrieval failed: error trying to connect: Connection timed out (os error 110))
+#+end_src
+**** should try to set a timeout to something reasonble (1-2 minutes)
+*** add a =status_msg= property to =Request= for showing detailed progress
+**** normally show the current path of the file being restore
+**** if very large file, show ~fetching very large file~
+**** if waiting for a long time for a pack file, indicate in status
+*** add the request status field to the graphql entity
+*** show the request status message in the web ui
 ** Efficient restore
+*** if restore finds an existing workspace, scan contents to build a ~have~ list of chunks vs starting over
 *** if restoring a file over an existing target, skip if checksum of target matches records
-*** an integration test exists in =restore_manager_test.rs= that is commented out
+**** an integration test exists in =restore_manager_test.rs= that is commented out
 ** Partial restore
 *** using latest snapshot, examine current data set and restore all missing/modified data
 *** provide lots of logging and frequent webui status updates
-** Improved backup management
-*** add ~manual~ frequency that turns off automatic backup
+** Pack store improvements
+*** add feature for browsing the pack store contents
 ** Dynamic chunk size calculation
 *** maybe calculate chunk size based on file size distribution
 **** already collecting the data during the snapshot phase
@@ -231,6 +382,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** TODO database backup procedure should prune old snapshots
 **** for local disk case, retain only a few snapshots
 **** for cloud case, honor the least expensive retention plan
+** Manual backup management
+*** Buttons to start and stop a backup; currently ~Manual~ frequency means no backups at all
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -249,6 +402,11 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** design mechanism for changing the passphrase but keeping old ones for decrypting packs
 ** Make error message text selectable/copyable
 *** file restore status shows an error message that cannot be selected and copied to the clipboard
+** First Hour Experience
+*** when there are no dataset, display appropriate actions on home page
+- create a pack store (if no pack stores)
+- restore database from pack store (if pack store defined and it appears to have database snapshots)
+- define a new dataset (if pack store defined but no database snapshots are present)
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
@@ -448,6 +606,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** cannot change stores assigned to dataset once there are snapshots
 **** basically would require starting over if changing stores, base path, etc
 *** TODO Secure FTP improvements
+**** SFTP is twice as slow as MinIO, should investigate why
 **** TODO support SFTP with private key authentication
 ***** use store form to take paths for public and private keys
 **** TODO allow private key that is locked with a passphrase
@@ -472,6 +631,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Pack file integrity
 *** Retrieve random pack files and verify integrity
 ** Architecture Review
+*** Alternative databases
+**** try using a different database and benchmark backup, database integrity checks, etc
+**** sample data: =reassign_packs= updated ~4214~ pack records in ~2~ seconds
 *** Rust dependency injection, is it helpful?
 **** https://github.com/AzureMarker/shaku
 **** https://github.com/mineichen/minfac
@@ -768,6 +930,57 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** the application will never store the actual password anywhere
 *** will need to prompt the user when a different passphrase is needed
 * Technical Information
+** Backup metrics
+*** 2023-08-11, 8 cores, 32gb RAM, 4-disk RAID-Z to minio on LAN, 346gb of data
+**** backup complete after 9 hours 48 minutes 11 seconds
+**** record counts after 1 snapshot
+| type   |  count |
+|--------+--------|
+| chunks |  47751 |
+| files  | 134745 |
+| packs  |   4133 |
+| trees  |  37143 |
+| xattrs |      0 |
+**** =fileCounts= sans =fileSizes= (which are shown below)
+| description |  count |
+|-------------+--------|
+| total files | 152181 |
+| directories |  37356 |
+| symlinks    |      0 |
+| very small  |   1576 |
+| very large  |      3 |
+**** =fileSizes=
+|      power | count |
+|------------+-------|
+|         64 |   402 |
+|        128 |  2189 |
+|        256 |  3431 |
+|        512 |  4201 |
+|       1024 |  8947 |
+|       2048 | 25343 |
+|       4096 |  4747 |
+|       8192 |  1804 |
+|      16384 |  5731 |
+|      32768 | 12277 |
+|      65536 | 23297 |
+|     131072 |  4169 |
+|     262144 | 10009 |
+|     524288 |  6064 |
+|    1048576 |  9046 |
+|    2097152 | 23288 |
+|    4194304 |  3383 |
+|    8388608 |   497 |
+|   16777216 |   288 |
+|   33554432 |   402 |
+|   67108864 |   444 |
+|  134217728 |   311 |
+|  268435456 |   217 |
+|  536870912 |    99 |
+| 1073741824 |    17 |
+| 2147483648 |     7 |
+| 4294967296 |     1 |
+** Restore statistics
+*** 4 hours to restore 63GB (11k files) of ~tanuki~ data from Google over fiber
 ** Parallelism
 *** shortening snapshot time
 **** mini parallelism is 8
@@ -981,7 +1194,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, Library, **/Downloads, **/node_modules, **/target, fvm=
 **** run hourly
-** kohaku
+** primary
 *** deploy using docker and ansible
 *** store credentials file as =/zeniba/shared/zorigami.json=
 *** data sets

@@ -45,6 +45,11 @@ impl PackBuilder {
         self.builder.is_some()
     }
 
+    /// Returns `true` if the builder has reached the target size.
+    pub fn is_full(&self) -> bool {
+        self.bytes_packed >= self.target_size
+    }
+
     /// Returns `true` if there are no chunks in the pack file.
     pub fn is_empty(&self) -> bool {
         self.chunks_packed == 0
