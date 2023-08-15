@@ -1,10 +1,11 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 
-//! The manager for performing backups by taking a snapshot of a dataset,
-//! storing new entries in the database, finding the differences from the
-//! previous snapshot, building pack files, and sending them to the store.
+//! Defines the `Performer` trait and implementation that perform backups by
+//! taking a snapshot of a dataset, storing new entries in the database, finding
+//! the differences from the previous snapshot, building pack files, and sending
+//! them to the store.
 
 use crate::domain::entities;
 use crate::domain::helpers::thread_pool::ThreadPool;
@@ -245,7 +246,7 @@ pub fn take_snapshot(
     let mut file_counts: entities::FileCounts = Default::default();
     let cpu_count = std::thread::available_parallelism()?.get();
     let pool = ThreadPool::new(cpu_count);
-    info!("take_snapshot: creating pool of {cpu_count} threads");
+    debug!("take_snapshot: creating pool of {cpu_count} threads");
     let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase

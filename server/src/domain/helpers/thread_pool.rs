@@ -5,7 +5,7 @@
 //! Create a pool of threads to run arbitrary functions. The pool of threads
 //! will remain active until the pool is dropped.
 
-use log::{debug, error, info, warn};
+use log::{error, info, warn, trace};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
@@ -92,11 +92,11 @@ impl Worker {
             };
             match message {
                 Ok(job) => {
-                    debug!("worker {id} got a job; executing...");
+                    trace!("worker {id} got a job; executing...");
                     job();
                 }
                 Err(_) => {
-                    debug!("worker {id} disconnected; shutting down...");
+                    trace!("worker {id} disconnected; shutting down...");
                     break;
                 }
             }
