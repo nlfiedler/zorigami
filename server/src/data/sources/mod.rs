@@ -78,6 +78,9 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve all pack records that should be in the given store.
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
 
+    /// Retrieve all pack records in the system regardless of store.
+    fn get_all_packs(&self) -> Result<Vec<Pack>, Error>;
+
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are
     /// assumed to be identical.
@@ -321,6 +324,23 @@ impl EntityDataSource for EntityDataSourceImpl {
                     result.digest = digest.unwrap();
                     results.push(result);
                 }
+            }
+        }
+        Ok(results)
+    }
+
+    fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
+        let db = self.database.lock().unwrap();
+        let packs = db.fetch_prefix("pack/")?;
+        let mut results: Vec<Pack> = Vec::new();
+        for (key, value) in packs {
+            let mut de = serde_cbor::Deserializer::from_slice(&value);
+            let mut result = PackDef::deserialize(&mut de)?;
+            // strip leading "pack/" from 'key' and convert to a Checksum
+            let digest: Result<Checksum, Error> = FromStr::from_str(&key);
+            if digest.is_ok() {
+                result.digest = digest.unwrap();
+                results.push(result);
             }
         }
         Ok(results)

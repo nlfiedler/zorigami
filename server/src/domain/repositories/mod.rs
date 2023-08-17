@@ -60,6 +60,9 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve all pack records that should be in the given store.
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
 
+    /// Retrieve all pack records in the system regardless of store.
+    fn get_all_packs(&self) -> Result<Vec<Pack>, Error>;
+
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are
     /// assumed to be identical.

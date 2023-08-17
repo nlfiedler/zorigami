@@ -849,6 +849,26 @@ impl QueryRoot {
         Ok(result)
     }
 
+    /// Exhaustively search all pack file entries to the given chunk.
+    ///
+    /// This is an expensive operation as it scans many records in the database
+    /// and downloads every single pack file to find the missing chunk.
+    fn scan_packs(
+        executor: &Executor,
+        dataset: String,
+        digest: Checksum,
+    ) -> FieldResult<Option<Checksum>> {
+        use crate::domain::usecases::scan_packs::{Params, ScanPacks};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = ScanPacks::new(Box::new(repo));
+        let passphrase = helpers::crypto::get_passphrase();
+        let params: Params = Params::new(dataset, digest, passphrase);
+        let result: Option<Checksum> = usecase.call(params)?;
+        Ok(result)
+    }
+
     /// Return the number of each type of database record.
     fn record_counts(executor: &Executor) -> FieldResult<entities::RecordCounts> {
         use crate::domain::usecases::get_counts::GetCounts;
@@ -1417,6 +1437,28 @@ impl MutationRoot {
         let params: Params = Params::new(store_id);
         let result: u32 = usecase.call(params)?;
         Ok(result as i32)
+    }
+
+    /// Create a missing file record from the given information.
+    ///
+    /// This will fetch the given pack file to verify the chunk is contained
+    /// therein, as well as to get the file size. This only works for files
+    /// containing a single chunk.
+    fn insertFile(
+        executor: &Executor,
+        dataset: String,
+        chunk_digest: Checksum,
+        pack_digest: Checksum,
+    ) -> FieldResult<bool> {
+        use crate::domain::usecases::insert_file::{InsertFile, Params};
+        use crate::domain::usecases::UseCase;
+        let ctx = executor.context();
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let passphrase = helpers::crypto::get_passphrase();
+        let usecase = InsertFile::new(Box::new(repo));
+        let params: Params = Params::new(dataset, chunk_digest, pack_digest, passphrase);
+        usecase.call(params)?;
+        Ok(true)
     }
 }
 

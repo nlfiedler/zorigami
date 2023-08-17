@@ -104,6 +104,10 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_packs(store_id)
     }
 
+    fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
+        self.datasource.get_all_packs()
+    }
+
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
         self.datasource.insert_database(pack)
     }
