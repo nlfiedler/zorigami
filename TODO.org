@@ -1,56 +1,22 @@
 * Tasks
-** DONE Test full backup and restore on ~yubaba~ using ~minio~
-*** DONE clear minio packs
-*** DONE replicate =zeniba/shared= from ~chihiro~
-*** DONE delete database files in =/zeniba/zorigami/database=
-*** DONE deploy zorigami
-*** DONE create the dataset, set to ~manual~, start a backup
-*** DONE wait for backup to complete, check for errors; no errors
-*** DONE destroy/create dataset, fix ownership and permissions
-*** using the one snapshot [18/18]
-- [X] Antonia
-- [X] Applications
-- [X] Artwork
-- [X] Books
-- [X] Certificates
-- [X] Correspondence
-- [X] Documents
-- [X] Historical
-- [X] Medical
-- [X] Movies
-- [X] Nathan
-- [X] Performances
-- [X] Pictures
-- [X] Projects
-- [X] Receipts
-- [X] Sounds
-- [X] tanuki
-- [X] Writings
-** DONE restore the missing files by finding the real packs and fixing the metadata
-*** file information
-:path: tanuki/assets/blobstore/2023/05/21/2215/01h106dakr177a8c105etsr3fw.jpg
-:digest: e390da5ca7b3bcb53de5201915b2c617a2cef419c8660772f835651bb452fb0f
-:pack: 781ec6d07a4bdec46c506be1f4b765eab4824b93d325766021e9d28e1684998d
-** TODO fix restore for symlinks
-*** error message =error restoring link= ... =No such file or directory (os error 2)=
-- Pictures/old_macbook/Photos Library.photoslibrary/Data
-- Pictures/old_macbook/Photos Library.photoslibrary/Modified
-- Pictures/old_macbook/Photos Library.photoslibrary/Originals
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Data
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/BigBlobs.apdb
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Faces.db
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/History.apdb
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/ImageProxies.apdb
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Library.apdb
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Database/Properties.apdb
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Modified
-- Pictures/old_macbook/iPhoto Library.migratedphotolibrary/Originals
-** TODO write unit tests for =PackRecord=
 ** TODO convert =take_snapshot()= to a use case with unit tests
 **** tests in =backup_manager_test.rs= will move to this new use case
+** TODO Rebuild and deploy on ~tampopo~ from scratch
+*** TODO stop =zorigami= process
+*** TODO delete =~/Library/Application\ Support/Zorigami/dbase*=
+*** TODO delete all S3 buckets on ~production~ account
+*** TODO build and deploy locally
+*** TODO configure packs and dataset
+*** TODO verify successful backup
 ** TODO Run =replica.sh= from ~chihiro~ to ~kohaku~ again
-** TODO Rebuild and deploy to ~chihiro~, destroy existing packs and start again
-** TODO Rebuild and deploy on ~tampopo~, destroy existing packs and start again
+** TODO Rebuild and deploy to ~chihiro~ from scratch
+*** TODO stop =zorigami_app_1= container
+*** TODO destroy =safe/packs= zfs dataset
+*** TODO delete =/zeniba/zorigami/database/dbase*=
+*** TODO create a new ~Google Cloud~ project
+*** TODO build and deploy =zorigami=
+*** TODO configure packs and dataset
+*** TODO verify successful backup
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
@@ -58,21 +24,6 @@
 **** find and report dangling objects
 **** TODO finish writing =verify_snapshot= use case tests
 **** TODO add GraphQL query to invoke =VerifySnapshot= usecase
-*** support repairing the broken database
-**** missing file records mean an entire snapshot is invalid
-***** fix by changing the next snapshots ~parent~ to be the parent of the invalid snapshot
-***** if the invalid snapshot is the most recent snapshot, change the latest snapshot record
-**** files missing from a pack file means an entire snapshot is invalid
-*** add option to delete all snapshots and start again
-**** remove all records that are _not_ stores and datasets
-- latest/
-- chunk/
-- pack/
-- file/
-- xattr/
-- dbase/
-- tree/
-**** delete all stored pack files from all stores?
 ** Improve backup reliability
 *** document the details of the scan and backup process
 **** what database records are created when?
@@ -527,6 +478,14 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** TODO Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content
+**** remove all records that are _not_ stores and datasets
+- latest/
+- chunk/
+- pack/
+- file/
+- xattr/
+- dbase/
+- tree/
 **** Optionally prune all existing packs in the process
 *** TODO event dispatching for the web and desktop
 **** use the state management to manage "events" and state
@@ -672,6 +631,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 ** Windows support
+*** TODO File mode support: currently commented out, should revisit recording file ~attributes~
 *** TODO Does Microsoft's ~Windows Package Manager~ (=winget=) provide an easier dev setup path?
 *** TODO Backup files opened by a running process
 **** Normally cannot read files that are opened on Windows

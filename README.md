@@ -304,3 +304,18 @@ Replaced the ReasonML web interface with Flutter.
 
 Rewrite server code according to Clean Architecture design, breaking database
 and pack stores into separate packages within the overall workspace.
+
+### August 2023
+
+Found and fixed a major bug in the recording of the file and chunk metadata. If
+a single-chunk file were to finish filling a pack, it would be recorded as
+belonging to the next pack that was created. If no other pack was created, the
+file record would not be created. This led to two problems on restore, one in
+which the chunk could not be found, and the other in which the file record was
+missing. Added a query to track down the missing chunks by searching all pack
+archives, and a mutation that inserts a new file record. An unused usecase has
+been committed to the repository for gathering the data regarding the chunks of
+a file that point to the wrong packs (the first problem).
+
+Tested full backup and restore on the 300+GB shared dataset. Verified that a
+30GB file was restored correctly. Symbolic links are also restored correctly.

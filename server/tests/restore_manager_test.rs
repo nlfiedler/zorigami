@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -552,18 +552,24 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let performer = PerformerImpl::new();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-    let dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
-    let target = "lorem-ipsum.txt";
+    let real_dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
+    let fake_dest = fixture_path.path().join("link-to-nothing");
     // cfg! macro will not work in this OS-specific import case
     {
         #[cfg(target_family = "unix")]
         use std::os::unix::fs;
         #[cfg(target_family = "windows")]
         use std::os::windows::fs;
+        // make a normal symlink that points to a file
         #[cfg(target_family = "unix")]
-        fs::symlink(&target, &dest)?;
+        fs::symlink("lorem-ipsum.txt", &real_dest)?;
         #[cfg(target_family = "windows")]
-        fs::symlink_file(&target, &dest)?;
+        fs::symlink_file("lorem-ipsum.txt", &real_dest)?;
+        // make a phony symlink that points to nothing
+        #[cfg(target_family = "unix")]
+        fs::symlink("link-value-is-meaningless", &fake_dest)?;
+        #[cfg(target_family = "windows")]
+        fs::symlink_file("link-value-is-meaningless", &fake_dest)?;
     }
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
@@ -612,10 +618,10 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     assert_eq!(counts.chunk, 0);
     assert_eq!(counts.tree, 2);
 
-    // restore the symlink from the first snapshot
-    let snapshot = dbase.get_snapshot(&first_backup.unwrap())?.unwrap();
-    let sut = RestorerImpl::new(state, file_restorer_factory);
-    let result = sut.start(dbase);
+    // restore the normal symlink from the first snapshot
+    let snapshot = dbase.get_snapshot(&first_backup.as_ref().unwrap())?.unwrap();
+    let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
+    let result = sut.start(dbase.clone());
     assert!(result.is_ok());
     let result = sut.enqueue(Request::new(
         snapshot.tree,
@@ -636,6 +642,33 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let value_path = fs::read_link(link_path).unwrap();
     let value_str = value_path.to_str().unwrap();
     assert_eq!(value_str, "lorem-ipsum.txt");
+
+    // restore the weird symlink from the first snapshot but also remove
+    // the symlink from the dataset to ensure restore functions correctly
+    fs::remove_file(&fake_dest).unwrap();
+    let snapshot = dbase.get_snapshot(&first_backup.as_ref().unwrap())?.unwrap();
+    let sut = RestorerImpl::new(state, file_restorer_factory);
+    let result = sut.start(dbase);
+    assert!(result.is_ok());
+    let result = sut.enqueue(Request::new(
+        snapshot.tree,
+        String::from("link-to-nothing"),
+        PathBuf::from("link-to-nothing"),
+        dataset.id.to_owned(),
+        "keyboard cat".into(),
+    ));
+    assert!(result.is_ok());
+    sut.wait_for_completed();
+    let requests = sut.requests();
+    assert_eq!(requests.len(), 1);
+    let request = &requests[0];
+    assert!(request.error_msg.is_none());
+
+    // ensure symlink contains expected contents
+    let link_path: PathBuf = fixture_path.path().join("link-to-nothing");
+    let value_path = fs::read_link(link_path).unwrap();
+    let value_str = value_path.to_str().unwrap();
+    assert_eq!(value_str, "link-value-is-meaningless");
 
     // shutdown the restorer supervisor to release the database lock
     let result = sut.stop();

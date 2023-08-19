@@ -692,7 +692,10 @@ impl FileRestorer for FileRestorerImpl {
         outfile.push(filepath);
         if let Some(parent) = outfile.parent() {
             fs::create_dir_all(parent)?;
-            fs::remove_file(&outfile)?;
+            // ignore any errors removing the file that may or moy not be
+            // present, but it definitely has to be gone in order for the
+            // symlink call to work
+            let _ = fs::remove_file(&outfile);
             // cfg! macro will not work in this OS-specific import case
             {
                 #[cfg(target_family = "unix")]
