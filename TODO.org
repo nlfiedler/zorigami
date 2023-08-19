@@ -1,6 +1,4 @@
 * Tasks
-** TODO convert =take_snapshot()= to a use case with unit tests
-**** tests in =backup_manager_test.rs= will move to this new use case
 ** TODO Rebuild and deploy on ~tampopo~ from scratch
 *** TODO stop =zorigami= process
 *** TODO delete =~/Library/Application\ Support/Zorigami/dbase*=

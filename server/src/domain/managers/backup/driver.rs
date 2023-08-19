@@ -389,8 +389,8 @@ impl PackRecord {
         // record the uploaded chunks to the database
         for chunk in self.chunks.iter_mut() {
             // Detect the case of a chunk whose digest matches an entire file,
-            // which means it will _not_ get a record of its own but instead the
-            // file record will point directly to a pack record.
+            // which means the chunk will _not_ get a record of its own but
+            // instead the file record will point directly to a pack record.
             if !self.files.contains_key(&chunk.digest) {
                 // set the pack digest for each chunk record
                 chunk.packfile = Some(digest.to_owned());
