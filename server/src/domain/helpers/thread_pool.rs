@@ -5,7 +5,7 @@
 //! Create a pool of threads to run arbitrary functions. The pool of threads
 //! will remain active until the pool is dropped.
 
-use log::{error, info, warn, trace};
+use log::{debug, error, warn, trace};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
@@ -64,7 +64,7 @@ impl Drop for ThreadPool {
     fn drop(&mut self) {
         drop(self.sender.take());
         for worker in &mut self.workers {
-            info!("thread_pool: shutting down worker {}", worker.id);
+            debug!("thread_pool: shutting down worker {}", worker.id);
             if let Some(thread) = worker.thread.take() {
                 if let Err(err) = thread.join() {
                     error!("failed to join thread: {err:?}")
