@@ -288,11 +288,9 @@ impl RestoreSupervisor {
             if let Err(error) = fetcher.load_dataset(&request.dataset) {
                 error!("process_queue: error loading dataset: {}", error);
                 self.set_error(error, &mut req);
-            } else {
-                if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
-                    error!("process_queue: error processing entry: {}", error);
-                    self.set_error(error, &mut req);
-                }
+            } else if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
+                error!("process_queue: error processing entry: {}", error);
+                self.set_error(error, &mut req);
             }
             info!("completed request {}/{}", request.tree, request.entry);
             self.push_completed(req);
@@ -336,11 +334,11 @@ impl RestoreSupervisor {
         &self,
         request: &mut Request,
         digest: Checksum,
-        filepath: &PathBuf,
+        filepath: &Path,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         // fetch the packs for the file and assemble the chunks
-        fetcher.fetch_file(&digest, &filepath, &request.passphrase)?;
+        fetcher.fetch_file(&digest, filepath, &request.passphrase)?;
         // update the count of files restored so far
         request.files_restored += 1;
         Ok(())
@@ -350,7 +348,7 @@ impl RestoreSupervisor {
         &self,
         request: &mut Request,
         digest: Checksum,
-        path: &PathBuf,
+        path: &Path,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         let tree = self
@@ -358,7 +356,7 @@ impl RestoreSupervisor {
             .get_tree(&digest)?
             .ok_or_else(|| anyhow!(format!("missing tree: {:?}", digest)))?;
         for entry in tree.entries.iter() {
-            let mut filepath = path.clone();
+            let mut filepath = path.to_path_buf();
             filepath.push(&entry.name);
             match &entry.reference {
                 TreeReference::LINK(contents) => {
@@ -518,10 +516,10 @@ pub trait FileRestorer: Send + Sync {
     ) -> Result<(), Error>;
 
     /// Restore the named symbolic link given its contents.
-    fn restore_link(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error>;
+    fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error>;
 
     /// Restore the named small file given its contents.
-    fn restore_small(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error>;
+    fn restore_small(&self, contents: &[u8], filepath: &Path) -> Result<(), Error>;
 }
 
 pub struct FileRestorerImpl {
@@ -582,7 +580,7 @@ impl FileRestorerImpl {
             crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
             fs::remove_file(&encrypted)?;
             verify_pack_digest(pack_digest, &tarball)?;
-            pack::extract_pack(&tarball, &workspace)?;
+            pack::extract_pack(&tarball, workspace)?;
             debug!("pack extracted");
             fs::remove_file(tarball)?;
             // remember this pack as being downloaded
@@ -656,10 +654,10 @@ impl FileRestorer for FileRestorerImpl {
             for (_offset, chunk) in &saved_file.chunks {
                 let chunk_rec = self
                     .dbase
-                    .get_chunk(&chunk)?
+                    .get_chunk(chunk)?
                     .ok_or_else(|| anyhow!(format!("missing chunk: {:?}", chunk)))?;
                 let pack_digest = chunk_rec.packfile.as_ref().unwrap();
-                self.fetch_pack(&pack_digest, &workspace, passphrase)?;
+                self.fetch_pack(pack_digest, &workspace, passphrase)?;
             }
             // sort the chunks by offset to produce the ordered file list
             let mut chunks = saved_file.chunks;
@@ -681,7 +679,7 @@ impl FileRestorer for FileRestorerImpl {
         Ok(())
     }
 
-    fn restore_link(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error> {
+    fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
         info!("restoring symbolic link: {}", filepath.display());
         #[cfg(target_family = "unix")]
         use std::os::unix::ffi::OsStringExt;
@@ -703,16 +701,16 @@ impl FileRestorer for FileRestorerImpl {
                 #[cfg(target_family = "windows")]
                 use std::os::windows::fs;
                 #[cfg(target_family = "unix")]
-                fs::symlink(&target, &outfile)?;
+                fs::symlink(target, outfile)?;
                 #[cfg(target_family = "windows")]
-                fs::symlink_file(&target, &outfile)?;
+                fs::symlink_file(target, outfile)?;
             }
             return Ok(());
         }
         Err(anyhow!(format!("no parent for: {:?}", outfile)))
     }
 
-    fn restore_small(&self, contents: &[u8], filepath: &PathBuf) -> Result<(), Error> {
+    fn restore_small(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
         info!("restoring small file: {}", filepath.display());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);

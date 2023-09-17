@@ -63,7 +63,7 @@ impl<'a> BackupDriver<'a> {
         passphrase: &str,
         stop_time: Option<DateTime<Utc>>,
     ) -> Result<Self, Error> {
-        let stores = dbase.load_dataset_stores(&dataset)?;
+        let stores = dbase.load_dataset_stores(dataset)?;
         let chunk_size = calc_chunk_size(dataset.pack_size);
         Ok(Self {
             dataset,
@@ -242,12 +242,12 @@ impl<'a> BackupDriver<'a> {
                 pack_path.display()
             ));
         }
-        let pack_digest = entities::Checksum::sha256_from_file(&pack_path)?;
+        let pack_digest = entities::Checksum::sha256_from_file(pack_path)?;
         // possible that we just happened to build an identical pack file
         if self.dbase.get_pack(&pack_digest)?.is_none() {
             let mut outfile = pack_path.to_path_buf();
             outfile.set_extension("nacl");
-            let salt = crypto::encrypt_file(&self.passphrase, &pack_path, &outfile)?;
+            let salt = crypto::encrypt_file(&self.passphrase, pack_path, &outfile)?;
             // new pack file, need to upload this and record to database
             let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
             let bucket_name = self.stores.get_bucket_name(&computer_id);
@@ -325,6 +325,7 @@ fn calc_chunk_size(pack_size: u64) -> u32 {
 
 /// Tracks the files and chunks that comprise a pack, and provides functions for
 /// saving the results to the database.
+#[derive(Default)]
 pub struct PackRecord {
     /// Those files that have been completed with this pack.
     files: HashMap<entities::Checksum, Vec<entities::Chunk>>,
@@ -347,7 +348,7 @@ impl PackRecord {
     /// this record expects to be in the pack file, false otherwise.
     fn verify_pack(&self, pack_path: &Path) -> Result<bool, Error> {
         use std::str::FromStr;
-        let file = fs::File::open(&pack_path)?;
+        let file = fs::File::open(pack_path)?;
         let mut ar = tar::Archive::new(file);
         // This is an n^2 search which is fine because the number of chunks in a
         // typical pack file number in the tens, never any significant number.
@@ -437,15 +438,6 @@ impl PackRecord {
             dbase.insert_file(&file)?;
         }
         Ok(self.files.len())
-    }
-}
-
-impl Default for PackRecord {
-    fn default() -> Self {
-        Self {
-            files: HashMap::new(),
-            chunks: Vec::new(),
-        }
     }
 }
 

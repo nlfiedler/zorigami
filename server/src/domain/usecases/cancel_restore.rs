@@ -54,13 +54,13 @@ impl fmt::Display for Params {
     }
 }
 
-impl Into<Request> for Params {
-    fn into(self) -> Request {
+impl From<Params> for Request {
+    fn from(val: Params) -> Self {
         Request::new(
-            self.tree,
-            self.entry,
-            self.filepath,
-            self.dataset,
+            val.tree,
+            val.entry,
+            val.filepath,
+            val.dataset,
             String::new(),
         )
     }

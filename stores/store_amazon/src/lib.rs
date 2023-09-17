@@ -121,7 +121,7 @@ impl AmazonStore {
     //
     // Returns the name of the bucket that was created or selected.
     async fn try_create_bucket(&self, client: &S3Client, bucket: &str) -> Result<String, Error> {
-        match create_bucket(&client, bucket, &self.region).await {
+        match create_bucket(client, bucket, &self.region).await {
             Err(err) => match err.downcast::<TooManyBucketsError>() {
                 Ok(_) => {
                     let mut names = BUCKET_NAMES.lock().unwrap();
@@ -161,7 +161,7 @@ impl AmazonStore {
         let meta = std::fs::metadata(packfile)?;
         let read_stream = tokio::fs::read(packfile.to_owned())
             .into_stream()
-            .map_ok(|b| Bytes::from(b));
+            .map_ok(Bytes::from);
         let req = PutObjectRequest {
             bucket: bucket_name.clone(),
             storage_class: Some(self.storage.clone()),
@@ -324,10 +324,7 @@ impl AmazonStore {
         let result = client.create_table(create_input).await;
         let created_result: Result<bool, Error> = if let Err(err) = result {
             match err {
-                RusotoError::Service(ref se) => match se {
-                    CreateTableError::ResourceInUse(_) => Ok(false),
-                    _ => Err(err.into()),
-                },
+                RusotoError::Service(CreateTableError::ResourceInUse(_)) => Ok(false),
                 _ => Err(err.into()),
             }
         } else {
@@ -399,10 +396,7 @@ impl AmazonStore {
                 Ok(None)
             }
             Err(err) => match err {
-                RusotoError::Service(ref se) => match se {
-                    GetItemError::ResourceNotFound(_) => Ok(None),
-                    _ => Err(err.into()),
-                },
+                RusotoError::Service(GetItemError::ResourceNotFound(_)) => Ok(None),
                 _ => Err(err.into()),
             },
         }
@@ -441,7 +435,7 @@ impl AmazonStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+        if let Some(renamed) = self.get_bucket_name(bucket).await? {
             // If the renamed bucket fails for some reason, then report it
             // immediately, do not attempt to generate a new name again.
             self.store_pack(packfile, &renamed, object).await
@@ -500,7 +494,7 @@ impl AmazonStore {
     }
 
     pub async fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+        if let Some(renamed) = self.get_bucket_name(bucket).await? {
             self.list_objects(&renamed).await
         } else {
             self.list_objects(bucket).await

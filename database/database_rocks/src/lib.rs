@@ -107,7 +107,7 @@ impl database_core::Database for Database {
             backup_path.set_extension("backup");
             backup_path
         });
-        let backup_opts = BackupEngineOptions::new(&backup_path)?;
+        let backup_opts = BackupEngineOptions::new(backup_path)?;
         let env = rocksdb::Env::new()?;
         let mut backup_engine = BackupEngine::open(&backup_opts, &env).unwrap();
         let restore_option = rocksdb::backup::RestoreOptions::default();

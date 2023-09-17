@@ -239,7 +239,7 @@ impl EntityDataSource for EntityDataSourceImpl {
             Some(value) => {
                 let as_string = String::from_utf8(value)?;
                 let result: Result<Checksum, Error> = FromStr::from_str(&as_string);
-                result.map(|v| Some(v))
+                result.map(Some)
             }
             None => Ok(None),
         }
@@ -320,8 +320,8 @@ impl EntityDataSource for EntityDataSourceImpl {
             if result.locations.iter().any(|l| l.store == store_id) {
                 // strip leading "pack/" from 'key' and convert to a Checksum
                 let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-                if digest.is_ok() {
-                    result.digest = digest.unwrap();
+                if let Ok(value) = digest {
+                    result.digest = value;
                     results.push(result);
                 }
             }
@@ -338,8 +338,8 @@ impl EntityDataSource for EntityDataSourceImpl {
             let mut result = PackDef::deserialize(&mut de)?;
             // strip leading "pack/" from 'key' and convert to a Checksum
             let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-            if digest.is_ok() {
-                result.digest = digest.unwrap();
+            if let Ok(value) = digest {
+                result.digest = value;
                 results.push(result);
             }
         }
@@ -378,8 +378,8 @@ impl EntityDataSource for EntityDataSourceImpl {
             let mut de = serde_cbor::Deserializer::from_slice(&value);
             let mut result = PackDef::deserialize(&mut de)?;
             let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-            if digest.is_ok() {
-                result.digest = digest.unwrap();
+            if let Ok(value) = digest {
+                result.digest = value;
                 results.push(result);
             }
         }
@@ -676,12 +676,12 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
         // repeatedly constructing the same thing. The lru crate would be perfect
         // for managing the cache.
         let source: Box<dyn PackDataSource> = match store.store_type {
-            StoreType::AMAZON => Box::new(amazon::AmazonPackSource::new(&store)?),
-            StoreType::AZURE => Box::new(azure::AzurePackSource::new(&store)?),
-            StoreType::LOCAL => Box::new(local::LocalPackSource::new(&store)?),
-            StoreType::GOOGLE => Box::new(google::GooglePackSource::new(&store)?),
-            StoreType::MINIO => Box::new(minio::MinioPackSource::new(&store)?),
-            StoreType::SFTP => Box::new(sftp::SftpPackSource::new(&store)?),
+            StoreType::AMAZON => Box::new(amazon::AmazonPackSource::new(store)?),
+            StoreType::AZURE => Box::new(azure::AzurePackSource::new(store)?),
+            StoreType::LOCAL => Box::new(local::LocalPackSource::new(store)?),
+            StoreType::GOOGLE => Box::new(google::GooglePackSource::new(store)?),
+            StoreType::MINIO => Box::new(minio::MinioPackSource::new(store)?),
+            StoreType::SFTP => Box::new(sftp::SftpPackSource::new(store)?),
         };
         Ok(source)
     }

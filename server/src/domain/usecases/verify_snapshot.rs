@@ -43,11 +43,11 @@ impl super::UseCase<Vec<DataError>, Params> for VerifySnapshot {
                                 pending_trees.push_back(checksum.to_owned())
                             }
                             TreeReference::FILE(file_digest) => {
-                                if !visited_files.check(&file_digest) {
+                                if !visited_files.check(file_digest) {
                                     if let Some(code) = check_file(&self.repo, file_digest)? {
                                         issues.push(code);
                                     }
-                                    visited_files.set(&file_digest);
+                                    visited_files.set(file_digest);
                                 }
                             }
                         }
@@ -73,7 +73,7 @@ fn check_file(
     repo: &Box<dyn RecordRepository>,
     file_digest: &Checksum,
 ) -> Result<Option<DataError>, Error> {
-    if let Some(file) = repo.get_file(&file_digest)? {
+    if let Some(file) = repo.get_file(file_digest)? {
         for (_, chunk_digest) in file.chunks.iter() {
             if let Some(chunk) = repo.get_chunk(chunk_digest)? {
                 if let Some(pack_digest) = chunk.packfile {

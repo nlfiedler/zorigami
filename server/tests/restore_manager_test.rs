@@ -56,7 +56,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
@@ -313,7 +313,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
@@ -549,7 +549,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let real_dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
@@ -715,7 +715,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
     let dest: PathBuf = fixture_path.path().join("very-small.txt");

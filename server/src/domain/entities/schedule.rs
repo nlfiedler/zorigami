@@ -66,10 +66,8 @@ pub struct TimeRange {
 impl TimeRange {
     /// Construct a new range using the given hour/minute values.
     pub fn new(start_hour: u32, start_min: u32, stop_hour: u32, stop_min: u32) -> Self {
-        let start_time = NaiveTime::from_hms_opt(start_hour, start_min, 0)
-            .unwrap_or_else(|| NaiveTime::default());
-        let stop_time =
-            NaiveTime::from_hms_opt(stop_hour, stop_min, 0).unwrap_or_else(|| NaiveTime::default());
+        let start_time = NaiveTime::from_hms_opt(start_hour, start_min, 0).unwrap_or_default();
+        let stop_time = NaiveTime::from_hms_opt(stop_hour, stop_min, 0).unwrap_or_default();
         Self {
             start: start_time.num_seconds_from_midnight(),
             stop: stop_time.num_seconds_from_midnight(),

@@ -79,14 +79,8 @@ pub trait Performer: Send + Sync {
 /// the current thread, allowing for easier management of the database locks
 /// when performing a full database restore.
 ///
+#[derive(Default)]
 pub struct PerformerImpl();
-
-impl PerformerImpl {
-    /// Construct an instance of PerformerImpl.
-    pub fn new() -> Self {
-        Self()
-    }
-}
 
 impl Performer for PerformerImpl {
     fn backup(&self, request: Request) -> Result<Option<entities::Checksum>, Error> {
@@ -615,13 +609,10 @@ fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
                         groomed.push(PathBuf::from(pattern));
                         groomed.push([pattern, "**"].iter().collect());
                     }
-                } else if pattern.ends_with("**") {
+                } else if pattern.starts_with('*') || pattern.ends_with("**") {
                     // prepend basepath
                     groomed.push([basepath_str, pattern].iter().collect());
-                } else if pattern.starts_with("*") {
-                    // prepend basepath
-                    groomed.push([basepath_str, pattern].iter().collect());
-                } else if pattern.len() > 0 {
+                } else if !pattern.is_empty() {
                     // exclude the path and everything below
                     groomed.push([basepath_str, pattern].iter().collect());
                     groomed.push([basepath_str, pattern, "**"].iter().collect());
@@ -632,7 +623,7 @@ fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
         }
         for exclusion in groomed.iter() {
             if let Some(pattern) = exclusion.to_str() {
-                if let Ok(glob) = Glob::new(&pattern) {
+                if let Ok(glob) = Glob::new(pattern) {
                     builder.add(glob);
                 } else {
                     warn!("could not build glob for {:?}", pattern);
@@ -781,7 +772,7 @@ fn process_files(
         actual = cvar.wait(actual).unwrap();
     }
     // filter those entries that resulted in error (None)
-    actual.drain(..).filter_map(|e| e).collect()
+    actual.drain(..).flatten().collect()
 }
 
 ///

@@ -104,10 +104,10 @@ impl FromStr for Checksum {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("sha1-") {
-            Ok(Checksum::SHA1(s[5..].to_owned()))
-        } else if s.starts_with("sha256-") {
-            Ok(Checksum::SHA256(s[7..].to_owned()))
+        if let Some(hash) = s.strip_prefix("sha1-") {
+            Ok(Checksum::SHA1(hash.to_owned()))
+        } else if let Some(hash) = s.strip_prefix("sha256-") {
+            Ok(Checksum::SHA256(hash.to_owned()))
         } else {
             Err(anyhow!(format!("not a recognized algorithm: {}", s)))
         }
@@ -370,17 +370,17 @@ impl FromStr for TreeReference {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("link-") {
-            let decoded = general_purpose::STANDARD.decode(&s[5..])?;
+        if let Some(value) = s.strip_prefix("link-") {
+            let decoded = general_purpose::STANDARD.decode(value)?;
             Ok(TreeReference::LINK(decoded))
-        } else if s.starts_with("tree-") {
-            let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
+        } else if let Some(value) = s.strip_prefix("tree-") {
+            let digest: Result<Checksum, Error> = FromStr::from_str(value);
             Ok(TreeReference::TREE(digest.expect("invalid tree SHA1")))
-        } else if s.starts_with("file-") {
-            let digest: Result<Checksum, Error> = FromStr::from_str(&s[5..]);
+        } else if let Some(value) = s.strip_prefix("file-") {
+            let digest: Result<Checksum, Error> = FromStr::from_str(value);
             Ok(TreeReference::FILE(digest.expect("invalid file SHA256")))
-        } else if s.starts_with("small-") {
-            let decoded = general_purpose::STANDARD.decode(&s[6..])?;
+        } else if let Some(value) = s.strip_prefix("small-") {
+            let decoded = general_purpose::STANDARD.decode(value)?;
             Ok(TreeReference::SMALL(decoded))
         } else {
             Err(anyhow!(format!("not a recognized reference: {}", s)))
@@ -440,13 +440,13 @@ impl TreeEntry {
         // entry and not blow up the backup process.
         let metadata = fs::symlink_metadata(path);
         let mtime = match metadata.as_ref() {
-            Ok(attr) => attr.modified().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),
+            Ok(attr) => attr.modified().unwrap_or(SystemTime::UNIX_EPOCH),
             Err(_) => SystemTime::UNIX_EPOCH,
         };
         // creation time is not available on all platforms, and we are only
         // using it to record a value in the database
         let ctime = match metadata.as_ref() {
-            Ok(attr) => attr.created().unwrap_or_else(|_| SystemTime::UNIX_EPOCH),
+            Ok(attr) => attr.created().unwrap_or(SystemTime::UNIX_EPOCH),
             Err(_) => SystemTime::UNIX_EPOCH,
         };
         Self {
@@ -643,7 +643,7 @@ impl File {
 ///
 /// Holds statistics regarding a specific snapshot.
 ///
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FileCounts {
     pub directories: u32,
     pub symlinks: u32,
@@ -673,7 +673,7 @@ impl FileCounts {
             // efficiency (2^255 is already much larger than very_large_files).
             // Use 64 as the maximum value for the preso layer to convert the
             // value back to a number-string.
-            let bits: u8 = power.try_into().map_or(64 as u8, |v: u32| v as u8);
+            let bits: u8 = power.try_into().map_or(64_u8, |v: u32| v as u8);
             if let Some(value) = self.file_sizes.get_mut(&bits) {
                 *value += 1;
             } else {
@@ -691,18 +691,6 @@ impl FileCounts {
             count += *value as u64;
         }
         count
-    }
-}
-
-impl Default for FileCounts {
-    fn default() -> Self {
-        Self {
-            directories: 0,
-            symlinks: 0,
-            very_small_files: 0,
-            very_large_files: 0,
-            file_sizes: HashMap::new(),
-        }
     }
 }
 
@@ -818,12 +806,12 @@ impl From<Coordinates> for PackLocation {
     }
 }
 
-impl Into<Coordinates> for PackLocation {
-    fn into(self) -> Coordinates {
+impl From<PackLocation> for Coordinates {
+    fn from(val: PackLocation) -> Self {
         Coordinates {
-            store: self.store,
-            bucket: self.bucket,
-            object: self.object,
+            store: val.store,
+            bucket: val.bucket,
+            object: val.object,
         }
     }
 }
@@ -959,7 +947,7 @@ impl Default for Configuration {
 }
 
 /// Record counts for the various entities stored in the record repository.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RecordCounts {
     /// Number of chunks stored in the repository.
     pub chunk: usize,
@@ -977,21 +965,6 @@ pub struct RecordCounts {
     pub tree: usize,
     /// Number of extended attributes stored in the repository.
     pub xattr: usize,
-}
-
-impl Default for RecordCounts {
-    fn default() -> Self {
-        Self {
-            chunk: 0,
-            dataset: 0,
-            file: 0,
-            pack: 0,
-            snapshot: 0,
-            store: 0,
-            tree: 0,
-            xattr: 0,
-        }
-    }
 }
 
 impl fmt::Display for RecordCounts {

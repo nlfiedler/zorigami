@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::Checksum;
 use crate::domain::helpers::crypto;
@@ -56,13 +56,13 @@ impl fmt::Display for Params {
     }
 }
 
-impl Into<Request> for Params {
-    fn into(self) -> Request {
+impl From<Params> for Request {
+    fn from(val: Params) -> Self {
         Request::new(
-            self.tree,
-            self.entry,
-            self.filepath,
-            self.dataset,
+            val.tree,
+            val.entry,
+            val.filepath,
+            val.dataset,
             String::new(),
         )
     }

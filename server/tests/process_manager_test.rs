@@ -74,7 +74,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let performer: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
+    let performer: Arc<dyn Performer> = Arc::new(PerformerImpl::default());
     let processor = SchedulerImpl::new(state.clone(), performer).interval(100);
     let result = processor.start(dbase.clone());
     assert!(result.is_ok());

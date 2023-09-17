@@ -10,7 +10,6 @@ use actix_files::{Files, NamedFile};
 use actix_web::{
     error::InternalError, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result,
 };
-use env_logger;
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
 use lazy_static::lazy_static;
@@ -55,7 +54,7 @@ lazy_static! {
         Arc::new(RestorerImpl::new(STATE_STORE.clone(), file_restorer_factory))
     };
     // Actual performer of the backups.
-    static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::new());
+    static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::default());
     // Supervisor for managing the running of backups.
     static ref SCHEDULER: Arc<dyn Scheduler> = {
         Arc::new(SchedulerImpl::new(STATE_STORE.clone(), BACKUP_PERFORMER.clone()))

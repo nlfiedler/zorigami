@@ -199,7 +199,7 @@ const _: () = {
                     }
                 }
             }
-            const VARIANTS: &'static [&'static str] = &["LINK", "TREE", "FILE", "SMALL"];
+            const VARIANTS: &[&str] = &["LINK", "TREE", "FILE", "SMALL"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "TreeReference",
@@ -966,8 +966,7 @@ const _: () = {
                     })
                 }
             }
-            const FIELDS: &'static [&'static str] =
-                &["nm", "mo", "ui", "us", "gi", "gr", "ct", "mt", "tr", "xa"];
+            const FIELDS: &[&str] = &["nm", "mo", "ui", "us", "gi", "gr", "ct", "mt", "tr", "xa"];
             _serde::Deserializer::deserialize_struct(
                 __deserializer,
                 "TreeEntry",
@@ -1199,7 +1198,7 @@ const _: () = {
                     })
                 }
             }
-            const FIELDS: &'static [&'static str] = &["en"];
+            const FIELDS: &[&str] = &["en"];
             _serde::Deserializer::deserialize_struct(
                 __deserializer,
                 "Tree",

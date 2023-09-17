@@ -134,9 +134,9 @@ impl GoogleStore {
                             }
                         }
                     }
-                    return Err(anyhow!(format!("{:?}", error)));
+                    Err(anyhow!(format!("{:?}", error)))
                 }
-                _ => return Err(anyhow!(format!("{:?}", error))),
+                _ => Err(anyhow!(format!("{:?}", error))),
             },
         }
     }
@@ -266,15 +266,19 @@ impl GoogleStore {
     async fn save_bucket_name(&self, original: &str, renamed: &str) -> Result<(), Error> {
         let hub = self.connect_fire().await?;
         let mut values: HashMap<String, firestore1::api::Value> = HashMap::new();
-        let mut value: firestore1::api::Value = Default::default();
-        value.string_value = Some(renamed.to_owned());
+        let value = firestore1::api::Value {
+            string_value: Some(renamed.to_owned()),
+            ..Default::default()
+        };
         values.insert("renamed".into(), value);
         let name = format!(
             "projects/{}/databases/{}/documents/renames/{}",
             &self.project, "(default)", original
         );
-        let mut document: firestore1::api::Document = Default::default();
-        document.fields = Some(values);
+        let document = firestore1::api::Document {
+            fields: Some(values),
+            ..Default::default()
+        };
         // databases_documents_patch() will either insert or update
         let (_response, _document) = hub
             .projects()
@@ -354,7 +358,7 @@ impl GoogleStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+        if let Some(renamed) = self.get_bucket_name(bucket).await? {
             // If the renamed bucket fails for some reason, then report it
             // immediately, do not attempt to generate a new name again.
             self.store_pack(packfile, &renamed, object).await
@@ -413,7 +417,7 @@ impl GoogleStore {
     }
 
     pub async fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        if let Some(renamed) = self.get_bucket_name(&bucket).await? {
+        if let Some(renamed) = self.get_bucket_name(bucket).await? {
             self.list_objects(&renamed).await
         } else {
             self.list_objects(bucket).await
@@ -429,10 +433,12 @@ async fn create_bucket(
     region: &Option<String>,
     storage_class: &Option<String>,
 ) -> Result<(), Error> {
-    let mut req = storage1::api::Bucket::default();
-    req.location = region.to_owned();
-    req.name = Some(name.to_owned());
-    req.storage_class = storage_class.to_owned();
+    let req = storage1::api::Bucket {
+        location: region.to_owned(),
+        name: Some(name.to_owned()),
+        storage_class: storage_class.to_owned(),
+        ..Default::default()
+    };
     // If bucket creation results in a 409, it means the bucket already exists,
     // but may possibly be owned by some other project.
     if let Err(error) = hub.buckets().insert(req, project_id).doit().await {

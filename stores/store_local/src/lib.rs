@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ impl LocalStore {
         let path: PathBuf = [&self.basepath, &location.bucket, &location.object]
             .iter()
             .collect();
-        fs::copy(&path, outfile)?;
+        fs::copy(path, outfile)?;
         Ok(())
     }
 
@@ -67,7 +67,7 @@ impl LocalStore {
             if path.is_dir() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     // ignore folders that are definitely not our buckets
-                    if !name.starts_with(".") {
+                    if !name.starts_with('.') {
                         results.push(name);
                     }
                 }
@@ -85,7 +85,7 @@ impl LocalStore {
             if path.is_file() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     // ignore files that are definitely not our buckets
-                    if !name.starts_with(".") {
+                    if !name.starts_with('.') {
                         results.push(name);
                     }
                 }

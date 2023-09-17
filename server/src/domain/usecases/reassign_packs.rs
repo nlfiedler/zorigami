@@ -46,7 +46,7 @@ impl super::UseCase<u64, Params> for ReassignPacks {
                 "ReassignPacks: changing store for pack {}",
                 &pack_record.digest
             );
-            let patched = patch_location(&pack_record, &params.old_store_id, &params.new_store_id);
+            let patched = patch_location(pack_record, &params.old_store_id, &params.new_store_id);
             self.repo.put_pack(&patched)?;
         }
         Ok(matching_packs.len() as u64)

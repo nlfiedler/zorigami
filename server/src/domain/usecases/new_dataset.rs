@@ -28,7 +28,7 @@ impl super::UseCase<Dataset, Params> for NewDataset {
             .excludes
             .into_iter()
             .map(|e| e.trim().to_owned())
-            .filter(|e| e.len() > 0)
+            .filter(|e| !e.is_empty())
             .collect();
         for schedule in params.schedules {
             dataset = dataset.add_schedule(schedule);

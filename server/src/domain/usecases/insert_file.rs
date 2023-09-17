@@ -62,7 +62,7 @@ impl<'a> super::UseCase<bool, Params<'a>> for InsertFile {
             .prefix("pack")
             .suffix(".salt")
             .tempfile_in(&dataset.workspace)?;
-        let _ = stores.retrieve_pack(&pack.locations, encrypted.path())?;
+        stores.retrieve_pack(&pack.locations, encrypted.path())?;
         let archive = tempfile::Builder::new()
             .prefix("pack")
             .suffix(".tar")

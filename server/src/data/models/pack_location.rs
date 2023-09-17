@@ -341,7 +341,7 @@ const _: () = {
                     })
                 }
             }
-            const FIELDS: &'static [&'static str] = &["s", "b", "o"];
+            const FIELDS: &[&str] = &["s", "b", "o"];
             _serde::Deserializer::deserialize_struct(
                 __deserializer,
                 "PackLocation",

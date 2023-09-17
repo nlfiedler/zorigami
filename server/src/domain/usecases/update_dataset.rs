@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
@@ -29,7 +29,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
             .excludes
             .into_iter()
             .map(|e| e.trim().to_owned())
-            .filter(|e| e.len() > 0)
+            .filter(|e| !e.is_empty())
             .collect();
         for schedule in params.schedules {
             dataset = dataset.add_schedule(schedule);

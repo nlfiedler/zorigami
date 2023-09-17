@@ -165,7 +165,7 @@ const _: () = {
                     }
                 }
             }
-            const VARIANTS: &'static [&'static str] = &["SHA1", "SHA256"];
+            const VARIANTS: &[&str] = &["SHA1", "SHA256"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "Checksum",

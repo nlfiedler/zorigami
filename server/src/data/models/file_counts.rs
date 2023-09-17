@@ -457,7 +457,7 @@ const _: () = {
                     })
                 }
             }
-            const FIELDS: &'static [&'static str] = &["d", "s", "vs", "vl", "m"];
+            const FIELDS: &[&str] = &["d", "s", "vs", "vl", "m"];
             _serde::Deserializer::deserialize_struct(
                 __deserializer,
                 "FileCounts",

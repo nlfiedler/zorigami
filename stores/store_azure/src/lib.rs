@@ -37,20 +37,17 @@ impl AzureStore {
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
         let custom_uri = props.get("custom_uri");
-        let access_tier = props
-            .get("access_tier")
-            .map(|tier| {
-                if tier.to_lowercase() == "hot" {
-                    Some(AccessTier::Hot)
-                } else if tier.to_lowercase() == "cool" {
-                    Some(AccessTier::Cool)
-                } else if tier.to_lowercase() == "archive" {
-                    Some(AccessTier::Archive)
-                } else {
-                    None
-                }
-            })
-            .flatten();
+        let access_tier = props.get("access_tier").and_then(|tier| {
+            if tier.to_lowercase() == "hot" {
+                Some(AccessTier::Hot)
+            } else if tier.to_lowercase() == "cool" {
+                Some(AccessTier::Cool)
+            } else if tier.to_lowercase() == "archive" {
+                Some(AccessTier::Archive)
+            } else {
+                None
+            }
+        });
         Ok(Self {
             store_id: store_id.to_owned(),
             account: account.to_owned(),
@@ -164,7 +161,7 @@ impl AzureStore {
         let mut stream = client.get().into_stream();
         while let Some(value) = stream.next().await {
             let data = value?.data.collect().await?;
-            file_handle.write(&data)?;
+            file_handle.write_all(&data)?;
         }
         Ok(())
     }
@@ -178,18 +175,14 @@ impl AzureStore {
         let builder = self.connect();
         let blob_service = builder.blob_service_client();
         let mut pageable = blob_service.list_containers().into_stream();
-        loop {
-            if let Some(result) = pageable.next().await {
-                match result {
-                    Ok(response) => {
-                        for container in response.containers {
-                            results.push(container.name);
-                        }
+        while let Some(result) = pageable.next().await {
+            match result {
+                Ok(response) => {
+                    for container in response.containers {
+                        results.push(container.name);
                     }
-                    Err(err) => return Err(err.into()),
                 }
-            } else {
-                break;
+                Err(err) => return Err(err.into()),
             }
         }
         Ok(results)
@@ -205,20 +198,16 @@ impl AzureStore {
         let client = builder.container_client(bucket);
         let mut results = Vec::new();
         let mut pageable = client.list_blobs().into_stream();
-        loop {
-            if let Some(result) = pageable.next().await {
-                match result {
-                    Ok(response) => {
-                        for blob_item in response.blobs.items {
-                            if let Blob(blob) = blob_item {
-                                results.push(blob.name);
-                            }
+        while let Some(result) = pageable.next().await {
+            match result {
+                Ok(response) => {
+                    for blob_item in response.blobs.items {
+                        if let Blob(blob) = blob_item {
+                            results.push(blob.name);
                         }
                     }
-                    Err(err) => return Err(err.into()),
                 }
-            } else {
-                break;
+                Err(err) => return Err(err.into()),
             }
         }
         Ok(results)

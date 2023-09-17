@@ -169,7 +169,7 @@ impl RecordRepository for RecordRepositoryImpl {
             .iter()
             .map(|store_id| self.get_store(store_id))
             .filter_map(|s| s.ok())
-            .filter_map(|s| s)
+            .flatten()
             .collect();
         if stores.is_empty() {
             return Err(anyhow!(format!(
@@ -348,7 +348,7 @@ impl PackRepository for PackRepositoryImpl {
             let loc = self
                 .store_pack_retry(source, packfile, bucket, object)
                 .context(ctx)?;
-            results.push(loc.into())
+            results.push(loc)
         }
         Ok(results)
     }
@@ -358,7 +358,7 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id && source.is_local() {
-                    let result = source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(loc, outfile);
                     if result.is_ok() {
                         return result;
                     }
@@ -374,7 +374,7 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id && !source.is_slow() {
-                    let result = source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(loc, outfile);
                     if result.is_ok() {
                         return result;
                     }
@@ -390,7 +390,7 @@ impl PackRepository for PackRepositoryImpl {
         for loc in locations.iter() {
             for (store, source) in self.sources.iter() {
                 if loc.store == store.id {
-                    let result = source.retrieve_pack(&loc, outfile);
+                    let result = source.retrieve_pack(loc, outfile);
                     if result.is_ok() {
                         return result;
                     }
@@ -428,7 +428,7 @@ impl PackRepository for PackRepositoryImpl {
                 store.id, store.label, bucket, object
             );
             let loc = store_database_retry(source, infile, &bucket, &object).context(ctx)?;
-            results.push(loc.into())
+            results.push(loc)
         }
         Ok(results)
     }
@@ -436,13 +436,13 @@ impl PackRepository for PackRepositoryImpl {
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {
         let bucket_name = computer_bucket_name(computer_id);
         // use the first store returned by the iterator, probably only one anyway
-        for (store, source) in self.sources.iter() {
+        if let Some((store, source)) = self.sources.iter().next() {
             let mut objects = source.list_databases(&bucket_name)?;
             objects.sort();
             if let Some(latest) = objects.last() {
                 let loc = PackLocation::new(&store.id, &bucket_name, latest);
                 source
-                    .retrieve_database(&loc, &outfile)
+                    .retrieve_database(&loc, outfile)
                     .context("database archive retrieval")?;
                 return Ok(());
             } else {

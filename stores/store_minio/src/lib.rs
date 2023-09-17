@@ -95,7 +95,7 @@ impl MinioStore {
         let meta = std::fs::metadata(packfile)?;
         let read_stream = tokio::fs::read(packfile.to_owned())
             .into_stream()
-            .map_ok(|b| Bytes::from(b));
+            .map_ok(Bytes::from);
         let req = PutObjectRequest {
             bucket: bucket.to_owned(),
             key: object.to_owned(),

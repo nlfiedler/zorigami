@@ -50,7 +50,7 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
     let request = Request::new(
@@ -133,7 +133,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
 
     // start the backup manager after the stop time has already passed; should
     // return an "out of time" error
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let passphrase = String::from("keyboard cat");
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
@@ -189,7 +189,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform a backup where there is only an empty file
-    let performer = PerformerImpl::new();
+    let performer = PerformerImpl::default();
     let passphrase = String::from("keyboard cat");
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());

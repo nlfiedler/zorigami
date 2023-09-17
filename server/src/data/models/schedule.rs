@@ -268,8 +268,7 @@ const _: () = {
                     }
                 }
             }
-            const VARIANTS: &'static [&'static str] =
-                &["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const VARIANTS: &[&str] = &["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "DayOfWeek",
@@ -553,7 +552,7 @@ const _: () = {
                     })
                 }
             }
-            const FIELDS: &'static [&'static str] = &["start", "stop"];
+            const FIELDS: &[&str] = &["start", "stop"];
             _serde::Deserializer::deserialize_struct(
                 __deserializer,
                 "TimeRange",
@@ -779,8 +778,7 @@ const _: () = {
                     }
                 }
             }
-            const VARIANTS: &'static [&'static str] =
-                &["First", "Second", "Third", "Fourth", "Fifth", "Day"];
+            const VARIANTS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth", "Day"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "DayOfMonth",
@@ -986,7 +984,7 @@ const _: () = {
                     }
                 }
             }
-            const VARIANTS: &'static [&'static str] = &["Hourly", "Daily", "Weekly", "Monthly"];
+            const VARIANTS: &[&str] = &["Hourly", "Daily", "Weekly", "Monthly"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "Schedule",

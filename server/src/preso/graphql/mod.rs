@@ -62,15 +62,15 @@ impl BigInt {
     }
 }
 
-impl Into<u32> for BigInt {
-    fn into(self) -> u32 {
-        self.0 as u32
+impl From<BigInt> for u32 {
+    fn from(val: BigInt) -> Self {
+        val.0 as u32
     }
 }
 
-impl Into<u64> for BigInt {
-    fn into(self) -> u64 {
-        self.0 as u64
+impl From<BigInt> for u64 {
+    fn from(val: BigInt) -> Self {
+        val.0 as u64
     }
 }
 
@@ -92,8 +92,8 @@ where
     fn from_input_value(v: &InputValue) -> Option<BigInt> {
         v.as_scalar_value()
             .and_then(|v| v.as_str())
-            .and_then(|s| i64::from_str_radix(s, 10).ok())
-            .map(|i| BigInt(i))
+            .and_then(|s| s.parse::<i64>().ok())
+            .map(BigInt)
     }
 
     fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
@@ -159,7 +159,7 @@ impl entities::TreeEntry {
 
     /// Modification time of the entry.
     fn mod_time(&self) -> DateTime<Utc> {
-        self.mtime.clone()
+        self.mtime
     }
 
     /// Reference to the entry itself.
@@ -333,7 +333,7 @@ impl entities::Dataset {
     fn error_message(&self, executor: &Executor) -> Option<String> {
         let ctx = executor.context();
         let redux = ctx.appstate.get_state();
-        redux.backups(&self.id).map(|e| e.error_message()).flatten()
+        redux.backups(&self.id).and_then(|e| e.error_message())
     }
 
     /// Most recent snapshot for this dataset, if any.
@@ -403,9 +403,9 @@ impl InputTimeRange {
     }
 }
 
-impl Into<entities::schedule::TimeRange> for InputTimeRange {
-    fn into(self) -> entities::schedule::TimeRange {
-        entities::schedule::TimeRange::new_secs(self.start_time as u32, self.stop_time as u32)
+impl From<InputTimeRange> for entities::schedule::TimeRange {
+    fn from(val: InputTimeRange) -> Self {
+        entities::schedule::TimeRange::new_secs(val.start_time as u32, val.stop_time as u32)
     }
 }
 
@@ -434,9 +434,9 @@ impl From<entities::schedule::DayOfWeek> for DayOfWeek {
     }
 }
 
-impl Into<entities::schedule::DayOfWeek> for DayOfWeek {
-    fn into(self) -> entities::schedule::DayOfWeek {
-        match self {
+impl From<DayOfWeek> for entities::schedule::DayOfWeek {
+    fn from(val: DayOfWeek) -> Self {
+        match val {
             DayOfWeek::Sun => entities::schedule::DayOfWeek::Sun,
             DayOfWeek::Mon => entities::schedule::DayOfWeek::Mon,
             DayOfWeek::Tue => entities::schedule::DayOfWeek::Tue,
@@ -740,7 +740,7 @@ impl restore::Request {
 
     /// The datetime when the request was completed.
     fn finished(&self) -> Option<DateTime<Utc>> {
-        self.finished.clone()
+        self.finished
     }
 
     /// Number of files restored so far during the restoration.
@@ -950,41 +950,41 @@ struct StoreInput {
     properties: Vec<PropertyInput>,
 }
 
-impl Into<crate::domain::usecases::new_store::Params> for StoreInput {
-    fn into(self) -> crate::domain::usecases::new_store::Params {
+impl From<StoreInput> for crate::domain::usecases::new_store::Params {
+    fn from(val: StoreInput) -> Self {
         let mut properties: HashMap<String, String> = HashMap::new();
-        for prop in self.properties.iter() {
+        for prop in val.properties.iter() {
             properties.insert(prop.name.to_owned(), prop.value.to_owned());
         }
-        crate::domain::usecases::new_store::Params::new(self.store_type, self.label, properties)
+        crate::domain::usecases::new_store::Params::new(val.store_type, val.label, properties)
     }
 }
 
-impl Into<crate::domain::usecases::test_store::Params> for StoreInput {
-    fn into(self) -> crate::domain::usecases::test_store::Params {
+impl From<StoreInput> for crate::domain::usecases::test_store::Params {
+    fn from(val: StoreInput) -> Self {
         let mut properties: HashMap<String, String> = HashMap::new();
-        for prop in self.properties.iter() {
+        for prop in val.properties.iter() {
             properties.insert(prop.name.to_owned(), prop.value.to_owned());
         }
         crate::domain::usecases::test_store::Params::new(
-            self.id.unwrap_or(String::from("default")),
-            self.store_type,
-            self.label,
+            val.id.unwrap_or(String::from("default")),
+            val.store_type,
+            val.label,
             properties,
         )
     }
 }
 
-impl Into<crate::domain::usecases::update_store::Params> for StoreInput {
-    fn into(self) -> crate::domain::usecases::update_store::Params {
+impl From<StoreInput> for crate::domain::usecases::update_store::Params {
+    fn from(val: StoreInput) -> Self {
         let mut properties: HashMap<String, String> = HashMap::new();
-        for prop in self.properties.iter() {
+        for prop in val.properties.iter() {
             properties.insert(prop.name.to_owned(), prop.value.to_owned());
         }
         crate::domain::usecases::update_store::Params::new(
-            self.id.unwrap_or(String::from("default")),
-            self.store_type,
-            self.label,
+            val.id.unwrap_or(String::from("default")),
+            val.store_type,
+            val.label,
             properties,
         )
     }
@@ -1008,28 +1008,28 @@ pub struct DatasetInput {
     pub excludes: Vec<String>,
 }
 
-impl Into<crate::domain::usecases::new_dataset::Params> for DatasetInput {
-    fn into(self) -> crate::domain::usecases::new_dataset::Params {
+impl From<DatasetInput> for crate::domain::usecases::new_dataset::Params {
+    fn from(val: DatasetInput) -> Self {
         crate::domain::usecases::new_dataset::Params::new(
-            PathBuf::from(self.basepath),
-            self.schedules.into_iter().map(|s| s.into()).collect(),
-            self.pack_size.into(),
-            self.stores,
-            self.excludes,
+            PathBuf::from(val.basepath),
+            val.schedules.into_iter().map(|s| s.into()).collect(),
+            val.pack_size.into(),
+            val.stores,
+            val.excludes,
         )
     }
 }
 
-impl Into<crate::domain::usecases::update_dataset::Params> for DatasetInput {
-    fn into(self) -> crate::domain::usecases::update_dataset::Params {
+impl From<DatasetInput> for crate::domain::usecases::update_dataset::Params {
+    fn from(val: DatasetInput) -> Self {
         crate::domain::usecases::update_dataset::Params::new(
-            self.id.unwrap_or(String::from("default")),
-            PathBuf::from(self.basepath),
-            self.schedules.into_iter().map(|s| s.into()).collect(),
-            self.workspace.map(|s| PathBuf::from(s)),
-            self.pack_size.into(),
-            self.stores,
-            self.excludes,
+            val.id.unwrap_or(String::from("default")),
+            PathBuf::from(val.basepath),
+            val.schedules.into_iter().map(|s| s.into()).collect(),
+            val.workspace.map(PathBuf::from),
+            val.pack_size.into(),
+            val.stores,
+            val.excludes,
         )
     }
 }
@@ -1170,16 +1170,16 @@ impl ScheduleInput {
     }
 }
 
-impl Into<entities::schedule::Schedule> for ScheduleInput {
-    fn into(self) -> entities::schedule::Schedule {
-        match &self.frequency {
+impl From<ScheduleInput> for entities::schedule::Schedule {
+    fn from(val: ScheduleInput) -> Self {
+        match &val.frequency {
             Frequency::Hourly => entities::schedule::Schedule::Hourly,
             Frequency::Daily => {
-                entities::schedule::Schedule::Daily(self.time_range.map(|s| s.into()))
+                entities::schedule::Schedule::Daily(val.time_range.map(|s| s.into()))
             }
             Frequency::Weekly => {
-                let dow = if let Some(dow) = self.day_of_week {
-                    Some((dow.into(), self.time_range.map(|s| s.into())))
+                let dow = if let Some(dow) = val.day_of_week {
+                    Some((dow.into(), val.time_range.map(|s| s.into())))
                 } else {
                     None
                 };
@@ -1189,15 +1189,15 @@ impl Into<entities::schedule::Schedule> for ScheduleInput {
                 let dom: Option<(
                     entities::schedule::DayOfMonth,
                     Option<entities::schedule::TimeRange>,
-                )> = if let Some(day) = self.day_of_month {
+                )> = if let Some(day) = val.day_of_month {
                     Some((
                         entities::schedule::DayOfMonth::from(day as u32),
-                        self.time_range.map(|s| s.into()),
+                        val.time_range.map(|s| s.into()),
                     ))
-                } else if let Some(wn) = self.week_of_month {
-                    let dow = self.day_of_week.unwrap();
+                } else if let Some(wn) = val.week_of_month {
+                    let dow = val.day_of_week.unwrap();
                     let dom = wn.into_dom(dow);
-                    Some((dom, self.time_range.map(|s| s.into())))
+                    Some((dom, val.time_range.map(|s| s.into())))
                 } else {
                     None
                 };
@@ -1407,7 +1407,7 @@ impl MutationRoot {
         // let's hope we never update more than 2 billion pack records
         let result_i32: i32 = result
             .try_into()
-            .map_or(2_147_483_647 as i32, |v: u64| v as i32);
+            .map_or(2_147_483_647_i32, |v: u64| v as i32);
         Ok(result_i32)
     }
 

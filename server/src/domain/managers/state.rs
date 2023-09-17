@@ -548,15 +548,10 @@ impl State {
 /// Implementation of the `Reactor` trait that invokes all registered listeners
 /// with the state whenever an action is dispatched.
 ///
+#[derive(Default)]
 struct Display {
     // copy of the previous application state
     previous: Option<State>,
-}
-
-impl Default for Display {
-    fn default() -> Self {
-        Self { previous: None }
-    }
 }
 
 impl Reactor<State> for Display {
