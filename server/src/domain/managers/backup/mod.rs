@@ -786,12 +786,16 @@ fn process_path(
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
     trace!("processed path entry {:?}", fullpath);
-    process_xattrs(fullpath, dbase);
+    process_xattrs(fullpath, &mut entry, dbase);
     entry
 }
 
 #[cfg(target_family = "unix")]
-fn process_xattrs(fullpath: &Path, dbase: &Arc<dyn RecordRepository>) {
+fn process_xattrs(
+    fullpath: &Path,
+    entry: &mut entities::TreeEntry,
+    dbase: &Arc<dyn RecordRepository>,
+) {
     if xattr::SUPPORTED_PLATFORM {
         // The "supported" flag is not all that helpful, as it will be true even
         // for platforms where xattr operations will result in an error.
@@ -813,7 +817,11 @@ fn process_xattrs(fullpath: &Path, dbase: &Arc<dyn RecordRepository>) {
 }
 
 #[cfg(target_family = "windows")]
-fn process_xattrs(_fullpath: &Path, _dbase: &Arc<dyn RecordRepository>) {
+fn process_xattrs(
+    _fullpath: &Path,
+    _entry: &mut entities::TreeEntry,
+    _dbase: &Arc<dyn RecordRepository>,
+) {
     // nothing do to be done on Windows
 }
 
