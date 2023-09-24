@@ -22,6 +22,7 @@ dependencies:
   graphql: ^5.1.3
   intl: ^0.18.0
   oxidized: ^6.1.0
+  time_range_picker: ^2.2.0
 
 dev_dependencies:
   flutter_test:
