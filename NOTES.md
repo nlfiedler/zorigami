@@ -216,9 +216,9 @@ Database files are copied to an off-line archive using RocksDB functionality, th
 1. Sync with any configured peers to get recent chunk updates.
 1. Check for an existing snapshot:
     1. If present but lacking `end_time` value, continue backup procedure
-    1. Otherwise, generate the tree objects to represent the state of the dataset
-1. Find the differences from the previous snapshot.
-1. If there are no changes, delete snapshot record, exit the procedure.
+    1. Otherwise, generate `tree` objects to record the dataset state
+1. Compare the root `tree` with the previous snapshot.
+    1. If there are no changes, exit the procedure.
 1. For each new/changed file, check if record exists; if not:
     1. For small files, treat as a single chunk
     1. For large files, use CDC to find chunks
@@ -226,7 +226,7 @@ Database files are copied to an off-line archive using RocksDB functionality, th
     1. If pack file is large enough, upload to storage
     1. Add `chunk` and `pack` records upon successful pack storage
 1. Set the `end_time` of snapshot record to indicate completion.
-1. Store latest snapshot identifier in `dataset/` record.
+1. Store latest snapshot identifier as a `latest` record.
 1. Backup the database files.
 
 #### Uploading Packs
