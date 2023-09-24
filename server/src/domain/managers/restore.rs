@@ -681,11 +681,9 @@ impl FileRestorer for FileRestorerImpl {
 
     fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
         info!("restoring symbolic link: {}", filepath.display());
-        #[cfg(target_family = "unix")]
-        use std::os::unix::ffi::OsStringExt;
-        #[cfg(target_family = "windows")]
-        use std::os::windows::ffi::OsStringExt;
-        let target = std::ffi::OsString::from_vec(contents.to_owned());
+        use os_str_bytes::OsStringBytes;
+        // this may panic if the bytes are not valid for this platform
+        let target = std::ffi::OsString::assert_from_raw_vec(contents.to_owned());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
         if let Some(parent) = outfile.parent() {

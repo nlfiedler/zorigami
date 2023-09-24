@@ -198,7 +198,9 @@ mod tests {
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
-                    std::fs::rename(encrypted_path.clone(), outfile).unwrap();
+                    // rename on Windows fails with permission denied, so do
+                    // what the local pack store would do and just copy
+                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))
@@ -256,7 +258,7 @@ mod tests {
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
-                    std::fs::rename(encrypted_path.clone(), outfile).unwrap();
+                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))

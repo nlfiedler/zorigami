@@ -112,10 +112,14 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
+        #[cfg(target_family="unix")]
+        let basepath = "/home/planet";
+        #[cfg(target_family="windows")]
+        let basepath = "\\home\\planet";
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from("/home/planet"),
+            basepath: PathBuf::from(basepath),
             schedules: vec![],
             workspace: None,
             pack_size: 33_554_432,
@@ -126,8 +130,12 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
-        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
+        assert_eq!(actual.basepath.to_string_lossy(), basepath);
+        #[cfg(target_family="unix")]
+        let expected_workspace = "/home/planet/.tmp";
+        #[cfg(target_family="windows")]
+        let expected_workspace = "\\home\\planet\\.tmp";
+        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
     }
 
     #[test]
@@ -136,12 +144,20 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
+        #[cfg(target_family="unix")]
+        let basepath = "/home/planet";
+        #[cfg(target_family="windows")]
+        let basepath = "\\home\\planet";
+        #[cfg(target_family="unix")]
+        let workspace = "/home/planet/tmpdir";
+        #[cfg(target_family="windows")]
+        let workspace = "\\home\\planet\\tmpdir";
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from("/home/planet"),
+            basepath: PathBuf::from(basepath),
             schedules: vec![],
-            workspace: Some(PathBuf::from("/home/planet/tmpdir")),
+            workspace: Some(PathBuf::from(workspace)),
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -150,8 +166,8 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
-        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/tmpdir");
+        assert_eq!(actual.basepath.to_string_lossy(), basepath);
+        assert_eq!(actual.workspace.to_string_lossy(), workspace);
     }
 
     #[test]
@@ -160,10 +176,14 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
+        #[cfg(target_family="unix")]
+        let basepath = "/home/planet";
+        #[cfg(target_family="windows")]
+        let basepath = "\\home\\planet";
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from("/home/planet"),
+            basepath: PathBuf::from(basepath),
             workspace: None,
             schedules: vec![],
             pack_size: 33_554_432,
@@ -174,8 +194,12 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
-        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
+        assert_eq!(actual.basepath.to_string_lossy(), basepath);
+        #[cfg(target_family="unix")]
+        let expected_workspace = "/home/planet/.tmp";
+        #[cfg(target_family="windows")]
+        let expected_workspace = "\\home\\planet\\.tmp";
+        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");

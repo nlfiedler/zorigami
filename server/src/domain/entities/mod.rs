@@ -1121,9 +1121,17 @@ mod tests {
             assert!(entry.group.is_some());
         }
         let formed = entry.to_string();
-        // formatted tree entry should look something like this:
-        // "100644 501:20 1545525436 1545525436 sha1-cafebabe lorem-ipsum.txt"
-        assert!(formed.contains("100644"));
+        // formatted tree entry should look something like this on Unix:
+        //
+        // "100644 501:20 1545525436 1545525436 tree-sha1-cafebabe lorem-ipsum.txt"
+        //
+        // formatted tree entry should look something like this on Windows:
+        //
+        // "40000 0:0 1695515391 1695515391 tree-sha1-cafebabe lorem-ipsum.txt"
+        #[cfg(target_family = "unix")]
+        assert!(formed.starts_with("100644"));
+        #[cfg(target_family = "windows")]
+        assert!(formed.starts_with("40000"));
         assert!(formed.contains("sha1-cafebabe"));
         assert!(formed.contains("lorem-ipsum.txt"));
     }

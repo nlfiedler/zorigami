@@ -689,7 +689,10 @@ mod tests {
         let maybe_file = dbase.get_file(&file3_digest)?;
         assert!(maybe_file.is_some());
         let file_rec = maybe_file.unwrap();
+        #[cfg(target_family="unix")]
         assert_eq!(file_rec.length, 3375);
+        #[cfg(target_family="windows")]
+        assert_eq!(file_rec.length, 3428);
         assert_eq!(file_rec.chunks.len(), 1);
         let maybe_pack = dbase.get_pack(&file_rec.chunks[0].1)?;
         assert!(maybe_pack.is_some());

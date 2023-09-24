@@ -112,9 +112,13 @@ mod tests {
             .with(always(), always())
             .returning(|_, _| Ok(()));
         // act
+        #[cfg(target_family="unix")]
+        let basepath = "/home/planet";
+        #[cfg(target_family="windows")]
+        let basepath = "\\home\\planet";
         let usecase = NewDataset::new(Box::new(mock));
         let params = Params {
-            basepath: PathBuf::from("/home/planet"),
+            basepath: PathBuf::from(basepath),
             schedules: vec![],
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
@@ -124,8 +128,12 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
-        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
+        assert_eq!(actual.basepath.to_string_lossy(), basepath);
+        #[cfg(target_family="unix")]
+        let expected_workspace = "/home/planet/.tmp";
+        #[cfg(target_family="windows")]
+        let expected_workspace = "\\home\\planet\\.tmp";
+        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");
@@ -145,8 +153,12 @@ mod tests {
             .returning(|_, _| Ok(()));
         // act
         let usecase = NewDataset::new(Box::new(mock));
+        #[cfg(target_family="unix")]
+        let basepath = "/home/planet";
+        #[cfg(target_family="windows")]
+        let basepath = "\\home\\planet";
         let params = Params {
-            basepath: PathBuf::from("/home/planet"),
+            basepath: PathBuf::from(basepath),
             schedules: vec![],
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
@@ -156,8 +168,12 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), "/home/planet");
-        assert_eq!(actual.workspace.to_string_lossy(), "/home/planet/.tmp");
+        assert_eq!(actual.basepath.to_string_lossy(), basepath);
+        #[cfg(target_family="unix")]
+        let expected_workspace = "/home/planet/.tmp";
+        #[cfg(target_family="windows")]
+        let expected_workspace = "\\home\\planet\\.tmp";
+        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");

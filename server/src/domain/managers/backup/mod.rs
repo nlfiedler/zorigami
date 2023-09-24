@@ -644,12 +644,10 @@ fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
 /// Read the symbolic link value and convert to raw bytes.
 ///
 fn read_link(path: &Path) -> Result<Vec<u8>, Error> {
-    #[cfg(target_family = "unix")]
-    use std::os::unix::ffi::OsStringExt;
-    #[cfg(target_family = "windows")]
-    use std::os::windows::ffi::OsStringExt;
+    // convert whatever value returned by the OS into raw bytes without string conversion
+    use os_str_bytes::OsStringBytes;
     let value = fs::read_link(path)?;
-    Ok(value.into_os_string().into_vec())
+    Ok(value.into_os_string().into_raw_vec())
 }
 
 ///
@@ -788,28 +786,35 @@ fn process_path(
     entry = entry.mode(fullpath);
     entry = entry.owners(fullpath);
     trace!("processed path entry {:?}", fullpath);
-    #[cfg(target_family = "unix")]
-    {
-        if xattr::SUPPORTED_PLATFORM {
-            // The "supported" flag is not all that helpful, as it will be true even
-            // for platforms where xattr operations will result in an error.
-            if let Ok(xattrs) = xattr::list(fullpath) {
-                for name in xattrs {
-                    let nm = name
-                        .to_str()
-                        .map(|v| v.to_owned())
-                        .unwrap_or_else(|| name.to_string_lossy().into_owned());
-                    if let Ok(Some(value)) = xattr::get(fullpath, &name) {
-                        let digest = entities::Checksum::sha1_from_bytes(value.as_ref());
-                        if dbase.insert_xattr(&digest, value.as_ref()).is_ok() {
-                            entry.xattrs.insert(nm, digest);
-                        }
+    process_xattrs(fullpath, dbase);
+    entry
+}
+
+#[cfg(target_family = "unix")]
+fn process_xattrs(fullpath: &Path, dbase: &Arc<dyn RecordRepository>) {
+    if xattr::SUPPORTED_PLATFORM {
+        // The "supported" flag is not all that helpful, as it will be true even
+        // for platforms where xattr operations will result in an error.
+        if let Ok(xattrs) = xattr::list(fullpath) {
+            for name in xattrs {
+                let nm = name
+                    .to_str()
+                    .map(|v| v.to_owned())
+                    .unwrap_or_else(|| name.to_string_lossy().into_owned());
+                if let Ok(Some(value)) = xattr::get(fullpath, &name) {
+                    let digest = entities::Checksum::sha1_from_bytes(value.as_ref());
+                    if dbase.insert_xattr(&digest, value.as_ref()).is_ok() {
+                        entry.xattrs.insert(nm, digest);
                     }
                 }
             }
         }
     }
-    entry
+}
+
+#[cfg(target_family = "windows")]
+fn process_xattrs(_fullpath: &Path, _dbase: &Arc<dyn RecordRepository>) {
+    // nothing do to be done on Windows
 }
 
 /// Update the file_counts record to reflect this tree entry.
@@ -851,9 +856,12 @@ mod tests {
         let entry = process_path(&path, tref, &dbase);
         // assert
         assert_eq!(entry.name, "washington-journal.txt");
-        let expected = entities::TreeReference::FILE(entities::Checksum::SHA256(
-            "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05".into(),
-        ));
+        #[cfg(target_family = "unix")]
+        let expected_hash = "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05";
+        #[cfg(target_family = "windows")]
+        let expected_hash = "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc";
+        let expected =
+            entities::TreeReference::FILE(entities::Checksum::SHA256(expected_hash.into()));
         assert_eq!(entry.reference, expected);
     }
 
