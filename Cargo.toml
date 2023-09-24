@@ -19,6 +19,7 @@ members = [
 exclude = [
     "healthcheck"
 ]
+resolver = "2"
 
 [profile.release]
 strip = "debuginfo"
