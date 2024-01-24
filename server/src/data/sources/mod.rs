@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! Performs serde on entities and stores them in a database.
@@ -168,7 +168,13 @@ pub struct EntityDataSourceImpl {
 
 impl EntityDataSourceImpl {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
-        std::fs::create_dir_all(&db_path)?;
+        use anyhow::Context;
+        std::fs::create_dir_all(&db_path).with_context(|| {
+            format!(
+                "EntityDataSourceImpl::new fs::create_dir_all({})",
+                db_path.as_ref().display()
+            )
+        })?;
         let database = Mutex::new(database_rocks::Database::new(db_path)?);
         Ok(Self { database })
     }

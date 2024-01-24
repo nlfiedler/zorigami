@@ -2,7 +2,7 @@
 // Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::Chunk;
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context, Error};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use std::fs::{self, File};
@@ -128,7 +128,8 @@ impl PackBuilder {
 /// "sha256-" prefix).
 ///
 pub fn extract_pack(infile: &Path, outdir: &Path) -> Result<Vec<String>, Error> {
-    fs::create_dir_all(outdir)?;
+    fs::create_dir_all(outdir)
+        .with_context(|| format!("extract_pack fs::create_dir_all({})", outdir.display()))?;
     let mut results = Vec::new();
     let file = File::open(infile)?;
     let mut ar = Archive::new(file);

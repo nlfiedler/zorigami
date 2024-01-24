@@ -11,7 +11,7 @@ use crate::domain::entities;
 use crate::domain::helpers::thread_pool::ThreadPool;
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context, Error};
 use chrono::{DateTime, Utc};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, info, trace, warn};
@@ -89,7 +89,12 @@ impl Performer for PerformerImpl {
         } else {
             debug!("backup: starting for {} until completion", request.dataset);
         }
-        fs::create_dir_all(&request.dataset.workspace)?;
+        fs::create_dir_all(&request.dataset.workspace).with_context(|| {
+            format!(
+                "backup fs::create_dir_all({})",
+                request.dataset.workspace.display()
+            )
+        })?;
         // Check if latest snapshot exists and lacks an end time, which indicates
         // that the previous backup did not complete successfully.
         let latest_snapshot = request.repo.get_latest_snapshot(&request.dataset.id)?;

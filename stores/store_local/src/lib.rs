@@ -1,7 +1,7 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context, Error};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,7 +44,8 @@ impl LocalStore {
         object: &str,
     ) -> Result<Coordinates, Error> {
         let mut path: PathBuf = [&self.basepath, bucket].iter().collect();
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(&path)
+            .with_context(|| format!("store_pack fs::create_dir_all({})", path.display()))?;
         path.push(object);
         fs::copy(packfile, &path)?;
         let loc = Coordinates::new(&self.store_id, bucket, object);

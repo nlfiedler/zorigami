@@ -592,6 +592,7 @@ impl FileRestorerImpl {
 
 impl FileRestorer for FileRestorerImpl {
     fn load_dataset(&mut self, dataset_id: &str) -> Result<(), Error> {
+        use anyhow::Context;
         if let Some(id) = self.dataset.as_ref() {
             if id == dataset_id {
                 return Ok(());
@@ -603,7 +604,12 @@ impl FileRestorer for FileRestorerImpl {
             .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", dataset_id)))?;
         self.dataset = Some(dataset_id.to_owned());
         self.stores = Some(Arc::from(self.dbase.load_dataset_stores(&dataset)?));
-        fs::create_dir_all(&dataset.workspace)?;
+        fs::create_dir_all(&dataset.workspace).with_context(|| {
+            format!(
+                "load_dataset fs::create_dir_all({})",
+                dataset.workspace.display()
+            )
+        })?;
         self.packpath = Some(tempfile::TempDir::new_in(dataset.workspace)?);
         self.basepath = Some(dataset.basepath);
         Ok(())
@@ -615,9 +621,11 @@ impl FileRestorer for FileRestorerImpl {
         filepath: &Path,
         passphrase: &str,
     ) -> Result<(), Error> {
+        use anyhow::Context;
         info!("restoring file from {} to {}", checksum, filepath.display());
         let workspace = self.packpath.as_ref().unwrap().path().to_path_buf();
-        fs::create_dir_all(&workspace)?;
+        fs::create_dir_all(&workspace)
+            .with_context(|| format!("fetch_file fs::create_dir_all({})", workspace.display()))?;
         // look up the file record to get chunks
         let saved_file = self
             .dbase
@@ -680,6 +688,7 @@ impl FileRestorer for FileRestorerImpl {
     }
 
     fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
+        use anyhow::Context;
         info!("restoring symbolic link: {}", filepath.display());
         use os_str_bytes::OsStringBytes;
         // this may panic if the bytes are not valid for this platform
@@ -687,7 +696,9 @@ impl FileRestorer for FileRestorerImpl {
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
         if let Some(parent) = outfile.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("restore_link fs::create_dir_all({})", parent.display())
+            })?;
             // ignore any errors removing the file that may or moy not be
             // present, but it definitely has to be gone in order for the
             // symlink call to work
@@ -709,11 +720,14 @@ impl FileRestorer for FileRestorerImpl {
     }
 
     fn restore_small(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
+        use anyhow::Context;
         info!("restoring small file: {}", filepath.display());
         let mut outfile = self.basepath.clone().unwrap();
         outfile.push(filepath);
         if let Some(parent) = outfile.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("restore_small fs::create_dir_all({})", parent.display())
+            })?;
             fs::write(&outfile, contents)?;
             return Ok(());
         }
