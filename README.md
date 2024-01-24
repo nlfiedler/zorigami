@@ -40,15 +40,17 @@ fvm flutter config --enable-web
 
 #### Windows
 
-1. Visual Studio [Code](https://code.visualstudio.com/)
+1. [Visual Studio Code](https://code.visualstudio.com/)
 1. [Git](https://git-scm.com/)
-1. [Visual Studio](https://visualstudio.microsoft.com/) (to build `vcpkg`)
-    * Choose **Desktop development with C++** "workload"
+1. [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+    * Select the following **Individual components**
+        - `MSVC ... build tools`, latest version with appropriate architecture
+        - `Windows 10 SDK`, or 11 if using Windows 11
 1. [vcpkg](https://github.com/Microsoft/vcpkg) (to install `openssl`)
+    * Move the cloned `vcpkg` directory somewhere permanent (e.g. `C:\bin`)
 1. `vcpkg install openssl`
 1. `Set-Item -path env:OPENSSL_DIR -value C:\bin\vcpkg\installed\x86-windows`
-1. Install [clang](http://clang.llvm.org/) (to build RocksDB)
-    * Need 32-bit because other pieces are 32-bit?
+1. [clang](http://clang.llvm.org/)
 1. `Set-Item -path env:LIBCLANG_PATH -value C:\bin\LLVM\bin`
 
 Rather than `Set-Item` it may be better to set the environment variables in the
@@ -59,6 +61,11 @@ build OpenSSL from source, which requires Perl in addition to the tools listed
 above, _and_ it will likely fail to compile on 32-bit Windows.
 
 ### Building, Testing, Starting the Backend
+
+Note that on **Windows** it may be necessary to to run PowerShell as an
+administrator since, for the time being, calling `symlink_file()` requires
+special privileges. Alternatively, running Windows in "developer mode" should
+also work.
 
 ```shell
 cargo update
@@ -189,13 +196,16 @@ How to create a new project and get the service account credentials file.
 1. Click _CREATE CREDENTIALS_ and select _Service_ account
 1. Enter an account name and optional description
 1. Click **CREATE** button
-1. Navigate to **IAM & Admin / IAM** and click the **ADD** button
+1. Navigate to **IAM & Admin / IAM** and click the **GRANT ACCESS** button
+1. Under the _Assign roles_ section of the dialog...
 1. Start typing the name of the service account and select the result
-1. Add role for _Storage Admin_ under the _Cloud Storage_ category
+1. Under the _Cloud Storage_ category and select _Storage Admin_
     * The service account needs to be able to create buckets and objects.
-1. Add role for _Firebase Admin_ under the _Firebase_ category
+1. Click **ADD ANOTHER ROLE** button
+1. Under the _Firebase_ category select _Firebase Admin_
     * The service account needs to be able to create and update documents.
-1. Click _Manage service accounts_ link or navigate to **IAM & Admin / Service Accounts**
+1. Click **SAVE** button
+1. Navigate to **IAM & Admin / Service Accounts**
 1. Click on the _Actions_ 3-dot button and select _Create key_
 1. Choose *JSON* and click **CREATE** button
 
