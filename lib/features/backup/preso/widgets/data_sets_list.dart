@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2023 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,7 +18,7 @@ import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 class DataSetsList extends ConsumerWidget {
   final List<DataSet> sets;
 
-  DataSetsList({Key? key, required this.sets}) : super(key: key);
+  const DataSetsList({Key? key, required this.sets}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,7 +34,7 @@ class DataSetsList extends ConsumerWidget {
           if (state is psb.Error) {
             return Card(
               child: ListTile(
-                title: Text('Error loading pack stores'),
+                title: const Text('Error loading pack stores'),
                 subtitle: Text(state.message),
               ),
             );
@@ -49,7 +49,7 @@ class DataSetsList extends ConsumerWidget {
                         stores: state.stores,
                       );
           }
-          return CircularProgressIndicator();
+          return const CircularProgressIndicator();
         },
       ),
     );
@@ -59,12 +59,12 @@ class DataSetsList extends ConsumerWidget {
 Widget buildStoresHelp(BuildContext context) {
   return Card(
     child: ListTile(
-      leading: Icon(Icons.dns),
-      title: Text('No pack stores found'),
-      subtitle: Text(
+      leading: const Icon(Icons.dns),
+      title: const Text('No pack stores found'),
+      subtitle: const Text(
         'First configure one or more pack stores, then create a data set using those stores.',
       ),
-      trailing: Icon(Icons.chevron_right),
+      trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.pushNamedAndRemoveUntil(
           context, '/stores', ModalRoute.withName('/')),
     ),
@@ -72,7 +72,7 @@ Widget buildStoresHelp(BuildContext context) {
 }
 
 Widget buildSetsHelp(BuildContext context) {
-  return Card(
+  return const Card(
     child: ListTile(
       leading: Icon(Icons.dns),
       title: Text('No data sets found'),
@@ -85,14 +85,14 @@ class DataSetsListInner extends ConsumerStatefulWidget {
   final List<DataSet> sets;
   final List<PackStore> stores;
 
-  DataSetsListInner({
+  const DataSetsListInner({
     Key? key,
     required this.sets,
     required this.stores,
   }) : super(key: key);
 
   @override
-  _DataSetsListState createState() => _DataSetsListState();
+  ConsumerState<DataSetsListInner> createState() => _DataSetsListState();
 }
 
 class _DataSetsListState extends ConsumerState<DataSetsListInner> {
@@ -104,9 +104,9 @@ class _DataSetsListState extends ConsumerState<DataSetsListInner> {
     items = List<ExpansionItem>.from(
       widget.sets.map((e) {
         final headerValue = ListTile(
-          leading: Icon(Icons.dns),
-          title: Text(e.basepath + ', runs ' + getSchedule(e)),
-          subtitle: Text('Status: ' + e.describeStatus()),
+          leading: const Icon(Icons.dns),
+          title: Text('${e.basepath}, runs ${getSchedule(e)}'),
+          subtitle: Text('Status: ${e.describeStatus()}'),
         );
         final expandedValue = Card(
           child: Padding(
@@ -128,26 +128,24 @@ class _DataSetsListState extends ConsumerState<DataSetsListInner> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Container(
-        child: BlocProvider<edsb.EditDataSetsBloc>(
-          create: (_) => ref.read(editDataSetsBlocProvider),
-          child: ExpansionPanelList(
-            expansionCallback: (int index, bool isExpanded) {
-              setState(() {
-                items[index].isExpanded = !isExpanded;
-              });
-            },
-            children: items.map<ExpansionPanel>((ExpansionItem item) {
-              return ExpansionPanel(
-                canTapOnHeader: true,
-                headerBuilder: (BuildContext context, bool isExpanded) {
-                  return item.headerValue;
-                },
-                body: item.expandedValue,
-                isExpanded: item.isExpanded,
-              );
-            }).toList(),
-          ),
+      child: BlocProvider<edsb.EditDataSetsBloc>(
+        create: (_) => ref.read(editDataSetsBlocProvider),
+        child: ExpansionPanelList(
+          expansionCallback: (int index, bool isExpanded) {
+            setState(() {
+              items[index].isExpanded = !items[index].isExpanded;
+            });
+          },
+          children: items.map<ExpansionPanel>((ExpansionItem item) {
+            return ExpansionPanel(
+              canTapOnHeader: true,
+              headerBuilder: (BuildContext context, bool isExpanded) {
+                return item.headerValue;
+              },
+              body: item.expandedValue,
+              isExpanded: item.isExpanded,
+            );
+          }).toList(),
         ),
       ),
     );
@@ -203,20 +201,20 @@ class DataSetListDetails extends StatelessWidget {
               initialValue: DataSetForm.initialValuesFrom(dataset, stores),
               autovalidateMode: AutovalidateMode.always,
               // not convinced this enabled is effective
-              enabled: !(state is edsb.Submitting),
+              enabled: state is! edsb.Submitting,
               child: datasetForm,
             ),
             ButtonBar(
               children: <Widget>[
                 ElevatedButton.icon(
-                  icon: Icon(Icons.save),
+                  icon: const Icon(Icons.save),
                   label: const Text('SAVE'),
                   onPressed: (state is edsb.Submitting)
                       ? null
                       : () => saveDataSet(context, datasetForm),
                 ),
                 TextButton.icon(
-                  icon: Icon(Icons.delete),
+                  icon: const Icon(Icons.delete),
                   label: const Text('DELETE'),
                   onPressed: (state is edsb.Submitting)
                       ? null

@@ -69,7 +69,7 @@ class PackStoresListState extends ConsumerState<PackStoresList> {
         child: ExpansionPanelList(
           expansionCallback: (int index, bool isExpanded) {
             setState(() {
-              items[index].isExpanded = !isExpanded;
+              items[index].isExpanded = !items[index].isExpanded;
             });
           },
           children: items.map<ExpansionPanel>((ExpansionItem item) {

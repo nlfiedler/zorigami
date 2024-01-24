@@ -208,17 +208,20 @@ class _DataSetFormState extends State<DataSetForm> {
                           end: stop,
                         );
                         final converted = timeRangeFromPicker(result);
-                        field.didChange(converted);
+                        if (converted != null) {
+                          field.didChange(converted);
+                        }
                       }
                     : null,
                 child: Text(
                   field.value != null
                       ? field.value.toPrettyString()
-                      : "click to set",
+                      : "tap to set",
                 ),
               ),
             );
           },
+          // TODO: require valid time range if timePickersEnabled
           validator: FormBuilderValidators.compose([
             FormBuilderValidators.required(),
           ]),
