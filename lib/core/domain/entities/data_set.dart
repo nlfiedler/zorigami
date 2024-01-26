@@ -28,12 +28,12 @@ class TimeRange extends Equatable {
 
   Result<dynamic, Failure> validate() {
     if (start < 0 || start > 86400) {
-      return Err(
+      return const Err(
         ValidationFailure('Start time must be between 0 and 86,400'),
       );
     }
     if (stop < 0 || stop > 86400) {
-      return Err(
+      return const Err(
         ValidationFailure('Stop time must be between 0 and 86,400'),
       );
     }
@@ -100,14 +100,14 @@ class Schedule extends Equatable {
             dayOfWeek is Some ||
             dayOfMonth is Some ||
             timeRange is Some) {
-          return Err(
+          return const Err(
             ValidationFailure('Hourly cannot take any range or days'),
           );
         }
         break;
       case Frequency.daily:
         if (weekOfMonth is Some || dayOfWeek is Some || dayOfMonth is Some) {
-          return Err(
+          return const Err(
             ValidationFailure('Daily can only take a time range'),
           );
         }
@@ -117,7 +117,7 @@ class Schedule extends Equatable {
         break;
       case Frequency.weekly:
         if (weekOfMonth is Some || dayOfMonth is Some) {
-          return Err(
+          return const Err(
             ValidationFailure(
               'Weekly can only take a time range and day-of-week',
             ),
@@ -129,14 +129,14 @@ class Schedule extends Equatable {
         break;
       case Frequency.monthly:
         if (dayOfMonth is Some && dayOfWeek is Some) {
-          return Err(
+          return const Err(
             ValidationFailure(
               'Monthly can only take either day-of-month or day-of-week',
             ),
           );
         }
         if (dayOfWeek is Some && weekOfMonth is None) {
-          return Err(
+          return const Err(
             ValidationFailure(
               'Monthly requires week-of-month when using day-of-week',
             ),
@@ -191,7 +191,7 @@ class DataSet extends Equatable {
 
   Result<dynamic, Failure> validate() {
     if (stores.isEmpty) {
-      return Err(
+      return const Err(
         ValidationFailure(
           'Data set must have at least one pack store',
         ),
@@ -209,15 +209,14 @@ class DataSet extends Equatable {
   String describeStatus() {
     switch (status) {
       case Status.none:
-        final ft = finishedTime();
-        if (ft != null) {
-          return 'finished at $ft';
+        if (isFinished()) {
+          return 'finished';
         }
         return 'not yet run';
       case Status.running:
         return 'still running';
       case Status.finished:
-        return 'finished at ${finishedTime() ?? '<null>'}';
+        return 'finished';
       case Status.paused:
         return 'paused';
       case Status.failed:
@@ -227,13 +226,13 @@ class DataSet extends Equatable {
     }
   }
 
-  String? finishedTime() {
+  bool isFinished() {
     return snapshot.mapOrElse(
       (s) => s.endTime.mapOrElse(
-        (e) => DateFormat.yMd().add_jm().format(e.toLocal()),
-        () => null,
+        (e) => true,
+        () => false,
       ),
-      () => null,
+      () => false,
     );
   }
 }

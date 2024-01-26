@@ -28,14 +28,13 @@
 **** scrolling no longer responds
 **** navigation, selection no longer respond
 **** probably an error is ocurring and it's invisible in production
-*** TODO snapshot time range shows stop time of the most recent snapshot on all snapshots
-*** TODO web ui should refresh restore requests page every few seconds
+*** DONE snapshot time range shows stop time of the most recent snapshot on all snapshots
 *** DONE fix all the stateful widgets to use the new convention
-*** TODO snapshots display should not have > button when there are no snapshots
+*** DONE snapshots display should not have > button when there are no snapshots
 *** TODO should clean up dataset workspaces on startup and periodically
 **** need to be sure no backup or restore is running, then delete everything in =.tmp=
 **** =State= could have a =is_quiet()= check or an event that be be subscribed to when everything is quiet
-** TODO Restore improvements
+** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
 **** if the restore supervisor crashes, the in-progress request is lost
@@ -59,6 +58,7 @@
 **** if waiting for a long time for a pack file, indicate in status
 *** add the request status field to the graphql entity
 *** show the request status message in the web ui
+*** web ui should refresh restore requests page every few seconds
 ** Efficient restore
 *** if restore finds an existing workspace, scan contents to build a ~have~ list of chunks vs starting over
 *** if restoring a file over an existing target, skip if checksum of target matches records
@@ -243,7 +243,6 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 **** for local disk case, retain only a few snapshots
 **** for cloud case, honor the least expensive retention plan
 ** Manual backup management
-*** The buttons to start and stop the backup are not obvious at all
 *** The whole display of snapshots needs to be improved
 *** Stop using the list item view thing and the leading/trailing widgets
 *** Design and build a custom widget in which the buttons actually look like buttons

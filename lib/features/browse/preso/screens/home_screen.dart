@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -66,7 +66,7 @@ Widget buildDatasetList(BuildContext context, List<DataSet> sets) {
           leading: backupButton(context, e),
           title: Text('${e.basepath}, runs ${getSchedule(e)}'),
           subtitle: Text('Status: ${e.describeStatus()}'),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: e.snapshot is Some ? const Icon(Icons.chevron_right) : null,
           onTap: () {
             if (e.snapshot is Some) {
               Navigator.push(
@@ -86,18 +86,18 @@ Widget buildDatasetList(BuildContext context, List<DataSet> sets) {
 
 Widget backupButton(BuildContext context, DataSet dataset) {
   if (dataset.status == Status.running) {
-    return IconButton(
+    return ElevatedButton.icon(
       icon: const Icon(Icons.cancel),
-      tooltip: 'Stop running backup',
+      label: const Text('Stop backup'),
       onPressed: () {
         BlocProvider.of<DataSetsBloc>(context)
             .add(StopBackup(dataset: dataset));
       },
     );
   } else {
-    return IconButton(
+    return ElevatedButton.icon(
       icon: const Icon(Icons.backup),
-      tooltip: 'Start backup now',
+      label: const Text('Start backup'),
       onPressed: () {
         BlocProvider.of<DataSetsBloc>(context)
             .add(StartBackup(dataset: dataset));
