@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, PackEntry, PackFile};
 use crate::domain::helpers::crypto;
@@ -31,8 +31,7 @@ impl<'a> super::UseCase<PackFile, Params<'a>> for GetPack {
         let stores = self.repo.load_dataset_stores(&dataset)?;
         fs::create_dir_all(&dataset.workspace).context("creating workspace")?;
         let encrypted = tempfile::Builder::new()
-            .prefix("pack")
-            .suffix(".salt")
+            .suffix(".pack")
             .tempfile_in(&dataset.workspace)?;
         let pack_record = self
             .repo
@@ -48,7 +47,6 @@ impl<'a> super::UseCase<PackFile, Params<'a>> for GetPack {
         stores.retrieve_pack(&pack_record.locations, encrypted.path())?;
         // decrypt
         let archive = tempfile::Builder::new()
-            .prefix("pack")
             .suffix(".tar")
             .tempfile_in(&dataset.workspace)?;
         crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), archive.path())?;
@@ -181,11 +179,11 @@ mod tests {
         // build empty pack file
         let mut builder = pack::PackBuilder::new(65536);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-pack.tar");
+        let packfile = outdir.path().join("zero.tar");
         builder.initialize(&packfile)?;
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("multi-pack.salt");
+        let encrypted = outdir.path().join("zero.pack");
         let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
@@ -236,7 +234,7 @@ mod tests {
         let chunks = helpers::find_file_chunks(&infile, 32768)?;
         let mut builder = pack::PackBuilder::new(1048576);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-pack.tar");
+        let packfile = outdir.path().join("multi.tar");
         builder.initialize(&packfile)?;
         for chunk in chunks.iter() {
             if builder.add_chunk(chunk)? {
@@ -245,7 +243,7 @@ mod tests {
         }
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("multi-pack.salt");
+        let encrypted = outdir.path().join("multi.pack");
         let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));

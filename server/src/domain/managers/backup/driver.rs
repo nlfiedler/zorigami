@@ -194,7 +194,6 @@ impl<'a> BackupDriver<'a> {
                     // build a "temporary" file that persists beyond the
                     // lifetime of the reference, just to get a unique name
                     let (_outfile, outpath) = tempfile::Builder::new()
-                        .prefix("pack")
                         .suffix(".tar")
                         .tempfile_in(&self.dataset.workspace)?
                         .keep()?;

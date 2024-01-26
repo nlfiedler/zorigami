@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2021 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Pack, PackLocation};
 use crate::domain::repositories::RecordRepository;
@@ -59,10 +59,7 @@ impl super::UseCase<Vec<Pack>, Params> for RestoreMissingPacks {
         let source_pack_repo = self.repo.build_pack_repo(&source_store)?;
         let mut really_missing_packs: Vec<Pack> = Vec::new();
         for missing in missing_packs {
-            let pack_file = tempfile::Builder::new()
-                .prefix("pack")
-                .suffix(".bin")
-                .tempfile()?;
+            let pack_file = tempfile::Builder::new().suffix(".pack").tempfile()?;
             info!(
                 "RestoreMissing: retrieving pack {} from source",
                 &missing.digest

@@ -63,8 +63,7 @@ impl<'a> super::UseCase<Vec<ChunkLocation>, Params<'a>> for ScanPacks {
                 .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", &pack.digest)))?;
             // retrieve and decrypt the pack file
             let encrypted = tempfile::Builder::new()
-                .prefix("pack")
-                .suffix(".salt")
+                .suffix(".pack")
                 .tempfile_in(&dataset.workspace)?;
             let result = stores.retrieve_pack(&pack.locations, encrypted.path());
             if result.is_err() {
@@ -75,7 +74,6 @@ impl<'a> super::UseCase<Vec<ChunkLocation>, Params<'a>> for ScanPacks {
                 continue;
             }
             let archive = tempfile::Builder::new()
-                .prefix("pack")
                 .suffix(".tar")
                 .tempfile_in(&dataset.workspace)?;
             crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), archive.path())?;
@@ -283,7 +281,7 @@ mod tests {
         let infile = Path::new("../test/fixtures/lorem-ipsum.txt");
         let mut builder = pack::PackBuilder::new(1048576);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("single-chunk.tar");
+        let packfile = outdir.path().join("single.tar");
         // chunk1 digest is also the file digest
         let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
         builder.initialize(&packfile)?;
@@ -292,7 +290,7 @@ mod tests {
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("single-chunk.salt");
+        let encrypted = outdir.path().join("single.pack");
         let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
 
         // arrange
@@ -363,7 +361,7 @@ mod tests {
         let chunks = helpers::find_file_chunks(&infile, 32768)?;
         let mut builder = pack::PackBuilder::new(1048576);
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-chunk.tar");
+        let packfile = outdir.path().join("multi.tar");
         builder.initialize(&packfile)?;
         for chunk in chunks.iter() {
             if builder.add_chunk(chunk)? {
@@ -372,7 +370,7 @@ mod tests {
         }
         let _result = builder.finalize()?;
         let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("multi-chunk.salt");
+        let encrypted = outdir.path().join("multi.pack");
         let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
 
         // arrange
