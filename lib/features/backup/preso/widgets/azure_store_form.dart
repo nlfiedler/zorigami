@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -14,13 +14,13 @@ class AzureStoreForm extends PackStoreForm {
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {
-    final custom_uri = store.options['custom_uri'] ?? '';
+    final customUri = store.options['custom_uri'] ?? '';
     return {
       'key': store.key,
       'label': store.label,
       'account': store.options['account'],
       'access_key': store.options['access_key'],
-      'custom_uri': custom_uri,
+      'custom_uri': customUri,
       'access_tier': store.options['access_tier'],
     };
   }
@@ -32,9 +32,9 @@ class AzureStoreForm extends PackStoreForm {
       'access_key': state.value['access_key'],
       'access_tier': state.value['access_tier'],
     };
-    final String custom_uri = state.value['custom_uri'];
-    if (custom_uri.isNotEmpty) {
-      options['custom_uri'] = custom_uri;
+    final String customUri = state.value['custom_uri'];
+    if (customUri.isNotEmpty) {
+      options['custom_uri'] = customUri;
     }
     return PackStore(
       key: state.value['key'],

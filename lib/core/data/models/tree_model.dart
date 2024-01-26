@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/tree.dart';
 
@@ -26,13 +26,13 @@ class TreeReferenceModel extends TreeReference {
   String toString() {
     switch (type) {
       case EntryType.file:
-        return 'file-' + value;
+        return 'file-$value';
       case EntryType.tree:
-        return 'tree-' + value;
+        return 'tree-$value';
       case EntryType.link:
-        return 'link-' + value;
+        return 'link-$value';
       case EntryType.small:
-        return 'small-' + value;
+        return 'small-$value';
     }
   }
 }
@@ -105,7 +105,7 @@ EntryType decodeEntryType(String reference) {
   } else if (reference.startsWith('small-')) {
     return EntryType.small;
   }
-  throw ArgumentError('unrecognized type: ' + reference);
+  throw ArgumentError('unrecognized type: $reference');
 }
 
 String encodeEntryType(EntryType type) {
@@ -131,5 +131,5 @@ String decodeReference(String reference) {
   } else if (reference.startsWith('small-')) {
     return reference.substring(6);
   }
-  throw ArgumentError('unrecognized reference: ' + reference);
+  throw ArgumentError('unrecognized reference: $reference');
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:zorigami/features/browse/preso/widgets/configuration.dart';
@@ -12,7 +12,7 @@ class MyNavigationDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: <Widget>[
-          Configuration(),
+          const Configuration(),
           ListTile(
             leading: const Icon(Icons.timeline),
             title: const Text('Snapshots'),

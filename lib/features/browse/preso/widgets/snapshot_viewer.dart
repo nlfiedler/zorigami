@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +15,7 @@ class SnapshotViewer extends StatelessWidget {
   final Loaded state;
   final DataSet dataset;
 
-  SnapshotViewer({
+  const SnapshotViewer({
     Key? key,
     required this.state,
     required this.dataset,
@@ -51,7 +51,7 @@ class SnapshotViewer extends StatelessWidget {
       children: <Widget>[
         Card(
           child: ListTile(
-            leading: Icon(Icons.timeline),
+            leading: const Icon(Icons.timeline),
             title: Text('Snapshot: $digest'),
             subtitle: Text(
               'Files: $count, Started: $started, Status: $status',
@@ -62,11 +62,11 @@ class SnapshotViewer extends StatelessWidget {
               children: <Widget>[
                 ElevatedButton(
                   onPressed: loadSubsequent(state, context),
-                  child: Icon(Icons.chevron_left),
+                  child: const Icon(Icons.chevron_left),
                 ),
                 ElevatedButton(
                   onPressed: loadParent(state, context),
-                  child: Icon(Icons.chevron_right),
+                  child: const Icon(Icons.chevron_right),
                 ),
               ],
             ),

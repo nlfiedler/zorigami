@@ -19,7 +19,7 @@ class Snapshot extends Equatable {
   // Reference to the tree containing all of the files.
   final String tree;
 
-  Snapshot({
+  const Snapshot({
     required this.checksum,
     required this.parent,
     required this.startTime,

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,19 +15,18 @@ class SnapshotScreen extends ConsumerWidget {
   // the data set under inspection
   final DataSet dataset;
 
-  SnapshotScreen({Key? key, required this.dataset}) : super(key: key);
+  const SnapshotScreen({Key? key, required this.dataset}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('SNAPSHOTS'),
+        title: const Text('SNAPSHOTS'),
       ),
       body: MultiBlocProvider(
         providers: [
           BlocProvider<SnapshotBrowserBloc>(
-            create: (_) =>
-                ref.read(snapshotBrowserBlocProvider),
+            create: (_) => ref.read(snapshotBrowserBlocProvider),
           ),
           BlocProvider<tbb.TreeBrowserBloc>(
             create: (_) => ref.read(treeBrowserBlocProvider),
@@ -42,12 +41,12 @@ class SnapshotScreen extends ConsumerWidget {
               );
             }
             if (state is Error) {
-              return Text('Error getting snapshot: ' + state.message);
+              return Text('Error getting snapshot: ${state.message}');
             }
             if (state is Loaded) {
               return SnapshotViewer(state: state, dataset: dataset);
             }
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           },
         ),
       ),

@@ -13,6 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
 
+  bloc: ^8.1.2
   bloc_concurrency: ^0.2.2
   equatable: ^2.0.3
   form_builder_validators: ^9.0.0

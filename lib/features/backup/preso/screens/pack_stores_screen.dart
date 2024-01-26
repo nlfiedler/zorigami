@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,11 +11,13 @@ import 'package:zorigami/features/backup/preso/widgets/pack_stores_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class PackStoresScreen extends ConsumerWidget {
+  const PackStoresScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('PACK STORES'),
+        title: const Text('PACK STORES'),
       ),
       body: BlocProvider<PackStoresBloc>(
         create: (_) => ref.read(packStoresBlocProvider),
@@ -28,7 +30,7 @@ class PackStoresScreen extends ConsumerWidget {
             if (state is Error) {
               return Card(
                 child: ListTile(
-                  title: Text('Error loading pack stores'),
+                  title: const Text('Error loading pack stores'),
                   subtitle: Text(state.message),
                 ),
               );
@@ -41,13 +43,13 @@ class PackStoresScreen extends ConsumerWidget {
                 children: <Widget>[
                   BlocProvider.value(
                     value: BlocProvider.of<PackStoresBloc>(context),
-                    child: PackStoreHeader(),
+                    child: const PackStoreHeader(),
                   ),
                   body,
                 ],
               );
             }
-            return CircularProgressIndicator();
+            return const CircularProgressIndicator();
           },
         ),
       ),
@@ -57,7 +59,7 @@ class PackStoresScreen extends ConsumerWidget {
 }
 
 Widget buildHelp(BuildContext context) {
-  return Card(
+  return const Card(
     child: ListTile(
       leading: Icon(Icons.dns),
       title: Text('No pack stores found'),

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
@@ -310,15 +310,15 @@ Option<WeekOfMonth> decodeWeekOfMonth(String? weekOfMonth) {
   if (weekOfMonth == null) {
     return const None();
   } else if (weekOfMonth == 'FIRST') {
-    return Some(WeekOfMonth.first);
+    return const Some(WeekOfMonth.first);
   } else if (weekOfMonth == 'SECOND') {
-    return Some(WeekOfMonth.second);
+    return const Some(WeekOfMonth.second);
   } else if (weekOfMonth == 'THIRD') {
-    return Some(WeekOfMonth.third);
+    return const Some(WeekOfMonth.third);
   } else if (weekOfMonth == 'FOURTH') {
-    return Some(WeekOfMonth.fourth);
+    return const Some(WeekOfMonth.fourth);
   } else if (weekOfMonth == 'FIFTH') {
-    return Some(WeekOfMonth.fifth);
+    return const Some(WeekOfMonth.fifth);
   } else {
     throw ArgumentError('weekOfMonth is not recognized');
   }
@@ -347,19 +347,19 @@ Option<DayOfWeek> decodeDayOfWeek(String? dayOfWeek) {
   if (dayOfWeek == null) {
     return const None();
   } else if (dayOfWeek == 'SUN') {
-    return Some(DayOfWeek.sun);
+    return const Some(DayOfWeek.sun);
   } else if (dayOfWeek == 'MON') {
-    return Some(DayOfWeek.mon);
+    return const Some(DayOfWeek.mon);
   } else if (dayOfWeek == 'TUE') {
-    return Some(DayOfWeek.tue);
+    return const Some(DayOfWeek.tue);
   } else if (dayOfWeek == 'WED') {
-    return Some(DayOfWeek.wed);
+    return const Some(DayOfWeek.wed);
   } else if (dayOfWeek == 'THU') {
-    return Some(DayOfWeek.thu);
+    return const Some(DayOfWeek.thu);
   } else if (dayOfWeek == 'FRI') {
-    return Some(DayOfWeek.fri);
+    return const Some(DayOfWeek.fri);
   } else if (dayOfWeek == 'SAT') {
-    return Some(DayOfWeek.sat);
+    return const Some(DayOfWeek.sat);
   } else {
     throw ArgumentError('dayOfWeek is not recognized');
   }

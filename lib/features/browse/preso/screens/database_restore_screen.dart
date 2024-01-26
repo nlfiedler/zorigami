@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,11 +13,13 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DatabaseRestoreScreen extends ConsumerWidget {
+  const DatabaseRestoreScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('RESTORE'),
+        title: const Text('RESTORE'),
       ),
       body: BlocProvider<PackStoresBloc>(
         create: (_) => ref.read(packStoresBlocProvider),
@@ -30,7 +32,7 @@ class DatabaseRestoreScreen extends ConsumerWidget {
             if (state is Error) {
               return Card(
                 child: ListTile(
-                  title: Text('Error loading pack stores'),
+                  title: const Text('Error loading pack stores'),
                   subtitle: Text(state.message),
                 ),
               );
@@ -39,7 +41,7 @@ class DatabaseRestoreScreen extends ConsumerWidget {
               if (state.stores.isEmpty) {
                 return buildNoStoresHelp(context);
               }
-              final helpTile = Card(
+              const helpTile = Card(
                 child: ListTile(
                   leading: Icon(Icons.dns),
                   title: Text('Select a pack store'),
@@ -55,7 +57,7 @@ class DatabaseRestoreScreen extends ConsumerWidget {
                 children: [helpTile, ...stores],
               );
             }
-            return CircularProgressIndicator();
+            return const CircularProgressIndicator();
           },
         ),
       ),
@@ -67,12 +69,12 @@ class DatabaseRestoreScreen extends ConsumerWidget {
 Widget buildNoStoresHelp(BuildContext context) {
   return Card(
     child: ListTile(
-      leading: Icon(Icons.dns),
-      title: Text('No pack stores found'),
-      subtitle: Text(
+      leading: const Icon(Icons.dns),
+      title: const Text('No pack stores found'),
+      subtitle: const Text(
         'Click here to create a pack store',
       ),
-      trailing: Icon(Icons.chevron_right),
+      trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.pushNamed(context, '/stores'),
     ),
   );
@@ -81,7 +83,7 @@ Widget buildNoStoresHelp(BuildContext context) {
 class PackStoreListEntry extends ConsumerWidget {
   final PackStore store;
 
-  PackStoreListEntry({Key? key, required this.store}) : super(key: key);
+  const PackStoreListEntry({Key? key, required this.store}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,13 +102,13 @@ class PackStoreListEntry extends ConsumerWidget {
         },
         builder: (context, state) {
           final trailing = state is rdb.Loading
-              ? CircularProgressIndicator()
-              : Icon(Icons.restore);
+              ? const CircularProgressIndicator()
+              : const Icon(Icons.restore);
           final onTap =
               state is rdb.Loading ? null : () => _showRestoreDialog(context);
           return Card(
             child: ListTile(
-              leading: Icon(Icons.archive),
+              leading: const Icon(Icons.archive),
               title: Text(title),
               subtitle: Text(subtitle),
               trailing: trailing,
@@ -124,12 +126,12 @@ class PackStoreListEntry extends ConsumerWidget {
       barrierDismissible: true,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Restore Database?'),
-          content: Text('This will overwrite the current database.'),
+          title: const Text('Restore Database?'),
+          content: const Text('This will overwrite the current database.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () {
@@ -138,7 +140,7 @@ class PackStoreListEntry extends ConsumerWidget {
                 );
                 Navigator.of(context).pop();
               },
-              child: Text('Restore'),
+              child: const Text('Restore'),
             ),
           ],
         );

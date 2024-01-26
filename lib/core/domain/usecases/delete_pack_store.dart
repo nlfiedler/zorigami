@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
@@ -23,7 +23,7 @@ class DeletePackStore implements UseCase<PackStore, Params> {
 class Params extends Equatable {
   final PackStore store;
 
-  Params({required this.store});
+  const Params({required this.store});
 
   @override
   List<Object> get props => [store];

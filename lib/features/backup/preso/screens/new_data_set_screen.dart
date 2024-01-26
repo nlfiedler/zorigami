@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,11 +15,13 @@ import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
 import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 
 class NewDataSetScreen extends ConsumerWidget {
+  const NewDataSetScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('ADD DATASET'),
+        title: const Text('ADD DATASET'),
       ),
       body: MultiBlocProvider(
         providers: [
@@ -40,7 +42,7 @@ class NewDataSetScreen extends ConsumerWidget {
             if (state is psb.Error) {
               return Card(
                 child: ListTile(
-                  title: Text('Error loading pack stores'),
+                  title: const Text('Error loading pack stores'),
                   subtitle: Text(state.message),
                 ),
               );
@@ -55,7 +57,7 @@ class NewDataSetScreen extends ConsumerWidget {
                 ),
               );
             }
-            return CircularProgressIndicator();
+            return const CircularProgressIndicator();
           },
         ),
       ),
@@ -113,13 +115,13 @@ class NewDataSetWidget extends StatelessWidget {
                 initialValue: DataSetForm.initialValuesFrom(dataset, stores),
                 autovalidateMode: AutovalidateMode.always,
                 // not convinced this enabled is effective
-                enabled: !(state is Submitting),
+                enabled: state is! Submitting,
                 child: datasetForm,
               ),
               ButtonBar(
                 children: <Widget>[
                   ElevatedButton.icon(
-                    icon: Icon(Icons.save),
+                    icon: const Icon(Icons.save),
                     label: const Text('ADD'),
                     onPressed: (state is Submitting)
                         ? null
@@ -136,7 +138,7 @@ class NewDataSetWidget extends StatelessWidget {
 }
 
 DataSet defaultDataSet() {
-  return DataSet(
+  return const DataSet(
     key: 'auto-generated',
     computerId: 'auto-generated',
     packSize: 67108864,

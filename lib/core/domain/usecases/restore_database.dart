@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
@@ -22,7 +22,7 @@ class Params extends Equatable {
   /// Identifier of pack store from which to restore database.
   final String storeId;
 
-  Params({required this.storeId});
+  const Params({required this.storeId});
 
   @override
   List<Object> get props => [storeId];

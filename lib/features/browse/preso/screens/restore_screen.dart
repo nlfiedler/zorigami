@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +12,8 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class RestoreRequestsScreen extends ConsumerWidget {
+  const RestoreRequestsScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<RestoresBloc>(
@@ -81,7 +83,7 @@ Widget buildBody(BuildContext context, RestoresState state) {
 class RestoreListEntry extends StatelessWidget {
   final Request request;
 
-  RestoreListEntry({Key? key, required this.request}) : super(key: key);
+  const RestoreListEntry({Key? key, required this.request}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 
@@ -12,7 +12,7 @@ class Configuration extends Equatable {
   // Unique identifier for the system.
   final String computerId;
 
-  Configuration({
+  const Configuration({
     required this.hostname,
     required this.username,
     required this.computerId,

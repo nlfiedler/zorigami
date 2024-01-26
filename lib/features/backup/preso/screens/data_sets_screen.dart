@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,6 +11,8 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DataSetsScreen extends ConsumerWidget {
+  const DataSetsScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<DataSetsBloc>(
@@ -19,7 +21,7 @@ class DataSetsScreen extends ConsumerWidget {
         builder: (context, state) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('DATA SETS'),
+              title: const Text('DATA SETS'),
               actions: <Widget>[
                 IconButton(
                   icon: const Icon(Icons.refresh),
@@ -40,11 +42,11 @@ class DataSetsScreen extends ConsumerWidget {
                     builder: (_) => NewDataSetScreen(),
                   ),
                 );
-                if (result != null) {
+                if (result != null && context.mounted) {
                   BlocProvider.of<DataSetsBloc>(context).add(ReloadDataSets());
                 }
               },
-              child: Icon(Icons.add),
+              child: const Icon(Icons.add),
             ),
             drawer: MyNavigationDrawer(),
           );
@@ -61,7 +63,7 @@ class DataSetsScreen extends ConsumerWidget {
     if (state is Error) {
       return Card(
         child: ListTile(
-          title: Text('Error loading data sets'),
+          title: const Text('Error loading data sets'),
           subtitle: Text(state.message),
         ),
       );
@@ -69,6 +71,6 @@ class DataSetsScreen extends ConsumerWidget {
     if (state is Loaded) {
       return DataSetsList(sets: state.sets);
     }
-    return CircularProgressIndicator();
+    return const CircularProgressIndicator();
   }
 }

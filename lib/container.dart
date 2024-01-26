@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:graphql/client.dart' as gql;
@@ -21,7 +21,7 @@ import 'package:zorigami/core/domain/repositories/tree_repository.dart';
 import 'package:zorigami/environment_config.dart';
 
 final graphqlProvider = Provider<gql.GraphQLClient>((ref) {
-  final uri = '${EnvironmentConfig.base_url}/graphql';
+  const uri = '${EnvironmentConfig.base_url}/graphql';
   return gql.GraphQLClient(
     link: gql.HttpLink(uri),
     cache: gql.GraphQLCache(),

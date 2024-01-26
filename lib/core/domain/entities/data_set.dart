@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:intl/intl.dart';
@@ -37,7 +37,7 @@ class TimeRange extends Equatable {
         ValidationFailure('Stop time must be between 0 and 86,400'),
       );
     }
-    return Ok(0);
+    return const Ok(0);
   }
 }
 
@@ -149,7 +149,7 @@ class Schedule extends Equatable {
       default:
         throw ArgumentError('frequency is not recognized');
     }
-    return Ok(0);
+    return const Ok(0);
   }
 }
 
@@ -203,7 +203,7 @@ class DataSet extends Equatable {
         return result;
       }
     }
-    return Ok(0);
+    return const Ok(0);
   }
 
   String describeStatus() {
@@ -217,7 +217,7 @@ class DataSet extends Equatable {
       case Status.running:
         return 'still running';
       case Status.finished:
-        return 'finished at ' + (finishedTime() ?? '<null>');
+        return 'finished at ${finishedTime() ?? '<null>'}';
       case Status.paused:
         return 'paused';
       case Status.failed:

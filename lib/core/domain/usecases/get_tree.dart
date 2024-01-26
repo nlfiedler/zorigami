@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
 import 'package:oxidized/oxidized.dart';
@@ -22,7 +22,7 @@ class GetTree implements UseCase<Tree, Params> {
 class Params extends Equatable {
   final String checksum;
 
-  Params({required this.checksum});
+  const Params({required this.checksum});
 
   @override
   List<Object> get props => [checksum];

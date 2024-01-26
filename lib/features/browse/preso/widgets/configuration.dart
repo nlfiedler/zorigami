@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +8,8 @@ import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 
 class Configuration extends ConsumerWidget {
+  const Configuration({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return BlocProvider<ConfigurationBloc>(
@@ -20,13 +22,13 @@ class Configuration extends ConsumerWidget {
                 .add(LoadConfiguration());
           }
           if (state is Error) {
-            return Text('Error: ' + state.message);
+            return Text('Error: ${state.message}');
           }
           if (state is Loaded) {
             final config = state.config;
-            final title = config.username + '@' + config.hostname;
+            final title = '${config.username}@${config.hostname}';
             return UserAccountsDrawerHeader(
-              currentAccountPicture: Icon(
+              currentAccountPicture: const Icon(
                 Icons.computer,
                 color: Colors.white,
                 size: 64.0,
@@ -35,7 +37,7 @@ class Configuration extends ConsumerWidget {
               accountName: Text(config.computerId),
             );
           }
-          return CircularProgressIndicator();
+          return const CircularProgressIndicator();
         },
       ),
     );

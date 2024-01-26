@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,10 +24,10 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => HomeScreen(),
-        '/requests': (context) => RestoreRequestsScreen(),
-        '/restore': (context) => DatabaseRestoreScreen(),
-        '/sets': (context) => DataSetsScreen(),
-        '/stores': (context) => PackStoresScreen(),
+        '/requests': (context) => const RestoreRequestsScreen(),
+        '/restore': (context) => const DatabaseRestoreScreen(),
+        '/sets': (context) => const DataSetsScreen(),
+        '/stores': (context) => const PackStoresScreen(),
       },
       theme: ThemeData(
         bottomSheetTheme: BottomSheetThemeData(

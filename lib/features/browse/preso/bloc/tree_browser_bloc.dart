@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'dart:async';
 import 'package:bloc/bloc.dart';
@@ -165,7 +165,7 @@ class TreeBrowserBloc extends Bloc<TreeBrowserEvent, TreeBrowserState> {
         while (selections.isNotEmpty) {
           final entry = selections.removeLast();
           final filepath =
-              path.isEmpty ? entry.name : path.join('/') + '/' + entry.name;
+              path.isEmpty ? entry.name : '${path.join('/')}/${entry.name}';
           final params = rf.Params(
             tree: history.last,
             entry: entry.name,
