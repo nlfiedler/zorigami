@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use azure_core::{RetryOptions, StatusCode};
@@ -61,13 +61,13 @@ impl AzureStore {
     fn connect(&self) -> ClientBuilder {
         let account = self.account.clone();
         let access_key = self.access_key.clone();
-        let credentials = StorageCredentials::Key(account.clone(), access_key);
+        let credentials = StorageCredentials::access_key(account.clone(), access_key);
         let mut cb = if let Some(uri) = &self.custom_uri {
             let location = CloudLocation::Custom {
+                account,
                 uri: uri.to_owned(),
-                credentials,
             };
-            ClientBuilder::with_location(location)
+            ClientBuilder::with_location(location, credentials)
         } else {
             ClientBuilder::new(account, credentials)
         };
