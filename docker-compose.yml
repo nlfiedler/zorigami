@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+    environment:
+      DB_PATH: "/database/dbase"
+      RUST_LOG: "info"
+    ports:
+      - "8080:8080"
+    volumes:
+      - type: bind
+        source: ./tmp/docker/packs
+        target: /packstore
+      - type: bind
+        source: ./tmp/docker/database
+        target: /database
+      - type: bind
+        source: "."
+        target: /datasets
