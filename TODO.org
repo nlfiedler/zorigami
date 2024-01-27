@@ -20,20 +20,6 @@
 **** capture actual time spent in each phase, accounting for ~pause~ times
 ** AWS SDK for Rust now available
 *** c.f. https://aws.amazon.com/blogs/developer/announcing-general-availability-of-the-aws-sdk-for-rust/
-** TODO webui bugs and improvements
-*** DONE all expandable panels have suddenly stopped expanding
-*** DONE fix the file name extensions to be consistent (=.salt=, =.nacl=, =.tar=, etc)
-*** DONE find all =create_dir_all= and add a =.context("")= to them
-*** TODO scrolling snapshot directory with lots of entries (239) sometimes becomes unresponsive
-**** scrolling no longer responds
-**** navigation, selection no longer respond
-**** probably an error is ocurring and it's invisible in production
-*** DONE snapshot time range shows stop time of the most recent snapshot on all snapshots
-*** DONE fix all the stateful widgets to use the new convention
-*** DONE snapshots display should not have > button when there are no snapshots
-*** TODO should clean up dataset workspaces on startup and periodically
-**** need to be sure no backup or restore is running, then delete everything in =.tmp=
-**** =State= could have a =is_quiet()= check or an event that be be subscribed to when everything is quiet
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -242,11 +228,15 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 *** TODO database backup procedure should prune old snapshots
 **** for local disk case, retain only a few snapshots
 **** for cloud case, honor the least expensive retention plan
-** Manual backup management
+** Snapshot browsing
 *** The whole display of snapshots needs to be improved
 *** Stop using the list item view thing and the leading/trailing widgets
-*** Design and build a custom widget in which the buttons actually look like buttons
+*** Make sure buttons actually look like buttons
 *** Have fields for start time, stop time, current status, additional details, etc
+*** scrolling snapshot directory with lots of entries (239) sometimes becomes unresponsive
+**** scrolling no longer responds
+**** navigation, selection no longer respond
+**** probably an error is ocurring and it's invisible in production
 ** Restore to dissimilar hardware
 *** TODO Allow setting the configuration to change the identity
 *** TODO Test by restoring a backup to a different system
@@ -275,6 +265,9 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Loose backend issues
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
+*** TODO should clean up dataset workspaces on startup and periodically
+**** need to be sure no backup or restore is running, then delete everything in =.tmp=
+**** =State= could have a =is_quiet()= check or an event that be be subscribed to when everything is quiet
 *** TODO refine use of =&str= and =String= arguments by using =Into<String>=
 **** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
 **** note that using =Cow= helps to minimize copying
