@@ -1,4 +1,15 @@
 * Tasks
+** TODO consider if BLAKE2 might be faster/better than SHA256
+*** consider using this for everything rather than SHA1 and SHA2 conditionally
+*** https://github.com/RustCrypto/hashes/tree/master/blake2
+** TODO replace pack file format with =exaf-rs=
+*** remove all uses of =sodiumoxide=, it is deprecated
+*** also pack the database using exaf
+*** also encrypt the database
+*** write an ADR to explain why this and not something else
+- zip crate doesn't encrypt
+- sevenz-rust had a data corruption/loss bug, and its very slow
+- tar/gzip is clumsy and awkward
 ** TODO Evaluate the changes in =~/mod.rs= and =~/take_snapshot.rs=
 *** appears to be converting the =take_snapshot()= function to a use case
 *** the modified =mod.rs= is what's left of =domain/managers/backup/mod.rs=
@@ -283,6 +294,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** ran out of files in tanuki when rocksdb directory contained 217 files
 **** maybe consider a means of countering this error at runtime
 *** TODO the monthly fuzzy schedule test fails on the 30th of the month
+*** eventually switch from =serde_cbor= to https://crates.io/crates/ciborium
+**** the docs have zero examples, no idea how to use the API
 ** Loose GraphQL tasks
 *** TODO where do errors go?
 **** database restore was failing but frontend reported nothing
@@ -492,14 +505,39 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** for a given snapshot
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
+** Pack file format
+*** tar file of a single 500 byte file is 2500 bytes (lots of zeros)
+*** 7-Zip is a strong contender
+| URL                                       | Comments                           |
+|-------------------------------------------+------------------------------------|
+| https://github.com/judemille/sevenzip-sys | wrapper around native library      |
+| https://github.com/dyz1990/sevenz-rust    | native Rust, but had data loss bug |
+*** consider new ~pack~ file format: https://pack.ac
+**** extremely good performance
+**** written in Pascal, so waiting for SDK and/or libraries
+*** various file formats of note
+| Name | URL                                | Comments                               |
+|------+------------------------------------+----------------------------------------|
+| tar  |                                    | antiquated, much overhead              |
+| zip  |                                    | flawed encryption                      |
+| jar  |                                    | Java ARchive format, variant of zip    |
+| B1   | https://github.com/b1-pack/b1-pack | died >10 years ago                     |
+| 7zip | https://www.7-zip.org              | major contender                        |
+| Pack | https://pack.ac                    | written in Pascal, no docs or spec     |
+| zzip | https://github.com/ddebin/zzip/    | died 9 years ago                       |
+| zpaq | https://github.com/zpaq/zpaq       | died 8 years ago                       |
+| xar  | https://github.com/mackyle/xar     | really interesting, XML format for TOC |
 ** Pack file integrity
 *** Retrieve random pack files and verify integrity
 ** Architecture Review
+*** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 *** Alternative databases
 **** try using a different database and benchmark backup, database integrity checks, etc
 **** sample data: =reassign_packs= updated ~4214~ pack records in ~2~ seconds
 *** Rust dependency injection, is it helpful?
 **** https://github.com/AzureMarker/shaku
+**** https://github.com/p0lunin/teloc
+**** https://github.com/hampusmat/syrette
 **** https://github.com/mineichen/minfac
 **** https://github.com/austinjones/lifeline-rs (whole runtime message bus system)
 **** https://github.com/dmitryb-dev/waiter
@@ -1057,7 +1095,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** pack store: =/Volumes/Zbackup=
 **** pack store: ~amazon~ (=us-west-2=)
 **** base path: =/Users/nfiedler=
-**** excludes: =.Trash, .android, Library, **/Downloads, **/node_modules, **/target, fvm=
+**** excludes: =.Trash, .android, .rustup, .cargo, Library, **/Downloads, **/node_modules, **/target, fvm=
 **** run daily in the afternoon
 ** primary
 *** deploy using docker and ansible

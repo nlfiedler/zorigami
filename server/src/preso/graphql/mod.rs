@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! The `schema` module defines the GraphQL schema and resolvers.
@@ -1567,7 +1567,7 @@ mod tests {
         let res = res.get_field_value("computerId").unwrap();
         let actual = res.as_scalar_value::<String>().unwrap();
         let username = whoami::username();
-        let hostname = whoami::hostname();
+        let hostname = whoami::fallible::hostname().unwrap_or("none".into());
         let expected = entities::Configuration::generate_unique_id(&username, &hostname);
         assert_eq!(actual, &expected);
     }

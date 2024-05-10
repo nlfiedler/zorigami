@@ -20,7 +20,7 @@ actix-files = "0.6.0"
 actix-rt = "2.8.0"
 actix-web = "4.3.0"
 anyhow = "1.0.55"
-base64 = "0.21.0"
+base64 = "0.22.1"
 blob-uuid = "0.5.0"
 bloomfilter = "1.0.9"
 chrono = { version = "0.4", features = ["serde"] }
@@ -38,11 +38,10 @@ log = "0.4.7"
 memmap2 = "0.9.4"
 os_str_bytes = { version = "6.6.1", features = ["conversions"] }
 reducer = "3.0"
-rusty_ulid = "2.0.0"
 serde = { version = "1.0.182", features = ["derive"] }
 serde_cbor = "0.11"
 serde_json = "1.0.79"
-sha-1 = "0.10.0"
+sha1 = "0.10.6"
 sha2 = "0.10.2"
 sodiumoxide = "0.2.7"
 store_amazon = { path = "../stores/store_amazon" }
@@ -55,8 +54,9 @@ store_sftp = { path = "../stores/store_sftp" }
 tar = "0.4.38"
 tempfile = "3.7.1"
 thiserror = "1.0.30"
+ulid = "1.1.2"
 uuid = { version = "1.1.2", features = ["serde", "v4", "v5"] }
-whoami = "1.0"
+whoami = "1.5.1"
 xid = "1.0.0"
 
 [target.'cfg(unix)'.dependencies]
@@ -64,5 +64,5 @@ xattr = "1.0.0"
 
 [dev-dependencies]
 mockall = "0.12.1"
-rocksdb = "0.21.0"
+rocksdb = "0.22.0"
 serial_test = "3.0.0"

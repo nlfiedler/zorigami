@@ -7,7 +7,7 @@ license = "UNLICENSED"
 
 [dependencies]
 anyhow = "1.0.55"
-base64 = "0.21.0"
+base64 = "0.22.1"
 google-firestore1 = "5.0.2"
 google-storage1 = "5.0.2"
 md-5 = "0.10.1"

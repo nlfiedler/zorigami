@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::data::sources::{
     EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
@@ -12,7 +12,6 @@ use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Context, Error, Result};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
-use rusty_ulid::generate_ulid_string;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -418,7 +417,7 @@ impl PackRepository for PackRepositoryImpl {
     fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error> {
         // Use a ULID as the object name so they sort by time which will make
         // it easier to find the latest database archive later.
-        let object = rusty_ulid::generate_ulid_string();
+        let object = ulid::Ulid::new().to_string();
         // Use a predictable bucket name so we can find it easily later.
         let bucket = computer_bucket_name(computer_id);
         let mut results: Vec<PackLocation> = Vec::new();
@@ -513,7 +512,7 @@ pub fn computer_bucket_name(unique_id: &str) -> String {
         Ok(uuid) => uuid.simple().to_string(),
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
-            generate_ulid_string().to_lowercase()
+            ulid::Ulid::new().to_string().to_lowercase()
         }
     }
 }
@@ -527,13 +526,13 @@ fn generate_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => {
             let shorter = uuid.simple().to_string();
-            let mut ulid = generate_ulid_string();
+            let mut ulid = ulid::Ulid::new().to_string();
             ulid.push_str(&shorter);
             ulid.to_lowercase()
         }
         Err(err) => {
             error!("failed to convert unique ID: {:?}", err);
-            generate_ulid_string().to_lowercase()
+            ulid::Ulid::new().to_string().to_lowercase()
         }
     }
 }
@@ -543,7 +542,7 @@ fn generate_bucket_name(unique_id: &str) -> String {
 fn generate_new_bucket_name(bucket_name: &str) -> String {
     // ULID as ASCII is 26 characters long, computer id is everything else
     let suffix = &bucket_name[26..];
-    let mut ulid = generate_ulid_string();
+    let mut ulid = ulid::Ulid::new().to_string();
     ulid.push_str(suffix);
     ulid.to_lowercase()
 }

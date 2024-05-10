@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
@@ -680,7 +680,6 @@ impl FileCounts {
                 self.file_sizes.insert(bits, 1);
             }
         }
-
     }
 
     /// Return the total number of files tracked by this record.
@@ -936,7 +935,7 @@ impl Configuration {
 impl Default for Configuration {
     fn default() -> Self {
         let username = whoami::username();
-        let hostname = whoami::hostname();
+        let hostname = whoami::fallible::hostname().unwrap_or("none".into());
         let computer_id = Configuration::generate_unique_id(&username, &hostname);
         Self {
             hostname,
