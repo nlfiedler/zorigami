@@ -12,6 +12,7 @@ There are, in fact, several problems with the current solution:
 
 1. Tar has significant overhead per entry
 1. sodiumoxide is deprecated and the project is archived (and NaCL itself appears to be dead)
+1. The NaCL library (and sodiumoxide in turn) are not standand encryption algorithms
 1. Content was compressed piecewise which is not effective (compression works better on larger blocks of data)
 1. Overall file, with all that tar overhead, was not compressed so encryption was less than great
 

@@ -329,3 +329,7 @@ a file that point to the wrong packs (the first problem).
 
 Tested full backup and restore on the 300+GB shared dataset. Verified that a
 30GB file was restored correctly. Symbolic links are also restored correctly.
+
+### May 2024
+
+Switched from the tar file abomination to [EXAF](https://github.com/nlfiedler/exaf-rs) for the pack files and the database archive. Both packs and database are now encrypted using the provided passphrase. This also allows for the database backup and pack files to be fetched and extracted manually if necessary.
