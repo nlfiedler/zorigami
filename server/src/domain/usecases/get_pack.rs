@@ -2,7 +2,6 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, PackEntry, PackFile};
-use crate::domain::helpers::crypto;
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Context, Error};
 use log::debug;
@@ -30,37 +29,26 @@ impl<'a> super::UseCase<PackFile, Params<'a>> for GetPack {
             .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", params.dataset_id)))?;
         let stores = self.repo.load_dataset_stores(&dataset)?;
         fs::create_dir_all(&dataset.workspace).context("creating workspace")?;
-        let encrypted = tempfile::Builder::new()
+        let archive = tempfile::Builder::new()
             .suffix(".pack")
             .tempfile_in(&dataset.workspace)?;
         let pack_record = self
             .repo
             .get_pack(pack_digest)?
             .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
-        // check the salt before downloading the pack, otherwise we waste
-        // time fetching it when we would not be able to decrypt it
-        let salt = pack_record
-            .crypto_salt
-            .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
         // retrieve the pack file
         debug!("get-pack: fetching pack {}", pack_digest);
-        stores.retrieve_pack(&pack_record.locations, encrypted.path())?;
-        // decrypt
-        let archive = tempfile::Builder::new()
-            .suffix(".tar")
-            .tempfile_in(&dataset.workspace)?;
-        crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), archive.path())?;
+        stores.retrieve_pack(&pack_record.locations, archive.path())?;
         // read the archive file entries
         let mut entries: Vec<PackEntry> = Vec::new();
         let attr = fs::metadata(&archive)?;
         let file_size = attr.len();
-        let file = fs::File::open(&archive)?;
-        let mut ar = tar::Archive::new(file);
-        for maybe_entry in ar.entries()? {
+        let mut reader = exaf_rs::reader::Entries::new(&archive)?;
+        reader.enable_encryption(&params.passphrase)?;
+        for maybe_entry in reader {
             let entry = maybe_entry?;
-            // we know the names are valid UTF-8, we created them
-            let path = String::from(entry.path()?.to_str().unwrap());
-            entries.push(PackEntry::new(path, entry.size()));
+            let path = entry.name().to_string();
+            entries.push(PackEntry::new(path, entry.size().unwrap_or(0)));
         }
         Ok(PackFile::new(file_size, entries))
     }
@@ -149,56 +137,27 @@ mod tests {
     }
 
     #[test]
-    fn test_get_pack_missing_salt() {
-        // arrange
-        let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
-        let mut mock = MockRecordRepository::new();
-        mock.expect_get_dataset()
-            .returning(move |_| Ok(Some(dataset.clone())));
-        mock.expect_load_dataset_stores().returning(move |_| {
-            let mock_store = MockPackRepository::new();
-            Ok(Box::new(mock_store))
-        });
-        mock.expect_get_pack().returning(move |_| {
-            let pack_sum = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-            Ok(Some(Pack::new(pack_sum, vec![])))
-        });
-        // act
-        let usecase = GetPack::new(Box::new(mock));
-        let pack_sum = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let params = Params::new("ignored", pack_sum, "keyboard cat");
-        let result = usecase.call(params);
-        // assert
-        assert!(result.is_err());
-        let err_string = result.err().unwrap().to_string();
-        assert!(err_string.contains("missing pack salt"));
-    }
-
-    #[test]
     fn test_get_pack_zero_entries() -> Result<(), Error> {
         // build empty pack file
-        let mut builder = pack::PackBuilder::new(65536);
+        let mut builder = pack::PackBuilder::new(65536).password("keyboard cat");
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("zero.tar");
+        let packfile = outdir.path().join("zero.pack");
         builder.initialize(&packfile)?;
         let _result = builder.finalize()?;
-        let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("zero.pack");
-        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
         mock.expect_load_dataset_stores().returning(move |_| {
-            let encrypted_path = encrypted.clone();
+            let packfile_path = packfile.clone();
             let mut mock_store = MockPackRepository::new();
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
                     // rename on Windows fails with permission denied, so do
                     // what the local pack store would do and just copy
-                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
+                    std::fs::copy(packfile_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))
@@ -206,9 +165,7 @@ mod tests {
         mock.expect_get_pack().returning(move |_| {
             let pack_sum = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
             let locations = vec![PackLocation::new("storeid", "bucketid", "objectid")];
-            let mut pack = Pack::new(pack_sum, locations);
-            pack.crypto_salt = Some(salt.clone());
-            Ok(Some(pack))
+            Ok(Some(Pack::new(pack_sum, locations)))
         });
         // act
         let usecase = GetPack::new(Box::new(mock));
@@ -219,7 +176,7 @@ mod tests {
         assert!(result.is_ok());
         let packfile = result.unwrap();
         assert_eq!(packfile.entries.len(), 0);
-        assert_eq!(packfile.length, 1024);
+        assert_eq!(packfile.length, 38);
         assert_eq!(packfile.content_length, 0);
         assert_eq!(packfile.smallest, 0);
         assert_eq!(packfile.largest, 0);
@@ -232,31 +189,27 @@ mod tests {
         // build average pack file
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let chunks = helpers::find_file_chunks(&infile, 32768)?;
-        let mut builder = pack::PackBuilder::new(1048576);
+        assert_eq!(chunks.len(), 2);
+        let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi.tar");
+        let packfile = outdir.path().join("multi.pack");
         builder.initialize(&packfile)?;
         for chunk in chunks.iter() {
-            if builder.add_chunk(chunk)? {
-                break;
-            }
+            builder.add_chunk(chunk)?;
         }
         let _result = builder.finalize()?;
-        let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("multi.pack");
-        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
         // arrange
         let dataset = Dataset::new(Path::new("tmp/test/get_pack"));
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
         mock.expect_load_dataset_stores().returning(move |_| {
-            let encrypted_path = encrypted.clone();
+            let packfile_path = packfile.clone();
             let mut mock_store = MockPackRepository::new();
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
-                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
+                    std::fs::copy(packfile_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))
@@ -264,9 +217,7 @@ mod tests {
         mock.expect_get_pack().returning(move |_| {
             let pack_sum = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
             let locations = vec![PackLocation::new("storeid", "bucketid", "objectid")];
-            let mut pack = Pack::new(pack_sum, locations);
-            pack.crypto_salt = Some(salt.clone());
-            Ok(Some(pack))
+            Ok(Some(Pack::new(pack_sum, locations)))
         });
         // act
         let usecase = GetPack::new(Box::new(mock));
@@ -276,22 +227,22 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let packfile = result.unwrap();
-        assert_eq!(packfile.length, 99328);
-        assert_eq!(packfile.content_length, 96748);
-        assert_eq!(packfile.smallest, 41825);
-        assert_eq!(packfile.largest, 54923);
-        assert_eq!(packfile.average, 48374);
+        assert_eq!(packfile.length, 96997);
+        assert_eq!(packfile.content_length, 109466);
+        assert_eq!(packfile.smallest, 42917);
+        assert_eq!(packfile.largest, 66549);
+        assert_eq!(packfile.average, 54733);
         assert_eq!(packfile.entries.len(), 2);
         assert_eq!(
             packfile.entries[0].name,
             "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
         );
-        assert_eq!(packfile.entries[0].size, 54923);
+        assert_eq!(packfile.entries[0].size, 66549);
         assert_eq!(
             packfile.entries[1].name,
             "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
         );
-        assert_eq!(packfile.entries[1].size, 41825);
+        assert_eq!(packfile.entries[1].size, 42917);
         Ok(())
     }
 }

@@ -1,8 +1,8 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
-use crate::domain::helpers::{crypto, pack};
+use crate::domain::helpers::pack;
 use crate::domain::managers::state::{RestorerAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
@@ -563,26 +563,17 @@ impl FileRestorerImpl {
                 .dbase
                 .get_pack(pack_digest)?
                 .ok_or_else(|| anyhow!(format!("missing pack record: {:?}", pack_digest)))?;
-            // check the salt before downloading the pack, otherwise we waste
-            // time fetching it when we would not be able to decrypt it
-            let salt = saved_pack
-                .crypto_salt
-                .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_digest)))?;
             // retrieve the pack file
-            let mut encrypted = PathBuf::new();
-            encrypted.push(workspace);
-            encrypted.push(pack_digest.to_string());
+            let mut archive = PathBuf::new();
+            archive.push(workspace);
+            archive.push(pack_digest.to_string());
             debug!("fetching pack {}", pack_digest);
-            stores.retrieve_pack(&saved_pack.locations, &encrypted)?;
-            // decrypt and then unpack the contents
-            let mut tarball = encrypted.clone();
-            tarball.set_extension("tar");
-            crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
-            fs::remove_file(&encrypted)?;
-            verify_pack_digest(pack_digest, &tarball)?;
-            pack::extract_pack(&tarball, workspace)?;
+            stores.retrieve_pack(&saved_pack.locations, &archive)?;
+            // unpack the contents
+            verify_pack_digest(pack_digest, &archive)?;
+            pack::extract_pack(&archive, workspace, Some(passphrase))?;
             debug!("pack extracted");
-            fs::remove_file(tarball)?;
+            fs::remove_file(archive)?;
             // remember this pack as being downloaded
             self.downloaded.insert(pack_digest.to_owned());
         }
@@ -781,6 +772,7 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
     use crate::domain::entities::{Dataset, Tree, TreeEntry};
+    use crate::domain::helpers::crypto;
     use crate::domain::managers;
     use crate::domain::managers::state::StateStoreImpl;
     use crate::domain::repositories::MockRecordRepository;

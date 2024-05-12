@@ -2,7 +2,6 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, File};
-use crate::domain::helpers::crypto;
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Context, Error};
 use log::info;
@@ -52,30 +51,21 @@ impl<'a> super::UseCase<bool, Params<'a>> for InsertFile {
             .repo
             .get_pack(&params.pack_digest)?
             .ok_or_else(|| anyhow!(format!("missing pack: {:?}", params.pack_digest)))?;
-        // check the salt before downloading the pack, otherwise we waste
-        // time fetching it when we would not be able to decrypt it
-        let salt = pack
-            .crypto_salt
-            .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", &pack.digest)))?;
         // retrieve and decrypt the pack file
-        let encrypted = tempfile::Builder::new()
+        let archive = tempfile::Builder::new()
             .suffix(".pack")
             .tempfile_in(&dataset.workspace)?;
-        stores.retrieve_pack(&pack.locations, encrypted.path())?;
-        let archive = tempfile::Builder::new()
-            .suffix(".tar")
-            .tempfile_in(&dataset.workspace)?;
-        crypto::decrypt_file(&params.passphrase, &salt, encrypted.path(), archive.path())?;
+        stores.retrieve_pack(&pack.locations, archive.path())?;
         // scan the contents of the tar file to verify chunk exists
-        let file = fs::File::open(&archive)?;
-        let mut ar = tar::Archive::new(file);
+        let mut reader = exaf_rs::reader::Entries::new(&archive)?;
+        reader.enable_encryption(&params.passphrase)?;
         let mut file_size: u64 = 0;
-        for maybe_entry in ar.entries()? {
+        for maybe_entry in reader {
             let entry = maybe_entry?;
             // we know the names are valid UTF-8, we created them
-            let digest = Checksum::from_str(entry.path()?.to_str().unwrap())?;
+            let digest = Checksum::from_str(entry.name())?;
             if digest == params.chunk_digest {
-                file_size = entry.size();
+                file_size = entry.size().unwrap_or(0);
                 break;
             }
         }
@@ -145,7 +135,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::{Checksum, Chunk, Dataset, File, Pack, PackLocation};
-    use crate::domain::helpers::{crypto, pack};
+    use crate::domain::helpers::pack;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use std::path::Path;
     use tempfile::tempdir;
@@ -229,9 +219,9 @@ mod tests {
     fn test_insert_file_pack_missing_chunk() -> Result<(), Error> {
         // build pack file containing a file with one chunk
         let infile = Path::new("../test/fixtures/lorem-ipsum.txt");
-        let mut builder = pack::PackBuilder::new(1048576);
+        let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("single.tar");
+        let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
         let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
         builder.initialize(&packfile)?;
@@ -239,9 +229,6 @@ mod tests {
         chunk = chunk.filepath(infile);
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
-        let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("single.pack");
-        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
 
         // arrange
         let mut mock = MockRecordRepository::new();
@@ -250,21 +237,19 @@ mod tests {
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
         mock.expect_load_dataset_stores().returning(move |_| {
-            let encrypted_path = encrypted.clone();
+            let packfile_path = packfile.clone();
             let mut mock_store = MockPackRepository::new();
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
-                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
+                    std::fs::copy(packfile_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))
         });
         mock.expect_get_pack().returning(move |digest| {
             let locations = vec![PackLocation::new("storeid", "bucketid", "objectid")];
-            let mut pack = Pack::new(digest.to_owned(), locations);
-            pack.crypto_salt = Some(salt.clone());
-            Ok(Some(pack))
+            Ok(Some(Pack::new(digest.to_owned(), locations)))
         });
 
         // act
@@ -290,9 +275,9 @@ mod tests {
     fn test_insert_file_success() -> Result<(), Error> {
         // build pack file containing a file with one chunk
         let infile = Path::new("../test/fixtures/lorem-ipsum.txt");
-        let mut builder = pack::PackBuilder::new(1048576);
+        let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("single.tar");
+        let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
         let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
         builder.initialize(&packfile)?;
@@ -300,9 +285,6 @@ mod tests {
         chunk = chunk.filepath(infile);
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
-        let passphrase = "keyboard cat";
-        let encrypted = outdir.path().join("single.pack");
-        let salt = crypto::encrypt_file(passphrase, &packfile, &encrypted)?;
 
         // arrange
         let mut mock = MockRecordRepository::new();
@@ -311,23 +293,21 @@ mod tests {
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(dataset.clone())));
         mock.expect_load_dataset_stores().returning(move |_| {
-            let encrypted_path = encrypted.clone();
+            let packfile_path = packfile.clone();
             let mut mock_store = MockPackRepository::new();
             mock_store
                 .expect_retrieve_pack()
                 .returning(move |_, outfile| {
                     // rename on Windows fails with permission denied, so do
                     // what the local pack store would do and just copy
-                    std::fs::copy(encrypted_path.clone(), outfile).unwrap();
+                    std::fs::copy(packfile_path.clone(), outfile).unwrap();
                     Ok(())
                 });
             Ok(Box::new(mock_store))
         });
         mock.expect_get_pack().returning(move |digest| {
             let locations = vec![PackLocation::new("storeid", "bucketid", "objectid")];
-            let mut pack = Pack::new(digest.to_owned(), locations);
-            pack.crypto_salt = Some(salt.clone());
-            Ok(Some(pack))
+            Ok(Some(Pack::new(digest.to_owned(), locations)))
         });
         mock.expect_insert_file()
             .times(1)
@@ -343,6 +323,7 @@ mod tests {
             "keyboard cat",
         );
         let result = usecase.call(params);
+        println!("result: {:?}", result);
 
         // assert
         assert!(result.is_ok());

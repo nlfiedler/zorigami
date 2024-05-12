@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
@@ -8,7 +8,6 @@ use crate::domain::entities::{
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -256,10 +255,6 @@ pub struct PackDef {
     pub digest: Checksum,
     #[serde(rename = "l")]
     pub locations: Vec<PackLocation>,
-    #[serde(rename = "t")]
-    pub upload_time: DateTime<Utc>,
-    #[serde(rename = "s")]
-    pub crypto_salt: Option<Salt>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -279,7 +274,6 @@ mod tests {
     use crate::domain::entities::schedule::TimeRange;
     use crate::domain::entities::{Tree, TreeEntry, TreeReference};
     use anyhow::Error;
-    use sodiumoxide::crypto::pwhash;
     use std::path::Path;
 
     #[test]
@@ -405,9 +399,7 @@ mod tests {
         // arrange
         let digest = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
         let coords = vec![PackLocation::new("store1", "bucket1", "object1")];
-        let mut pack = Pack::new(digest, coords);
-        // (normally should init sodiumoxide but for the tests it is okay)
-        pack.crypto_salt = Some(pwhash::gen_salt());
+        let pack = Pack::new(digest, coords);
         // act
         let mut buffer: Vec<u8> = Vec::new();
         let mut ser = serde_json::Serializer::new(&mut buffer);
@@ -419,8 +411,6 @@ mod tests {
         assert_eq!(actual.locations.len(), pack.locations.len());
         assert_eq!(actual.locations.len(), 1);
         assert_eq!(actual.locations[0], pack.locations[0]);
-        assert_eq!(actual.upload_time, pack.upload_time);
-        assert_eq!(actual.crypto_salt, pack.crypto_salt);
         Ok(())
     }
 

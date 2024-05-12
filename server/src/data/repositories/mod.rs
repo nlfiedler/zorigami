@@ -214,18 +214,18 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_snapshot(digest)
     }
 
-    fn create_backup(&self) -> Result<tempfile::TempPath, Error> {
+    fn create_backup(&self, password: &str) -> Result<tempfile::TempPath, Error> {
         let backup_path = self.datasource.create_backup(None)?;
         let file = tempfile::NamedTempFile::new()?;
         let path = file.into_temp_path();
-        create_tar(&backup_path, &path)?;
+        create_archive(&backup_path, &path, password)?;
         Ok(path)
     }
 
-    fn restore_from_backup(&self, path: &Path) -> Result<(), Error> {
+    fn restore_from_backup(&self, path: &Path, password: &str) -> Result<(), Error> {
         let tempdir = tempfile::tempdir()?;
         let temppath = tempdir.path().to_path_buf();
-        extract_tar(path, &temppath)?;
+        extract_archive(path, &temppath, password)?;
         self.datasource.restore_from_backup(Some(temppath))
     }
 
@@ -235,25 +235,44 @@ impl RecordRepository for RecordRepositoryImpl {
 }
 
 ///
-/// Create a gzip compressed tar file for the given directory structure.
+/// Create a compressed archive from the given directory structure.
 ///
-fn create_tar(basepath: &Path, outfile: &Path) -> Result<(), Error> {
-    let file = std::fs::File::create(outfile)?;
-    let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-    let mut builder = tar::Builder::new(encoder);
-    builder.append_dir_all(".", basepath)?;
-    let _output = builder.into_inner()?;
+fn create_archive(basepath: &Path, outfile: &Path, password: &str) -> Result<(), Error> {
+    let output = std::fs::File::create(outfile)?;
+    let mut writer = exaf_rs::writer::Writer::new(output)?;
+    writer.enable_encryption(
+        exaf_rs::KeyDerivation::Argon2id,
+        exaf_rs::Encryption::AES256GCM,
+        password,
+    )?;
+    // Simply calling add_dir_all() on basepath will result in the name of the
+    // basepath directory being a part of the archive entry paths, so instead
+    // examine the entries within basepath and add them individually.
+    let readdir = std::fs::read_dir(basepath)?;
+    for entry_result in readdir {
+        let entry = entry_result?;
+        let path = entry.path();
+        // DirEntry.metadata() does not follow symlinks and that is good
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            writer.add_dir_all(path)?;
+        } else if metadata.is_file() {
+            writer.add_file(path, None)?;
+        } else if metadata.is_symlink() {
+            writer.add_symlink(path, None)?;
+        }
+    }
+    writer.finish()?;
     Ok(())
 }
 
 ///
-/// Extract the contents of the gzip compressed tar file to the given directory.
+/// Extract the contents of the compressed archive to the given directory.
 ///
-fn extract_tar(infile: &Path, outdir: &Path) -> Result<(), Error> {
-    let file = std::fs::File::open(infile)?;
-    let decoder = flate2::read::GzDecoder::new(file);
-    let mut ar = tar::Archive::new(decoder);
-    ar.unpack(outdir)?;
+fn extract_archive(infile: &Path, outdir: &Path, password: &str) -> Result<(), Error> {
+    let mut reader = exaf_rs::reader::from_file(infile)?;
+    reader.enable_encryption(password)?;
+    reader.extract_all(&outdir)?;
     Ok(())
 }
 
@@ -753,12 +772,12 @@ mod tests {
         mock.expect_restore_from_backup().returning(|_| Ok(()));
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
-        let result = repo.create_backup();
+        let result = repo.create_backup("Secret123");
         // assert
         assert!(result.is_ok());
         // act
         let archive_path = result.unwrap();
-        let result = repo.restore_from_backup(&archive_path);
+        let result = repo.restore_from_backup(&archive_path, "Secret123");
         // assert
         assert!(result.is_ok());
     }
@@ -1744,11 +1763,11 @@ mod tests {
     }
 
     #[test]
-    fn test_tar_file() -> Result<(), Error> {
+    fn test_archive_file() -> Result<(), Error> {
         let outdir = tempfile::tempdir()?;
-        let packfile = outdir.path().join("filename.tz");
-        create_tar(Path::new("../test/fixtures"), &packfile)?;
-        extract_tar(&packfile, outdir.path())?;
+        let packfile = outdir.path().join("archive.pack");
+        create_archive(Path::new("../test/fixtures"), &packfile, "Secret123")?;
+        extract_archive(&packfile, outdir.path(), "Secret123")?;
 
         let file = outdir.path().join("SekienAkashita.jpg");
         let chksum = Checksum::sha256_from_file(&file)?;

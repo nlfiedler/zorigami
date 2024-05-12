@@ -1,10 +1,11 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::managers::state::{RestorerAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Error};
 use log::{debug, error, info, log_enabled, Level};
+use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
@@ -19,7 +20,7 @@ impl RestoreDatabase {
     }
 }
 
-impl super::UseCase<String, Params> for RestoreDatabase {
+impl<'a> super::UseCase<String, Params<'a>> for RestoreDatabase {
     fn call(&self, params: Params) -> Result<String, Error> {
         if log_enabled!(Level::Debug) {
             if let Ok(datasets) = self.repo.get_datasets() {
@@ -47,7 +48,7 @@ impl super::UseCase<String, Params> for RestoreDatabase {
             // stop the backup before trying again. Of course, a running backup
             // would be unlikely given the use case scenario.
             info!("restoring database from backup...");
-            self.repo.restore_from_backup(&archive_path)
+            self.repo.restore_from_backup(&archive_path, &params.passphrase)
         } else {
             Err(anyhow!("no pack stores defined"))
         };
@@ -71,35 +72,38 @@ impl super::UseCase<String, Params> for RestoreDatabase {
     }
 }
 
-pub struct Params {
+pub struct Params<'a> {
     /// Identifier of the pack store from which to retrieve the database.
     store_id: String,
     /// Reference to the application state store.
     state: Arc<dyn StateStore>,
+    /// Pass phrase for decrypting the pack.
+    passphrase: Cow<'a, str>,
 }
 
-impl Params {
-    pub fn new<T: Into<String>>(store_id: T, state: Arc<dyn StateStore>) -> Self {
+impl<'a> Params<'a> {
+    pub fn new<T: Into<String>>(store_id: T, state: Arc<dyn StateStore>, passphrase: T) -> Self {
         Self {
             store_id: store_id.into(),
             state,
+            passphrase: Cow::from(passphrase.into()),
         }
     }
 }
 
-impl fmt::Display for Params {
+impl<'a> fmt::Display for Params<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Params({})", self.store_id)
     }
 }
 
-impl cmp::PartialEq for Params {
+impl<'a> cmp::PartialEq for Params<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.store_id == other.store_id
     }
 }
 
-impl cmp::Eq for Params {}
+impl<'a> cmp::Eq for Params<'a> {}
 
 #[cfg(test)]
 mod tests {
@@ -136,7 +140,7 @@ mod tests {
         let config: Configuration = Default::default();
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
-        mock.expect_restore_from_backup().returning(|_| Ok(()));
+        mock.expect_restore_from_backup().returning(|_, _| Ok(()));
         let mut stater = MockStateStore::new();
         stater
             .expect_stop_supervisor()
@@ -155,7 +159,7 @@ mod tests {
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act
         let usecase = RestoreDatabase::new(Box::new(mock));
-        let params = Params::new("cafebabe", appstate);
+        let params = Params::new("cafebabe", appstate, "Secret123");
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());
@@ -189,7 +193,7 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(config.clone()));
         mock.expect_restore_from_backup()
-            .returning(|_| Err(anyhow!("no database archives available")));
+            .returning(|_, _| Err(anyhow!("no database archives available")));
         let mut stater = MockStateStore::new();
         stater
             .expect_stop_supervisor()
@@ -208,7 +212,7 @@ mod tests {
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act
         let usecase = RestoreDatabase::new(Box::new(mock));
-        let params = Params::new("cafebabe", appstate);
+        let params = Params::new("cafebabe", appstate, "Secret123");
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());
@@ -241,7 +245,7 @@ mod tests {
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         // act
         let usecase = RestoreDatabase::new(Box::new(mock));
-        let params = Params::new("cafebabe", appstate);
+        let params = Params::new("cafebabe", appstate, "Secret123");
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());

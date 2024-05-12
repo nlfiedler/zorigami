@@ -28,8 +28,8 @@ database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenv = "0.15.0"
 env_logger = "0.11.0"
+exaf-rs = "1.1.1"
 fastcdc = "3.0.0"
-flate2 = "1.0.25"
 globset = "0.4.13"
 juniper = "0.15.9"
 lazy_static = "1.3.0"
@@ -43,7 +43,6 @@ serde_cbor = "0.11"
 serde_json = "1.0.79"
 sha1 = "0.10.6"
 sha2 = "0.10.2"
-sodiumoxide = "0.2.7"
 store_amazon = { path = "../stores/store_amazon" }
 store_azure = { path = "../stores/store_azure" }
 store_core = { path = "../stores/store_core" }
@@ -51,7 +50,6 @@ store_google = { path = "../stores/store_google" }
 store_local = { path = "../stores/store_local" }
 store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
-tar = "0.4.38"
 tempfile = "3.7.1"
 thiserror = "1.0.30"
 ulid = "1.1.2"

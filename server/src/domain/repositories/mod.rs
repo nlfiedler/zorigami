@@ -140,10 +140,10 @@ pub trait RecordRepository: Send + Sync {
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
 
     /// Create a backup of the database, returning the path of the archive file.
-    fn create_backup(&self) -> Result<tempfile::TempPath, Error>;
+    fn create_backup(&self, password: &str) -> Result<tempfile::TempPath, Error>;
 
     /// Restore the database from the provided archive file.
-    fn restore_from_backup(&self, path: &Path) -> Result<(), Error>;
+    fn restore_from_backup(&self, path: &Path, password: &str) -> Result<(), Error>;
 
     /// Retrieve the counts of the various record types in the data source.
     fn get_entity_counts(&self) -> Result<RecordCounts, Error>;

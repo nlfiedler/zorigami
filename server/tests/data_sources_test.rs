@@ -1,10 +1,9 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
 use server::domain::entities::{self, Checksum};
-use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -90,9 +89,7 @@ fn test_insert_get_pack() -> Result<(), Error> {
 
     let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
-    let mut pack = entities::Pack::new(digest1.clone(), coords);
-    // (normally should init sodiumoxide but for the tests it is okay)
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest1.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
     datasource.insert_pack(&pack).unwrap();
     datasource.insert_pack(&pack).unwrap();
@@ -103,8 +100,6 @@ fn test_insert_get_pack() -> Result<(), Error> {
     assert_eq!(actual.locations.len(), pack.locations.len());
     assert_eq!(actual.locations.len(), 1);
     assert_eq!(actual.locations[0], pack.locations[0]);
-    assert_eq!(actual.upload_time, pack.upload_time);
-    assert_eq!(actual.crypto_salt, pack.crypto_salt);
 
     // insert a bunch more pack records to test get_packs()
     let digest2 = Checksum::SHA1(String::from("4a285c30855fde0a195f3bdbd5e2663338f7510a"));
@@ -112,14 +107,12 @@ fn test_insert_get_pack() -> Result<(), Error> {
         entities::PackLocation::new("store1", "bucket1", "object2"),
         entities::PackLocation::new("store2", "bucket1", "object2"),
     ];
-    let mut pack = entities::Pack::new(digest2.clone(), coords);
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest2.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
     let digest3 = Checksum::SHA1(String::from("bf24db8ccd274daad5fe73a71b95cd00ffa56a37"));
     let coords = vec![entities::PackLocation::new("store2", "bucket1", "object3")];
-    let mut pack = entities::Pack::new(digest3.clone(), coords);
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest3.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
     let digest4 = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
@@ -128,14 +121,12 @@ fn test_insert_get_pack() -> Result<(), Error> {
         entities::PackLocation::new("store3", "bucket1", "object4"),
         entities::PackLocation::new("store11", "bucket1", "object4"),
     ];
-    let mut pack = entities::Pack::new(digest4.clone(), coords);
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest4.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
     let digest5 = Checksum::SHA1(String::from("1619f1be8e89c810fb213efa2f7b30ab788d3ada"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object5")];
-    let mut pack = entities::Pack::new(digest5.clone(), coords);
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest5.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
     // test get_packs()
@@ -168,8 +159,6 @@ fn test_insert_get_database() -> Result<(), Error> {
     assert_eq!(actual.locations.len(), pack.locations.len());
     assert_eq!(actual.locations.len(), 1);
     assert_eq!(actual.locations[0], pack.locations[0]);
-    assert_eq!(actual.upload_time, pack.upload_time);
-    assert_eq!(actual.crypto_salt, pack.crypto_salt);
 
     // insert some more database records to test get_databases()
     let digest2 = Checksum::SHA1(String::from("4a285c30855fde0a195f3bdbd5e2663338f7510a"));
@@ -495,9 +484,7 @@ fn test_record_counts() -> Result<(), Error> {
     // pack(s)
     let digest1 = Checksum::SHA1(String::from("bc1a3198db79036e56b30f0ab307cee55e845907"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
-    let mut pack = entities::Pack::new(digest1.clone(), coords);
-    // (normally should init sodiumoxide but for the tests it is okay)
-    pack.crypto_salt = Some(pwhash::gen_salt());
+    let pack = entities::Pack::new(digest1.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
     // snapshot(s)

@@ -709,11 +709,6 @@ impl entities::Pack {
     fn locations(&self) -> Vec<entities::PackLocation> {
         self.locations.clone()
     }
-
-    /// Date and time of successful upload.
-    fn upload_time(&self) -> DateTime<Utc> {
-        self.upload_time
-    }
 }
 
 #[juniper::graphql_object(description = "A request to restore a file or directory.")]
@@ -1347,8 +1342,9 @@ impl MutationRoot {
         use crate::domain::usecases::UseCase;
         let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let passphrase = helpers::crypto::get_passphrase();
         let usecase = RestoreDatabase::new(Box::new(repo));
-        let params: Params = Params::new(store_id, ctx.appstate.clone());
+        let params: Params = Params::new(store_id, ctx.appstate.clone(), passphrase);
         let result = usecase.call(params)?;
         Ok(result)
     }

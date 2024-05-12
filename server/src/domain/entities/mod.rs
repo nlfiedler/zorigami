@@ -4,7 +4,6 @@
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::prelude::*;
-use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -822,10 +821,6 @@ pub struct Pack {
     pub digest: Checksum,
     /// List of pack locations.
     pub locations: Vec<PackLocation>,
-    /// Date/time of successful upload, for conflict resolution.
-    pub upload_time: DateTime<Utc>,
-    /// Salt used to encrypt this pack.
-    pub crypto_salt: Option<Salt>,
 }
 
 impl Pack {
@@ -835,8 +830,6 @@ impl Pack {
         Self {
             digest,
             locations: coords,
-            upload_time: Utc::now(),
-            crypto_salt: None,
         }
     }
 }

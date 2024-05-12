@@ -98,10 +98,8 @@
 
 * contains raw file content
 * default pack file size of 64MB
-* pack file format
-    - tar file whose entries are compressed with gzip
+* pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
     - entry names are the chunk hash digest plus prefix
-    - entry dates are always UTC epoch to yield consistent results
     - encrypted with key derived from passphrase and random salt
 
 ### Database Schema
@@ -165,7 +163,6 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
         + store XID
         + remote bucket/vault name
         + remote object/archive name
-    - upload_time: date/time of successful upload, for conflict resolution
 * extended attribute records
     - key: `xattr/` + SHA1 of the attribute value
     - value: attribute data as a Buffer
@@ -184,7 +181,6 @@ Sync with peers for multi-host chunk deduplication.
         + store XID
         + remote bucket/vault name
         + remote object/archive name
-    - upload_time: date/time of successful upload, for conflict resolution
 
 ## Implementation
 
@@ -200,10 +196,7 @@ shifting.
 
 #### Database Sync
 
-When the peer(s) are available, sync with their chunk/pack database to get
-recent records. If there are conflicts (which seems unlikely given the pack
-would have to have the exact same chunks) resolve by keeping the pack record
-that has the most recent `upload_time`.
+When the peer(s) are available, sync with their chunk/pack database to get recent records.
 
 ### Database Snapshots
 

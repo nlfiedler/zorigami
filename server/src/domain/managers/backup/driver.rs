@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! The `driver` module defines the `BackupDriver` and `PackRecord` types.
@@ -16,13 +16,12 @@
 //! where those chunks are located.
 
 use crate::domain::entities;
-use crate::domain::helpers::{self, crypto, pack};
+use crate::domain::helpers::{self, pack};
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
 use log::{error, info, trace, warn};
-use sodiumoxide::crypto::pwhash::Salt;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::Path;
@@ -73,7 +72,7 @@ impl<'a> BackupDriver<'a> {
             stores,
             stop_time,
             chunk_size,
-            builder: pack::PackBuilder::new(dataset.pack_size),
+            builder: pack::PackBuilder::new(dataset.pack_size).password(passphrase),
             record: Default::default(),
             file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),
@@ -194,7 +193,7 @@ impl<'a> BackupDriver<'a> {
                     // build a "temporary" file that persists beyond the
                     // lifetime of the reference, just to get a unique name
                     let (_outfile, outpath) = tempfile::Builder::new()
-                        .suffix(".tar")
+                        .suffix(".pack")
                         .tempfile_in(&self.dataset.workspace)?
                         .keep()?;
                     self.builder.initialize(&outpath)?;
@@ -235,18 +234,16 @@ impl<'a> BackupDriver<'a> {
         trace!("upload_record_reset {}", pack_path.display());
         // verify that the pack contents match the record; this is not perfect
         // since the record itself could also be wrong, but it's quick and easy
-        if !self.record.verify_pack(pack_path)? {
+        if !self.record.verify_pack(pack_path, &self.passphrase)? {
             return Err(anyhow!(
                 "missing chunks from pack file {}",
                 pack_path.display()
             ));
         }
         let pack_digest = entities::Checksum::sha256_from_file(pack_path)?;
-        // possible that we just happened to build an identical pack file
+        // basically impossible to produce the same pack twice because the EXAF
+        // encryption involves a random nonce per archive content block
         if self.dbase.get_pack(&pack_digest)?.is_none() {
-            let mut outfile = pack_path.to_path_buf();
-            outfile.set_extension("nacl");
-            let salt = crypto::encrypt_file(&self.passphrase, pack_path, &outfile)?;
             // new pack file, need to upload this and record to database
             let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
             let bucket_name = self.stores.get_bucket_name(&computer_id);
@@ -256,12 +253,11 @@ impl<'a> BackupDriver<'a> {
             // sufficiently unique for our purposes
             let locations = self
                 .stores
-                .store_pack(&outfile, &bucket_name, &object_name)?;
+                .store_pack(&pack_path, &bucket_name, &object_name)?;
             self.record
-                .record_completed_pack(self.dbase, &pack_digest, locations, salt)?;
+                .record_completed_pack(self.dbase, &pack_digest, locations)?;
             self.state
                 .backup_event(BackupAction::UploadPack(self.dataset.id.clone()));
-            fs::remove_file(outfile)?;
         } else {
             info!("pack record already exists for {}", pack_digest);
         }
@@ -293,7 +289,7 @@ impl<'a> BackupDriver<'a> {
         // Create a stable snapshot of the database as a single file, upload it
         // to a special place in the pack store, then record the pseudo-pack to
         // enable accurate pack pruning.
-        let backup_path = self.dbase.create_backup()?;
+        let backup_path = self.dbase.create_backup(&self.passphrase)?;
         let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
         let coords = self.stores.store_database(&computer_id, &backup_path)?;
         let digest = entities::Checksum::sha256_from_file(&backup_path)?;
@@ -345,17 +341,17 @@ impl PackRecord {
 
     /// Return true if the given (unencrypted) pack file contains everything
     /// this record expects to be in the pack file, false otherwise.
-    fn verify_pack(&self, pack_path: &Path) -> Result<bool, Error> {
+    fn verify_pack(&self, pack_path: &Path, password: &str) -> Result<bool, Error> {
         use std::str::FromStr;
-        let file = fs::File::open(pack_path)?;
-        let mut ar = tar::Archive::new(file);
         // This is an n^2 search which is fine because the number of chunks in a
-        // typical pack file number in the tens, never any significant number.
+        // typical pack file is not a significantly high number (10s to 1,000s).
         let mut found_count: usize = 0;
-        for maybe_entry in ar.entries()? {
+        let mut reader = exaf_rs::reader::Entries::new(pack_path)?;
+        reader.enable_encryption(password)?;
+        for maybe_entry in reader {
             let entry = maybe_entry?;
             // we know the names are valid UTF-8, we created them
-            let digest = entities::Checksum::from_str(entry.path()?.to_str().unwrap())?;
+            let digest = entities::Checksum::from_str(entry.name())?;
             let mut found = false;
             for chunk in self.chunks.iter() {
                 if chunk.digest == digest {
@@ -384,7 +380,6 @@ impl PackRecord {
         dbase: &Arc<dyn RecordRepository>,
         digest: &entities::Checksum,
         coords: Vec<entities::PackLocation>,
-        salt: Salt,
     ) -> Result<(), Error> {
         // record the uploaded chunks to the database
         for chunk in self.chunks.iter_mut() {
@@ -399,8 +394,7 @@ impl PackRecord {
         }
         self.chunks.clear();
         // record the pack in the database
-        let mut pack = entities::Pack::new(digest.to_owned(), coords);
-        pack.crypto_salt = Some(salt);
+        let pack = entities::Pack::new(digest.to_owned(), coords);
         dbase.insert_pack(&pack)?;
         Ok(())
     }
@@ -466,9 +460,9 @@ mod tests {
         let mut record: PackRecord = Default::default();
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let chunks = super::helpers::find_file_chunks(&infile, 16384)?;
-        let mut builder = pack::PackBuilder::new(1048576);
+        let mut builder = pack::PackBuilder::new(1048576).password("secret123");
         let outdir = tempdir()?;
-        let packfile = outdir.path().join("multi-pack.tar");
+        let packfile = outdir.path().join("multi-pack.pack");
         builder.initialize(&packfile)?;
         for chunk in chunks.iter() {
             if builder.add_chunk(chunk)? {
@@ -477,7 +471,7 @@ mod tests {
             record.add_chunk(chunk.to_owned());
         }
         let _ = builder.finalize()?;
-        let result = record.verify_pack(&packfile)?;
+        let result = record.verify_pack(&packfile, "secret123")?;
         assert!(result);
 
         // inject a "missing" chunk into record, should return false
@@ -489,13 +483,13 @@ mod tests {
             11364,
         );
         record.chunks.push(chunk);
-        let result = record.verify_pack(&packfile)?;
+        let result = record.verify_pack(&packfile, "secret123")?;
         assert_eq!(result, false);
 
         // remove one of the chunks from record, should raise an error
         record.chunks.pop();
         record.chunks.pop();
-        let result = record.verify_pack(&packfile);
+        let result = record.verify_pack(&packfile, "secret123");
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
         assert!(err_string.contains("unexpected chunk"));
@@ -510,28 +504,18 @@ mod tests {
         stores: &Arc<dyn PackRepository>,
     ) -> Result<bool, Error> {
         use std::str::FromStr;
-        let salt = pack_rec
-            .crypto_salt
-            .ok_or_else(|| anyhow!(format!("missing pack salt: {:?}", pack_rec.digest)))?;
         // retrieve the pack file
-        let mut encrypted = PathBuf::new();
-        encrypted.push(workspace);
-        encrypted.push(pack_rec.digest.to_string());
-        stores.retrieve_pack(&pack_rec.locations, &encrypted)?;
-        // decrypt and then unpack the contents
-        let mut tarball = encrypted.clone();
-        tarball.set_extension("tar");
-        crypto::decrypt_file(passphrase, &salt, &encrypted, &tarball)?;
-        fs::remove_file(&encrypted)?;
-        let file = fs::File::open(&tarball)?;
-        let mut ar = tar::Archive::new(file);
-        // This is an n^2 search which is fine because the number of chunks in a
-        // typical pack file number in the tens, never any significant number.
+        let mut archive = PathBuf::new();
+        archive.push(workspace);
+        archive.push(pack_rec.digest.to_string());
+        stores.retrieve_pack(&pack_rec.locations, &archive)?;
+        // unpack the contents
+        let mut reader = exaf_rs::reader::Entries::new(&archive)?;
+        reader.enable_encryption(passphrase)?;
         let mut found_count: usize = 0;
-        for maybe_entry in ar.entries()? {
+        for maybe_entry in reader {
             let entry = maybe_entry?;
-            // we know the names are valid UTF-8, we created them
-            let digest = entities::Checksum::from_str(entry.path()?.to_str().unwrap())?;
+            let digest = entities::Checksum::from_str(entry.name())?;
             let mut found = false;
             for chunk in chunks {
                 if chunk == &digest {
@@ -545,12 +529,12 @@ mod tests {
                 return Err(anyhow!(
                     "unexpected chunk {} found in pack {}",
                     digest,
-                    tarball.display()
+                    archive.display()
                 ));
             }
         }
         // ensure we found all of the chunks
-        fs::remove_file(tarball)?;
+        fs::remove_file(archive)?;
         Ok(found_count == chunks.len())
     }
 
@@ -774,14 +758,18 @@ mod tests {
         let file_rec = maybe_file.unwrap();
         assert_eq!(file_rec.length, 1272254);
         assert_eq!(file_rec.chunks.len(), 7);
-        let mut pack_digests: HashSet<Checksum> = HashSet::new();
+        // need the pack digests in the correct order since the checksums will
+        // change when encryption is enabled
+        let mut pack_digests: Vec<Checksum> = vec![];
         for (_, checksum) in file_rec.chunks.iter() {
             let chunk_rec = dbase
                 .get_chunk(&checksum)?
                 .ok_or_else(|| anyhow!("missing chunk {}", checksum))?;
             assert!(chunk_rec.packfile.is_some());
             let pack_digest = chunk_rec.packfile.clone().unwrap();
-            pack_digests.insert(pack_digest);
+            if !pack_digests.contains(&pack_digest) {
+                pack_digests.push(pack_digest);
+            }
         }
 
         // verify that there are two packs and their records exist
@@ -793,10 +781,7 @@ mod tests {
 
         // verify the contents of the first pack file; the pack digests are
         // predictable and we also happen to know the chunk order
-        let pack_digest = Checksum::SHA256(
-            "c704183a8a25ba8f87eb949993edb2d596f11b3f2223d2a1430f747caababc32".to_owned(),
-        );
-        let pack_rec = dbase.get_pack(&pack_digest)?.unwrap();
+        let pack_rec = dbase.get_pack(&pack_digests[0])?.unwrap();
         let chunks: Vec<entities::Checksum> = vec![
             Checksum::SHA256(
                 "752262ccd96e1f3f47ce83475058630f1dafa55b15fa28ca7929815e084132d7".to_owned(),
@@ -817,10 +802,7 @@ mod tests {
         )?);
 
         // verify the contents of the second pack file
-        let pack_digest = Checksum::SHA256(
-            "0fe5d765309795ff4de3440c64d019528c869c6b96634e4227d8e6d3e89f675d".to_owned(),
-        );
-        let pack_rec = dbase.get_pack(&pack_digest)?.unwrap();
+        let pack_rec = dbase.get_pack(&pack_digests[1])?.unwrap();
         let chunks: Vec<entities::Checksum> = vec![
             Checksum::SHA256(
                 "c8b5e0313ad3265424ece141a011523eca2f573748c648932314f4e069358381".to_owned(),
