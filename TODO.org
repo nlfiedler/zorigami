@@ -1,13 +1,17 @@
 * Tasks
-** TODO upgrade Rust dependencies
-** TODO upgrade Dart/Flutter dependencies
 ** TODO change dataset form to force pack size to be a multiple of 16
 ** TODO consider if BLAKE2 might be faster/better than SHA256
 *** consider using this for everything rather than SHA1 and SHA2 conditionally
 *** https://github.com/RustCrypto/hashes/tree/master/blake2
-** TODO Evaluate the changes in =~/mod.rs= and =~/take_snapshot.rs=
-*** appears to be converting the =take_snapshot()= function to a use case
-*** the modified =mod.rs= is what's left of =domain/managers/backup/mod.rs=
+** TODO consider refactoring the =domain/managers= code
+*** the entity-like objects should go into =domain/entities=
+*** some code could become a usecase, such as the =take_snapshot()= function
+**** see =~/mod.rs= and =~/take_snapshot.rs=
+**** appears to be converting the =take_snapshot()= function to a use case
+**** the modified =mod.rs= is what's left of =domain/managers/backup/mod.rs=
+** TODO upgrade =juniper= to latest release
+*** quite a bit of changes to the API
+*** replace =server/src/preso/graphql/mod.rs= with =~/in-progress-graphql-mod.rs=
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
