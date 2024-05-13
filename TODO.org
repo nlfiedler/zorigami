@@ -1,5 +1,4 @@
 * Tasks
-** TODO change dataset form to force pack size to be a multiple of 16
 ** TODO consider if BLAKE2 might be faster/better than SHA256
 *** consider using this for everything rather than SHA1 and SHA2 conditionally
 *** https://github.com/RustCrypto/hashes/tree/master/blake2

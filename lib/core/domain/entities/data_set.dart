@@ -2,7 +2,6 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
-import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/error/failures.dart';

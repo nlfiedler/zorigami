@@ -147,17 +147,16 @@ class _DataSetFormState extends State<DataSetForm> {
             labelText: 'Excludes',
           ),
         ),
-        FormBuilderTextField(
+        FormBuilderSlider(
           name: 'packSize',
           decoration: const InputDecoration(
             icon: Icon(Icons.folder_open),
             labelText: 'Pack Size (MB)',
           ),
-          validator: FormBuilderValidators.compose([
-            FormBuilderValidators.numeric(),
-            FormBuilderValidators.min(16),
-            FormBuilderValidators.max(256),
-          ]),
+          initialValue: 64.0,
+          min: 16.0,
+          max: 256.0,
+          divisions: (256 - 16) ~/ 16,
         ),
         FormBuilderCheckboxGroup<String>(
           name: 'stores',
