@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -131,11 +131,11 @@ async fn test_backup_restore() -> Result<(), Error> {
 
     // restore the file from the first snapshot
     #[cfg(target_family = "unix")]
-    let digest_expected = Checksum::SHA256(String::from(
-        "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
     ));
     #[cfg(target_family = "windows")]
-    let digest_expected = Checksum::SHA256(String::from(
+    let digest_expected = Checksum::BLAKE3(String::from(
         "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
@@ -157,12 +157,12 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert!(request.error_msg.is_none());
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // restore the file from the second snapshot
-    let digest_expected = Checksum::SHA256(String::from(
-        "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f",
     ));
     sut.reset_completed();
     let snapshot = dbase.get_snapshot(&second_backup)?.unwrap();
@@ -179,16 +179,16 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // restore the file from the third snapshot
     #[cfg(target_family = "unix")]
-    let digest_expected = Checksum::SHA256(String::from(
-        "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60",
     ));
     #[cfg(target_family = "windows")]
-    let digest_expected = Checksum::SHA256(String::from(
+    let digest_expected = Checksum::BLAKE3(String::from(
         "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc",
     ));
     sut.reset_completed();
@@ -206,12 +206,12 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // restore the file from the fourth snapshot
-    let digest_expected = Checksum::SHA256(String::from(
-        "b2c67e90a01f5d7aca48835b8ad8f0902ef03288aa4083e742bccbd96d8590a4",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "3153cbf8ed39aa92c6dbe17eb08b3253ec3d600aef6b0a0fc43673ac6d255427",
     ));
     sut.reset_completed();
     let snapshot = dbase.get_snapshot(&fourth_backup)?.unwrap();
@@ -228,12 +228,12 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // restore the zero length file from the first snapshot
-    let digest_expected = Checksum::SHA256(String::from(
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
     ));
     sut.reset_completed();
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
@@ -250,7 +250,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
     assert!(request.error_msg.is_none());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // shutdown the restorer supervisor to release the database lock

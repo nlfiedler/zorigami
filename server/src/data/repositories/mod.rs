@@ -1770,35 +1770,35 @@ mod tests {
         extract_archive(&packfile, outdir.path(), "Secret123")?;
 
         let file = outdir.path().join("SekienAkashita.jpg");
-        let chksum = Checksum::sha256_from_file(&file)?;
+        let chksum = Checksum::blake3_from_file(&file)?;
         assert_eq!(
             chksum.to_string(),
-            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+            "blake3-dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f"
         );
         let file = outdir.path().join("lorem-ipsum.txt");
-        let chksum = Checksum::sha256_from_file(&file)?;
+        let chksum = Checksum::blake3_from_file(&file)?;
         #[cfg(target_family = "unix")]
         assert_eq!(
             chksum.to_string(),
-            "sha256-095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f"
+            "blake3-deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128"
         );
         // line endings differ
         #[cfg(target_family = "windows")]
         assert_eq!(
             chksum.to_string(),
-            "sha256-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
+            "blake3-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
         );
         let file = outdir.path().join("washington-journal.txt");
-        let chksum = Checksum::sha256_from_file(&file)?;
+        let chksum = Checksum::blake3_from_file(&file)?;
         #[cfg(target_family = "unix")]
         assert_eq!(
             chksum.to_string(),
-            "sha256-314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05"
+            "blake3-540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60"
         );
         #[cfg(target_family = "windows")]
         assert_eq!(
             chksum.to_string(),
-            "sha256-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
+            "blake3-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
         );
 
         Ok(())

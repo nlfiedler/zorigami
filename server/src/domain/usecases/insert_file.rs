@@ -146,7 +146,7 @@ mod tests {
         let mut mock = MockRecordRepository::new();
         mock.expect_get_file().returning(move |_| {
             Ok(Some(File::new(
-                Checksum::SHA256("deadbeef".into()),
+                Checksum::BLAKE3("deadbeef".into()),
                 0,
                 vec![],
             )))
@@ -155,8 +155,8 @@ mod tests {
         let usecase = InsertFile::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::BLAKE3("deadbeef".into()),
+            Checksum::BLAKE3("cafebabe".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -176,8 +176,8 @@ mod tests {
         let usecase = InsertFile::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::BLAKE3("deadbeef".into()),
+            Checksum::BLAKE3("cafebabe".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -204,8 +204,8 @@ mod tests {
         let usecase = InsertFile::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::BLAKE3("deadbeef".into()),
+            Checksum::BLAKE3("cafebabe".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -223,9 +223,9 @@ mod tests {
         let outdir = tempdir()?;
         let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
-        let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let chunk1_sha = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
         builder.initialize(&packfile)?;
-        let mut chunk = Chunk::new(Checksum::SHA256(chunk1_sha.into()), 0, 3129);
+        let mut chunk = Chunk::new(Checksum::BLAKE3(chunk1_sha.into()), 0, 3129);
         chunk = chunk.filepath(infile);
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
@@ -257,8 +257,8 @@ mod tests {
         let params = Params::new(
             "ignored",
             // intentionally giving the wrong chunk digest
-            Checksum::SHA256("deadbeef".into()),
-            Checksum::SHA256("cafebabe".into()),
+            Checksum::BLAKE3("deadbeef".into()),
+            Checksum::BLAKE3("cafebabe".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -279,9 +279,9 @@ mod tests {
         let outdir = tempdir()?;
         let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
-        let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let chunk1_sha = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
         builder.initialize(&packfile)?;
-        let mut chunk = Chunk::new(Checksum::SHA256(chunk1_sha.into()), 0, 3129);
+        let mut chunk = Chunk::new(Checksum::BLAKE3(chunk1_sha.into()), 0, 3129);
         chunk = chunk.filepath(infile);
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
@@ -311,15 +311,15 @@ mod tests {
         });
         mock.expect_insert_file()
             .times(1)
-            .withf(|file| file.digest == Checksum::SHA256(chunk1_sha.into()))
+            .withf(|file| file.digest == Checksum::BLAKE3(chunk1_sha.into()))
             .returning(|_| Ok(()));
 
         // act
         let usecase = InsertFile::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256(chunk1_sha.into()),
-            Checksum::SHA256("deadbeef".into()),
+            Checksum::BLAKE3(chunk1_sha.into()),
+            Checksum::BLAKE3("deadbeef".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);

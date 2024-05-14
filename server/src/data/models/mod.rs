@@ -25,7 +25,7 @@ mod checksum;
 // #[derive(Serialize, Deserialize)]
 // pub enum Checksum {
 //     SHA1(String),
-//     SHA256(String),
+//     BLAKE3(String),
 // }
 
 mod pack_location;
@@ -435,8 +435,8 @@ mod tests {
     #[test]
     fn test_tree_serde() -> Result<(), Error> {
         // arrange
-        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let b3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+        let file_digest = Checksum::BLAKE3(String::from(b3sum));
         let reference = TreeReference::FILE(file_digest);
         let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
         let entry = TreeEntry::new(filepath, reference);
@@ -457,8 +457,8 @@ mod tests {
     #[test]
     fn test_file_serde() -> Result<(), Error> {
         // arrange
-        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let b3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+        let file_digest = Checksum::BLAKE3(String::from(b3sum));
         let chunks = vec![(0, file_digest.clone())];
         let file = File::new(file_digest.clone(), 3129, chunks);
         // act

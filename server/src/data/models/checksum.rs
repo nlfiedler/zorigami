@@ -16,7 +16,7 @@ use crate::domain::entities::Checksum;
 #[doc(hidden)]
 #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
 const _: () = {
-    #[allow(rust_2018_idioms, clippy::useless_attribute)]
+    #[allow(unused_extern_crates, clippy::useless_attribute)]
     extern crate serde as _serde;
     #[automatically_derived]
     impl _serde::Serialize for Checksum {
@@ -35,11 +35,11 @@ const _: () = {
                     "SHA1",
                     __field0,
                 ),
-                Checksum::SHA256(ref __field0) => _serde::Serializer::serialize_newtype_variant(
+                Checksum::BLAKE3(ref __field0) => _serde::Serializer::serialize_newtype_variant(
                     __serializer,
                     "Checksum",
                     1u32,
-                    "SHA256",
+                    "BLAKE3",
                     __field0,
                 ),
             }
@@ -49,7 +49,7 @@ const _: () = {
 #[doc(hidden)]
 #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
 const _: () = {
-    #[allow(rust_2018_idioms, clippy::useless_attribute)]
+    #[allow(unused_extern_crates, clippy::useless_attribute)]
     extern crate serde as _serde;
     #[automatically_derived]
     impl<'de> _serde::Deserialize<'de> for Checksum {
@@ -58,10 +58,12 @@ const _: () = {
             __D: _serde::Deserializer<'de>,
         {
             #[allow(non_camel_case_types)]
+            #[doc(hidden)]
             enum __Field {
                 __field0,
                 __field1,
             }
+            #[doc(hidden)]
             struct __FieldVisitor;
             impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
                 type Value = __Field;
@@ -93,7 +95,7 @@ const _: () = {
                 {
                     match __value {
                         "SHA1" => _serde::__private::Ok(__Field::__field0),
-                        "SHA256" => _serde::__private::Ok(__Field::__field1),
+                        "BLAKE3" => _serde::__private::Ok(__Field::__field1),
                         _ => _serde::__private::Err(_serde::de::Error::unknown_variant(
                             __value, VARIANTS,
                         )),
@@ -108,7 +110,7 @@ const _: () = {
                 {
                     match __value {
                         b"SHA1" => _serde::__private::Ok(__Field::__field0),
-                        b"SHA256" => _serde::__private::Ok(__Field::__field1),
+                        b"BLAKE3" => _serde::__private::Ok(__Field::__field1),
                         _ => {
                             let __value = &_serde::__private::from_utf8_lossy(__value);
                             _serde::__private::Err(_serde::de::Error::unknown_variant(
@@ -129,6 +131,7 @@ const _: () = {
                     _serde::Deserializer::deserialize_identifier(__deserializer, __FieldVisitor)
                 }
             }
+            #[doc(hidden)]
             struct __Visitor<'de> {
                 marker: _serde::__private::PhantomData<Checksum>,
                 lifetime: _serde::__private::PhantomData<&'de ()>,
@@ -148,24 +151,20 @@ const _: () = {
                 where
                     __A: _serde::de::EnumAccess<'de>,
                 {
-                    match match _serde::de::EnumAccess::variant(__data) {
-                        _serde::__private::Ok(__val) => __val,
-                        _serde::__private::Err(__err) => {
-                            return _serde::__private::Err(__err);
-                        }
-                    } {
+                    match _serde::de::EnumAccess::variant(__data)? {
                         (__Field::__field0, __variant) => _serde::__private::Result::map(
                             _serde::de::VariantAccess::newtype_variant::<String>(__variant),
                             Checksum::SHA1,
                         ),
                         (__Field::__field1, __variant) => _serde::__private::Result::map(
                             _serde::de::VariantAccess::newtype_variant::<String>(__variant),
-                            Checksum::SHA256,
+                            Checksum::BLAKE3,
                         ),
                     }
                 }
             }
-            const VARIANTS: &[&str] = &["SHA1", "SHA256"];
+            #[doc(hidden)]
+            const VARIANTS: &'static [&'static str] = &["SHA1", "BLAKE3"];
             _serde::Deserializer::deserialize_enum(
                 __deserializer,
                 "Checksum",

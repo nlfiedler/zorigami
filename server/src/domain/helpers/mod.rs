@@ -26,7 +26,7 @@ pub fn find_file_chunks(infile: &Path, avg_size: u32) -> io::Result<Vec<Chunk>> 
     let mut results = Vec::new();
     for entry in chunker {
         let end = entry.offset + entry.length;
-        let chksum = Checksum::sha256_from_bytes(&mmap[entry.offset..end]);
+        let chksum = Checksum::blake3_from_bytes(&mmap[entry.offset..end]);
         let mut chunk = Chunk::new(chksum, entry.offset, entry.length);
         chunk = chunk.filepath(infile);
         results.push(chunk);
@@ -47,31 +47,31 @@ mod tests {
         assert_eq!(results[0].length, 21325);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
+            "blake3-261930e84e14c240210ae8c459acc4bb85dd52f1b91c868f2106dbc1ceb3acca"
         );
         assert_eq!(results[1].offset, 21325);
         assert_eq!(results[1].length, 17140);
         assert_eq!(
             results[1].digest.to_string(),
-            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
+            "blake3-a01747cf21202f0068b8897d2be92aa4479b7ac7207b3baa5057b8ec75fa1c10"
         );
         assert_eq!(results[2].offset, 38465);
         assert_eq!(results[2].length, 28084);
         assert_eq!(
             results[2].digest.to_string(),
-            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
+            "blake3-01e5305fb8f54d214ed2946843ea360fb9bb3f5df66ef3e34fb024d32ebcaee1"
         );
         assert_eq!(results[3].offset, 66549);
         assert_eq!(results[3].length, 18217);
         assert_eq!(
             results[3].digest.to_string(),
-            "sha256-bbd5b0b284d4e3c2098e92e8e2897e738c669113d06472560188d99a288872a3"
+            "blake3-fc28c67b6ef846a841452a215bf704058f65cba5c1d78160398d3c2e046642f9"
         );
         assert_eq!(results[4].offset, 84766);
         assert_eq!(results[4].length, 24700);
         assert_eq!(
             results[4].digest.to_string(),
-            "sha256-ede34e1a6cb287766e857eb0ed45b9f4b5ad83bb93c597be880c3a2ac91cddbe"
+            "blake3-f6996300fce24d3da56c81ea52e5f4f461ce6adb4496f65252996e1082471aac"
         );
         Ok(())
     }
@@ -85,13 +85,13 @@ mod tests {
         assert_eq!(results[0].length, 66549);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
+            "blake3-c3a9c101999bcd14212cbac34a78a5018c6d1548a32c084f43499c254adf07ef"
         );
         assert_eq!(results[1].offset, 66549);
         assert_eq!(results[1].length, 42917);
         assert_eq!(
             results[1].digest.to_string(),
-            "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
+            "blake3-4b5f350ca573fc4f44b0da18d6aef9cdb2bcb7eeab1ad371af82557d0f353454"
         );
         Ok(())
     }
@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(results[0].length, 109466);
         assert_eq!(
             results[0].digest.to_string(),
-            "sha256-d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+            "blake3-dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f"
         );
         Ok(())
     }

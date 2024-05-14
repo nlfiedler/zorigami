@@ -56,7 +56,7 @@ class DataSetForm extends StatefulWidget {
     List<PackStore> stores,
   ) {
     // convert pack size int of bytes to string of megabytes
-    final packSize = (dataset.packSize / 1048576).round().toString();
+    final packSize = (dataset.packSize / 1048576).round();
     final frequency = frequencyFromDataSet(dataset);
     final timeRange = timeRangeFromDataSet(dataset);
     final initialStores = buildInitialStores(dataset, stores);
@@ -78,7 +78,7 @@ class DataSetForm extends StatefulWidget {
     List<PackStore> stores,
   ) {
     // convert pack size string of megabytes to int of bytes
-    final packSize = int.parse(state.value['packSize']) * 1048576;
+    final packSize = state.value['packSize'] * 1048576;
     final schedules = schedulesFromState(state);
     final excludes = excludesFromState(state);
     return DataSet(
@@ -221,9 +221,9 @@ class _DataSetFormState extends State<DataSetForm> {
             );
           },
           // TODO: require valid time range if timePickersEnabled
-          validator: FormBuilderValidators.compose([
-            FormBuilderValidators.required(),
-          ]),
+          // validator: FormBuilderValidators.compose([
+          //   FormBuilderValidators.required(),
+          // ]),
         ),
       ],
     );

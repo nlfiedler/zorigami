@@ -101,7 +101,7 @@ where
     }
 }
 
-#[graphql_scalar(description = "A SHA1 or SHA256 checksum, with algorithm prefix.")]
+#[graphql_scalar(description = "A hash digest value with algorithm prefix.")]
 impl<S> GraphQLScalar for Checksum
 where
     S: ScalarValue,
@@ -115,7 +115,7 @@ where
             .and_then(|v| v.as_str())
             .filter(|s| {
                 // make sure the input value actually looks like a digest
-                s.starts_with("sha1-") || s.starts_with("sha256-")
+                s.starts_with("sha1-") || s.starts_with("blake3-")
             })
             .map(|s| FromStr::from_str(s).unwrap())
     }
@@ -2018,8 +2018,8 @@ mod tests {
     #[test]
     fn test_query_tree_some() {
         // arrange
-        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let b3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+        let file_digest = Checksum::BLAKE3(String::from(b3sum));
         let reference = TreeReference::FILE(file_digest);
         let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
         let entry = entities::TreeEntry::new(filepath, reference);

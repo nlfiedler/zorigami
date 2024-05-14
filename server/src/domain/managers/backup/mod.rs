@@ -752,7 +752,7 @@ fn process_files(
         let dbase = dbase.clone();
         let entries = entries.clone();
         pool.execute(move || {
-            let entry = match entities::Checksum::sha256_from_file(&path) {
+            let entry = match entities::Checksum::blake3_from_file(&path) {
                 Ok(digest) => {
                     let tref = entities::TreeReference::FILE(digest);
                     Some(process_path(&path, tref, &dbase))
@@ -862,7 +862,7 @@ mod tests {
         mock.expect_insert_xattr().returning(|_, _| Ok(()));
         // act
         let path = Path::new("../test/fixtures/washington-journal.txt");
-        let digest = entities::Checksum::sha256_from_file(&path).unwrap();
+        let digest = entities::Checksum::blake3_from_file(&path).unwrap();
         let tref = entities::TreeReference::FILE(digest);
         let dbase: Arc<(dyn crate::domain::repositories::RecordRepository + 'static)> =
             Arc::new(mock);
@@ -870,11 +870,11 @@ mod tests {
         // assert
         assert_eq!(entry.name, "washington-journal.txt");
         #[cfg(target_family = "unix")]
-        let expected_hash = "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05";
+        let expected_hash = "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60";
         #[cfg(target_family = "windows")]
         let expected_hash = "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc";
         let expected =
-            entities::TreeReference::FILE(entities::Checksum::SHA256(expected_hash.into()));
+            entities::TreeReference::FILE(entities::Checksum::BLAKE3(expected_hash.into()));
         assert_eq!(entry.reference, expected);
     }
 
@@ -1038,8 +1038,8 @@ mod tests {
         assert!(changed[0].is_ok());
         assert_eq!(
             changed[0].as_ref().unwrap().digest,
-            Checksum::SHA256(String::from(
-                "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed"
+            Checksum::BLAKE3(String::from(
+                "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f"
             ))
         );
 

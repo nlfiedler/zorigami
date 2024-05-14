@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
 use dotenv::dotenv;
@@ -88,11 +88,11 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     assert!(maybe_snapshot.is_some(), "latest snapshot not available");
     let snapshot_sha1 = maybe_snapshot.unwrap();
     #[cfg(target_family = "unix")]
-    let digest_expected = Checksum::SHA256(String::from(
-        "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
     ));
     #[cfg(target_family = "windows")]
-    let digest_expected = Checksum::SHA256(String::from(
+    let digest_expected = Checksum::BLAKE3(String::from(
         "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
     ));
     let snapshot = dbase.get_snapshot(&snapshot_sha1)?.unwrap();
@@ -114,7 +114,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     assert!(request.error_msg.is_none());
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
-    let digest_actual = Checksum::sha256_from_file(&outfile)?;
+    let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
     // Ideally would iterate pack records in database and delete the pack files

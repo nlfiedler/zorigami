@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:zorigami/core/data/models/tree_model.dart';
 import 'package:zorigami/core/domain/entities/tree.dart';
@@ -18,7 +18,7 @@ void main() {
           'name': '.DS_Store',
           'modTime': '2022-01-17T22:20:52+00:00',
           'reference':
-              'file-sha256-aa95ab743d4a5ed969de85bd574c57aa332772559264b944b0af7cc078f66131'
+              'file-blake3-aa95ab743d4a5ed969de85bd574c57aa332772559264b944b0af7cc078f66131'
         },
         {
           'name': '.Trash',
@@ -48,7 +48,7 @@ void main() {
           reference: const TreeReferenceModel(
             type: EntryType.file,
             value:
-                'sha256-aa95ab743d4a5ed969de85bd574c57aa332772559264b944b0af7cc078f66131',
+                'blake3-aa95ab743d4a5ed969de85bd574c57aa332772559264b944b0af7cc078f66131',
           ),
         ),
         TreeEntryModel(

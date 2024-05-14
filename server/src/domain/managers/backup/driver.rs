@@ -240,7 +240,7 @@ impl<'a> BackupDriver<'a> {
                 pack_path.display()
             ));
         }
-        let pack_digest = entities::Checksum::sha256_from_file(pack_path)?;
+        let pack_digest = entities::Checksum::blake3_from_file(pack_path)?;
         // basically impossible to produce the same pack twice because the EXAF
         // encryption involves a random nonce per archive content block
         if self.dbase.get_pack(&pack_digest)?.is_none() {
@@ -292,7 +292,7 @@ impl<'a> BackupDriver<'a> {
         let backup_path = self.dbase.create_backup(&self.passphrase)?;
         let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
         let coords = self.stores.store_database(&computer_id, &backup_path)?;
-        let digest = entities::Checksum::sha256_from_file(&backup_path)?;
+        let digest = entities::Checksum::blake3_from_file(&backup_path)?;
         let pack = entities::Pack::new(digest.clone(), coords);
         self.dbase.insert_database(&pack)?;
         Ok(())
@@ -476,7 +476,7 @@ mod tests {
 
         // inject a "missing" chunk into record, should return false
         let chunk = entities::Chunk::new(
-            entities::Checksum::SHA256(
+            entities::Checksum::BLAKE3(
                 "7b5352a6d7116e70b420c6e2f5ad3b49ba0af92923ab53ee43bd3fd0374d2521".to_owned(),
             ),
             0,
@@ -590,24 +590,24 @@ mod tests {
         //
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         let mut driver = BackupDriver::new(&dataset, &dbase, &state, "secret123", None)?;
-        let file1_digest = Checksum::SHA256(
-            "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed".to_owned(),
+        let file1_digest = Checksum::BLAKE3(
+            "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f".to_owned(),
         );
         let changed_file = ChangedFile::new(
             Path::new("../test/fixtures/SekienAkashita.jpg"),
             file1_digest.clone(),
         );
         driver.add_file(changed_file)?;
-        let file2_digest = Checksum::SHA256(
-            "59d1ff1b1df864f071e3efe637bc9009b28282a203002f52988bb9b01910a0b5".to_owned(),
+        let file2_digest = Checksum::BLAKE3(
+            "2cd10c8eafa9bb6562eae34758bd7bcffd840afb1c503b42d0659b0718cafe99".to_owned(),
         );
         let changed_file = ChangedFile::new(
             Path::new("../test/fixtures/baby-birth.jpg"),
             file2_digest.clone(),
         );
         driver.add_file(changed_file)?;
-        let file3_digest = Checksum::SHA256(
-            "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05".to_owned(),
+        let file3_digest = Checksum::BLAKE3(
+            "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60".to_owned(),
         );
         let changed_file = ChangedFile::new(
             Path::new("../test/fixtures/washington-journal.txt"),
@@ -648,15 +648,15 @@ mod tests {
         // verify that the pack file actually contains the expected chunks
         let chunks: Vec<entities::Checksum> = vec![
             // first file is split into two chunks
-            Checksum::SHA256(
-                "c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483".to_owned(),
+            Checksum::BLAKE3(
+                "c3a9c101999bcd14212cbac34a78a5018c6d1548a32c084f43499c254adf07ef".to_owned(),
             ),
-            Checksum::SHA256(
-                "b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0".to_owned(),
+            Checksum::BLAKE3(
+                "4b5f350ca573fc4f44b0da18d6aef9cdb2bcb7eeab1ad371af82557d0f353454".to_owned(),
             ),
             // second file is a single chunk
-            Checksum::SHA256(
-                "59d1ff1b1df864f071e3efe637bc9009b28282a203002f52988bb9b01910a0b5".to_owned(),
+            Checksum::BLAKE3(
+                "2cd10c8eafa9bb6562eae34758bd7bcffd840afb1c503b42d0659b0718cafe99".to_owned(),
             ),
         ];
         assert!(download_and_verify_pack(
@@ -683,8 +683,8 @@ mod tests {
         assert_ne!(pack_rec.digest, pack_digest);
 
         // verify that the pack file actually contains the expected chunk(s)
-        let chunks: Vec<entities::Checksum> = vec![Checksum::SHA256(
-            "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05".to_owned(),
+        let chunks: Vec<entities::Checksum> = vec![Checksum::BLAKE3(
+            "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60".to_owned(),
         )];
         let stores = Arc::from(dbase.load_dataset_stores(&dataset)?);
         assert!(download_and_verify_pack(
@@ -742,8 +742,8 @@ mod tests {
         //
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         let mut driver = BackupDriver::new(&dataset, &dbase, &state, "secret123", None)?;
-        let file1_digest = Checksum::SHA256(
-            "aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6".to_owned(),
+        let file1_digest = Checksum::BLAKE3(
+            "b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8".to_owned(),
         );
         let changed_file = ChangedFile::new(
             Path::new("../test/fixtures/C++98-tutorial.pdf"),
@@ -779,18 +779,17 @@ mod tests {
             assert!(maybe_pack.is_some());
         }
 
-        // verify the contents of the first pack file; the pack digests are
-        // predictable and we also happen to know the chunk order
+        // verify the contents of the first pack file
         let pack_rec = dbase.get_pack(&pack_digests[0])?.unwrap();
         let chunks: Vec<entities::Checksum> = vec![
-            Checksum::SHA256(
-                "752262ccd96e1f3f47ce83475058630f1dafa55b15fa28ca7929815e084132d7".to_owned(),
+            Checksum::BLAKE3(
+                "0480af365eef43f62ce523bbc027018594fc58f60ef83373c0747833c5a76a34".to_owned(),
             ),
-            Checksum::SHA256(
-                "062755f9c6f3463f18c82ae0c940326894029c51689eccd3b1dc6ba4a7158bc2".to_owned(),
+            Checksum::BLAKE3(
+                "0652fd2632ffff1dae524121485d0f36a538eaaff0873091a827f88e1e87e532".to_owned(),
             ),
-            Checksum::SHA256(
-                "cb02ed33bddb9a9279dae322655b2f9906318e60c0837b57bf292449d137330b".to_owned(),
+            Checksum::BLAKE3(
+                "fcc513b817b91c5a65dff05977b7efacf4f7b3c66ab3d1148c4d6fda8657901e".to_owned(),
             ),
         ];
         assert!(download_and_verify_pack(
@@ -804,17 +803,17 @@ mod tests {
         // verify the contents of the second pack file
         let pack_rec = dbase.get_pack(&pack_digests[1])?.unwrap();
         let chunks: Vec<entities::Checksum> = vec![
-            Checksum::SHA256(
-                "c8b5e0313ad3265424ece141a011523eca2f573748c648932314f4e069358381".to_owned(),
+            Checksum::BLAKE3(
+                "84ffcbd58ba181caa30ee1c22025f3c5a3a0d0572570d8e19573ed2b20459bba".to_owned(),
             ),
-            Checksum::SHA256(
-                "af529e3b7ec8aab0ab91cf53868858a36602340c6098759469dc6c9a08cb6c3a".to_owned(),
+            Checksum::BLAKE3(
+                "b71e6d19e69fc78ca8f09cc789e52517ee328b6f84ec0587a5aa02437c6d7b0c".to_owned(),
             ),
-            Checksum::SHA256(
-                "2757840ed97fbfbc5ce6985c5e6090ac9e3834999fe9f60b679c308f26797e69".to_owned(),
+            Checksum::BLAKE3(
+                "676fc9716d83f0c279d7aa45193459f2671cc39c12e466b0122dd565ab260bfb".to_owned(),
             ),
-            Checksum::SHA256(
-                "f9c35688f670649ffb1e0d58f7a19c46926a6ff2c89acae3940605f70a65614e".to_owned(),
+            Checksum::BLAKE3(
+                "7ca63166ddd184501ece9a84adf9b5d6d1193bdc5343006bbe23e2a3da1694f9".to_owned(),
             ),
         ];
         assert!(download_and_verify_pack(

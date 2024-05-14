@@ -738,7 +738,7 @@ impl Drop for FileRestorerImpl {
 
 // Verify the retrieved pack file digest matches the database record.
 fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
-    let actual = Checksum::sha256_from_file(path)?;
+    let actual = Checksum::blake3_from_file(path)?;
     if &actual != digest {
         Err(anyhow!(format!(
             "pack digest does not match: {} != {}",
@@ -839,8 +839,8 @@ mod tests {
         let tree = Tree::new(
             vec![TreeEntry::new(
                 Path::new("../test/fixtures/lorem-ipsum.txt"),
-                TreeReference::FILE(Checksum::SHA256(String::from(
-                    "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+                TreeReference::FILE(Checksum::BLAKE3(String::from(
+                    "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
                 ))),
             )],
             1,
@@ -928,20 +928,20 @@ mod tests {
             vec![
                 TreeEntry::new(
                     Path::new("../test/fixtures/lorem-ipsum.txt"),
-                    TreeReference::FILE(Checksum::SHA256(String::from(
-                        "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f",
+                    TreeReference::FILE(Checksum::BLAKE3(String::from(
+                        "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
                     ))),
                 ),
                 TreeEntry::new(
                     Path::new("../test/fixtures/washington-journal.txt"),
-                    TreeReference::FILE(Checksum::SHA256(String::from(
-                        "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05",
+                    TreeReference::FILE(Checksum::BLAKE3(String::from(
+                        "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60",
                     ))),
                 ),
                 TreeEntry::new(
                     Path::new("../test/fixtures/SekienAkashita.jpg"),
-                    TreeReference::FILE(Checksum::SHA256(String::from(
-                        "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed",
+                    TreeReference::FILE(Checksum::BLAKE3(String::from(
+                        "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f",
                     ))),
                 ),
             ],

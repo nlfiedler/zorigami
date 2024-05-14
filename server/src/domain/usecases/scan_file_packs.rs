@@ -202,7 +202,7 @@ mod tests {
         let usecase = ScanPacks::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
+            Checksum::BLAKE3("deadbeef".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -228,14 +228,14 @@ mod tests {
         let usecase = ScanPacks::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
+            Checksum::BLAKE3("deadbeef".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());
         let err_string = result.err().unwrap().to_string();
-        assert!(err_string.contains("no such file: sha256-deadbeef"));
+        assert!(err_string.contains("no such file: blake3-deadbeef"));
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
         mock.expect_get_all_packs().returning(|| Ok(Vec::new()));
         mock.expect_get_file().returning(|_| {
             Ok(Some(File::new(
-                Checksum::SHA256("deadbeef".into()),
+                Checksum::BLAKE3("deadbeef".into()),
                 0,
                 vec![],
             )))
@@ -261,7 +261,7 @@ mod tests {
         let usecase = ScanPacks::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256("deadbeef".into()),
+            Checksum::BLAKE3("deadbeef".into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -279,9 +279,9 @@ mod tests {
         let outdir = tempdir()?;
         let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
-        let chunk1_sha = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
+        let chunk1_sha = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
         builder.initialize(&packfile)?;
-        let mut chunk = Chunk::new(Checksum::SHA256(chunk1_sha.into()), 0, 3129);
+        let mut chunk = Chunk::new(Checksum::BLAKE3(chunk1_sha.into()), 0, 3129);
         chunk = chunk.filepath(infile);
         builder.add_chunk(&chunk)?;
         let _result = builder.finalize()?;
@@ -315,7 +315,7 @@ mod tests {
                 Checksum::SHA1("d535524bd023d0d22a3912a472c5b0f2db111690".into()),
             )];
             Ok(Some(File::new(
-                Checksum::SHA256(chunk1_sha.into()),
+                Checksum::BLAKE3(chunk1_sha.into()),
                 3129,
                 file_chunks,
             )))
@@ -325,7 +325,7 @@ mod tests {
         let usecase = ScanPacks::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256(chunk1_sha.into()),
+            Checksum::BLAKE3(chunk1_sha.into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -334,7 +334,7 @@ mod tests {
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.len(), 1);
-        let expected_chunk = Checksum::SHA256(chunk1_sha.into());
+        let expected_chunk = Checksum::BLAKE3(chunk1_sha.into());
         let expected_old_pack = Checksum::SHA1("d535524bd023d0d22a3912a472c5b0f2db111690".into());
         let expected_new_pack = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());
         assert_eq!(results[0].chunk_digest, expected_chunk);
@@ -348,7 +348,7 @@ mod tests {
     fn test_scan_packs_multiple_chunks() -> Result<(), Error> {
         // build pack file containing a multi-chunk file
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let file_digest = "d9e749d9367fc908876749d6502eb212fee88c9a94892fb07da5ef3ba8bc39ed";
+        let file_digest = "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f";
         let chunks = helpers::find_file_chunks(&infile, 32768)?;
         let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
@@ -391,7 +391,7 @@ mod tests {
                 chunk_offset += chunk.length as u64;
             }
             Ok(Some(File::new(
-                Checksum::SHA256(file_digest.into()),
+                Checksum::BLAKE3(file_digest.into()),
                 109466,
                 file_chunks,
             )))
@@ -400,12 +400,12 @@ mod tests {
         let chunk2_sha = "b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0";
         mock.expect_get_chunk()
             .withf(move |c| {
-                let expected = Checksum::SHA256(chunk1_sha.into());
+                let expected = Checksum::BLAKE3(chunk1_sha.into());
                 c == &expected
             })
             .returning(|_| {
                 // intentionally create a chunk record with the wrong pack digest
-                let digest = Checksum::SHA256(chunk1_sha.into());
+                let digest = Checksum::BLAKE3(chunk1_sha.into());
                 let mut chunk = Chunk::new(digest, 0, 66549);
                 chunk.packfile = Some(Checksum::SHA1(
                     "d535524bd023d0d22a3912a472c5b0f2db111690".to_owned(),
@@ -414,12 +414,12 @@ mod tests {
             });
         mock.expect_get_chunk()
             .withf(move |c| {
-                let expected = Checksum::SHA256(chunk2_sha.into());
+                let expected = Checksum::BLAKE3(chunk2_sha.into());
                 c == &expected
             })
             .returning(|_| {
                 // intentionally create a chunk record with the wrong pack digest
-                let digest = Checksum::SHA256(chunk2_sha.into());
+                let digest = Checksum::BLAKE3(chunk2_sha.into());
                 let mut chunk = Chunk::new(digest, 66549, 42917);
                 chunk.packfile = Some(Checksum::SHA1(
                     "d535524bd023d0d22a3912a472c5b0f2db111690".to_owned(),
@@ -431,7 +431,7 @@ mod tests {
         let usecase = ScanPacks::new(Box::new(mock));
         let params = Params::new(
             "ignored",
-            Checksum::SHA256(file_digest.into()),
+            Checksum::BLAKE3(file_digest.into()),
             "keyboard cat",
         );
         let result = usecase.call(params);
@@ -440,13 +440,13 @@ mod tests {
         assert!(result.is_ok());
         let results = result.unwrap();
         assert_eq!(results.len(), 2);
-        let expected_chunk = Checksum::SHA256(chunk1_sha.into());
+        let expected_chunk = Checksum::BLAKE3(chunk1_sha.into());
         let expected_old_pack = Checksum::SHA1("d535524bd023d0d22a3912a472c5b0f2db111690".into());
         let expected_new_pack = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());
         assert_eq!(results[0].chunk_digest, expected_chunk);
         assert_eq!(results[0].old_pack_digest, expected_old_pack);
         assert_eq!(results[0].new_pack_digest, expected_new_pack);
-        let expected_chunk = Checksum::SHA256(chunk2_sha.into());
+        let expected_chunk = Checksum::BLAKE3(chunk2_sha.into());
         assert_eq!(results[1].chunk_digest, expected_chunk);
         assert_eq!(results[1].old_pack_digest, expected_old_pack);
         assert_eq!(results[1].new_pack_digest, expected_new_pack);

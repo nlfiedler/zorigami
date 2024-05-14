@@ -235,12 +235,12 @@ mod tests {
         assert_eq!(packfile.entries.len(), 2);
         assert_eq!(
             packfile.entries[0].name,
-            "sha256-c451d8d136529890c3ecc169177c036029d2b684f796f254bf795c96783fc483"
+            "blake3-c3a9c101999bcd14212cbac34a78a5018c6d1548a32c084f43499c254adf07ef"
         );
         assert_eq!(packfile.entries[0].size, 66549);
         assert_eq!(
             packfile.entries[1].name,
-            "sha256-b4da74176d97674c78baa2765c77f0ccf4a9602f229f6d2b565cf94447ac7af0"
+            "blake3-4b5f350ca573fc4f44b0da18d6aef9cdb2bcb7eeab1ad371af82557d0f353454"
         );
         assert_eq!(packfile.entries[1].size, 42917);
         Ok(())

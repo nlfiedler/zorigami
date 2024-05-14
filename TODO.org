@@ -1,7 +1,8 @@
 * Tasks
-** TODO consider if BLAKE2 might be faster/better than SHA256
-*** consider using this for everything rather than SHA1 and SHA2 conditionally
-*** https://github.com/RustCrypto/hashes/tree/master/blake2
+** TODO build and run tests on Windows, fix
+** TODO data set form input validation is broken for time range?
+*** try to add a dataset that runs hourly, ADD button does nothing
+*** commenting out the time range validator makes it pass
 ** TODO consider refactoring the =domain/managers= code
 *** the entity-like objects should go into =domain/entities=
 *** some code could become a usecase, such as the =take_snapshot()= function
@@ -11,6 +12,27 @@
 ** TODO upgrade =juniper= to latest release
 *** quite a bit of changes to the API
 *** replace =server/src/preso/graphql/mod.rs= with =~/in-progress-graphql-mod.rs=
+** TODO deploy to mini
+*** capture information about current backups
+| Description       | Value |
+|-------------------+-------|
+| Size of database  |       |
+| Number of records |       |
+| Avg size of packs |       |
+*** configure Azure for blob storage
+*** wipe the =/Volumes/Zbackup= disk
+** TODO deploy to chihiro
+*** capture information about current backups
+| Description       | Value |
+|-------------------+-------|
+| Size of database  |       |
+| Number of records |       |
+| Avg size of packs |       |
+*** start a new project on google cloud
+*** wipe the =safe= pack store
+** TODO Eventually clean up Google and AWS storage
+*** old zorigami project on google
+*** S3 buckets on ~production~ AWS account
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist

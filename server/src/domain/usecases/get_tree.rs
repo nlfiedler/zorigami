@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, Tree};
 use crate::domain::repositories::RecordRepository;
@@ -60,8 +60,8 @@ mod tests {
     #[test]
     fn test_get_tree_some() {
         // arrange
-        let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-        let file_digest = Checksum::SHA256(String::from(sha256sum));
+        let b3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+        let file_digest = Checksum::BLAKE3(String::from(b3sum));
         let reference = TreeReference::FILE(file_digest);
         let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
         let entry = TreeEntry::new(filepath, reference);

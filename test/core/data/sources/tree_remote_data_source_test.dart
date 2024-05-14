@@ -47,7 +47,7 @@ void main() {
         reference: const TreeReferenceModel(
           type: EntryType.file,
           value:
-              'sha256-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4',
+              'blake3-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4',
         ),
       ),
       TreeEntryModel(
@@ -70,7 +70,7 @@ void main() {
               'name': '.apdisk',
               'modTime': '2018-05-07T03:52:44+00:00',
               'reference':
-                  'file-sha256-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4'
+                  'file-blake3-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4'
             },
             {
               'name': 'Documents',

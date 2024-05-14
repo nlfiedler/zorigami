@@ -133,8 +133,8 @@ impl PackBuilder {
 
 ///
 /// Extract the chunks from the given pack file, writing them to the output
-/// directory, with the names being the original SHA256 of the chunk (with a
-/// "sha256-" prefix).
+/// directory, with the names being the original hash digest of the chunk with
+/// the algorithm prefix).
 ///
 pub fn extract_pack(
     infile: &Path,
@@ -174,24 +174,24 @@ mod tests {
         // build a small pack file with small files
         let chunks = [
             Chunk::new(
-                Checksum::SHA256(
-                    "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f".to_owned(),
+                Checksum::BLAKE3(
+                    "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128".to_owned(),
                 ),
                 0,
                 3129,
             )
             .filepath(Path::new("../test/fixtures/lorem-ipsum.txt")),
             Chunk::new(
-                Checksum::SHA256(
-                    "314d5e0f0016f0d437829541f935bd1ebf303f162fdd253d5a47f65f40425f05".to_owned(),
+                Checksum::BLAKE3(
+                    "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60".to_owned(),
                 ),
                 0,
                 3375,
             )
             .filepath(Path::new("../test/fixtures/washington-journal.txt")),
             Chunk::new(
-                Checksum::SHA256(
-                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_owned(),
+                Checksum::BLAKE3(
+                    "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262".to_owned(),
                 ),
                 0,
                 0,
@@ -219,7 +219,7 @@ mod tests {
             let entry = result?;
             let entry_name = entry.name();
             assert_eq!(entry_name.len(), 71);
-            assert!(entry_name.starts_with("sha256-"));
+            assert!(entry_name.starts_with("blake3-"));
         }
         Ok(())
     }
@@ -256,30 +256,30 @@ mod tests {
         assert_eq!(entries.len(), 3);
         assert_eq!(
             entries[0],
-            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
+            "blake3-261930e84e14c240210ae8c459acc4bb85dd52f1b91c868f2106dbc1ceb3acca"
         );
         assert_eq!(
             entries[1],
-            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
+            "blake3-a01747cf21202f0068b8897d2be92aa4479b7ac7207b3baa5057b8ec75fa1c10"
         );
         assert_eq!(
             entries[2],
-            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
+            "blake3-01e5305fb8f54d214ed2946843ea360fb9bb3f5df66ef3e34fb024d32ebcaee1"
         );
-        let part1sum = Checksum::sha256_from_file(&outdir.path().join(&entries[0]))?;
+        let part1sum = Checksum::blake3_from_file(&outdir.path().join(&entries[0]))?;
         assert_eq!(
             part1sum.to_string(),
-            "sha256-695429afe5937d6c75099f6e587267065a64e9dd83596a3d7386df3ef5a792c2"
+            "blake3-261930e84e14c240210ae8c459acc4bb85dd52f1b91c868f2106dbc1ceb3acca"
         );
-        let part2sum = Checksum::sha256_from_file(&outdir.path().join(&entries[1]))?;
+        let part2sum = Checksum::blake3_from_file(&outdir.path().join(&entries[1]))?;
         assert_eq!(
             part2sum.to_string(),
-            "sha256-17119f7abc183375afdb652248aad0c7211618d263335cc4e4ffc9a31e719bcb"
+            "blake3-a01747cf21202f0068b8897d2be92aa4479b7ac7207b3baa5057b8ec75fa1c10"
         );
-        let part3sum = Checksum::sha256_from_file(&outdir.path().join(&entries[2]))?;
+        let part3sum = Checksum::blake3_from_file(&outdir.path().join(&entries[2]))?;
         assert_eq!(
             part3sum.to_string(),
-            "sha256-1545925739c6bfbd6609752a0e6ab61854f14d1fdb9773f08a7f52a13f9362d8"
+            "blake3-01e5305fb8f54d214ed2946843ea360fb9bb3f5df66ef3e34fb024d32ebcaee1"
         );
         Ok(())
     }
@@ -288,8 +288,8 @@ mod tests {
     fn test_pack_builder_jpg() -> Result<(), Error> {
         // build a pack file with a jpeg image
         let chunks = [Chunk::new(
-            Checksum::SHA256(
-                "aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6".to_owned(),
+            Checksum::BLAKE3(
+                "b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8".to_owned(),
             ),
             0,
             1272254,
@@ -315,12 +315,12 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(
             entries[0],
-            "sha256-aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6"
+            "blake3-b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8"
         );
-        let part4sum = Checksum::sha256_from_file(&outdir.path().join(&entries[0]))?;
+        let part4sum = Checksum::blake3_from_file(&outdir.path().join(&entries[0]))?;
         assert_eq!(
             part4sum.to_string(),
-            "sha256-aafd64b759b896ceed90c88625c08f215f2a3b0a01ccf47e64239875c5710aa6"
+            "blake3-b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8"
         );
         Ok(())
     }

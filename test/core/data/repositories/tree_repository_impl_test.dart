@@ -31,7 +31,7 @@ void main() {
         reference: TreeReferenceModel(
           type: EntryType.file,
           value:
-              'sha256-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4',
+              'blake3-8c983bd0fac51fa7c6c59dcdd2d3cfd618a60d5b9b66bbe647880a451dd33ab4',
         ),
       ),
       TreeEntryModel(

@@ -149,16 +149,16 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
         + xattrs[]
           - name
           - digest (SHA1 for xattr)
-        + reference (SHA1 for tree, SHA256 for file, base64-encoded value for symlink)
+        + reference (SHA1 for tree, BLAKE3 for file, base64-encoded value for symlink)
         + entry name
 * file records
-    - key: `file/` + SHA256 at time of snapshot
+    - key: `file/` + BLAKE3 at time of snapshot
     - length: size of file in bytes
     - chunks:
         + offset: file position for this chunk
-        + digest: chunk SHA256 (or pack if only one chunk)
+        + digest: chunk BLAKE3 (or pack if only one chunk)
 * database snapshots (identical to pack records)
-    - key: `dbase/` + SHA256 of pack file (with "sha256-" prefix)
+    - key: `dbase/` + BLAKE3 of pack file (with "blake3-" prefix)
     - coordinates:
         + store XID
         + remote bucket/vault name
@@ -172,11 +172,11 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
 Sync with peers for multi-host chunk deduplication.
 
 * chunk records
-    - key: `chunk/` + SHA256 of chunk (with "sha256-" prefix)
+    - key: `chunk/` + BLAKE3 of chunk (with "blake3-" prefix)
     - size of chunk in bytes
-    - SHA256 of pack
+    - BLAKE3 of pack
 * pack records
-    - key: `pack/` + SHA256 of pack file (with "sha256-" prefix)
+    - key: `pack/` + BLAKE3 of pack file (with "blake3-" prefix)
     - coordinates:
         + store XID
         + remote bucket/vault name
@@ -188,7 +188,7 @@ Sync with peers for multi-host chunk deduplication.
 
 Uses a content-defined chunking (a.k.a. content-dependent chunking) algorithm to
 determine suitable chunk boundaries, and stores each unique chunk once based on
-the SHA256 digest of the chunk. In particular, uses
+the BLAKE3 digest of the chunk. In particular, uses
 [FastCDC](https://crates.io/crates/fastcdc)
 which is much faster than Rabin-based fingerprinting, and somewhat faster than
 Gear. This avoids the shortcomings of fixed-size chunking due to boundary
@@ -237,7 +237,7 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 
 #### File Restore
 
-1. Use selected file SHA256 to find list of chunks.
+1. Use selected file BLAKE3 to find list of chunks.
 1. For each chunk, look up the pack record to get bucket and object.
 1. Download pack and verify checksum to detect corruption.
 1. Extract the chunk of the file in the pack to a temporary file.

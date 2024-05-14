@@ -21,6 +21,7 @@ actix-rt = "2.8.0"
 actix-web = "4.3.0"
 anyhow = "1.0.55"
 base64 = "0.22.1"
+blake3 = "1.5.1"
 blob-uuid = "0.5.0"
 bloomfilter = "1.0.9"
 chrono = { version = "0.4", features = ["serde"] }
@@ -42,7 +43,6 @@ serde = { version = "1.0.182", features = ["derive"] }
 serde_cbor = "0.11"
 serde_json = "1.0.79"
 sha1 = "0.10.6"
-sha2 = "0.10.2"
 store_amazon = { path = "../stores/store_amazon" }
 store_azure = { path = "../stores/store_azure" }
 store_core = { path = "../stores/store_core" }

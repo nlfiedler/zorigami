@@ -23,7 +23,7 @@ fn test_insert_get_chunk() -> Result<(), Error> {
 
     // insert/get should return something a little different since not all
     // fields are serialized to the database
-    let digest1 = Checksum::SHA256(
+    let digest1 = Checksum::BLAKE3(
         "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
     );
     let packsum1 = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
@@ -37,7 +37,7 @@ fn test_insert_get_chunk() -> Result<(), Error> {
     let actual: entities::Chunk = record.unwrap();
     assert_eq!(
         actual.digest.to_string(),
-        "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
+        "blake3-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
     );
     // skipped offset is always zero
     assert_eq!(actual.offset, 0);
@@ -52,7 +52,7 @@ fn test_insert_get_chunk() -> Result<(), Error> {
     // Inserting a chunk with different property values but the same digest
     // (which is wrong regardless) will _not_ overwrite the entry already in the
     // database.
-    let digest2 = Checksum::SHA256(
+    let digest2 = Checksum::BLAKE3(
         "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
     );
     let packsum2 = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
@@ -66,7 +66,7 @@ fn test_insert_get_chunk() -> Result<(), Error> {
     let actual: entities::Chunk = record.unwrap();
     assert_eq!(
         actual.digest.to_string(),
-        "sha256-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
+        "blake3-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
     );
     // skipped offset is always zero
     assert_eq!(actual.offset, 0);
@@ -333,8 +333,8 @@ fn test_insert_get_file() -> Result<(), Error> {
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
-    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let chunks = vec![(0, file_digest.clone())];
     let file = entities::File::new(file_digest.clone(), 3129, chunks);
     datasource.insert_file(&file).unwrap();
@@ -358,8 +358,8 @@ fn test_put_get_tree() -> Result<(), Error> {
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
-    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let reference = entities::TreeReference::FILE(file_digest);
     let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
     let entry = entities::TreeEntry::new(filepath, reference);
@@ -443,20 +443,20 @@ fn test_record_counts() -> Result<(), Error> {
         .unwrap();
 
     // file(s)
-    let sha256sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let chunks = vec![(0, file_digest.clone())];
     let file = entities::File::new(file_digest.clone(), 3129, chunks);
     datasource.insert_file(&file).unwrap();
-    let sha256sum = "5562df727e98eb815bb371f095964d07f3e821659d4eb27ed9e20cd5160c5338";
-    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let blake3sum = "5562df727e98eb815bb371f095964d07f3e821659d4eb27ed9e20cd5160c5338";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let chunks = vec![(0, file_digest.clone())];
     let file = entities::File::new(file_digest.clone(), 4096, chunks);
     datasource.insert_file(&file).unwrap();
 
     // tree(s)
-    let sha256sum = "659d4eb27ed9e20095964d07f3e821cd5160c53385562df727e98eb815bb371f";
-    let file_digest = Checksum::SHA256(String::from(sha256sum));
+    let blake3sum = "659d4eb27ed9e20095964d07f3e821cd5160c53385562df727e98eb815bb371f";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let reference = entities::TreeReference::FILE(file_digest);
     let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
     let entry = entities::TreeEntry::new(filepath, reference);
@@ -464,18 +464,18 @@ fn test_record_counts() -> Result<(), Error> {
     datasource.insert_tree(&tree).unwrap();
 
     // chunk(s)
-    let digest1 = Checksum::SHA256(
+    let digest1 = Checksum::BLAKE3(
         "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
     );
     let packsum1 = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
     let chunk1 = entities::Chunk::new(digest1, 0, 40000).packfile(packsum1.clone());
     assert!(datasource.insert_chunk(&chunk1).is_ok());
-    let digest2 = Checksum::SHA256(
+    let digest2 = Checksum::BLAKE3(
         "eb27a0167e9595659ca8a04949bc4f604eb6fc4f2a64b4bb3f3b780da62f6cb1".to_owned(),
     );
     let chunk2 = entities::Chunk::new(digest2, 40000, 64000).packfile(packsum1.clone());
     assert!(datasource.insert_chunk(&chunk2).is_ok());
-    let digest3 = Checksum::SHA256(
+    let digest3 = Checksum::BLAKE3(
         "ca8a4f2aeb27a0167e959565964b4bb3f3b780da62f6cb104949bc4f604eb6fc".to_owned(),
     );
     let chunk3 = entities::Chunk::new(digest3, 64000, 99999).packfile(packsum1);

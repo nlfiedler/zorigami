@@ -30,7 +30,7 @@ void main() {
         modTime: DateTime.utc(2018, 5, 7, 3, 52, 44),
         reference: const TreeReference(
           type: EntryType.file,
-          value: 'sha256-8c983bd',
+          value: 'blake3-8c983bd',
         ),
       ),
       TreeEntry(
@@ -51,7 +51,7 @@ void main() {
         modTime: DateTime.utc(2019, 5, 7, 3, 52, 44),
         reference: const TreeReference(
           type: EntryType.file,
-          value: 'sha256-89c8b3d',
+          value: 'blake3-89c8b3d',
         ),
       ),
       TreeEntry(
@@ -72,7 +72,7 @@ void main() {
         modTime: DateTime.utc(2020, 5, 7, 3, 52, 44),
         reference: const TreeReference(
           type: EntryType.file,
-          value: 'sha256-98c8bd3',
+          value: 'blake3-98c8bd3',
         ),
       ),
       TreeEntry(
