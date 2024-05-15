@@ -1,5 +1,4 @@
 * Tasks
-** TODO build and run tests on Windows, fix
 ** TODO data set form input validation is broken for time range?
 *** try to add a dataset that runs hourly, ADD button does nothing
 *** commenting out the time range validator makes it pass
@@ -33,6 +32,10 @@
 ** TODO Eventually clean up Google and AWS storage
 *** old zorigami project on google
 *** S3 buckets on ~production~ AWS account
+** Consider open sourcing
+*** Add a large warning on the README about schema changes, not reliable, use at own risk
+*** Remove the reference to the license checker, not needed
+*** Clean up the TODO items related to productization
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist

@@ -6,8 +6,8 @@ A backup and restore application.
 
 * Unlimited backup: all files of any size
 * Maintains multiple versions, not just the most recent
-* Efficiency: compression, de-duplication, block-level incremental backup
-* Encryption: all remotely stored data is encrypted with libsodium
+* Efficiency: compression, de-duplication, chunk-level incremental backup
+* Encryption: all remotely stored data is encrypted using AES256-GCM AEAD
 * Service agnostic: SFTP, Amazon, Azure, Google, MinIO
 * Directory tree and individual file restore
 * Restore to dissimilar hardware
@@ -332,4 +332,6 @@ Tested full backup and restore on the 300+GB shared dataset. Verified that a
 
 ### May 2024
 
-Switched from the tar file abomination to [EXAF](https://github.com/nlfiedler/exaf-rs) for the pack files and the database archive. Both packs and database are now encrypted using the provided passphrase. This also allows for the database backup and pack files to be fetched and extracted manually if necessary.
+Switched from the tar file abomination to [EXAF](https://github.com/nlfiedler/exaf-rs) for the pack files and the database archive. Both packs and database are now encrypted using the provided passphrase with a strong, standards-based encryption algorithm. This also allows for the database backup and pack files to be fetched and extracted manually if necessary.
+
+Replace all use of SHA256 with BLAKE3 for improved performance (the latter is about twice as fast as the former).
