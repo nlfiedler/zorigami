@@ -872,7 +872,7 @@ mod tests {
         #[cfg(target_family = "unix")]
         let expected_hash = "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60";
         #[cfg(target_family = "windows")]
-        let expected_hash = "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc";
+        let expected_hash = "183d52ff928be3e77cccf1b78b12b31910d5079195a637a9a2b499059f99b781";
         let expected =
             entities::TreeReference::FILE(entities::Checksum::BLAKE3(expected_hash.into()));
         assert_eq!(entry.reference, expected);

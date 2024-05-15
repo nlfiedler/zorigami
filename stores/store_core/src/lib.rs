@@ -102,11 +102,7 @@ mod tests {
         #[cfg(target_family = "unix")]
         assert_eq!(md5sum, "40756e6058736e2485119410c2014380");
         #[cfg(target_family = "windows")]
-        assert_eq!(
-            // this checksum is wrong and will need to be fixed
-            md5sum,
-            "40756e6058736e2485119410c2014380"
-        );
+        assert_eq!(md5sum, "8aed508af644bc58db20c9b73c5b67ad");
     }
 
     #[test]
@@ -115,10 +111,6 @@ mod tests {
         #[cfg(target_family = "unix")]
         assert_eq!(md5sum, "5eb63bbbe01eeed093cb22bb8f5acdc3");
         #[cfg(target_family = "windows")]
-        assert_eq!(
-            // this checksum is wrong and will need to be fixed
-            md5sum,
-            "5eb63bbbe01eeed093cb22bb8f5acdc3"
-        );
+        assert_eq!(md5sum, "5eb63bbbe01eeed093cb22bb8f5acdc3");
     }
 }

@@ -1786,7 +1786,7 @@ mod tests {
         #[cfg(target_family = "windows")]
         assert_eq!(
             chksum.to_string(),
-            "blake3-1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee"
+            "blake3-2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a"
         );
         let file = outdir.path().join("washington-journal.txt");
         let chksum = Checksum::blake3_from_file(&file)?;
@@ -1798,7 +1798,7 @@ mod tests {
         #[cfg(target_family = "windows")]
         assert_eq!(
             chksum.to_string(),
-            "blake3-494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc"
+            "blake3-183d52ff928be3e77cccf1b78b12b31910d5079195a637a9a2b499059f99b781"
         );
 
         Ok(())

@@ -42,23 +42,23 @@ fvm flutter config --enable-web
 
 1. [Visual Studio Code](https://code.visualstudio.com/)
 1. [Git](https://git-scm.com/)
+    * `winget install --id Git.Git -e --source winget`
 1. [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
     * Select the following **Individual components**
         - `MSVC ... build tools`, latest version with appropriate architecture
-        - `Windows 10 SDK`, or 11 if using Windows 11
+        - `Windows 11 SDK`, or 10 if using Windows 10
+        - C++ Clang Compiler for Windows
+        - MSBuild support for LLVM toolset
 1. [vcpkg](https://github.com/Microsoft/vcpkg) (to install `openssl`)
     * Move the cloned `vcpkg` directory somewhere permanent (e.g. `C:\bin`)
 1. `vcpkg install openssl`
-1. `Set-Item -path env:OPENSSL_DIR -value C:\bin\vcpkg\installed\x86-windows`
-1. [clang](http://clang.llvm.org/)
-1. `Set-Item -path env:LIBCLANG_PATH -value C:\bin\LLVM\bin`
+1. `Set-Item -path env:OPENSSL_DIR -value C:\bin\vcpkg\installed\x64-windows`
 
-Rather than `Set-Item` it may be better to set the environment variables in the
-system settings, then VS Code will be able to build everything.
+Rather than using `Set-Item` it may be better to set the environment variables in the system settings, then VS Code will be able to build everything.
 
-The `openssl` Rust crate must _not_ be "vendored" otherwise it will attempt to
-build OpenSSL from source, which requires Perl in addition to the tools listed
-above, _and_ it will likely fail to compile on 32-bit Windows.
+The `openssl` Rust crate must _not_ be "vendored" otherwise it will attempt to build OpenSSL from source, which requires Perl in addition to the tools listed above.
+
+Note that Visual Studio Installer might install LLVM with multiple architectures (x86 and ARM) and that may result in the Rust compiler attempting to load the wrong version (`libclang.dll could not be opened: LoadLibraryExW failed`) -- if that happens, removing the other architecture directory should help.
 
 ### Building, Testing, Starting the Backend
 

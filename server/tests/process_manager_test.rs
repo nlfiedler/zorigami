@@ -93,7 +93,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     ));
     #[cfg(target_family = "windows")]
     let digest_expected = Checksum::BLAKE3(String::from(
-        "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
+        "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
     ));
     let snapshot = dbase.get_snapshot(&snapshot_sha1)?.unwrap();
     let restorer = RestorerImpl::new(state, file_restorer_factory);

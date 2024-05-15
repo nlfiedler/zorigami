@@ -471,11 +471,7 @@ mod tests {
         #[cfg(target_family = "unix")]
         assert_eq!(md5sum, "4b9772cf2c623ad529900f0ffe4e8ded");
         #[cfg(target_family = "windows")]
-        assert_eq!(
-            // this checksum is wrong and will need to be fixed
-            md5sum,
-            "4b9772cf2c623ad529900f0ffe4e8ded"
-        );
+        assert_eq!(md5sum, "f143ccda41d1e2a553ef214e4549cd6e");
 
         // remove all objects from all buckets, and the buckets, too
         for bucket in buckets {

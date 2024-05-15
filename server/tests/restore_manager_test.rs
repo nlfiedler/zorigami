@@ -136,7 +136,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     ));
     #[cfg(target_family = "windows")]
     let digest_expected = Checksum::BLAKE3(String::from(
-        "1ed890fb1b875a5d7637d54856dc36195bed2e8e40fe6c155a2908b8dd00ebee",
+        "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
     ));
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
     let sut = RestorerImpl::new(state, file_restorer_factory);
@@ -189,7 +189,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     ));
     #[cfg(target_family = "windows")]
     let digest_expected = Checksum::BLAKE3(String::from(
-        "494cb077670d424f47a3d33929d6f1cbcf408a06d28be11259b2fe90666010dc",
+        "183d52ff928be3e77cccf1b78b12b31910d5079195a637a9a2b499059f99b781",
     ));
     sut.reset_completed();
     let snapshot = dbase.get_snapshot(&third_backup)?.unwrap();
