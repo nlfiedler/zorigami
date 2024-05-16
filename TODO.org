@@ -1,7 +1,4 @@
 * Tasks
-** TODO data set form input validation is broken for time range?
-*** try to add a dataset that runs hourly, ADD button does nothing
-*** commenting out the time range validator makes it pass
 ** TODO consider refactoring the =domain/managers= code
 *** the entity-like objects should go into =domain/entities=
 *** some code could become a usecase, such as the =take_snapshot()= function
@@ -11,6 +8,7 @@
 ** TODO upgrade =juniper= to latest release
 *** quite a bit of changes to the API
 *** replace =server/src/preso/graphql/mod.rs= with =~/in-progress-graphql-mod.rs=
+** TODO experiement with different chunk sizes (1mb, 2mb, etc)
 ** TODO deploy to mini
 *** capture information about current backups
 | Description       | Value |
@@ -36,6 +34,13 @@
 *** Add a large warning on the README about schema changes, not reliable, use at own risk
 *** Remove the reference to the license checker, not needed
 *** Clean up the TODO items related to productization
+*** Delete the =CHANGELOG.md=, it only makes sense for a library
+*** Move ~history~ content in =README.md= into =doc/HISTORY.md=
+*** Move =NOTES.md= into =doc/DESIGN.md=
+*** Move the ~deployments~ section of =TODO.org= to a wiki page
+*** Clear out the ~product~ section of =TODO.org=
+*** Move the ~technical information~ into design documents
+**** especially observations about chunk sizes, parallelism
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
@@ -296,6 +301,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 - define a new dataset (if pack store defined but no database snapshots are present)
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
+*** time range picker in data set form is terrible
+**** may be better to have minute increments and custom formatter for the display
 ** Loose backend issues
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
@@ -908,6 +915,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 ** Restore statistics
 *** 4 hours to restore 63GB (11k files) of ~tanuki~ data from Google over fiber
 ** Parallelism
+*** more threads means more disk thrashing; SSD is well-suited to this approach
 *** shortening snapshot time
 **** mini parallelism is 8
 **** server parallelism is 4
@@ -926,7 +934,7 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** if packing file fails, overall backup will fail
 *** what happens when file contents change between scanning and packing?
 **** changed file is stored using the original checksum
-**** file will subsequently be backed up again next time
+**** file will subsequently be (needlessly) backed up again next time
 ** Data Growth
 *** main server
 **** better pack file generation
@@ -1072,8 +1080,7 @@ perform a pack pruning, the most recent database snapshot would be removed.
 | production  |  536345 |
 | gzipped     |  145785 |
 ** Exploring other languages
-*** Compile to native for easy deployment
-*** Compile to native for code obfuscation
+*** Compile to native for speed and easy deployment
 *** Rust
 **** Advantages
 ***** compile to native

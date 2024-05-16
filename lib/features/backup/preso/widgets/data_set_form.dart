@@ -1,11 +1,10 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:oxidized/oxidized.dart';
-import 'package:time_range_picker/time_range_picker.dart' as tpicker;
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 
@@ -58,7 +57,7 @@ class DataSetForm extends StatefulWidget {
     // convert pack size int of bytes to string of megabytes
     final packSize = (dataset.packSize / 1048576).round();
     final frequency = frequencyFromDataSet(dataset);
-    final timeRange = timeRangeFromDataSet(dataset);
+    final timeRange = rangeValuesFromDataSet(dataset);
     final initialStores = buildInitialStores(dataset, stores);
     final initialExcludes = dataset.excludes.join(', ');
     return {
@@ -187,43 +186,16 @@ class _DataSetFormState extends State<DataSetForm> {
                 timePickersEnabled = allowTimeRange(val as FrequencyOption));
           },
         ),
-        FormBuilderField<TimeRange>(
+        FormBuilderRangeSlider(
           name: "timeRange",
+          min: 0,
+          max: 24,
+          divisions: 24,
           enabled: timePickersEnabled,
-          builder: (FormFieldState<dynamic> field) {
-            return InputDecorator(
-              decoration: const InputDecoration(
-                icon: Icon(Icons.schedule),
-                labelText: 'Start/Stop Time',
-              ),
-              child: TextButton(
-                onPressed: timePickersEnabled
-                    ? () async {
-                        TimeOfDay? start = startTimeFromValue(field.value);
-                        TimeOfDay? stop = stopTimeFromValue(field.value);
-                        var result = await tpicker.showTimeRangePicker(
-                          context: context,
-                          start: start,
-                          end: stop,
-                        );
-                        final converted = timeRangeFromPicker(result);
-                        if (converted != null) {
-                          field.didChange(converted);
-                        }
-                      }
-                    : null,
-                child: Text(
-                  field.value != null
-                      ? field.value.toPrettyString()
-                      : "tap to set",
-                ),
-              ),
-            );
-          },
-          // TODO: require valid time range if timePickersEnabled
-          // validator: FormBuilderValidators.compose([
-          //   FormBuilderValidators.required(),
-          // ]),
+          decoration: const InputDecoration(
+            icon: Icon(Icons.schedule),
+            labelText: 'Start/Stop Time',
+          ),
         ),
       ],
     );
@@ -282,6 +254,14 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
   }
 }
 
+RangeValues? rangeValuesFromDataSet(DataSet dataset) {
+  TimeRange? range = timeRangeFromDataSet(dataset);
+  if (range != null) {
+    return RangeValues(range.start / 3600, range.stop / 3600);
+  }
+  return null;
+}
+
 TimeRange? timeRangeFromDataSet(DataSet dataset) {
   if (dataset.schedules.isEmpty) {
     return null;
@@ -298,40 +278,6 @@ TimeRange? timeRangeFromDataSet(DataSet dataset) {
   }
 }
 
-TimeOfDay? startTimeFromValue(TimeRange? value) {
-  if (value != null) {
-    return timeOfDateFromInt(value.start);
-  }
-  return null;
-}
-
-TimeOfDay? stopTimeFromValue(TimeRange? value) {
-  if (value != null) {
-    return timeOfDateFromInt(value.stop);
-  }
-  return null;
-}
-
-// convert from TimeRange.start/stop to the material TimeOfDay
-TimeOfDay timeOfDateFromInt(int time) {
-  final int asMinutes = (time / 60) as int;
-  //
-  // This code works fine in dartdevc:
-  //
-  // final int hour = as_minutes ~/ 60;
-  // final int minutes = as_minutes % 60;
-  // return DateTime(1, 1, 1, hour, minutes);
-  //
-  // However, it seems like the dart2js compiler produces something erroneous
-  // and it causes this code to fail miserably, which in turn causes the
-  // component to paint an enormous grey rectangle. As such, perform all the
-  // arithmetic using not-integer operators and then convert to ints at the end.
-  //
-  final hour = asMinutes / 60;
-  final minutes = asMinutes - (hour.toInt() * 60);
-  return TimeOfDay(hour: hour.toInt(), minute: minutes.toInt());
-}
-
 List<Schedule> schedulesFromState(FormBuilderState state) {
   final FrequencyOption option = state.value['frequency'];
   if (option.frequency == null) {
@@ -340,7 +286,7 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
   }
   // dart needs help knowing exactly what type of option is returned
   final Option<TimeRange> timeRange = allowTimeRange(option)
-      ? Option.from(state.value['timeRange'])
+      ? Option.from(timeRangeFromRangeValues(state.value['timeRange']))
       : const None();
   return [
     Schedule(
@@ -358,11 +304,11 @@ List<String> excludesFromState(FormBuilderState state) {
   return List.from(value.split(',').map((e) => e.trim()));
 }
 
-TimeRange? timeRangeFromPicker(tpicker.TimeRange? value) {
+TimeRange? timeRangeFromRangeValues(RangeValues? value) {
   if (value != null) {
-    final start = (value.startTime.hour * 60 + value.startTime.minute) * 60;
-    final stop = (value.endTime.hour * 60 + value.endTime.minute) * 60;
-    return TimeRange(start: start, stop: stop);
+    final start = value.start * 3600;
+    final stop = value.end * 3600;
+    return TimeRange(start: start.toInt(), stop: stop.toInt());
   }
   return null;
 }
