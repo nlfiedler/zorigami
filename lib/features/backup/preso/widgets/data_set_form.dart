@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
@@ -186,12 +187,17 @@ class _DataSetFormState extends State<DataSetForm> {
                 timePickersEnabled = allowTimeRange(val as FrequencyOption));
           },
         ),
+        // 288 is the number of 5-minute divisions in 24 hours
         FormBuilderRangeSlider(
           name: "timeRange",
           min: 0,
-          max: 24,
-          divisions: 24,
+          max: 288,
+          divisions: 288,
           enabled: timePickersEnabled,
+          labels: const RangeLabels('Start', 'Stop'),
+          minValueWidget: (value) => const Text('12 am'),
+          valueWidget: (formatted) => convertToTime(formatted),
+          maxValueWidget: (value) => const Text('12 am'),
           decoration: const InputDecoration(
             icon: Icon(Icons.schedule),
             labelText: 'Start/Stop Time',
@@ -200,6 +206,22 @@ class _DataSetFormState extends State<DataSetForm> {
       ],
     );
   }
+}
+
+// Converts the input value '97 - 208' to '8:05 - 17:20'
+Widget convertToTime(String formatted) {
+  final f = NumberFormat('00');
+  String converter(int value) {
+    final int asMinutes = value * 5;
+    final int hour = asMinutes ~/ 60;
+    final int minutes = asMinutes % 60;
+    return '${f.format(hour)}:${f.format(minutes)}';
+  }
+
+  final parts = formatted.split('-');
+  final start = converter(int.parse(parts[0]));
+  final stop = converter(int.parse(parts[1]));
+  return Text('$start - $stop');
 }
 
 class FrequencyOption {
@@ -257,7 +279,7 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
 RangeValues? rangeValuesFromDataSet(DataSet dataset) {
   TimeRange? range = timeRangeFromDataSet(dataset);
   if (range != null) {
-    return RangeValues(range.start / 3600, range.stop / 3600);
+    return RangeValues(range.start / 300, range.stop / 300);
   }
   return null;
 }
@@ -306,8 +328,8 @@ List<String> excludesFromState(FormBuilderState state) {
 
 TimeRange? timeRangeFromRangeValues(RangeValues? value) {
   if (value != null) {
-    final start = value.start * 3600;
-    final stop = value.end * 3600;
+    final start = value.start * 300;
+    final stop = value.end * 300;
     return TimeRange(start: start.toInt(), stop: stop.toInt());
   }
   return null;

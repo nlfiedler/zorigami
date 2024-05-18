@@ -1,10 +1,6 @@
 * Tasks
-** TODO consider refactoring the =domain/managers= code
-*** the entity-like objects should go into =domain/entities=
-*** some code could become a usecase, such as the =take_snapshot()= function
-**** see =~/mod.rs= and =~/take_snapshot.rs=
-**** appears to be converting the =take_snapshot()= function to a use case
-**** the modified =mod.rs= is what's left of =domain/managers/backup/mod.rs=
+** TODO fix the data set time range widget
+*** current widget does not allow choosing a range that spans midnight
 ** TODO upgrade =juniper= to latest release
 *** quite a bit of changes to the API
 *** replace =server/src/preso/graphql/mod.rs= with =~/in-progress-graphql-mod.rs=
@@ -301,8 +297,6 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 - define a new dataset (if pack store defined but no database snapshots are present)
 ** Improved interface
 *** c.f. https://duplicacy.com/guide.html webui looks good
-*** time range picker in data set form is terrible
-**** may be better to have minute increments and custom formatter for the display
 ** Loose backend issues
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
