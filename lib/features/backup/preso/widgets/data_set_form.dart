@@ -4,10 +4,11 @@
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
-import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
 import 'package:zorigami/core/domain/entities/pack_store.dart';
+import 'package:zorigami/features/backup/preso/widgets/time_range_picker.dart'
+    as tpicker;
 
 final frequencyManual = FrequencyOption(
   label: 'Manual',
@@ -58,7 +59,7 @@ class DataSetForm extends StatefulWidget {
     // convert pack size int of bytes to string of megabytes
     final packSize = (dataset.packSize / 1048576).round();
     final frequency = frequencyFromDataSet(dataset);
-    final timeRange = rangeValuesFromDataSet(dataset);
+    final timeRange = timeRangeFromDataSet(dataset);
     final initialStores = buildInitialStores(dataset, stores);
     final initialExcludes = dataset.excludes.join(', ');
     return {
@@ -187,41 +188,45 @@ class _DataSetFormState extends State<DataSetForm> {
                 timePickersEnabled = allowTimeRange(val as FrequencyOption));
           },
         ),
-        // 288 is the number of 5-minute divisions in 24 hours
-        FormBuilderRangeSlider(
+        FormBuilderField<TimeRange>(
           name: "timeRange",
-          min: 0,
-          max: 288,
-          divisions: 288,
           enabled: timePickersEnabled,
-          labels: const RangeLabels('Start', 'Stop'),
-          minValueWidget: (value) => const Text('12 am'),
-          valueWidget: (formatted) => convertToTime(formatted),
-          maxValueWidget: (value) => const Text('12 am'),
-          decoration: const InputDecoration(
-            icon: Icon(Icons.schedule),
-            labelText: 'Start/Stop Time',
-          ),
+          builder: (FormFieldState<dynamic> field) {
+            return InputDecorator(
+              decoration: const InputDecoration(
+                icon: Icon(Icons.schedule),
+                labelText: 'Start/Stop Time',
+              ),
+              child: TextButton(
+                onPressed: timePickersEnabled
+                    ? () async {
+                        TimeOfDay? start = startTimeFromValue(field.value);
+                        TimeOfDay? stop = stopTimeFromValue(field.value);
+                        var result = await tpicker.showTimeRangePicker(
+                          context: context,
+                          start: start,
+                          end: stop,
+                        );
+                        final converted = timeRangeFromPicker(result);
+                        if (converted != null) {
+                          field.didChange(converted);
+                        }
+                      }
+                    : null,
+                child: Text(
+                  field.value != null
+                      ? field.value.toPrettyString()
+                      : "tap to set",
+                ),
+              ),
+            );
+          },
+          validator:
+              timePickersEnabled ? FormBuilderValidators.required() : null,
         ),
       ],
     );
   }
-}
-
-// Converts the input value '97 - 208' to '8:05 - 17:20'
-Widget convertToTime(String formatted) {
-  final f = NumberFormat('00');
-  String converter(int value) {
-    final int asMinutes = value * 5;
-    final int hour = asMinutes ~/ 60;
-    final int minutes = asMinutes % 60;
-    return '${f.format(hour)}:${f.format(minutes)}';
-  }
-
-  final parts = formatted.split('-');
-  final start = converter(int.parse(parts[0]));
-  final stop = converter(int.parse(parts[1]));
-  return Text('$start - $stop');
 }
 
 class FrequencyOption {
@@ -276,10 +281,33 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
   }
 }
 
-RangeValues? rangeValuesFromDataSet(DataSet dataset) {
-  TimeRange? range = timeRangeFromDataSet(dataset);
-  if (range != null) {
-    return RangeValues(range.start / 300, range.stop / 300);
+TimeOfDay? startTimeFromValue(TimeRange? value) {
+  if (value != null) {
+    return timeOfDateFromInt(value.start);
+  }
+  return null;
+}
+
+TimeOfDay? stopTimeFromValue(TimeRange? value) {
+  if (value != null) {
+    return timeOfDateFromInt(value.stop);
+  }
+  return null;
+}
+
+// convert from TimeRange.start/stop to the material TimeOfDay
+TimeOfDay timeOfDateFromInt(int time) {
+  final int asMinutes = (time / 60) as int;
+  final hour = asMinutes / 60;
+  final minutes = asMinutes - (hour.toInt() * 60);
+  return TimeOfDay(hour: hour.toInt(), minute: minutes.toInt());
+}
+
+TimeRange? timeRangeFromPicker(tpicker.TimeRange? value) {
+  if (value != null) {
+    final start = (value.startTime.hour * 60 + value.startTime.minute) * 60;
+    final stop = (value.endTime.hour * 60 + value.endTime.minute) * 60;
+    return TimeRange(start: start, stop: stop);
   }
   return null;
 }
@@ -308,7 +336,7 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
   }
   // dart needs help knowing exactly what type of option is returned
   final Option<TimeRange> timeRange = allowTimeRange(option)
-      ? Option.from(timeRangeFromRangeValues(state.value['timeRange']))
+      ? Option.from(state.value['timeRange'])
       : const None();
   return [
     Schedule(
@@ -324,15 +352,6 @@ List<Schedule> schedulesFromState(FormBuilderState state) {
 List<String> excludesFromState(FormBuilderState state) {
   final String value = state.value['excludes'];
   return List.from(value.split(',').map((e) => e.trim()));
-}
-
-TimeRange? timeRangeFromRangeValues(RangeValues? value) {
-  if (value != null) {
-    final start = value.start * 300;
-    final stop = value.end * 300;
-    return TimeRange(start: start.toInt(), stop: stop.toInt());
-  }
-  return null;
 }
 
 bool allowTimeRange(FrequencyOption frequency) {

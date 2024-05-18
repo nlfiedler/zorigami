@@ -23,6 +23,7 @@ dependencies:
   graphql: ^5.1.3
   intl: ^0.18.1
   oxidized: ^6.1.0
+  progressive_time_picker: ^1.0.1
 
 dev_dependencies:
   flutter_test:

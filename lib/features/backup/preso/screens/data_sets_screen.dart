@@ -39,7 +39,7 @@ class DataSetsScreen extends ConsumerWidget {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => NewDataSetScreen(),
+                    builder: (_) => const NewDataSetScreen(),
                   ),
                 );
                 if (result != null && context.mounted) {
