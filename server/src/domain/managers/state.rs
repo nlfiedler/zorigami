@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! The `state` module manages the application state.
@@ -237,8 +237,12 @@ pub enum BackupAction {
     Start(String),
     /// Signal the backup to be stopped if it is running.
     Stop(String),
+    /// Set the number of changed files when the backup starts.
+    BeginUpload(String, u64),
     /// Increment the pack upload count for a dataset.
     UploadPack(String),
+    /// Increase the byte upload count for a dataset by the given amount.
+    UploadBytes(String, u64),
     /// Increase the file upload count for a dataset by the given amount.
     UploadFiles(String, u64),
     /// Set the completion time for the backup of a given dataset.
@@ -290,8 +294,15 @@ pub enum RestorerAction {
 pub struct BackupState {
     start_time: DateTime<Utc>,
     end_time: Option<DateTime<Utc>>,
+    /// Number of files that changed in this snapshot.
+    changed_files: u64,
+    /// Number of pack files uploaded so far.
     packs_uploaded: u64,
+    /// Number of files uploaded so far.
     files_uploaded: u64,
+    /// Number of bytes uploaded so far, which may change more often than the
+    /// number of files in the event that a very large file is being uploaded.
+    bytes_uploaded: u64,
     error_msg: Option<String>,
     paused: bool,
     stop_requested: bool,
@@ -302,8 +313,10 @@ impl Default for BackupState {
         Self {
             start_time: Utc::now(),
             end_time: None,
+            changed_files: 0,
             packs_uploaded: 0,
             files_uploaded: 0,
+            bytes_uploaded: 0,
             error_msg: None,
             paused: false,
             stop_requested: false,
@@ -322,6 +335,11 @@ impl BackupState {
         self.end_time
     }
 
+    /// Return the number of files that have changed since the last snapshot.
+    pub fn changed_files(&self) -> u64 {
+        self.changed_files
+    }
+
     /// Return the number of packs uploaded for this dataset.
     pub fn packs_uploaded(&self) -> u64 {
         self.packs_uploaded
@@ -330,6 +348,11 @@ impl BackupState {
     /// Return the number of files uploaded for this dataset.
     pub fn files_uploaded(&self) -> u64 {
         self.files_uploaded
+    }
+
+    /// Return the number of bytes uploaded for this dataset.
+    pub fn bytes_uploaded(&self) -> u64 {
+        self.bytes_uploaded
     }
 
     /// Return the state of the error flag.
@@ -453,9 +476,22 @@ impl Reducer<BackupAction> for State {
                     record.stop_requested = true;
                 }
             }
+            BackupAction::BeginUpload(key, files) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.changed_files = files;
+                    record.packs_uploaded = 0;
+                    record.bytes_uploaded = 0;
+                    record.files_uploaded = 0;
+                }
+            }
             BackupAction::UploadPack(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
                     record.packs_uploaded += 1;
+                }
+            }
+            BackupAction::UploadBytes(key, inc) => {
+                if let Some(record) = self.backups.get_mut(&key) {
+                    record.bytes_uploaded += inc;
                 }
             }
             BackupAction::UploadFiles(key, inc) => {

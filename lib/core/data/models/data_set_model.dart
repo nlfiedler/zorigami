@@ -132,6 +132,57 @@ class ScheduleModel extends Schedule {
   }
 }
 
+class BackupStateModel extends BackupState {
+  const BackupStateModel({
+    required bool paused,
+    required bool stopRequested,
+    required int changedFiles,
+    required int packsUploaded,
+    required int filesUploaded,
+    required int bytesUploaded,
+  }) : super(
+          paused: paused,
+          stopRequested: stopRequested,
+          changedFiles: changedFiles,
+          packsUploaded: packsUploaded,
+          filesUploaded: filesUploaded,
+          bytesUploaded: bytesUploaded,
+        );
+
+  factory BackupStateModel.from(BackupState state) {
+    return BackupStateModel(
+      paused: state.paused,
+      stopRequested: state.stopRequested,
+      changedFiles: state.changedFiles,
+      packsUploaded: state.packsUploaded,
+      filesUploaded: state.filesUploaded,
+      bytesUploaded: state.bytesUploaded,
+    );
+  }
+
+  factory BackupStateModel.fromJson(Map<String, dynamic> json) {
+    return BackupStateModel(
+      paused: json['paused'],
+      stopRequested: json['stopRequested'],
+      changedFiles: int.parse(json['changedFiles']),
+      packsUploaded: int.parse(json['packsUploaded']),
+      filesUploaded: int.parse(json['filesUploaded']),
+      bytesUploaded: int.parse(json['bytesUploaded']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'paused': paused,
+      'stopRequested': stopRequested,
+      'changedFiles': changedFiles.toString(),
+      'packsUploaded': packsUploaded.toString(),
+      'filesUploaded': filesUploaded.toString(),
+      'bytesUploaded': bytesUploaded.toString(),
+    };
+  }
+}
+
 class DataSetModel extends DataSet {
   const DataSetModel({
     required String key,
@@ -143,6 +194,7 @@ class DataSetModel extends DataSet {
     required List<String> excludes,
     required Option<SnapshotModel> snapshot,
     required Status status,
+    required Option<BackupStateModel> backupState,
     required Option<String> errorMsg,
   }) : super(
           key: key,
@@ -154,6 +206,7 @@ class DataSetModel extends DataSet {
           excludes: excludes,
           snapshot: snapshot,
           status: status,
+          backupState: backupState,
           errorMsg: errorMsg,
         );
 
@@ -162,6 +215,7 @@ class DataSetModel extends DataSet {
       dataset.schedules.map((s) => ScheduleModel.from(s)),
     );
     final snapshot = dataset.snapshot.map((e) => SnapshotModel.from(e));
+    final state = dataset.backupState.map((e) => BackupStateModel.from(e));
     return DataSetModel(
       key: dataset.key,
       computerId: dataset.computerId,
@@ -172,6 +226,7 @@ class DataSetModel extends DataSet {
       excludes: dataset.excludes,
       snapshot: snapshot,
       status: dataset.status,
+      backupState: state,
       errorMsg: dataset.errorMsg,
     );
   }
@@ -193,6 +248,9 @@ class DataSetModel extends DataSet {
         : List.from(
             json['excludes'].map((e) => e.toString()),
           );
+    final backupState = Option.from(json['backupState']).map(
+      (v) => BackupStateModel.fromJson(v as Map<String, dynamic>),
+    );
     // note that computerId is optional, but we will ignore that for now
     return DataSetModel(
       key: json['id'],
@@ -205,6 +263,7 @@ class DataSetModel extends DataSet {
       excludes: excludes,
       snapshot: snapshot,
       status: decodeStatus(json['status']),
+      backupState: backupState,
       errorMsg: Option.from(json['errorMessage']),
     );
   }
@@ -213,7 +272,9 @@ class DataSetModel extends DataSet {
     final List<Map<String, dynamic>> schedules = List.from(
       this.schedules.map((s) => ScheduleModel.from(s).toJson()),
     );
-    final result = {
+    final Option<Map<String, dynamic>> backupState =
+        this.backupState.map((s) => BackupStateModel.from(s).toJson());
+    final Map<String, dynamic> result = {
       'id': key,
       'basepath': basepath,
       'schedules': schedules,
@@ -224,6 +285,7 @@ class DataSetModel extends DataSet {
     if (!input) {
       result['computerId'] = computerId;
       result['status'] = encodeStatus(status);
+      result['backupState'] = backupState.toNullable();
     }
     return result;
   }

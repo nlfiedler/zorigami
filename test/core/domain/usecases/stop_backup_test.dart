@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -30,6 +30,7 @@ void main() {
     excludes: [],
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
 
@@ -43,11 +44,11 @@ void main() {
     () async {
       // arrange
       when(() => mockDataSetRepository.stopBackup(any()))
-          .thenAnswer((_) async => Ok<bool, Failure>(true));
+          .thenAnswer((_) async => const Ok<bool, Failure>(true));
       // act
       final result = await usecase(const Params(dataset: tDataSet));
       // assert
-      expect(result, equals(Ok<bool, Failure>(true)));
+      expect(result, equals(const Ok<bool, Failure>(true)));
       verify(() => mockDataSetRepository.stopBackup(any()));
       verifyNoMoreInteractions(mockDataSetRepository);
     },

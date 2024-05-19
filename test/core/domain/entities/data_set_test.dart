@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
@@ -11,11 +11,11 @@ void main() {
       'should reject invalid start time',
       () {
         expect(
-          TimeRange(start: -1, stop: 0).validate(),
+          const TimeRange(start: -1, stop: 0).validate(),
           isA<Err>(),
         );
         expect(
-          TimeRange(start: 86401, stop: 0).validate(),
+          const TimeRange(start: 86401, stop: 0).validate(),
           isA<Err>(),
         );
       },
@@ -25,11 +25,11 @@ void main() {
       'should reject invalid stop time',
       () {
         expect(
-          TimeRange(start: 0, stop: -1).validate(),
+          const TimeRange(start: 0, stop: -1).validate(),
           isA<Err>(),
         );
         expect(
-          TimeRange(start: 0, stop: 86401).validate(),
+          const TimeRange(start: 0, stop: 86401).validate(),
           isA<Err>(),
         );
       },
@@ -39,19 +39,19 @@ void main() {
       'should accept valid time range',
       () {
         expect(
-          TimeRange(start: 0, stop: 0).validate(),
+          const TimeRange(start: 0, stop: 0).validate(),
           isA<Ok>(),
         );
         expect(
-          TimeRange(start: 86400, stop: 86400).validate(),
+          const TimeRange(start: 86400, stop: 86400).validate(),
           isA<Ok>(),
         );
         expect(
-          TimeRange(start: 72000, stop: 14400).validate(),
+          const TimeRange(start: 72000, stop: 14400).validate(),
           isA<Ok>(),
         );
         expect(
-          TimeRange(start: 14400, stop: 72000).validate(),
+          const TimeRange(start: 14400, stop: 72000).validate(),
           isA<Ok>(),
         );
       },
@@ -61,27 +61,27 @@ void main() {
       'should pretty print various ranges',
       () {
         expect(
-          TimeRange(start: 0, stop: 0).toPrettyString(),
+          const TimeRange(start: 0, stop: 0).toPrettyString(),
           equals('from 12:00 AM to 12:00 AM'),
         );
         expect(
-          TimeRange(start: 0, stop: 43200).toPrettyString(),
+          const TimeRange(start: 0, stop: 43200).toPrettyString(),
           equals('from 12:00 AM to 12:00 PM'),
         );
         expect(
-          TimeRange(start: 43200, stop: 0).toPrettyString(),
+          const TimeRange(start: 43200, stop: 0).toPrettyString(),
           equals('from 12:00 PM to 12:00 AM'),
         );
         expect(
-          TimeRange(start: 86400, stop: 86400).toPrettyString(),
+          const TimeRange(start: 86400, stop: 86400).toPrettyString(),
           equals('from 12:00 AM to 12:00 AM'),
         );
         expect(
-          TimeRange(start: 72000, stop: 14400).toPrettyString(),
+          const TimeRange(start: 72000, stop: 14400).toPrettyString(),
           equals('from 8:00 PM to 4:00 AM'),
         );
         expect(
-          TimeRange(start: 12660, stop: 54060).toPrettyString(),
+          const TimeRange(start: 12660, stop: 54060).toPrettyString(),
           equals('from 3:31 AM to 3:01 PM'),
         );
       },
@@ -93,7 +93,7 @@ void main() {
       'should reject hourly with any other settings',
       () {
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.hourly,
             weekOfMonth: Some(WeekOfMonth.first),
             dayOfWeek: None(),
@@ -103,7 +103,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.hourly,
             weekOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.thu),
@@ -113,7 +113,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.hourly,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -123,7 +123,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.hourly,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -139,7 +139,7 @@ void main() {
       'should reject daily with anything other than time range',
       () {
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.daily,
             weekOfMonth: Some(WeekOfMonth.first),
             dayOfWeek: None(),
@@ -149,7 +149,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.daily,
             weekOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.thu),
@@ -159,7 +159,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.daily,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -169,7 +169,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.daily,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -185,7 +185,7 @@ void main() {
       'should reject weekly with week-of-month or day-of-month',
       () {
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.weekly,
             weekOfMonth: Some(WeekOfMonth.first),
             dayOfWeek: None(),
@@ -195,7 +195,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.weekly,
             weekOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.thu),
@@ -205,7 +205,7 @@ void main() {
           isA<Ok>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.weekly,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -215,7 +215,7 @@ void main() {
           isA<Err>(),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.weekly,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -230,7 +230,7 @@ void main() {
     test(
       'should reject monthly with day-of-month and day-of-week',
       () {
-        final result = Schedule(
+        final result = const Schedule(
           frequency: Frequency.monthly,
           weekOfMonth: Some(WeekOfMonth.first),
           dayOfWeek: Some(DayOfWeek.thu),
@@ -248,7 +248,7 @@ void main() {
     test(
       'should reject monthly with day-of-week but not week-of-month',
       () {
-        final result = Schedule(
+        final result = const Schedule(
           frequency: Frequency.monthly,
           weekOfMonth: None(),
           dayOfWeek: Some(DayOfWeek.thu),
@@ -267,7 +267,7 @@ void main() {
       'should pretty print the schedule',
       () {
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.hourly,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -277,7 +277,7 @@ void main() {
           equals('hourly'),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.daily,
             weekOfMonth: None(),
             dayOfWeek: None(),
@@ -287,7 +287,7 @@ void main() {
           equals('daily'),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.weekly,
             weekOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.mon),
@@ -297,7 +297,7 @@ void main() {
           equals('weekly on Monday'),
         );
         expect(
-          Schedule(
+          const Schedule(
             frequency: Frequency.monthly,
             weekOfMonth: Some(WeekOfMonth.second),
             dayOfWeek: Some(DayOfWeek.thu),
@@ -314,7 +314,7 @@ void main() {
     test(
       'should reject set without any stores',
       () {
-        final result = DataSet(
+        final result = const DataSet(
           key: '',
           computerId: '',
           basepath: '',
@@ -324,6 +324,7 @@ void main() {
           excludes: [],
           snapshot: None(),
           status: Status.none,
+          backupState: None(),
           errorMsg: None(),
         ).validate();
         expect(result, isA<Err>());
@@ -335,7 +336,7 @@ void main() {
     );
 
     test('should reject set with invalid schedule', () {
-      final result = DataSet(
+      final result = const DataSet(
         key: '',
         computerId: '',
         basepath: '',
@@ -353,6 +354,7 @@ void main() {
         excludes: [],
         snapshot: None(),
         status: Status.none,
+        backupState: None(),
         errorMsg: None(),
       ).validate();
       expect(result, isA<Err>());
@@ -365,7 +367,7 @@ void main() {
     test(
       'should accept set with valid properties',
       () {
-        final result = DataSet(
+        final result = const DataSet(
           key: '',
           computerId: '',
           basepath: '',
@@ -375,6 +377,7 @@ void main() {
           excludes: [],
           snapshot: None(),
           status: Status.none,
+          backupState: None(),
           errorMsg: None(),
         ).validate();
         expect(result, isA<Ok>());

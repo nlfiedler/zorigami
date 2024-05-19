@@ -10,7 +10,7 @@ use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::helpers;
 use crate::domain::managers::backup::Scheduler;
 use crate::domain::managers::restore::{self, Restorer};
-use crate::domain::managers::state::StateStore;
+use crate::domain::managers::state::{self, StateStore};
 use crate::domain::repositories::RecordRepository;
 use chrono::prelude::*;
 use juniper::{
@@ -264,6 +264,43 @@ pub enum Status {
     FAILED,
 }
 
+#[juniper::graphql_object(description = "Detailed information of the state of the backup.")]
+impl state::BackupState {
+    /// True if the running backup has been paused.
+    fn paused(&self) -> bool {
+        self.is_paused()
+    }
+
+    /// True if the running backup received a request to stop prematurely.
+    fn stop_requested(&self) -> bool {
+        self.should_stop()
+    }
+
+    /// Number of files that changed in this snapshot.
+    #[graphql(name = "changedFiles")]
+    fn files_changed(&self) -> BigInt {
+        BigInt(self.changed_files() as i64)
+    }
+
+    /// Number of pack files uploaded so far.
+    #[graphql(name = "packsUploaded")]
+    fn uploaded_packs(&self) -> BigInt {
+        BigInt(self.packs_uploaded() as i64)
+    }
+
+    /// Number of files uploaded so far.
+    #[graphql(name = "filesUploaded")]
+    fn uploaded_files(&self) -> BigInt {
+        BigInt(self.files_uploaded() as i64)
+    }
+
+    /// Number of bytes uploaded so far, which may change more often than the
+    #[graphql(name = "bytesUploaded")]
+    fn uploaded_bytes(&self) -> BigInt {
+        BigInt(self.bytes_uploaded() as i64)
+    }
+}
+
 #[juniper::graphql_object(
     Context = GraphContext,
     description = "Location, schedule, and pack store for a backup data set.")
@@ -321,6 +358,12 @@ impl entities::Dataset {
         } else {
             Status::NONE
         }
+    }
+
+    /// Detailed state of the backup for this dataset.
+    fn backup_state(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<state::BackupState> {
+        let redux = ctx.appstate.get_state();
+        redux.backups(&self.id).cloned()
     }
 
     /// Error message for the most recent snapshot, if any.
@@ -1912,7 +1955,10 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
+        vars.insert(
+            "digest".to_owned(),
+            ChecksumGQL(snapshot_sha2).to_input_value(),
+        );
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
@@ -1949,7 +1995,10 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
+        vars.insert(
+            "digest".to_owned(),
+            ChecksumGQL(snapshot_sha2).to_input_value(),
+        );
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
@@ -1980,7 +2029,10 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
+        vars.insert(
+            "digest".to_owned(),
+            ChecksumGQL(snapshot_sha2).to_input_value(),
+        );
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }

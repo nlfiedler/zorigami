@@ -2,6 +2,7 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:equatable/equatable.dart';
+import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:zorigami/core/error/failures.dart';
@@ -152,6 +153,44 @@ class Schedule extends Equatable {
   }
 }
 
+class BackupState extends Equatable {
+  final bool paused;
+  final bool stopRequested;
+  final int changedFiles;
+  final int packsUploaded;
+  final int filesUploaded;
+  final int bytesUploaded;
+
+  const BackupState({
+    required this.paused,
+    required this.stopRequested,
+    required this.changedFiles,
+    required this.packsUploaded,
+    required this.filesUploaded,
+    required this.bytesUploaded,
+  });
+
+  @override
+  List<Object> get props => [changedFiles];
+
+  @override
+  bool get stringify => true;
+
+  String describeState() {
+    if (paused) {
+      return 'paused';
+    } else if (stopRequested) {
+      return 'stop requested';
+    } else {
+      final f = NumberFormat();
+      final u = f.format(filesUploaded);
+      final c = f.format(changedFiles);
+      final b = f.format(bytesUploaded);
+      return '$u of $c files, $b bytes uploaded';
+    }
+  }
+}
+
 enum Status { none, running, finished, paused, failed }
 
 /// A `DataSet` may have zero or more schedules.
@@ -167,6 +206,7 @@ class DataSet extends Equatable {
   final List<String> excludes;
   final Option<Snapshot> snapshot;
   final Status status;
+  final Option<BackupState> backupState;
   final Option<String> errorMsg;
 
   const DataSet({
@@ -179,6 +219,7 @@ class DataSet extends Equatable {
     required this.excludes,
     required this.snapshot,
     required this.status,
+    required this.backupState,
     required this.errorMsg,
   });
 
@@ -213,7 +254,7 @@ class DataSet extends Equatable {
         }
         return 'not yet run';
       case Status.running:
-        return 'still running';
+        return backupState.match((s) => s.describeState(), () => 'in progress');
       case Status.finished:
         return 'finished';
       case Status.paused:

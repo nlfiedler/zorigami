@@ -149,5 +149,6 @@ DataSet defaultDataSet() {
     excludes: [],
     errorMsg: None(),
     status: Status.none,
+    backupState: None(),
   );
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +31,7 @@ void main() {
     excludes: [],
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
 
@@ -46,11 +47,11 @@ void main() {
       startBackup = start.StartBackup(mockDataSetRepository);
       stopBackup = stop.StopBackup(mockDataSetRepository);
       when(() => mockDataSetRepository.getAllDataSets())
-          .thenAnswer((_) async => Ok(const [tDataSet]));
+          .thenAnswer((_) async => const Ok([tDataSet]));
       when(() => mockDataSetRepository.startBackup(any()))
-          .thenAnswer((_) async => Ok(true));
+          .thenAnswer((_) async => const Ok(true));
       when(() => mockDataSetRepository.stopBackup(any()))
-          .thenAnswer((_) async => Ok(true));
+          .thenAnswer((_) async => const Ok(true));
     });
 
     blocTest(
@@ -142,7 +143,7 @@ void main() {
       mockDataSetRepository = MockDataSetRepository();
       getDataSets = GetDataSets(mockDataSetRepository);
       when(() => mockDataSetRepository.getAllDataSets())
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

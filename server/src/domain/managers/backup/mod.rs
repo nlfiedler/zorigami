@@ -190,12 +190,27 @@ fn continue_backup(
                 .get_snapshot(&current_sha1)?
                 .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", current_sha1)))?;
             let tree = snapshot.tree;
+            // count the changed files and emit an event
+            let iter = TreeWalker::new(repo, &dataset.basepath, tree.clone());
+            let count: u64 = iter.count() as u64;
+            state.backup_event(BackupAction::BeginUpload(dataset.id.clone(), count));
+            // perform the backup
             let iter = TreeWalker::new(repo, &dataset.basepath, tree);
             for result in iter {
                 driver.add_file(result?)?;
             }
         }
         Some(ref parent) => {
+            // count the changed files and emit an event
+            let iter = find_changed_files(
+                repo,
+                dataset.basepath.clone(),
+                parent.clone(),
+                current_sha1.clone(),
+            )?;
+            let count: u64 = iter.count() as u64;
+            state.backup_event(BackupAction::BeginUpload(dataset.id.clone(), count));
+            // perform the backup
             let iter = find_changed_files(
                 repo,
                 dataset.basepath.clone(),

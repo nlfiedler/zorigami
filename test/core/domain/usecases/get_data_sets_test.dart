@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -21,7 +21,7 @@ void main() {
     usecase = GetDataSets(mockDataSetRepository);
   });
 
-  final tDataSet = DataSet(
+  const tDataSet = DataSet(
     key: 'cafebabe',
     computerId: 'data1',
     basepath: '',
@@ -31,6 +31,7 @@ void main() {
     excludes: [],
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
   // annotate the type to assist with matching

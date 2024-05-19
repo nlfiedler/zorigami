@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -34,6 +34,7 @@ void main() {
     excludes: [],
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
   final tDataSetList = [tDataSetModel];

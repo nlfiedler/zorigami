@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:graphql/client.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
@@ -30,6 +30,14 @@ const String dataSetFields = '''
     dayOfMonth
   }
   status
+  backupState {
+    paused
+    stopRequested
+    changedFiles
+    packsUploaded
+    filesUploaded
+    bytesUploaded
+  }
   errorMessage
   latestSnapshot {
     checksum

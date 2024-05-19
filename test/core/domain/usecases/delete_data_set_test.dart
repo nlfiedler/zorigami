@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,7 +20,7 @@ void main() {
     usecase = DeleteDataSet(mockDataSetRepository);
   });
 
-  final tDataSet = DataSet(
+  const tDataSet = DataSet(
     key: 'cafebabe',
     computerId: 'cray-11',
     basepath: '/home/planet',
@@ -30,6 +30,7 @@ void main() {
     packSize: 65536,
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
 
@@ -43,11 +44,11 @@ void main() {
     () async {
       // arrange
       when(() => mockDataSetRepository.deleteDataSet(any()))
-          .thenAnswer((_) async => Ok<DataSet, Failure>(tDataSet));
+          .thenAnswer((_) async => const Ok<DataSet, Failure>(tDataSet));
       // act
-      final result = await usecase(Params(dataset: tDataSet));
+      final result = await usecase(const Params(dataset: tDataSet));
       // assert
-      expect(result, equals(Ok<DataSet, Failure>(tDataSet)));
+      expect(result, equals(const Ok<DataSet, Failure>(tDataSet)));
       verify(() => mockDataSetRepository.deleteDataSet(any()));
       verifyNoMoreInteractions(mockDataSetRepository);
     },

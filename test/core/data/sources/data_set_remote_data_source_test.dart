@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:graphql/client.dart' as gql;
@@ -45,13 +45,13 @@ void main() {
     key: 'setkey1',
     computerId: 'cray-11',
     basepath: '/home/planet',
-    schedules: [
+    schedules: const [
       Schedule(
         frequency: Frequency.weekly,
-        timeRange: const None(),
-        dayOfMonth: const None(),
+        timeRange: None(),
+        dayOfMonth: None(),
         dayOfWeek: Some(DayOfWeek.thu),
-        weekOfMonth: const None(),
+        weekOfMonth: None(),
       )
     ],
     packSize: 67108864,
@@ -60,7 +60,7 @@ void main() {
     snapshot: Some(
       Snapshot(
         checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-        parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+        parent: const Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
         startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
         endTime: Some(
           DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
@@ -70,6 +70,7 @@ void main() {
       ),
     ),
     status: Status.finished,
+    backupState: const None(),
     errorMsg: const None(),
   );
   final tDataSetModel = DataSetModel.from(tDataSet);
@@ -110,6 +111,15 @@ void main() {
             }
           ],
           'status': null,
+          'backupState': {
+            '__typename': 'BackupState',
+            'paused': false,
+            'stopRequested': false,
+            'changedFiles': '1001',
+            'packsUploaded': '10',
+            'filesUploaded': '101',
+            'bytesUploaded': '10001',
+          },
           'errorMessage': null,
           'latestSnapshot': {
             '__typename': 'Snapshot',
@@ -237,6 +247,7 @@ void main() {
           excludes: [],
           snapshot: None(),
           status: Status.none,
+          backupState: None(),
           errorMsg: None(),
         );
         expect(result, contains(simpleModel));
@@ -307,6 +318,7 @@ void main() {
           excludes: [],
           snapshot: None(),
           status: Status.none,
+          backupState: None(),
           errorMsg: None(),
         );
         expect(result, contains(simpleModel));

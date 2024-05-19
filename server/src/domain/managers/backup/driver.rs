@@ -254,6 +254,13 @@ impl<'a> BackupDriver<'a> {
             let locations = self
                 .stores
                 .store_pack(&pack_path, &bucket_name, &object_name)?;
+            // report the number of bytes uploaded to provide some progress in
+            // case there is a very large file that spans many packs
+            let bytes_uploaded = self.record.count_bytes();
+            self.state.backup_event(BackupAction::UploadBytes(
+                self.dataset.id.clone(),
+                bytes_uploaded,
+            ));
             self.record
                 .record_completed_pack(self.dbase, &pack_digest, locations)?;
             self.state
@@ -337,6 +344,15 @@ impl PackRecord {
     /// Add a chunk to this pack.
     fn add_chunk(&mut self, chunk: entities::Chunk) {
         self.chunks.push(chunk);
+    }
+
+    /// Count the total bytes of all of the chunks in this pack.
+    fn count_bytes(&self) -> u64 {
+        let mut result: u64 = 0;
+        for chunk in self.chunks.iter() {
+            result += chunk.length as u64;
+        }
+        result
     }
 
     /// Return true if the given (unencrypted) pack file contains everything

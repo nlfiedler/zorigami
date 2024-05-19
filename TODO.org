@@ -1,10 +1,4 @@
 * Tasks
-** TODO Nearly all of the mini packs are too big (~90mb)
-*** probably need some fuzzy logic as to when to stop packing a file
-*** maybe when the size is 90% or more of the target size?
-** Provide some indication as to how long the backup will take
-*** total the size of all of the files that will be saved
-*** update the backup status to indicate how many bytes have been processed as a percentage
 ** TODO deploy to chihiro
 *** start a new project on google cloud
 *** wipe the =safe= pack store
@@ -61,137 +55,13 @@
 ** Partial restore
 *** using latest snapshot, examine current data set and restore all missing/modified data
 *** provide lots of logging and frequent webui status updates
-** Pack store improvements
-*** add feature for browsing the pack store contents
-** Dynamic chunk size calculation
-*** maybe calculate chunk size based on file size distribution
-**** already collecting the data during the snapshot phase
-**** if there are many large files, then chunk sizes should be larger
-**** chunk sizes less than 1kb would be too much overhead to track
-**** chunk size minimum of 32kb for typical workloads, 64kb would be safer
-**** for backups, 1mb to 4mb chunk sizes is probably reasonable
-**** should store the computed chunk size in the database
-*** Main server stats as of 2023-01-14
-**** compressed database snapshot: 41,109,539
-**** Record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |    272 |
-| files     | 134950 |
-| trees     |  65312 |
-| chunks    |  56813 |
-| packs     |   4107 |
-| xattrs    |  18035 |
-**** File size distribution
-| Less than Size | Count |
-|----------------+-------|
-|             80 |  1418 |
-|           1024 | 14997 |
-|          10240 | 34084 |
-|         102400 | 42247 |
-|        1048576 | 23365 |
-|       10485760 | 31305 |
-|      104857600 |  1209 |
-|       infinity |   585 |
-**** File sizes by powers of two
-***** majority of files are less than 4mb
-#+begin_src shell
-$ find . -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}END{for (i in size) printf("%11d %5d\n", 2^i, size[i])}' | sort -n
-          0   121
-          1     2
-          8    11
-         16    74
-         32   963
-         64  1492
-        128  2956
-        256  2184
-        512  8730
-       1024 10525
-       2048 21755
-       4096  1296
-       8192  3071
-      16384  7231
-      32768 25297
-      65536  8580
-     131072  7497
-     262144  7061
-     524288  7401
-    1048576 18137
-    2097152 12139
-    4194304   949
-    8388608   242
-   16777216   328
-   33554432   443
-   67108864   402
-  134217728   225
-  268435456   166
-  536870912    55
- 1073741824     7
- 2147483648     3
- 4294967296     2
-34359738368     1
-#+end_src
-*** Mac mini stats as of 2023-01-14
-**** compressed database snapshot: 791,955,794
-**** Record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |    279 |
-| files     | 740122 |
-| trees     | 126189 |
-| chunks    |   6687 |
-| packs     |    470 |
-| xattrs    |   4842 |
-**** File size distribution
-| Less than size |  Count |
-|----------------+--------|
-|             80 |  55321 |
-|           1024 | 160793 |
-|          10240 | 350121 |
-|         102400 |  78929 |
-|        1048576 |   7907 |
-|       10485760 |    848 |
-|      104857600 |    201 |
-|       infinity |      9 |
-**** File sizes by powers of two
-***** 654,129 saved files versus 607,152 counted files
-***** half of all files (305,012) are between 1kb and 4kb
-***** nearly all files (559,676) are 8kb or less
-#+begin_src shell
-$ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -o -name node_modules -prune -o -name target -prune -o -type f -print0 | xargs -0 ls -l | awk '{size[int(log($5)/log(2))]++}END{for (i in size) printf("%10d %6d\n", 2^i, size[i])}' | sort -n
-         0   1164
-         1     92
-         2   2156
-         4    163
-         8    421
-        16  44117
-        32   4415
-        64   7535
-       128  12256
-       256  53875
-       512  74758
-      1024 100676
-      2048  93775
-      4096 110561
-      8192  53712
-     16384  22738
-     32768  12834
-     65536   6279
-    131072   3149
-    262144   1010
-    524288    512
-   1048576    373
-   2097152    169
-   4194304    152
-   8388608    165
-  16777216     39
-  33554432     39
-  67108864      8
- 134217728      7
- 268435456      2
-#+end_src
 ** Snapshot browsing
 *** The whole display of snapshots needs to be improved
+*** improve snapshot tree browser
+**** should sort entries by filename case-insensitively
+**** for larger number of entries, should use =PaginatedDataTable=
+**** nice to have: sticky table header
+**** nice to have: sort by file type
 *** Stop using the list item view thing and the leading/trailing widgets
 *** Make sure buttons actually look like buttons
 *** Have fields for start time, stop time, current status, additional details, etc
@@ -255,22 +125,12 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** should automatically retry the query a few times before giving up
 *** test with a smaller browser window to surface sizing issues
 *** when there are no snapshots, clicking the dataset row does nothing
-*** how to refresh the snapshots screen?
-**** gets stale as soon as a backup has been run
-**** navigation to the snapshots does not work if there were none to start with
-**** maybe add a refresh button like in google cloud console
-*** schedule start/stop times should be using local time (no excuse for not doing this)
 *** local store basepath and google credentials should use file picker
 **** https://pub.dev/packages/form_builder_file_picker
 *** improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
 *** improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
-*** improve snapshot tree browser
-**** should sort entries by filename case-insensitively
-**** for larger number of entries, should use =PaginatedDataTable=
-**** nice to have: sticky table header
-**** nice to have: sort by file type
 *** consider how to hide the minio secret key using a show/hide button
 *** consider approaches to l10n and i18n
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/

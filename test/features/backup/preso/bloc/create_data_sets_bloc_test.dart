@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +17,7 @@ void main() {
   late MockDataSetRepository mockDataSetRepository;
   late dds.DefineDataSet usecase;
 
-  final tDataSet = DataSet(
+  const tDataSet = DataSet(
     key: 'dataset1',
     computerId: 'localhost',
     basepath: '/home/planet',
@@ -27,6 +27,7 @@ void main() {
     excludes: [],
     snapshot: None(),
     status: Status.none,
+    backupState: None(),
     errorMsg: None(),
   );
 
@@ -40,7 +41,7 @@ void main() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = dds.DefineDataSet(mockDataSetRepository);
       when(() => mockDataSetRepository.defineDataSet(any()))
-          .thenAnswer((_) async => Ok(tDataSet));
+          .thenAnswer((_) async => const Ok(tDataSet));
     });
 
     blocTest(
@@ -63,7 +64,7 @@ void main() {
       mockDataSetRepository = MockDataSetRepository();
       usecase = dds.DefineDataSet(mockDataSetRepository);
       when(() => mockDataSetRepository.defineDataSet(any()))
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

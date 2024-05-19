@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/data_set_model.dart';
@@ -88,24 +88,24 @@ void main() {
           equals(const None<WeekOfMonth>()),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.first))),
-          Some(WeekOfMonth.first),
+          decodeWeekOfMonth(encodeWeekOfMonth(const Some(WeekOfMonth.first))),
+          const Some(WeekOfMonth.first),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.second))),
-          Some(WeekOfMonth.second),
+          decodeWeekOfMonth(encodeWeekOfMonth(const Some(WeekOfMonth.second))),
+          const Some(WeekOfMonth.second),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.third))),
-          Some(WeekOfMonth.third),
+          decodeWeekOfMonth(encodeWeekOfMonth(const Some(WeekOfMonth.third))),
+          const Some(WeekOfMonth.third),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.fourth))),
-          Some(WeekOfMonth.fourth),
+          decodeWeekOfMonth(encodeWeekOfMonth(const Some(WeekOfMonth.fourth))),
+          const Some(WeekOfMonth.fourth),
         );
         expect(
-          decodeWeekOfMonth(encodeWeekOfMonth(Some(WeekOfMonth.fifth))),
-          Some(WeekOfMonth.fifth),
+          decodeWeekOfMonth(encodeWeekOfMonth(const Some(WeekOfMonth.fifth))),
+          const Some(WeekOfMonth.fifth),
         );
       },
     );
@@ -120,32 +120,32 @@ void main() {
           equals(const None<DayOfWeek>()),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sun))),
-          Some(DayOfWeek.sun),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.sun))),
+          const Some(DayOfWeek.sun),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.mon))),
-          Some(DayOfWeek.mon),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.mon))),
+          const Some(DayOfWeek.mon),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.tue))),
-          Some(DayOfWeek.tue),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.tue))),
+          const Some(DayOfWeek.tue),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.wed))),
-          Some(DayOfWeek.wed),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.wed))),
+          const Some(DayOfWeek.wed),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.thu))),
-          Some(DayOfWeek.thu),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.thu))),
+          const Some(DayOfWeek.thu),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.fri))),
-          Some(DayOfWeek.fri),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.fri))),
+          const Some(DayOfWeek.fri),
         );
         expect(
-          decodeDayOfWeek(encodeDayOfWeek(Some(DayOfWeek.sat))),
-          Some(DayOfWeek.sat),
+          decodeDayOfWeek(encodeDayOfWeek(const Some(DayOfWeek.sat))),
+          const Some(DayOfWeek.sat),
         );
       },
     );
@@ -174,21 +174,21 @@ void main() {
           ScheduleModel.fromJson(tScheduleModel.toJson()),
           equals(tScheduleModel),
         );
-        final weeklyThursday = ScheduleModel(
+        const weeklyThursday = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: const None(),
-          dayOfMonth: const None(),
+          timeRange: None(),
+          dayOfMonth: None(),
           dayOfWeek: Some(DayOfWeek.thu),
-          weekOfMonth: const None(),
+          weekOfMonth: None(),
         );
         expect(
           ScheduleModel.fromJson(weeklyThursday.toJson()),
           equals(weeklyThursday),
         );
-        final monthlyThirdWed = ScheduleModel(
+        const monthlyThirdWed = ScheduleModel(
           frequency: Frequency.monthly,
-          timeRange: const None(),
-          dayOfMonth: const None(),
+          timeRange: None(),
+          dayOfMonth: None(),
           dayOfWeek: Some(DayOfWeek.wed),
           weekOfMonth: Some(WeekOfMonth.third),
         );
@@ -196,12 +196,12 @@ void main() {
           ScheduleModel.fromJson(monthlyThirdWed.toJson()),
           equals(monthlyThirdWed),
         );
-        final weeklySaturdayNight = ScheduleModel(
+        const weeklySaturdayNight = ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: Some(const TimeRangeModel(start: 72000, stop: 14400)),
-          dayOfMonth: const None(),
-          dayOfWeek: const None(),
-          weekOfMonth: const None(),
+          timeRange: Some(TimeRangeModel(start: 72000, stop: 14400)),
+          dayOfMonth: None(),
+          dayOfWeek: None(),
+          weekOfMonth: None(),
         );
         expect(
           ScheduleModel.fromJson(weeklySaturdayNight.toJson()),
@@ -216,13 +216,13 @@ void main() {
       key: 'foo113',
       computerId: 'cray-11',
       basepath: '/home/planet',
-      schedules: [
+      schedules: const [
         ScheduleModel(
           frequency: Frequency.weekly,
-          timeRange: const None(),
-          dayOfMonth: const None(),
+          timeRange: None(),
+          dayOfMonth: None(),
           dayOfWeek: Some(DayOfWeek.thu),
-          weekOfMonth: const None(),
+          weekOfMonth: None(),
         )
       ],
       packSize: 67108864,
@@ -231,7 +231,7 @@ void main() {
       snapshot: Some(
         SnapshotModel(
           checksum: 'cafebabe',
-          parent: Some('ebebebeb'),
+          parent: const Some('ebebebeb'),
           startTime: DateTime.now(),
           endTime: Some(DateTime.now()),
           fileCount: 1234567890,
@@ -239,6 +239,16 @@ void main() {
         ),
       ),
       status: Status.finished,
+      backupState: const Some(
+        BackupStateModel(
+          paused: false,
+          stopRequested: false,
+          changedFiles: 1001,
+          packsUploaded: 10,
+          filesUploaded: 101,
+          bytesUploaded: 10001,
+        ),
+      ),
       errorMsg: const None(),
     );
     test(
@@ -262,6 +272,7 @@ void main() {
         expect(decoded.stores, equals(tDataSetModel.stores));
         // except this one we don't care about
         // expect(decoded.snapshot, equals(tDataSetModel.snapshot));
+        expect(decoded.backupState, equals(tDataSetModel.backupState));
 
         // arrange (with minimal data)
         const model = DataSetModel(
@@ -274,6 +285,7 @@ void main() {
           excludes: [],
           snapshot: None(),
           status: Status.none,
+          backupState: None(),
           errorMsg: None(),
         );
         // assert
@@ -290,13 +302,13 @@ void main() {
         key: 'setkey1',
         computerId: 'cray-11',
         basepath: '/home/planet',
-        schedules: [
+        schedules: const [
           Schedule(
             frequency: Frequency.weekly,
-            timeRange: const None(),
-            dayOfMonth: const None(),
+            timeRange: None(),
+            dayOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.thu),
-            weekOfMonth: const None(),
+            weekOfMonth: None(),
           )
         ],
         packSize: 67108864,
@@ -305,7 +317,7 @@ void main() {
         snapshot: Some(
           Snapshot(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-            parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+            parent: const Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
             endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
@@ -315,19 +327,20 @@ void main() {
           ),
         ),
         status: Status.finished,
+        backupState: const None(),
         errorMsg: const None(),
       );
       final dataSetModel = DataSetModel(
         key: 'setkey1',
         computerId: 'cray-11',
         basepath: '/home/planet',
-        schedules: [
+        schedules: const [
           ScheduleModel(
             frequency: Frequency.weekly,
-            timeRange: const None(),
-            dayOfMonth: const None(),
+            timeRange: None(),
+            dayOfMonth: None(),
             dayOfWeek: Some(DayOfWeek.thu),
-            weekOfMonth: const None(),
+            weekOfMonth: None(),
           )
         ],
         packSize: 67108864,
@@ -336,7 +349,7 @@ void main() {
         snapshot: Some(
           SnapshotModel(
             checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-            parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+            parent: const Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
             startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
             endTime: Some(
               DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),
@@ -346,6 +359,7 @@ void main() {
           ),
         ),
         status: Status.finished,
+        backupState: const None(),
         errorMsg: const None(),
       );
       // act
