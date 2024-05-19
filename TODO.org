@@ -1,7 +1,4 @@
 * Tasks
-** TODO deploy to mini
-*** configure Azure for blob storage
-*** wipe the =/Volumes/Zbackup= disk
 ** TODO deploy to chihiro
 *** capture information about current backups
 | Description       | Value |
@@ -27,6 +24,10 @@
 **** especially observations about chunk sizes, parallelism
 *** Add a ~TODO~ section to the =README.md= to highlight pending tasks
 - automatic pruning to keep the database size to a reasonable limit
+*** Document how to use
+1) create one or more pack stores
+2) create a dataset
+3) profit!
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
@@ -1107,7 +1108,7 @@ Termination Reason: CODESIGNING 4 Launch Constraint Violation
 **** launch agent in =~/Library/LaunchAgents/zorigami.plist=
 **** database in =~/Library/Application\ Support/Zorigami=
 **** pack store: =/Volumes/Zbackup=
-**** pack store: ~amazon~ (=us-west-2=)
+**** pack store: ~azure~ (=us-west-3=)
 **** base path: =/Users/nfiedler=
 **** excludes: =.Trash, .android, .rustup, .cargo, Library, **/Downloads, **/node_modules, **/target, fvm=
 **** run daily in the afternoon
