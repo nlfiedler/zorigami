@@ -1,33 +1,16 @@
 * Tasks
+** TODO Nearly all of the mini packs are too big (~90mb)
+*** probably need some fuzzy logic as to when to stop packing a file
+*** maybe when the size is 90% or more of the target size?
+** Provide some indication as to how long the backup will take
+*** total the size of all of the files that will be saved
+*** update the backup status to indicate how many bytes have been processed as a percentage
 ** TODO deploy to chihiro
-*** capture information about current backups
-| Description       | Value |
-|-------------------+-------|
-| Size of database  |       |
-| Number of records |       |
-| Avg size of packs |       |
 *** start a new project on google cloud
 *** wipe the =safe= pack store
 ** TODO Eventually clean up Google and AWS storage
 *** old zorigami project on google
 *** S3 buckets on ~production~ AWS account
-** Consider open sourcing
-*** Add a large warning on the README about schema changes, not reliable, use at own risk
-*** Remove the reference to the license checker, not needed
-*** Clean up the TODO items related to productization
-*** Delete the =CHANGELOG.md=, it only makes sense for a library
-*** Move ~history~ content in =README.md= into =doc/HISTORY.md=
-*** Move =NOTES.md= into =doc/DESIGN.md=
-*** Move the ~deployments~ section of =TODO.org= to a wiki page
-*** Clear out the ~product~ section of =TODO.org=
-*** Move the ~technical information~ into design documents
-**** especially observations about chunk sizes, parallelism
-*** Add a ~TODO~ section to the =README.md= to highlight pending tasks
-- automatic pruning to keep the database size to a reasonable limit
-*** Document how to use
-1) create one or more pack stores
-2) create a dataset
-3) profit!
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist
@@ -207,53 +190,6 @@ $ find . -name .Trash -prune -o -name Library -prune -o -name Downloads -prune -
  134217728      7
  268435456      2
 #+end_src
-** Digest algorithm alternatives
-*** is sha256 adequate? would another algorithm be better?
-*** https://github.com/BLAKE3-team/BLAKE3 (Rust, Apache)
-** Replace Time Machine
-*** TODO develop as a macOS app that bundles the binary and starts at login
-**** consider if =launchd= is needed for this
-**** launchd definition
-#+begin_src xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-    <dict>
-        <key>Label</key>
-        <string>zorigami</string>
-        <key>Program</key>
-        <string>/Users/nfiedler/Applications/Zorigami/zorigami</string>
-        <key>WorkingDirectory</key>
-        <string>/Users/nfiedler/Applications/Zorigami</string>
-        <key>RunAtLoad</key>
-        <true/>
-        <key>EnvironmentVariables</key>
-        <dict>
-            <key>DB_PATH</key>
-            <string>/Users/nfiedler/Library/Application Support/Zorigami/dbase</string>
-            <key>HOST</key>
-            <string>0.0.0.0</string>
-            <key>PORT</key>
-            <string>8000</string>
-            <key>RUST_LOG</key>
-            <string>info</string>
-        </dict>
-        <key>StandardErrorPath</key>
-        <string>/Users/nfiedler/Library/Application Support/Zorigami/error.log</string>
-        <key>StandardOutPath</key>
-        <string>/Users/nfiedler/Library/Application Support/Zorigami/output.log</string>
-    </dict>
-</plist>
-#+end_src
-**** how to start
-#+begin_src shell
-launchctl load ~/Library/LaunchAgents/zorigami.plist
-#+end_src
-*** TODO figure out how to give it permission to access files on macOS
-**** not sure this is possible, even Zoom does not do this prior to running
-*** TODO database backup procedure should prune old snapshots
-**** for local disk case, retain only a few snapshots
-**** for cloud case, honor the least expensive retention plan
 ** Snapshot browsing
 *** The whole display of snapshots needs to be improved
 *** Stop using the list item view thing and the leading/trailing widgets
@@ -264,8 +200,8 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 **** navigation, selection no longer respond
 **** probably an error is ocurring and it's invisible in production
 ** Restore to dissimilar hardware
-*** TODO Allow setting the configuration to change the identity
-*** TODO Test by restoring a backup to a different system
+*** Allow setting the configuration to change the identity
+*** Test by restoring a backup to a different system
 ** Dynamic bucket allocation
 *** hard-coded value of 128 is pretty low for local pack stores
 *** cloud-based pack stores can accommodate many objects per bucket
@@ -273,28 +209,19 @@ launchctl load ~/Library/LaunchAgents/zorigami.plist
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
-** Investigate file checksum collision
-*** how likely is it for two different files to have the same checksum?
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
-*** design mechanism for changing the passphrase but keeping old ones for decrypting packs
+*** consider how to change the passphrase but retain old ones for decrypting packs
 ** Make error message text selectable/copyable
 *** file restore status shows an error message that cannot be selected and copied to the clipboard
-** First Hour Experience
-*** when there are no dataset, display appropriate actions on home page
-- create a pack store (if no pack stores)
-- restore database from pack store (if pack store defined and it appears to have database snapshots)
-- define a new dataset (if pack store defined but no database snapshots are present)
-** Improved interface
-*** c.f. https://duplicacy.com/guide.html webui looks good
 ** Loose backend issues
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
-*** TODO should clean up dataset workspaces on startup and periodically
+*** should clean up dataset workspaces on startup and periodically
 **** need to be sure no backup or restore is running, then delete everything in =.tmp=
 **** =State= could have a =is_quiet()= check or an event that be be subscribed to when everything is quiet
-*** TODO refine use of =&str= and =String= arguments by using =Into<String>=
+*** refine use of =&str= and =String= arguments by using =Into<String>=
 **** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
 **** note that using =Cow= helps to minimize copying
 #+BEGIN_SRC rust
@@ -303,69 +230,69 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
     self
 }
 #+END_SRC
-*** TODO Too many open files (in RocksDB)
+*** Too many open files (in RocksDB)
 **** need to set =set_max_open_files()= on database options
 **** default ulimit on macOS is 256, so something less would be ideal
 **** ran out of files in tanuki when rocksdb directory contained 217 files
 **** maybe consider a means of countering this error at runtime
-*** TODO the monthly fuzzy schedule test fails on the 30th of the month
+*** the monthly fuzzy schedule test fails on the 30th of the month
 *** eventually switch from =serde_cbor= to https://crates.io/crates/ciborium
 **** the docs have zero examples, no idea how to use the API
 ** Loose GraphQL tasks
-*** TODO where do errors go?
+*** where do errors go?
 **** database restore was failing but frontend reported nothing
-*** TODO schema custom types need some unit tests
+*** schema custom types need some unit tests
 **** especially the schedule validation code
-*** TODO probably should use a better client cache
+*** probably should use a better client cache
 **** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
 **** uses the "type" of the object and its unique identifier as the caching key
 **** our objects would need to have a "typename" for this to work
-*** TODO find out how to document arguments to mutations
+*** find out how to document arguments to mutations
 **** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
-*** TODO pack store ~test~ feature shows snackbar repeatedly
-*** TODO sometimes get an HTTP error in GraphQL client
+*** pack store ~test~ feature shows snackbar repeatedly
+*** sometimes get an HTTP error in GraphQL client
 **** should automatically retry the query a few times before giving up
-*** TODO test with a smaller browser window to surface sizing issues
-*** TODO when there are no snapshots, clicking the dataset row does nothing
-*** TODO how to refresh the snapshots screen?
+*** test with a smaller browser window to surface sizing issues
+*** when there are no snapshots, clicking the dataset row does nothing
+*** how to refresh the snapshots screen?
 **** gets stale as soon as a backup has been run
 **** navigation to the snapshots does not work if there were none to start with
 **** maybe add a refresh button like in google cloud console
-*** TODO schedule start/stop times should be using local time (no excuse for not doing this)
-*** TODO local store basepath and google credentials should use file picker
+*** schedule start/stop times should be using local time (no excuse for not doing this)
+*** local store basepath and google credentials should use file picker
 **** https://pub.dev/packages/form_builder_file_picker
-*** TODO improve the navigation drawer
+*** improve the navigation drawer
 **** currently selected option should be highlighted, not actionable
-*** TODO improve (server) error handling
+*** improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
-*** TODO improve snapshot tree browser
+*** improve snapshot tree browser
 **** should sort entries by filename case-insensitively
 **** for larger number of entries, should use =PaginatedDataTable=
 **** nice to have: sticky table header
 **** nice to have: sort by file type
-*** TODO consider how to hide the minio secret key using a show/hide button
-*** TODO consider approaches to l10n and i18n
+*** consider how to hide the minio secret key using a show/hide button
+*** consider approaches to l10n and i18n
 **** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
-*** TODO improve the data sets form
+*** improve the data sets form
 **** TODO FAB covers the =DELETE= button even when scrolled all the way down
 **** TODO use the =validate()= function on =DataSet= to ensure validity
 **** TODO should decode the computer ID to improve readability
-*** TODO should sort the datasets so they are always in the same order
+*** should sort the datasets so they are always in the same order
 **** maybe sort them by date, with most recent first
-*** TODO tree entries of =ERROR= type should be displayed as such
+*** tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
 ***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** TODO should have ui for listing all snapshots in a dataset
+*** should have ui for listing all snapshots in a dataset
 **** consider presenting in a style similar to Time Machine
 **** e.g. a timeline of the snapshots
 **** c.f. https://pub.dev/packages/flutter_timeline
 **** probably need paging in the ui and graphql api
-*** TODO improve the page for defining stores
+*** improve the page for defining stores
 **** TODO delete button should be far away from the other button(s)
 **** TODO delete button should require two clicks, with "are you sure?"
-*** TODO use breadcrumbs in the tree navigator to get back to parent directories
-*** TODO consider and improve accessibility
+*** use breadcrumbs in the tree navigator to get back to parent directories
+*** consider and improve accessibility
 **** enable testing for a11y sanity
 **** add hints to improve the presentation of information
 ***** configuration panel
@@ -408,13 +335,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Consider a structured design for error types and handling
 **** c.f. https://fettblog.eu/rust-enums-wrapping-errors/
 *** Look at https://github.com/dtolnay/thiserror for defining error types
-** Initial Configuration
-*** Walk user through pack store and data set creation
-*** Offer path for restoring database from existing pack store
-*** Allow user to set user/host names for computer UUID
-**** They may need to avoid naming conflicts with other local users
-**** Imagine a computer lab all sharing a single cloud storage account
-*** Allow user to browse files in existing dataset and choose which ones to exclude
 ** Remote pack store interaction
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
@@ -455,11 +375,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** Permit ~weekly~ backups every N weeks
 **** Permit ~monthly~ backups every N months
 *** frontend
-**** TODO Support multiple schedules in interface
-**** TODO Support day-of-week in schedule
-**** TODO Support day-of-month in schedule
-**** TODO Support week-of-month in schedule
-**** TODO Support time-range in schedule
+**** Support multiple schedules in interface
+**** Support day-of-week in schedule
+**** Support day-of-month in schedule
+**** Support week-of-month in schedule
+**** Support time-range in schedule
 ** Filters for excluding files by size
 *** allow adding rules on a dataset to ignore files that are too small/large
 ** Point-in-time snapshots
@@ -520,30 +440,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** for a given snapshot
 ***** count number of files with N chunks for all values of N
 *** TODO Show number of packs stored in a pack store
-** Pack file format
-*** tar file of a single 500 byte file is 2500 bytes (lots of zeros)
-*** 7-Zip is a strong contender
-| URL                                       | Comments                           |
-|-------------------------------------------+------------------------------------|
-| https://github.com/judemille/sevenzip-sys | wrapper around native library      |
-| https://github.com/dyz1990/sevenz-rust    | native Rust, but had data loss bug |
-*** consider new ~pack~ file format: https://pack.ac
-**** extremely good performance
-**** written in Pascal, so waiting for SDK and/or libraries
-*** various file formats of note
-| Name | URL                                | Comments                               |
-|------+------------------------------------+----------------------------------------|
-| tar  |                                    | antiquated, much overhead              |
-| zip  |                                    | flawed encryption                      |
-| jar  |                                    | Java ARchive format, variant of zip    |
-| B1   | https://github.com/b1-pack/b1-pack | died >10 years ago                     |
-| 7zip | https://www.7-zip.org              | major contender                        |
-| Pack | https://pack.ac                    | written in Pascal, no docs or spec     |
-| zzip | https://github.com/ddebin/zzip/    | died 9 years ago                       |
-| zpaq | https://github.com/zpaq/zpaq       | died 8 years ago                       |
-| xar  | https://github.com/mackyle/xar     | really interesting, XML format for TOC |
-** Pack file integrity
-*** Retrieve random pack files and verify integrity
 ** Architecture Review
 *** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 *** Alternative databases
@@ -602,27 +498,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Client/Server
 **** Look at ways to secure the server, to allay fears of exploits
 **** A web conferencing tool was exploited via its hidden HTTP server
-** Desktop application
-*** design a configuration system for desktop
-**** define the whole clean architecture setup
-***** entities, use cases, repositories
-**** data source for web will have values defined by environment_config only
-**** data source for desktop will use shared preferences (?) for persistence
-**** data layer repository chooses between data sources based on environment
-***** how to detect if application was compiled for web
-#+BEGIN_SRC dart
-import 'package:flutter/foundation.dart' show kIsWeb;
-if (kIsWeb) { /* web stuff */ } else { /* not web */ }
-#+END_SRC
-*** clipboard support
-**** look for clipboard plugin for flutter (for macOS)
-**** c.f. https://flutter.dev/docs/development/packages-and-plugins/developing-packages
-** macOS support
-*** TODO optional Time Machine style backup and retention policy
-**** hourly backups for 24 hours
-**** daily backups for 30 days
-**** weekly backups for everything else
-**** prune backups to maintain a certain size
+** Time Machine style backup and retention policy
+*** hourly backups for 24 hours
+*** daily backups for 30 days
+*** weekly backups for everything else
+*** prune backups to maintain a certain size
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application
@@ -653,16 +533,6 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** Stale snapshots exist in the database but are not referenced elsewhere
 *** TODO Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
-** Windows support
-*** TODO File mode support: currently commented out, should revisit recording file ~attributes~
-*** TODO Does Microsoft's ~Windows Package Manager~ (=winget=) provide an easier dev setup path?
-*** TODO Backup files opened by a running process
-**** Normally cannot read files that are opened on Windows
-**** See Volume Shadow Copy Services (VSS) for details
-*** TODO Support Windows file types
-**** ReadOnly
-**** Hidden
-**** System
 ** More Better
 *** Ransomware protection
 **** descriptions of what this means
@@ -702,151 +572,10 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 **** must invalidate all of the snapshots effected by the missing store
 *** TODO Permit moving from one store to another
 **** would mean downloading the packs and uploading them to the new store
-*** TODO Consider how to backup and restore FIFO, BLK, and CHR "files"
-**** c.f. https://github.com/jborg/attic/blob/master/attic/archive.py
-**** c.f. https://github.com/avz/node-mkfifo (for FIFO)
-**** c.f. https://github.com/mafintosh/mknod (for BLK and CHR)
-* Product
-** Why another backup program?
-*** Original reason in 2014: nothing supported Linux and Glacier
-*** What will set this apart from other offerings?
-**** Easy to use graphical interface (both desktop and web)
-**** Cross-platform (Windows, macOS, Linux)
-**** Support for multiple backends, including Glacier
-** TODO Define an MVP and work toward release
-** TODO Evaluate other backup software
-*** TODO Check out some on App Store
-**** Backup Guru LE
-**** ChronoSync Express
-**** Backup
-**** Remote Backup Magic
-**** Sync - Backup and Restore
-**** Backup for Dropbox
-**** Freeze - for Amazon Glacier
-*** Lot of "folder sync" apps out there
-** TODO Define the target audience
-*** Average home user, no technical expertise required
-** TODO Need distinquishing features
-*** What sets this application apart from the other polished products?
-**** Cross-platform (e.g. macOS, Windows)
-**** Linux server ready
-** Application Monitoring
-*** Need something to capture failures for debugging
-**** c.f. https://sentry.io/welcome/
-** Windows Certified
-*** CloudBerry(?) has bunches of certifications
-*** is that really so meaningful? *I* never cared
-** Alternatives
-*** Commercial
-**** Arq
-***** https://www.arqbackup.com
-***** Windows, Mac
-***** Uses a single master password
-***** Supports numerous backends
-**** Carbonite
-***** https://www.carbonite.com
-***** Consumer and business
-***** Billed monthly
-***** 128-bit encryption for all but most expensive plan
-***** Windows, Mac, and "servers"
-***** Seems to backup to their servers
-**** CloudBerry
-***** https://www.cloudberrylab.com/backup
-***** Consumer and business
-***** Windows, Mac, Linux
-***** Supports Glacier and other services
-***** Freeware version lacks compression, encryption, limited to 200GB
-**** Duplicacy
-***** https://github.com/gilbertchen/duplicacy
-***** Lists other open source tools and compares them
-***** Deduplicates chunks across systems
-***** Does not use a database supposedly
-***** Does not and can not support Glacier
-**** JungleDisk
-***** https://www.jungledisk.com/encrypted-backups/
-***** Primarily business oriented
-***** Seems to rely on their servers
-***** Probably stores data elsewhere
-**** Rebel Backup
-***** https://www.svsware.com/rebelbackup
-***** Encrypted backups to Dropbox or Google Drive
-***** macOS only
-**** qBackup
-***** https://www.qualeed.com/en/qbackup/
-***** Windows, Mac, Linux
-***** Supports numerous backends
-***** Has copious documentation with screen shots
-**** tarsnap
-***** https://www.tarsnap.com
-***** Free client
-***** Uses public key encryption rather than a password
-***** Stores data in Amazon S3
-***** Relies on tarsnap servers
-***** 10x the price of Google Cloud or Amazon Glacier
-***** Command-line interface
-*** Open Source
-**** Asuran
-***** https://gitlab.com/asuran-rs/asuran/
-***** a library and cli for making backups
-***** stores all chunks in content-addressable stores
-**** Attic
-***** https://attic-backup.org
-***** Development stopped in 2015
-***** Only supports SSH remote host
-***** Command-line interface
-**** Borg
-***** https://borgbackup.readthedocs.io/
-***** Fork of Attic
-***** Only supports SSH remote host
-***** Command-line interface
-**** bup
-***** https://bup.github.io
-***** Git-like (uses Python and Git) pack file storage
-***** Requires a bup server for remote storage
-***** Command-line interface
-**** Duplicati
-***** https://www.duplicati.com/
-***** Requires .NET or Mono
-***** Web-based interface
-***** Windows and Linux
-***** No Glacier support
-**** duplicity
-***** http://duplicity.nongnu.org
-***** Uses GnuPG, a tar-like format, and rsync
-***** Supports backends with a filesystem-like interface
-***** Command-line interface
-***** No Glacier support
-**** rclone
-***** https://github.com/rclone/rclone
-***** Syncs a directory structure to the cloud
-***** Offers chunking and encryption
-***** Command-line interface
-***** No Glacier support
-**** restic
-***** https://restic.net
-***** Git-like data model
-***** Supports numerous backends (no Glacier)
-***** Command-line interface
-** Name
-*** Joseph suggests "Attic"
-**** =atticapp.com= is taken
-**** =attic.app= is for sale
-**** Look for ~attic~ in different languages
-**** Esperanto: ~mansardo~
-***** also means something in Macedonian
-**** Hawaiian: ~kaukau~
-**** Latin: ~atticae~
 * Documentation
 ** Duplicati has a fun description of how the backup works
 *** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
 *** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/
-** TODO Third party license attributions
-*** Include any/all third party license attribution somewhere
-*** =cargo lichking bundle= will dump everything to the console
-** TODO document how the user might change the passphrase over time
-*** user must remember their old passwords in order to decrypt old pack files
-*** the application will never store the actual password anywhere
-*** will need to prompt the user when a different passphrase is needed
 * Technical Information
 ** Backup metrics
 *** 2023-08-11, 8 cores, 32gb RAM, 4-disk RAID-Z to minio on LAN, 346gb of data
@@ -1053,82 +782,3 @@ if (kIsWeb) { /* web stuff */ } else { /* not web */ }
 Because the database snapshot is recorded in the database after the snapshot
 has already been uploaded, if the user were to restore the database and then
 perform a pack pruning, the most recent database snapshot would be removed.
-** JS Build Artifacts
-*** Flutter => main.dart.js
-| State      |    Size |
-|------------+---------|
-| production | 1742125 |
-*** ReasonML + Webpack => main.js
-| State       |    Size |
-|-------------+---------|
-| development | 2761882 |
-| production  |  536345 |
-| gzipped     |  145785 |
-** Exploring other languages
-*** Compile to native for speed and easy deployment
-*** Rust
-**** Advantages
-***** compile to native
-***** expressive, safe type system
-***** good dependency management
-***** lots of useful tools (e.g. clippy)
-**** Disadvantages
-***** fewer libraries compared to Go
-*** Go vs Rust
-**** Go: first class support for cloud services
-**** Go: statically linked OpenPGP readily available
-**** Go: easy to read and write language
-**** Rust: mature dependency management tooling
-**** Rust: cargo has good editor support
-**** Rust: expressive type system
-**** Rust: nominal subtyping is much easier to follow
-**** Rust: streamlined error handling
-**** Rust: fine-grained namespaces and visibility control
-* Deployments
-** local test
-*** setup
-**** base path: =/Users/nfiedler/projects/zorigami=
-**** excludes: =.git, **/tmp, **/.tmp, **/target=
-**** run hourly
-** mac mini
-*** how to build: see =README.md= in ~Local Test Build~ section
-*** how to update
-1) =ps -ef | grep -i zorigami=
-2) stop: =launchctl kill SIGTERM gui/501/zorigami=
-3) =mv target/release/zorigami ~/Applications/Zorigami=
-4) =rsync -vcr build/web ~/Applications/Zorigami/=
-5) enable: =launchctl enable gui/501/zorigami=
-6) start: =launchctl kickstart -p gui/501/zorigami=
-7) =ps -ef | grep -i zorigami=
-*** may need to =enable= and =kickstart= twice due to code signing error
-#+begin_src
-Termination Reason: CODESIGNING 4 Launch Constraint Violation
-#+end_src
-*** setup
-**** launch agent in =~/Library/LaunchAgents/zorigami.plist=
-**** database in =~/Library/Application\ Support/Zorigami=
-**** pack store: =/Volumes/Zbackup=
-**** pack store: ~azure~ (=us-west-3=)
-**** base path: =/Users/nfiedler=
-**** excludes: =.Trash, .android, .rustup, .cargo, Library, **/Downloads, **/node_modules, **/target, fvm=
-**** run daily in the afternoon
-** primary
-*** deploy using docker and ansible
-*** store credentials file as =/zeniba/shared/zorigami.json=
-*** data sets
-**** shared files
-:base_path: /datasets
-:excludes: (none)
-:pack_size: 64mb
-:pack_stores: all
-:schedule: daily, 11:30pm to 5:30am
-*** pack stores
-**** local
-:label: safe
-:path: /packstore
-**** cloud
-:label: google
-:credentials: /datasets/zorigami.json
-:project_id: zorigami
-:region: us-west1
-:storage: NEARLINE

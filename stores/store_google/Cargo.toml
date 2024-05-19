@@ -3,7 +3,7 @@ name = "store_google"
 version = "0.2.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2021"
-license = "UNLICENSED"
+license = "MIT"
 
 [dependencies]
 anyhow = "1.0.55"

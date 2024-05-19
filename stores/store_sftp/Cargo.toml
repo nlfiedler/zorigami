@@ -3,7 +3,7 @@ name = "store_sftp"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
 edition = "2021"
-license = "UNLICENSED"
+license = "MIT"
 
 [dependencies]
 dotenv = "0.15.0"

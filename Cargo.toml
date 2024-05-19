@@ -1,8 +1,3 @@
-# The new `strip` feature used below is gated behind a feature flag for the
-# version of cargo that cargo-outdated was compiled against. Eventually this can
-# be removed once cargo-outdated is updated.
-cargo-features = ["strip"]
-
 [workspace]
 members = [
     "database/database_core",

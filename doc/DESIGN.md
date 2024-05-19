@@ -9,34 +9,20 @@
 
 ## Design
 
+### Clean Architecture
+
+Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The domain layer defines the "policy" or business logic of the application, consisting of entities, use cases, and repositories. The data layer is the interface to the underlying system, defining the data models that are ultimately stored in a database. The presentation layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface.
+
+### Workspace and Packages
+
+The overall application is broken into several crates, or packages as they are sometimes called. The principle benefit of this is that the overall scale of the application is easier to manage as it grows. In particular, the dependencies and build time steadily grow as more store backends are added. These pack store implementations, and the database implementation as well, are in packages that are kept separate from the main `server` package. In theory this will help with build times for the crates, as each crate forms a single compilation unit in Rust, meaning that a change to any file within that crate will result in the entire crate being compiled again. Note also that the dependencies among crates form a directed acyclic graph, meaning there can be no mutual dependencies.
+
+## Implementation
+
 * Backend written in Rust, uses Juniper GraphQL server
 * Front-end written in Flutter, uses Zino & Co GraphQL client
 * Key/Value store is RocksDB
 * Pack storage supports local, Amazon, Azure, Google, MinIO, SFTP
-
-## Use Cases
-
-### Initial Setup
-
-* Backend waits for initial setup via web or desktop.
-* Upon startup of desktop app, walk user through setup.
-* Offer choice of recovering from backup, or starting anew.
-
-### Regular Backup
-
-* Backend performs backups according to configured schedule.
-* Manual backup for data sets without a configured schedule.
-
-### Full Restore
-
-* Retrieve the database from the pack store.
-* Restore selected dataset(s)
-* Walk the latest snapshot, restoring all files.
-* May need to allow user to choose a different "computer UUID" in case it changed
-
-### File Restore
-
-* Given a file/tree digest, retrieve packs to get chunks, reassemble.
 
 ## Data Format
 
@@ -96,17 +82,15 @@
 
 ### Pack Files
 
-* contains raw file content
-* default pack file size of 64MB
-* pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
+* Compressed archive containing raw file content
+* Default pack file size of 64MB
+* Pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
     - entry names are the chunk hash digest plus prefix
     - encrypted with key derived from passphrase and random salt
 
 ### Database Schema
 
 The database is a key/value store provided by [RocksDB](https://rocksdb.org). The records are all stored using [CBOR](https://cbor.io) unless noted otherwise, most likely JSON. The records consist of key/value pairs with abbreviated names to minimize storage use. Each record key has a prefix that indicates what type of record it is, such as `chunk/` for chunk records.
-
-#### Primary Database
 
 * configuration record
     - database key: `configuration`
@@ -166,11 +150,6 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
 * extended attribute records
     - key: `xattr/` + SHA1 of the attribute value
     - value: attribute data as a Buffer
-
-#### Chunk Database
-
-Sync with peers for multi-host chunk deduplication.
-
 * chunk records
     - key: `chunk/` + BLAKE3 of chunk (with "blake3-" prefix)
     - size of chunk in bytes
@@ -182,7 +161,7 @@ Sync with peers for multi-host chunk deduplication.
         + remote bucket/vault name
         + remote object/archive name
 
-## Implementation
+## More Implementation Details
 
 ### Deduplication
 
@@ -194,15 +173,11 @@ which is much faster than Rabin-based fingerprinting, and somewhat faster than
 Gear. This avoids the shortcomings of fixed-size chunking due to boundary
 shifting.
 
-#### Database Sync
-
-When the peer(s) are available, sync with their chunk/pack database to get recent records.
-
 ### Database Snapshots
 
-Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed tar and uploaded to the pack store in the special bucket.
+Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed archive and uploaded to the pack store in the special bucket.
 
-### Procedure
+### Procedure Details
 
 #### Backup
 
@@ -225,15 +200,12 @@ Database files are copied to an off-line archive using RocksDB functionality, th
 #### Uploading Packs
 
 1. Select an existing bucket, or create a new one.
-    * For Amazon Glacier, limited to 1,000 vaults, so reuse will be necessary.
-    * For Amazon S3, limited to 100 buckets, so reuse will be necessary.
-    * For Google, no hard limit, but perhaps a practical limit.
 1. Upload the pack file to the cloud.
 1. Update pack record to track remote coordinates.
 
 #### Crash Recovery
 
-If the latest snapshot is missing an end time, there is pending work to finish.
+If the latest snapshot is missing an end time, there is pending work to finish, in which case the backup will essentially resume the snapshot that was in progress.
 
 #### File Restore
 
@@ -248,6 +220,8 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 
 #### Full Recovery
 
+_This is not yet implemented._
+
 1. Find all buckets with type 5 UUID for a name
 1. Fetch metadata object/archive for those buckets
 1. Present the list to the user to choose which to recover
@@ -256,6 +230,8 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 1. Iterate entries in database, fetching packs and extracting files
 
 #### Garbage Collection
+
+_This is not yet implemented._
 
 * Automatic garbage collection:
     - Remove tree and file records that are no longer referenced
@@ -269,19 +245,9 @@ If the latest snapshot is missing an end time, there is pending work to finish.
 
 #### Deleting Old Backups
 
+_This is not yet implemented._
+
 Remove the snapshot record to be deleted, then garbage collect.
-
-### Encryption
-
-#### Master Password
-
-* Need to prompt the user for their password when starting up
-* If available, use a "secret vault" provided by the OS
-    - macOS Keychain
-    - Windows Data Protection API
-    - Linux gnome-keyring
-* If an environment variable is set, can use that
-    - c.f. https://forum.duplicacy.com/t/passwords-credentials-and-environment-variables/1094
 
 ### Bucket Collision
 
