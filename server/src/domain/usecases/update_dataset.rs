@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
@@ -23,7 +23,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
     fn call(&self, params: Params) -> Result<Dataset, Error> {
         // use the constructor to leverage some of the default behavior in case
         // not everything has been defined in the params
-        let mut dataset = Dataset::new(&params.basepath);
+        let mut dataset = Dataset::with_pack_size(&params.basepath, params.pack_size);
         dataset.id = params.id;
         dataset.excludes = params
             .excludes
@@ -32,12 +32,11 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
             .filter(|e| !e.is_empty())
             .collect();
         for schedule in params.schedules {
-            dataset = dataset.add_schedule(schedule);
+            dataset.add_schedule(schedule);
         }
         for store in params.stores.iter() {
-            dataset = dataset.add_store(store);
+            dataset.add_store(store);
         }
-        dataset = dataset.pack_size(params.pack_size);
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }

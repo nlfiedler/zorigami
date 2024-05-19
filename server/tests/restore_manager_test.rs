@@ -49,7 +49,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
@@ -306,7 +306,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
@@ -542,7 +542,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
@@ -708,7 +708,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");

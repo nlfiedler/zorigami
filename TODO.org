@@ -1,15 +1,5 @@
 * Tasks
-** TODO upgrade =juniper= to latest release
-*** quite a bit of changes to the API
-*** replace =server/src/preso/graphql/mod.rs= with =~/in-progress-graphql-mod.rs=
-** TODO experiement with different chunk sizes (1mb, 2mb, etc)
 ** TODO deploy to mini
-*** capture information about current backups
-| Description       | Value |
-|-------------------+-------|
-| Size of database  |       |
-| Number of records |       |
-| Avg size of packs |       |
 *** configure Azure for blob storage
 *** wipe the =/Volumes/Zbackup= disk
 ** TODO deploy to chihiro
@@ -35,6 +25,8 @@
 *** Clear out the ~product~ section of =TODO.org=
 *** Move the ~technical information~ into design documents
 **** especially observations about chunk sizes, parallelism
+*** Add a ~TODO~ section to the =README.md= to highlight pending tasks
+- automatic pruning to keep the database size to a reasonable limit
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist

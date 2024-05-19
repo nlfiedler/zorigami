@@ -14,8 +14,9 @@ use crate::domain::managers::state::StateStore;
 use crate::domain::repositories::RecordRepository;
 use chrono::prelude::*;
 use juniper::{
-    graphql_scalar, EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject,
-    GraphQLObject, ParseScalarResult, ParseScalarValue, RootNode, Value,
+    EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
+    GraphQLScalar, InputValue, ParseScalarResult, ParseScalarValue, RootNode, ScalarToken,
+    ScalarValue, Value,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -52,13 +53,32 @@ impl juniper::Context for GraphContext {}
 // Define a larger integer type so we can represent those larger values, such as
 // file sizes. Some of the core types define fields that are larger than i32, so
 // this type is used to represent those values in GraphQL.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+
+/// An integer type larger than the standard signed 32-bit.
+#[derive(Copy, Clone, Debug, Eq, GraphQLScalar, PartialEq)]
+#[graphql(with = Self)]
 pub struct BigInt(i64);
 
 impl BigInt {
     /// Construct a BigInt for the given value.
     pub fn new(value: i64) -> Self {
         BigInt(value)
+    }
+
+    fn to_output<S: ScalarValue>(&self) -> Value<S> {
+        Value::scalar(format!("{}", self.0))
+    }
+
+    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
+        v.as_scalar_value()
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<i64>().ok())
+            .map(BigInt)
+            .ok_or_else(|| format!("Expected `BigInt`, found: {v}"))
+    }
+
+    fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
+        <String as ParseScalarValue<S>>::from_str(value)
     }
 }
 
@@ -80,72 +100,48 @@ impl From<u32> for BigInt {
     }
 }
 
-#[graphql_scalar(description = "An integer type larger than the standard signed 32-bit.")]
-impl<S> GraphQLScalar for BigInt
-where
-    S: ScalarValue,
-{
-    fn resolve(&self) -> Value {
+/// A SHA1 or BLAKE3 checksum, with algorithm prefix.
+#[derive(GraphQLScalar)]
+#[graphql(with = Self, name = "Checksum")]
+struct ChecksumGQL(Checksum);
+
+impl ChecksumGQL {
+    fn to_output<S: ScalarValue>(&self) -> Value<S> {
         Value::scalar(format!("{}", self.0))
     }
 
-    fn from_input_value(v: &InputValue) -> Option<BigInt> {
-        v.as_scalar_value()
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<i64>().ok())
-            .map(BigInt)
+    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
+        v.as_string_value()
+            .map(|s| Checksum::from_str(s).ok())
+            .flatten()
+            .map(|c| ChecksumGQL(c))
+            .ok_or_else(|| format!("Expected `Checksum`, found: {v}"))
     }
 
-    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+    fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
         <String as ParseScalarValue<S>>::from_str(value)
     }
 }
 
-#[graphql_scalar(description = "A hash digest value with algorithm prefix.")]
-impl<S> GraphQLScalar for Checksum
-where
-    S: ScalarValue,
-{
-    fn resolve(&self) -> Value {
-        Value::scalar(format!("{}", self))
+/// Reference for a tree entry, such as a file or tree.
+#[derive(GraphQLScalar)]
+#[graphql(with = Self, name = "TreeReference")]
+struct TreeReferenceGQL(TreeReference);
+
+impl TreeReferenceGQL {
+    fn to_output<S: ScalarValue>(&self) -> Value<S> {
+        Value::scalar(format!("{}", self.0))
     }
 
-    fn from_input_value(v: &InputValue) -> Option<Checksum> {
-        v.as_scalar_value()
-            .and_then(|v| v.as_str())
-            .filter(|s| {
-                // make sure the input value actually looks like a digest
-                s.starts_with("sha1-") || s.starts_with("blake3-")
-            })
-            .map(|s| FromStr::from_str(s).unwrap())
+    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
+        v.as_string_value()
+            .map(|s| TreeReference::from_str(s).ok())
+            .flatten()
+            .map(|t| TreeReferenceGQL(t))
+            .ok_or_else(|| format!("Expected `TreeReference`, found: {v}"))
     }
 
-    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
-        <String as ParseScalarValue<S>>::from_str(value)
-    }
-}
-
-#[graphql_scalar(description = "Reference for a tree entry, such as a file or tree.")]
-impl<S> GraphQLScalar for TreeReference
-where
-    S: ScalarValue,
-{
-    fn resolve(&self) -> Value {
-        let value = format!("{}", self);
-        Value::scalar(value)
-    }
-
-    fn from_input_value(v: &InputValue) -> Option<TreeReference> {
-        v.as_scalar_value()
-            .and_then(|v| v.as_str())
-            .filter(|s| {
-                // make sure the input value actually looks like a digest
-                s.starts_with("file-") || s.starts_with("link-") || s.starts_with("tree-")
-            })
-            .map(|s| FromStr::from_str(s).unwrap())
-    }
-
-    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+    fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
         <String as ParseScalarValue<S>>::from_str(value)
     }
 }
@@ -163,8 +159,8 @@ impl entities::TreeEntry {
     }
 
     /// Reference to the entry itself.
-    fn reference(&self) -> TreeReference {
-        self.reference.clone()
+    fn reference(&self) -> TreeReferenceGQL {
+        TreeReferenceGQL(self.reference.clone())
     }
 }
 
@@ -218,13 +214,13 @@ impl entities::FileCounts {
 #[juniper::graphql_object(description = "A single backup, either in progress or completed.")]
 impl entities::Snapshot {
     /// Original computed checksum of the snapshot.
-    fn checksum(&self) -> Checksum {
-        self.digest.clone()
+    fn checksum(&self) -> ChecksumGQL {
+        ChecksumGQL(self.digest.clone())
     }
 
     /// The snapshot before this one, if any.
-    fn parent(&self) -> Option<Checksum> {
-        self.parent.clone()
+    fn parent(&self) -> Option<ChecksumGQL> {
+        self.parent.clone().map(|c| ChecksumGQL(c))
     }
 
     /// Time when the snapshot was first created.
@@ -248,8 +244,8 @@ impl entities::Snapshot {
     }
 
     /// Reference to the tree containing all of the files.
-    fn tree(&self) -> Checksum {
-        self.tree.clone()
+    fn tree(&self) -> ChecksumGQL {
+        ChecksumGQL(self.tree.clone())
     }
 }
 
@@ -279,8 +275,7 @@ impl entities::Dataset {
     }
 
     /// Unique computer identifier.
-    fn computer_id(&self, executor: &Executor) -> Option<String> {
-        let ctx = executor.context();
+    fn computer_id(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<String> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         if let Ok(value) = repo.get_computer_id(&self.id) {
             value
@@ -311,8 +306,7 @@ impl entities::Dataset {
     }
 
     /// Status of the most recent snapshot for this dataset.
-    fn status(&self, executor: &Executor) -> Status {
-        let ctx = executor.context();
+    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> Status {
         let redux = ctx.appstate.get_state();
         if let Some(backup) = redux.backups(&self.id) {
             if backup.is_paused() {
@@ -330,15 +324,13 @@ impl entities::Dataset {
     }
 
     /// Error message for the most recent snapshot, if any.
-    fn error_message(&self, executor: &Executor) -> Option<String> {
-        let ctx = executor.context();
+    fn error_message(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<String> {
         let redux = ctx.appstate.get_state();
         redux.backups(&self.id).and_then(|e| e.error_message())
     }
 
     /// Most recent snapshot for this dataset, if any.
-    fn latest_snapshot(&self, executor: &Executor) -> Option<entities::Snapshot> {
-        let ctx = executor.context();
+    fn latest_snapshot(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<entities::Snapshot> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         if let Ok(Some(digest)) = repo.get_latest_snapshot(&self.id) {
             if let Ok(result) = repo.get_snapshot(&digest) {
@@ -364,7 +356,7 @@ impl entities::Dataset {
     }
 }
 
-#[juniper::graphql_object(description = "Range of time in which to run backup.")]
+#[juniper::graphql_object(name = "TimeRange", desc = "Range of time in which to run backup.")]
 impl entities::schedule::TimeRange {
     /// Seconds from midnight at which to start.
     fn start_time(&self) -> i32 {
@@ -701,8 +693,8 @@ impl entities::PackLocation {
 #[juniper::graphql_object(description = "An archive containing saved files.")]
 impl entities::Pack {
     /// Unique checksum of the pack contents.
-    fn checksum(&self) -> Checksum {
-        self.digest.clone()
+    fn checksum(&self) -> ChecksumGQL {
+        ChecksumGQL(self.digest.clone())
     }
 
     /// List of store-specific coordinates where the pack is saved.
@@ -714,8 +706,8 @@ impl entities::Pack {
 #[juniper::graphql_object(description = "A request to restore a file or directory.")]
 impl restore::Request {
     /// Digest of the tree containing the entry to restore.
-    fn tree(&self) -> Checksum {
-        self.tree.clone()
+    fn tree(&self) -> ChecksumGQL {
+        ChecksumGQL(self.tree.clone())
     }
 
     /// Name of the entry within the tree to be restored.
@@ -797,17 +789,15 @@ pub struct QueryRoot;
 #[juniper::graphql_object(Context = GraphContext)]
 impl QueryRoot {
     /// Retrieve the configuration record.
-    fn configuration(executor: &Executor) -> FieldResult<entities::Configuration> {
-        let ctx = executor.context();
+    fn configuration(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<entities::Configuration> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         Ok(repo.get_configuration()?)
     }
 
     /// Find all dataset configurations.
-    fn datasets(executor: &Executor) -> FieldResult<Vec<entities::Dataset>> {
+    fn datasets(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<entities::Dataset>> {
         use crate::domain::usecases::get_datasets::GetDatasets;
         use crate::domain::usecases::{NoParams, UseCase};
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetDatasets::new(Box::new(repo));
         let params: NoParams = NoParams {};
@@ -816,10 +806,12 @@ impl QueryRoot {
     }
 
     /// Find any packs that are missing from the given store.
-    fn missing_packs(executor: &Executor, store_id: String) -> FieldResult<Vec<entities::Pack>> {
+    fn missing_packs(
+        #[graphql(ctx)] ctx: &GraphContext,
+        store_id: String,
+    ) -> FieldResult<Vec<entities::Pack>> {
         use crate::domain::usecases::find_missing::{FindMissingPacks, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = FindMissingPacks::new(Box::new(repo));
         let params: Params = Params::new(store_id);
@@ -829,17 +821,16 @@ impl QueryRoot {
 
     /// Retrieve entry listing a specific pack.
     fn pack(
-        executor: &Executor,
+        #[graphql(ctx)] ctx: &GraphContext,
         dataset: String,
-        digest: Checksum,
+        digest: ChecksumGQL,
     ) -> FieldResult<entities::PackFile> {
         use crate::domain::usecases::get_pack::{GetPack, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
-        let params: Params = Params::new(dataset, digest, passphrase);
+        let params: Params = Params::new(dataset, digest.0, passphrase);
         let result: entities::PackFile = usecase.call(params)?;
         Ok(result)
     }
@@ -849,26 +840,24 @@ impl QueryRoot {
     /// This is an expensive operation as it scans many records in the database
     /// and downloads every single pack file to find the missing chunk.
     fn scan_packs(
-        executor: &Executor,
+        #[graphql(ctx)] ctx: &GraphContext,
         dataset: String,
-        digest: Checksum,
-    ) -> FieldResult<Option<Checksum>> {
+        digest: ChecksumGQL,
+    ) -> FieldResult<Option<ChecksumGQL>> {
         use crate::domain::usecases::scan_packs::{Params, ScanPacks};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ScanPacks::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
-        let params: Params = Params::new(dataset, digest, passphrase);
+        let params: Params = Params::new(dataset, digest.0, passphrase);
         let result: Option<Checksum> = usecase.call(params)?;
-        Ok(result)
+        Ok(result.map(|c| ChecksumGQL(c)))
     }
 
     /// Return the number of each type of database record.
-    fn record_counts(executor: &Executor) -> FieldResult<entities::RecordCounts> {
+    fn record_counts(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<entities::RecordCounts> {
         use crate::domain::usecases::get_counts::GetCounts;
         use crate::domain::usecases::{NoParams, UseCase};
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetCounts::new(Box::new(repo));
         let params: NoParams = NoParams {};
@@ -877,10 +866,9 @@ impl QueryRoot {
     }
 
     /// Query for any pending and recently completed file restore operations.
-    fn restores(executor: &Executor) -> FieldResult<Vec<restore::Request>> {
+    fn restores(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<restore::Request>> {
         use crate::domain::usecases::query_restores::QueryRestores;
         use crate::domain::usecases::{NoParams, UseCase};
-        let ctx = executor.context();
         let usecase = QueryRestores::new(ctx.restorer.clone());
         let params: NoParams = NoParams {};
         let requests: Vec<restore::Request> = usecase.call(params)?;
@@ -888,22 +876,23 @@ impl QueryRoot {
     }
 
     /// Retrieve a specific snapshot.
-    fn snapshot(executor: &Executor, digest: Checksum) -> FieldResult<Option<entities::Snapshot>> {
+    fn snapshot(
+        #[graphql(ctx)] ctx: &GraphContext,
+        digest: ChecksumGQL,
+    ) -> FieldResult<Option<entities::Snapshot>> {
         use crate::domain::usecases::get_snapshot::{GetSnapshot, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetSnapshot::new(Box::new(repo));
-        let params: Params = Params::new(digest);
+        let params: Params = Params::new(digest.0);
         let result: Option<entities::Snapshot> = usecase.call(params)?;
         Ok(result)
     }
 
     /// Find all named store configurations.
-    fn stores(executor: &Executor) -> FieldResult<Vec<Store>> {
+    fn stores(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<Store>> {
         use crate::domain::usecases::get_stores::GetStores;
         use crate::domain::usecases::{NoParams, UseCase};
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetStores::new(Box::new(repo));
         let params: NoParams = NoParams {};
@@ -913,13 +902,15 @@ impl QueryRoot {
     }
 
     /// Retrieve a specific tree.
-    fn tree(executor: &Executor, digest: Checksum) -> FieldResult<Option<entities::Tree>> {
+    fn tree(
+        #[graphql(ctx)] ctx: &GraphContext,
+        digest: ChecksumGQL,
+    ) -> FieldResult<Option<entities::Tree>> {
         use crate::domain::usecases::get_tree::{GetTree, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetTree::new(Box::new(repo));
-        let params: Params = Params::new(digest);
+        let params: Params = Params::new(digest.0);
         let result: Option<entities::Tree> = usecase.call(params)?;
         Ok(result)
     }
@@ -1207,10 +1198,9 @@ pub struct MutationRoot;
 #[juniper::graphql_object(Context = GraphContext)]
 impl MutationRoot {
     /// Define a new store with the given configuration.
-    fn defineStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
+    fn define_store(#[graphql(ctx)] ctx: &GraphContext, input: StoreInput) -> FieldResult<Store> {
         use crate::domain::usecases::new_store::{NewStore, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = NewStore::new(Box::new(repo));
         let params: Params = input.into();
@@ -1219,7 +1209,7 @@ impl MutationRoot {
     }
 
     /// Update the saved store configuration.
-    fn updateStore(executor: &Executor, input: StoreInput) -> FieldResult<Store> {
+    fn update_store(#[graphql(ctx)] ctx: &GraphContext, input: StoreInput) -> FieldResult<Store> {
         if input.id.is_none() {
             return Err(FieldError::new(
                 "Cannot update store without id field",
@@ -1228,7 +1218,6 @@ impl MutationRoot {
         }
         use crate::domain::usecases::update_store::{Params, UpdateStore};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = UpdateStore::new(Box::new(repo));
         let params: Params = input.into();
@@ -1239,10 +1228,9 @@ impl MutationRoot {
     /// Test the given pack store definition for basic connectivity.
     ///
     /// Returns an error message, or 'ok' if there were no errors.
-    fn testStore(executor: &Executor, input: StoreInput) -> FieldResult<String> {
+    fn test_store(#[graphql(ctx)] ctx: &GraphContext, input: StoreInput) -> FieldResult<String> {
         use crate::domain::usecases::test_store::{Params, TestStore};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = TestStore::new(Box::new(repo));
         let params: Params = input.into();
@@ -1255,10 +1243,9 @@ impl MutationRoot {
     }
 
     /// Delete the named store, returning the identifier.
-    fn deleteStore(executor: &Executor, id: String) -> FieldResult<String> {
+    fn delete_store(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<String> {
         use crate::domain::usecases::delete_store::{DeleteStore, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = DeleteStore::new(Box::new(repo));
         let params: Params = Params::new(id.clone());
@@ -1267,10 +1254,12 @@ impl MutationRoot {
     }
 
     /// Define a new dataset with the given configuration.
-    fn defineDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
+    fn define_dataset(
+        #[graphql(ctx)] ctx: &GraphContext,
+        input: DatasetInput,
+    ) -> FieldResult<entities::Dataset> {
         use crate::domain::usecases::new_dataset::{NewDataset, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let datasource = ctx.datasource.clone();
         input.validate(datasource.clone())?;
         let repo = RecordRepositoryImpl::new(datasource);
@@ -1281,7 +1270,10 @@ impl MutationRoot {
     }
 
     /// Update an existing dataset with the given configuration.
-    fn updateDataset(executor: &Executor, input: DatasetInput) -> FieldResult<entities::Dataset> {
+    fn update_dataset(
+        #[graphql(ctx)] ctx: &GraphContext,
+        input: DatasetInput,
+    ) -> FieldResult<entities::Dataset> {
         if input.id.is_none() {
             return Err(FieldError::new(
                 "Cannot update dataset without id field",
@@ -1290,7 +1282,6 @@ impl MutationRoot {
         }
         use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let datasource = ctx.datasource.clone();
         input.validate(datasource.clone())?;
         let repo = RecordRepositoryImpl::new(datasource);
@@ -1301,10 +1292,9 @@ impl MutationRoot {
     }
 
     /// Delete the dataset with the given identifier, returning the identifier.
-    fn deleteDataset(executor: &Executor, id: String) -> FieldResult<String> {
+    fn delete_dataset(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<String> {
         use crate::domain::usecases::delete_dataset::{DeleteDataset, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = DeleteDataset::new(Box::new(repo));
         let params: Params = Params::new(id.clone());
@@ -1313,10 +1303,9 @@ impl MutationRoot {
     }
 
     /// Begin the backup procedure for the dataset with the given identifier.
-    fn startBackup(executor: &Executor, id: String) -> FieldResult<bool> {
+    fn start_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::start_backup::{Params, StartBackup};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = StartBackup::new(Box::new(repo), ctx.processor.clone());
         let params: Params = Params::new(id);
@@ -1325,10 +1314,9 @@ impl MutationRoot {
     }
 
     /// Signal the running backup for the given dataset to stop prematurely.
-    fn stopBackup(executor: &Executor, id: String) -> FieldResult<bool> {
+    fn stop_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::stop_backup::{Params, StopBackup};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = StopBackup::new(Box::new(repo), ctx.appstate.clone());
         let params: Params = Params::new(id);
@@ -1337,10 +1325,12 @@ impl MutationRoot {
     }
 
     /// Restore the database from the most recent snapshot.
-    fn restoreDatabase(executor: &Executor, store_id: String) -> FieldResult<String> {
+    fn restore_database(
+        #[graphql(ctx)] ctx: &GraphContext,
+        store_id: String,
+    ) -> FieldResult<String> {
         use crate::domain::usecases::restore_database::{Params, RestoreDatabase};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let passphrase = helpers::crypto::get_passphrase();
         let usecase = RestoreDatabase::new(Box::new(repo));
@@ -1351,36 +1341,34 @@ impl MutationRoot {
 
     /// Enqueue a request to restore the given file or directory tree.
     fn restore_files(
-        executor: &Executor,
-        tree: Checksum,
+        #[graphql(ctx)] ctx: &GraphContext,
+        tree: ChecksumGQL,
         entry: String,
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
         use crate::domain::usecases::restore_files::{Params, RestoreFiles};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let usecase = RestoreFiles::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
-        let params: Params = Params::new(tree.clone(), entry.clone(), fpath, dataset);
+        let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
         usecase.call(params)?;
         Ok(true)
     }
 
     /// Cancel the pending restore request that matches the given values.
     fn cancel_restore(
-        executor: &Executor,
-        tree: Checksum,
+        #[graphql(ctx)] ctx: &GraphContext,
+        tree: ChecksumGQL,
         entry: String,
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
         use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let usecase = CancelRestore::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
-        let params: Params = Params::new(tree.clone(), entry.clone(), fpath, dataset);
+        let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
         let result = usecase.call(params)?;
         Ok(result)
     }
@@ -1389,13 +1377,12 @@ impl MutationRoot {
     ///
     /// This is a dangerous action and should be used very carefully.
     fn reassign_packs(
-        executor: &Executor,
+        #[graphql(ctx)] ctx: &GraphContext,
         source_id: String,
         target_id: String,
     ) -> FieldResult<i32> {
         use crate::domain::usecases::reassign_packs::{Params, ReassignPacks};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ReassignPacks::new(Box::new(repo));
         let params: Params = Params::new(source_id, target_id);
@@ -1409,13 +1396,12 @@ impl MutationRoot {
 
     /// Restore any missing packs, copying from the other pack store.
     fn restore_packs(
-        executor: &Executor,
+        #[graphql(ctx)] ctx: &GraphContext,
         source_id: String,
         target_id: String,
     ) -> FieldResult<Vec<entities::Pack>> {
         use crate::domain::usecases::restore_missing::{Params, RestoreMissingPacks};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = RestoreMissingPacks::new(Box::new(repo));
         let params: Params = Params::new(source_id, target_id);
@@ -1424,10 +1410,9 @@ impl MutationRoot {
     }
 
     /// Remove extraneous packs from the given pack store.
-    fn prune_extra(executor: &Executor, store_id: String) -> FieldResult<i32> {
+    fn prune_extra(#[graphql(ctx)] ctx: &GraphContext, store_id: String) -> FieldResult<i32> {
         use crate::domain::usecases::prune_extra::{Params, PruneExtraPacks};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = PruneExtraPacks::new(Box::new(repo));
         let params: Params = Params::new(store_id);
@@ -1440,19 +1425,18 @@ impl MutationRoot {
     /// This will fetch the given pack file to verify the chunk is contained
     /// therein, as well as to get the file size. This only works for files
     /// containing a single chunk.
-    fn insertFile(
-        executor: &Executor,
+    fn insert_file(
+        #[graphql(ctx)] ctx: &GraphContext,
         dataset: String,
-        chunk_digest: Checksum,
-        pack_digest: Checksum,
+        chunk_digest: ChecksumGQL,
+        pack_digest: ChecksumGQL,
     ) -> FieldResult<bool> {
         use crate::domain::usecases::insert_file::{InsertFile, Params};
         use crate::domain::usecases::UseCase;
-        let ctx = executor.context();
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let passphrase = helpers::crypto::get_passphrase();
         let usecase = InsertFile::new(Box::new(repo));
-        let params: Params = Params::new(dataset, chunk_digest, pack_digest, passphrase);
+        let params: Params = Params::new(dataset, chunk_digest.0, pack_digest.0, passphrase);
         usecase.call(params)?;
         Ok(true)
     }
@@ -1490,16 +1474,16 @@ mod tests {
     fn test_bigint_scalar() {
         let iv: InputValue<juniper::DefaultScalarValue> =
             juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("1048576".to_owned()));
-        let option: Option<BigInt> = BigInt::from_input_value(&iv);
-        assert!(option.is_some());
+        let option: Result<BigInt, FieldError> = BigInt::from_input_value(&iv);
+        assert!(option.is_ok());
         let actual = option.unwrap();
         assert_eq!(actual, BigInt(1048576));
 
         // not a number
         let iv: InputValue<juniper::DefaultScalarValue> =
             juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("madokami".to_owned()));
-        let option: Option<BigInt> = BigInt::from_input_value(&iv);
-        assert!(option.is_none());
+        let option: Result<BigInt, FieldError> = BigInt::from_input_value(&iv);
+        assert!(option.is_err());
     }
 
     #[test]
@@ -1507,16 +1491,16 @@ mod tests {
         let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
             juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
         );
-        let option: Option<Checksum> = Checksum::from_input_value(&iv);
-        assert!(option.is_some());
+        let option: Result<ChecksumGQL, FieldError> = ChecksumGQL::from_input_value(&iv);
+        assert!(option.is_ok());
         let actual = option.unwrap();
-        assert!(actual.is_sha1());
+        assert!(actual.0.is_sha1());
 
         // missing algorithm prefix
         let iv: InputValue<juniper::DefaultScalarValue> =
             juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("cafebabe".to_owned()));
-        let option: Option<Checksum> = Checksum::from_input_value(&iv);
-        assert!(option.is_none());
+        let option: Result<ChecksumGQL, FieldError> = ChecksumGQL::from_input_value(&iv);
+        assert!(option.is_err());
     }
 
     #[test]
@@ -1524,17 +1508,17 @@ mod tests {
         let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
             juniper::DefaultScalarValue::String("tree-sha1-cafebabe".to_owned()),
         );
-        let option: Option<TreeReference> = TreeReference::from_input_value(&iv);
-        assert!(option.is_some());
+        let option: Result<TreeReferenceGQL, FieldError> = TreeReferenceGQL::from_input_value(&iv);
+        assert!(option.is_ok());
         let actual = option.unwrap();
-        assert!(actual.is_tree());
+        assert!(actual.0.is_tree());
 
         // missing entry type prefix
         let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
             juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
         );
-        let option: Option<TreeReference> = TreeReference::from_input_value(&iv);
-        assert!(option.is_none());
+        let option: Result<TreeReferenceGQL, FieldError> = TreeReferenceGQL::from_input_value(&iv);
+        assert!(option.is_err());
     }
 
     #[test]
@@ -1928,7 +1912,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
@@ -1965,7 +1949,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
@@ -1996,7 +1980,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), snapshot_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(snapshot_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Snapshot($digest: Checksum!) {
                 snapshot(digest: $digest) { fileCount }
@@ -2018,7 +2002,7 @@ mod tests {
     #[test]
     fn test_query_tree_some() {
         // arrange
-        let b3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+        let b3sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
         let file_digest = Checksum::BLAKE3(String::from(b3sum));
         let reference = TreeReference::FILE(file_digest);
         let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
@@ -2034,7 +2018,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }
@@ -2072,7 +2056,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }
@@ -2103,7 +2087,7 @@ mod tests {
         // act
         let schema = create_schema();
         let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), tree_sha2.to_input_value());
+        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
         let (res, errors) = juniper::execute_sync(
             r#"query Tree($digest: Checksum!) {
                 tree(digest: $digest) { entries { name } }

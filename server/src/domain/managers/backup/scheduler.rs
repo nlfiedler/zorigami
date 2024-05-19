@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! The `scheduler` module spawns threads to perform backups, ensuring backups
@@ -449,7 +449,7 @@ mod tests {
     async fn test_scheduler_start_stop_restart() -> io::Result<()> {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_id = dataset.id.clone();
         let datasets = vec![dataset];
         let mut mock = MockRecordRepository::new();
@@ -563,7 +563,7 @@ mod tests {
     fn test_should_run_first_backup_due() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let datasets = vec![dataset];
@@ -586,7 +586,7 @@ mod tests {
     fn test_should_run_first_backup_running() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone = dataset.id.clone();
@@ -612,7 +612,7 @@ mod tests {
     fn test_should_run_backup_not_overdue() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let datasets = vec![dataset];
@@ -620,7 +620,7 @@ mod tests {
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let end_time = Utc::now();
-        snapshot = snapshot.end_time(end_time);
+        snapshot.set_end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -643,7 +643,7 @@ mod tests {
     fn test_should_run_backup_overdue() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let datasets = vec![dataset];
@@ -652,7 +652,7 @@ mod tests {
         let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
-        snapshot = snapshot.end_time(end_time);
+        snapshot.set_end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -675,7 +675,7 @@ mod tests {
     fn test_should_run_old_snapshot_recent_backup() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone1 = dataset.id.clone();
@@ -686,7 +686,7 @@ mod tests {
         let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
-        snapshot = snapshot.end_time(end_time);
+        snapshot.set_end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -713,7 +713,7 @@ mod tests {
     fn test_should_run_backup_restarted() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone = dataset.id.clone();
@@ -747,7 +747,7 @@ mod tests {
     fn test_should_run_backup_restarted_not_overdue() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone = dataset.id.clone();
@@ -756,7 +756,7 @@ mod tests {
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let end_time = Utc::now();
-        snapshot = snapshot.end_time(end_time);
+        snapshot.set_end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -783,7 +783,7 @@ mod tests {
     fn test_should_run_overdue_backup_running() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone1 = dataset.id.clone();
@@ -793,7 +793,7 @@ mod tests {
         let mut snapshot = Snapshot::new(None, tree_sha, Default::default());
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
-        snapshot = snapshot.end_time(end_time);
+        snapshot.set_end_time(end_time);
         let snapshot_sha1 = snapshot.digest.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_datasets()
@@ -818,7 +818,7 @@ mod tests {
     fn test_should_run_overdue_had_error() {
         // arrange
         let mut dataset = Dataset::new(Path::new("/some/path"));
-        dataset = dataset.add_schedule(Schedule::Daily(None));
+        dataset.add_schedule(Schedule::Daily(None));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone1 = dataset.id.clone();
@@ -865,7 +865,7 @@ mod tests {
             stop_time.hour(),
             stop_time.minute(),
         );
-        dataset = dataset.add_schedule(Schedule::Daily(Some(range)));
+        dataset.add_schedule(Schedule::Daily(Some(range)));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone1 = dataset.id.clone();
@@ -909,7 +909,7 @@ mod tests {
             stop_time.hour(),
             stop_time.minute(),
         );
-        dataset = dataset.add_schedule(Schedule::Daily(Some(range)));
+        dataset.add_schedule(Schedule::Daily(Some(range)));
         let dataset_clone = dataset.clone();
         let dataset_id = dataset.id.clone();
         let dataset_id_clone1 = dataset.id.clone();

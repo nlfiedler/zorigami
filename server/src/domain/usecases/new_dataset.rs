@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
@@ -23,7 +23,7 @@ impl super::UseCase<Dataset, Params> for NewDataset {
     fn call(&self, params: Params) -> Result<Dataset, Error> {
         // use the constructor to generate a new identifier and then copy
         // everything over
-        let mut dataset = Dataset::new(&params.basepath);
+        let mut dataset = Dataset::with_pack_size(&params.basepath, params.pack_size);
         dataset.excludes = params
             .excludes
             .into_iter()
@@ -31,12 +31,11 @@ impl super::UseCase<Dataset, Params> for NewDataset {
             .filter(|e| !e.is_empty())
             .collect();
         for schedule in params.schedules {
-            dataset = dataset.add_schedule(schedule);
+            dataset.add_schedule(schedule);
         }
         for store in params.stores.iter() {
-            dataset = dataset.add_store(store);
+            dataset.add_store(store);
         }
-        dataset = dataset.pack_size(params.pack_size);
         self.repo.put_dataset(&dataset)?;
         // for new datasets we need to save the computer id
         let config = self.repo.get_configuration()?;

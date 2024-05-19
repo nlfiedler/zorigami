@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -44,7 +44,7 @@ fn test_continue_backup() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
     dbase.put_computer_id(&dataset.id, &computer_id)?;
@@ -126,7 +126,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
     dbase.put_computer_id(&dataset.id, &computer_id)?;
@@ -183,7 +183,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("local123");
+    dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
     dbase.put_computer_id(&dataset.id, &computer_id)?;

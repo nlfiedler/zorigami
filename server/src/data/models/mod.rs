@@ -375,7 +375,7 @@ mod tests {
         file_counts.register_file(16777216);
         file_counts.register_file(1048576);
         let mut snapshot = Snapshot::new(Some(parent), tree, file_counts);
-        snapshot = snapshot.end_time(Utc::now());
+        snapshot.set_end_time(Utc::now());
         // act
         let mut buffer: Vec<u8> = Vec::new();
         let mut ser = serde_json::Serializer::new(&mut buffer);

@@ -277,7 +277,7 @@ impl<'a> BackupDriver<'a> {
             .dbase
             .get_snapshot(snap_sha1)?
             .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snap_sha1)))?;
-        snapshot = snapshot.end_time(Utc::now());
+        snapshot.set_end_time(Utc::now());
         self.dbase.put_snapshot(&snapshot)?;
         self.state
             .backup_event(BackupAction::Finish(self.dataset.id.clone()));
@@ -567,7 +567,7 @@ mod tests {
         // create a dataset
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
-        dataset = dataset.add_store("local123");
+        dataset.add_store("local123");
         dataset.pack_size = 131072 as u64;
         let computer_id = entities::Configuration::generate_unique_id("mr.ed", "stable");
         dbase.put_computer_id(&dataset.id, &computer_id)?;
@@ -727,7 +727,7 @@ mod tests {
         // create a dataset
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
-        dataset = dataset.add_store("local123");
+        dataset.add_store("local123");
         dataset.pack_size = 524288 as u64;
         let computer_id = entities::Configuration::generate_unique_id("mr.ed", "stable");
         dbase.put_computer_id(&dataset.id, &computer_id)?;

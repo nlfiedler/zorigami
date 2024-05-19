@@ -64,8 +64,8 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     fs::create_dir_all(&fixture_base)?;
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
-    dataset = dataset.add_store("minio123");
-    dataset = dataset.add_schedule(Schedule::Hourly);
+    dataset.add_store("minio123");
+    dataset.add_schedule(Schedule::Hourly);
     dbase.put_dataset(&dataset)?;
     let computer_id = entities::Configuration::generate_unique_id("charlie", "homebase");
     dbase.put_computer_id(&dataset.id, &computer_id)?;

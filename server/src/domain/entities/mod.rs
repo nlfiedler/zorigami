@@ -237,6 +237,11 @@ const DEFAULT_PACK_SIZE: u64 = 67_108_864;
 impl Dataset {
     /// Construct a Dataset with the path of the directory tree to be saved.
     pub fn new(basepath: &Path) -> Dataset {
+        Dataset::with_pack_size(basepath, DEFAULT_PACK_SIZE)
+    }
+
+    /// Construct a `Dataset` with the given path and pack size.
+    pub fn with_pack_size(basepath: &Path, pack_size: u64) -> Self {
         let id = xid::new().to_string();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
@@ -245,28 +250,20 @@ impl Dataset {
             basepath: basepath.to_owned(),
             schedules: vec![],
             workspace,
-            pack_size: DEFAULT_PACK_SIZE,
+            pack_size,
             stores: vec![],
             excludes: vec![],
         }
     }
 
     /// Add the given store identifier to the dataset.
-    pub fn add_store(mut self, store: &str) -> Self {
+    pub fn add_store(&mut self, store: &str) {
         self.stores.push(store.to_owned());
-        self
     }
 
     /// Add the given schedule to the dataset.
-    pub fn add_schedule(mut self, schedule: schedule::Schedule) -> Self {
+    pub fn add_schedule(&mut self, schedule: schedule::Schedule) {
         self.schedules.push(schedule);
-        self
-    }
-
-    /// Set the pack size for the dataset.
-    pub fn pack_size(mut self, pack_size: u64) -> Self {
-        self.pack_size = pack_size;
-        self
     }
 }
 
@@ -732,16 +729,14 @@ impl Snapshot {
         snapshot
     }
 
-    /// Add the end_time property.
-    pub fn end_time(mut self, end_time: DateTime<Utc>) -> Self {
+    /// Set the `end_time` property.
+    pub fn set_end_time(&mut self, end_time: DateTime<Utc>) {
         self.end_time = Some(end_time);
-        self
     }
 
-    /// Set the start_time property to overwrite the default of `now`.
-    pub fn start_time(mut self, start_time: DateTime<Utc>) -> Self {
+    /// Set the `start_time` property.
+    pub fn set_start_time(&mut self, start_time: DateTime<Utc>) {
         self.start_time = start_time;
-        self
     }
 }
 

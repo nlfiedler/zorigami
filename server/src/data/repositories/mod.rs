@@ -719,7 +719,7 @@ mod tests {
             .returning(move |_| Ok(Some(store.clone())));
         // act
         let mut dataset = Dataset::new(Path::new("/home/planet"));
-        dataset = dataset.add_store("local123");
+        dataset.add_store("local123");
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.load_dataset_stores(&dataset);
         // assert
@@ -735,7 +735,7 @@ mod tests {
             .returning(move |_| Ok(None));
         // act
         let mut dataset = Dataset::new(Path::new("/home/planet"));
-        dataset = dataset.add_store("local123");
+        dataset.add_store("local123");
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.load_dataset_stores(&dataset);
         // assert

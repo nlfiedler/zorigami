@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! Defines the `Performer` trait and implementation that perform backups by
@@ -264,7 +264,7 @@ fn take_snapshot(
         "took snapshot {} with {} files after {}",
         snap.digest, tree.file_count, pretty_time
     );
-    snap = snap.start_time(actual_start_time);
+    snap.set_start_time(actual_start_time);
     dbase.put_snapshot(&snap)?;
     Ok(Some(snap.digest))
 }

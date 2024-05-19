@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use chrono::prelude::*;
 
@@ -84,7 +84,7 @@ impl TimeRange {
     }
 
     /// Return true if the given time falls within the defined range.
-    pub fn within(&self, datetime: DateTime<Utc>) -> bool {
+    pub fn is_within(&self, datetime: DateTime<Utc>) -> bool {
         let the_time = datetime.num_seconds_from_midnight();
         if self.stop < self.start {
             self.start <= the_time || the_time < self.stop
@@ -94,7 +94,7 @@ impl TimeRange {
     }
 
     /// Compute the time at which to stop, according to this time range.
-    pub fn stop_time(&self, datetime: DateTime<Utc>) -> DateTime<Utc> {
+    pub fn compute_stop_time(&self, datetime: DateTime<Utc>) -> DateTime<Utc> {
         let the_time = datetime.num_seconds_from_midnight();
         if self.stop < the_time {
             let delta = 86_400 - (the_time - self.stop);
@@ -185,16 +185,16 @@ impl Schedule {
         match *self {
             Schedule::Hourly => true,
             Schedule::Daily(None) => true,
-            Schedule::Daily(Some(ref range)) => range.within(time),
+            Schedule::Daily(Some(ref range)) => range.is_within(time),
             Schedule::Weekly(None) => true,
             Schedule::Weekly(Some((ref dow, None))) => dow.same_day(time),
             Schedule::Weekly(Some((ref dow, Some(ref range)))) => {
-                dow.same_day(time) && range.within(time)
+                dow.same_day(time) && range.is_within(time)
             }
             Schedule::Monthly(None) => true,
             Schedule::Monthly(Some((ref dom, None))) => dom.same_day(time),
             Schedule::Monthly(Some((ref dom, Some(ref range)))) => {
-                dom.same_day(time) && range.within(time)
+                dom.same_day(time) && range.is_within(time)
             }
         }
     }
@@ -214,13 +214,13 @@ impl Schedule {
         match *self {
             Schedule::Hourly => None,
             Schedule::Daily(None) => None,
-            Schedule::Daily(Some(ref range)) => Some(range.stop_time(time)),
+            Schedule::Daily(Some(ref range)) => Some(range.compute_stop_time(time)),
             Schedule::Weekly(None) => None,
             Schedule::Weekly(Some((_, None))) => None,
-            Schedule::Weekly(Some((_, Some(ref range)))) => Some(range.stop_time(time)),
+            Schedule::Weekly(Some((_, Some(ref range)))) => Some(range.compute_stop_time(time)),
             Schedule::Monthly(None) => None,
             Schedule::Monthly(Some((_, None))) => None,
-            Schedule::Monthly(Some((_, Some(ref range)))) => Some(range.stop_time(time)),
+            Schedule::Monthly(Some((_, Some(ref range)))) => Some(range.compute_stop_time(time)),
         }
     }
 }
@@ -268,7 +268,7 @@ mod tests {
             let then = Utc
                 .with_ymd_and_hms(2003, 8, 30, values.4, values.5, 0)
                 .unwrap();
-            assert_eq!(range.within(then), values.6, "index: {}", idx);
+            assert_eq!(range.is_within(then), values.6, "index: {}", idx);
         }
     }
 
