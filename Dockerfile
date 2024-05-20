@@ -28,7 +28,7 @@ RUN cargo build --release
 # is known to work via the fvm tool, and then enable the web platform as a build
 # target.
 #
-FROM google/dart AS flutter
+FROM dart:stable AS flutter
 ARG BASE_URL=http://localhost:8080
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get -q update && \
@@ -40,7 +40,7 @@ COPY fonts fonts/
 COPY lib lib/
 COPY pubspec.yaml .
 COPY web web/
-RUN fvm use stable
+RUN fvm use --force stable
 RUN fvm flutter config --enable-web
 RUN fvm flutter pub get
 ENV BASE_URL ${BASE_URL}

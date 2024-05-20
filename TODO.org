@@ -1,10 +1,4 @@
 * Tasks
-** TODO deploy to chihiro
-*** start a new project on google cloud
-*** wipe the =safe= pack store
-** TODO Eventually clean up Google and AWS storage
-*** old zorigami project on google
-*** S3 buckets on ~production~ AWS account
 ** Database Integrity
 *** support database integrity checks
 **** ensure all referenced records actually exist

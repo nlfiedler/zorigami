@@ -18,13 +18,14 @@ A backup and restore application written in [Rust](https://www.rust-lang.org) an
 
 This project has been a work-in-progress since 2014 and there are still some items that have not yet been implemented. The most notable of these are:
 
+* This software is provided "as-is", WITHOUT WARRANTY OF ANY KIND, see the `LICENSE` for details.
 * The database schema and pack file formats have changed radically over the years. It may happen again.
-* No automatic pruning of the snapshots to keep the database size to a reasonable limit.
+* No automatic pruning of the snapshots which would keep the database size to a reasonable limit.
 * Object-to-bucket allocation is very primitive and needs improvement.
 * Restoring to dissimilar hardware is not yet an easy task.
-* No readily available build, you will need to build and deploy manually.
+* No readily available binaries you will need to build and deploy it yourself.
 * No QoS control on uploads over the network so a backup can slow everything else to a crawl.
-* Backup procedure operates file-by-file (not _point-in-time_) and hence may record changed content incorrectly.
+* Backup procedure operates file-by-file (not _point-in-time_) and hence may record changed content incorrectly or inconsistently (such as with database files).
 
 ## Building and Testing
 
@@ -34,6 +35,8 @@ This project has been a work-in-progress since 2014 and there are still some ite
 * [Flutter](https://flutter.dev) **stable** channel
 
 ### Initial Setup
+
+#### macOS
 
 Use [fvm](https://pub.dev/packages/fvm) to select a specific version of Flutter
 to be installed and used by the application. This is the most reliable method
@@ -48,7 +51,7 @@ fvm flutter config --enable-web
 
 #### Windows
 
-The application has not been tested on Windows, but building and testing should work. As expected, this is very complex because Windows was not made for this sort of thing.
+The application has not been tested on Windows, but building and running the automated tests does work. As expected, this process is very complex because Windows was not made for this sort of thing.
 
 1. [Visual Studio Code](https://code.visualstudio.com/)
 1. [Git](https://git-scm.com/)
@@ -103,17 +106,7 @@ fvm flutter run -d chrome
 
 ### Docker
 
-[Docker](https://www.docker.com) is used for testing some features of the
-application (e.g. SFTP). A Docker Compose file is located in the `containers`
-directory, which describes the services used for testing. With the services
-running, and a `.env` file in the base directory, the tests will leverage the
-services.
-
-### dotenv
-
-The backend uses [dotenv](https://github.com/dotenv-rs/dotenv) to configure the
-tests. For instance, the tests related to SFTP are enabled by the presence of
-certain environment variables, which is easily accomplished using dotenv.
+[Docker](https://www.docker.com) is used for testing some features of the application, such as the various remote pack stores. A Docker Compose file is located in the `containers` directory, which describes the services used for testing. With the services running, and an appropriately configured `.env` file in the base directory, the tests will leverage the services.
 
 ### environment_config
 
