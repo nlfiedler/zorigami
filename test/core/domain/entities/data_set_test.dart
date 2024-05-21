@@ -1,8 +1,10 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
+import 'package:intl/intl.dart';
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/data_set.dart';
+import 'package:zorigami/core/domain/entities/snapshot.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -383,5 +385,230 @@ void main() {
         expect(result, isA<Ok>());
       },
     );
+  });
+
+  group('Dataset.describeStatus', () {
+    test('should say finished if status none but end time set', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: Some(DateTime.now()),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.none,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('finished'));
+    });
+
+    test('should say not yet run if no status or end time', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: const None(),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.none,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('not yet run'));
+    });
+
+    test('should say in progress if status running but no state', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: Some(DateTime.now()),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.running,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('in progress'));
+    });
+
+    test('should give details if status running and has state', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: Some(DateTime.now()),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.running,
+        backupState: const Some(
+          BackupState(
+            paused: false,
+            stopRequested: false,
+            changedFiles: 101,
+            packsUploaded: 3,
+            filesUploaded: 18,
+            bytesUploaded: 10001,
+          ),
+        ),
+        errorMsg: const None(),
+      );
+      expect(
+        sut.describeStatus(),
+        equals('18 of 101 files, 10,001 bytes uploaded'),
+      );
+    });
+
+    test('should say finished at time if status and end time set', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.utc(2021, 9, 29, 12, 42, 51),
+          endTime: Some(DateTime.utc(2021, 9, 29, 16, 24, 15)),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.finished,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      final dt = DateTime.utc(2021, 9, 29, 16, 24, 15);
+      final localdt = DateFormat.yMd().add_jm().format(dt);
+      expect(sut.describeStatus(), equals('finished at $localdt'));
+    });
+
+    test('should say paused if status paused temporarily', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: const None(),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.paused,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('paused'));
+    });
+
+    test('should say error unknown if status failed w/o cause', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: const None(),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.failed,
+        backupState: const None(),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('error: unknown'));
+    });
+
+    test('should say error foobar if status failed w/cause', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: const None(),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.failed,
+        backupState: const None(),
+        errorMsg: const Some('foobar'),
+      );
+      expect(sut.describeStatus(), equals('error: foobar'));
+    });
+  });
+
+  group('formatTime', () {
+    test('should handle midnight values', () {
+      expect(formatTime(0), equals('12:00 AM'));
+      expect(formatTime(86400), equals('12:00 AM'));
+    });
+
+    test('should format PM values', () {
+      expect(formatTime(61920), equals('5:12 PM'));
+      expect(formatTime(82860), equals('11:01 PM'));
+    });
+
+    test('should format AM values', () {
+      expect(formatTime(34380), equals('9:33 AM'));
+      expect(formatTime(40080), equals('11:08 AM'));
+    });
   });
 }

@@ -256,7 +256,14 @@ class DataSet extends Equatable {
       case Status.running:
         return backupState.match((s) => s.describeState(), () => 'in progress');
       case Status.finished:
-        return 'finished';
+        final suffix = snapshot.mapOrElse(
+          (s) => s.endTime.mapOrElse(
+            (e) => ' at ${DateFormat.yMd().add_jm().format(e)}',
+            () => '',
+          ),
+          () => '',
+        );
+        return 'finished$suffix';
       case Status.paused:
         return 'paused';
       case Status.failed:
@@ -283,10 +290,10 @@ String formatTime(int seconds) {
   if (seconds == 0 || seconds == 86400) {
     return '12:00 AM';
   }
-  final hours = (seconds / 3600).truncate();
+  final hours = seconds ~/ 3600;
   final suffix = hours >= 12 ? 'PM' : 'AM';
   final hour = (hours > 12 ? hours % 12 : hours).toString();
-  final minute = ((seconds % 3600) / 60).truncate().toString().padLeft(2, '0');
+  final minute = ((seconds % 3600) ~/ 60).toString().padLeft(2, '0');
   return '$hour:$minute $suffix';
 }
 
