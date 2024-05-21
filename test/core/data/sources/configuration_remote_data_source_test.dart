@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:graphql/client.dart' as gql;
@@ -38,7 +38,7 @@ void main() {
     registerFallbackValue(dummyRequest);
   });
 
-  final tConfigurationModel = ConfigurationModel(
+  const tConfigurationModel = ConfigurationModel(
     hostname: 'kohaku',
     username: 'zorigami',
     computerId: 'r9c7i5l6VFK5Smt8VkBBsQ',

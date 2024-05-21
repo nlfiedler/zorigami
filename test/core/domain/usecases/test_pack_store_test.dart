@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,8 +20,8 @@ void main() {
     usecase = TestPackStore(mockPackStoreRepository);
   });
 
-  final key = 'cafebabe';
-  final tPackStore = PackStore(
+  const key = 'cafebabe';
+  const tPackStore = PackStore(
     key: key,
     label: 'label1',
     kind: StoreKind.local,
@@ -38,11 +38,11 @@ void main() {
     () async {
       // arrange
       when(() => mockPackStoreRepository.testPackStore(any()))
-          .thenAnswer((_) async => Ok<String, Failure>('ok'));
+          .thenAnswer((_) async => const Ok<String, Failure>('ok'));
       // act
-      final result = await usecase(Params(store: tPackStore));
+      final result = await usecase(const Params(store: tPackStore));
       // assert
-      expect(result, Ok<String, Failure>('ok'));
+      expect(result, const Ok<String, Failure>('ok'));
       verify(() => mockPackStoreRepository.testPackStore(any()));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

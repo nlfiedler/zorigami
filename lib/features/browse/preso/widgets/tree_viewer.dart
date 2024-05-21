@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,10 +14,10 @@ class TreeViewer extends StatelessWidget {
   final DataSet dataset;
 
   const TreeViewer({
-    Key? key,
+    super.key,
     required this.dataset,
     required this.rootTree,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +62,10 @@ class TreePath extends StatelessWidget {
   final Loaded state;
 
   const TreePath({
-    Key? key,
+    super.key,
     required this.dataset,
     required this.state,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +110,7 @@ class TreePath extends StatelessWidget {
 class TreeTable extends StatefulWidget {
   final Loaded state;
 
-  const TreeTable({Key? key, required this.state}) : super(key: key);
+  const TreeTable({super.key, required this.state});
 
   @override
   State<TreeTable> createState() => _TreeTableState();

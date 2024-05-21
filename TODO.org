@@ -1,22 +1,4 @@
 * Tasks
-** Database Integrity
-*** support database integrity checks
-**** ensure all referenced records actually exist
-**** like git fsck, start at the top and traverse everything
-**** find and report dangling objects
-**** TODO finish writing =verify_snapshot= use case tests
-**** TODO add GraphQL query to invoke =VerifySnapshot= usecase
-** Improve backup reliability
-*** consider capturing all failed file backups in the database
-**** attempt to process the failed files during subsequent backups
-*** run a verification step after the backup is complete
-*** add some ~debug~ logging at regular intervals during the scan phase
-*** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
-**** should show the start time, not simply ~still running~
-**** show number of files packed, number of packs uploaded (what info logging shows now)
-**** capture actual time spent in each phase, accounting for ~pause~ times
-** AWS SDK for Rust now available
-*** c.f. https://aws.amazon.com/blogs/developer/announcing-general-availability-of-the-aws-sdk-for-rust/
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -42,6 +24,24 @@
 *** add the request status field to the graphql entity
 *** show the request status message in the web ui
 *** web ui should refresh restore requests page every few seconds
+** Database Integrity
+*** support database integrity checks
+**** ensure all referenced records actually exist
+**** like git fsck, start at the top and traverse everything
+**** find and report dangling objects
+**** TODO finish writing =verify_snapshot= use case tests
+**** TODO add GraphQL query to invoke =VerifySnapshot= usecase
+** Improve backup reliability
+*** consider capturing all failed file backups in the database
+**** attempt to process the failed files during subsequent backups
+*** run a verification step after the backup is complete
+*** add some ~debug~ logging at regular intervals during the scan phase
+*** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
+**** should show the start time, not simply ~still running~
+**** show number of files packed, number of packs uploaded (what info logging shows now)
+**** capture actual time spent in each phase, accounting for ~pause~ times
+** AWS SDK for Rust now available
+*** c.f. https://aws.amazon.com/blogs/developer/announcing-general-availability-of-the-aws-sdk-for-rust/
 ** Efficient restore
 *** if restore finds an existing workspace, scan contents to build a ~have~ list of chunks vs starting over
 *** if restoring a file over an existing target, skip if checksum of target matches records

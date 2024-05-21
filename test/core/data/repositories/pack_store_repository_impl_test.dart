@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -23,7 +23,7 @@ void main() {
     );
   });
 
-  final tPackStoreModel = PackStoreModel(
+  const tPackStoreModel = PackStoreModel(
     key: 'abc123',
     label: 'Label1',
     kind: StoreKind.local,
@@ -31,7 +31,7 @@ void main() {
   );
   final tPackModelList = [tPackStoreModel];
   final List<PackStore> tPackStores = [tPackStoreModel];
-  final PackStore tPackStore = tPackStoreModel;
+  const PackStore tPackStore = tPackStoreModel;
 
   setUpAll(() {
     // mocktail needs a fallback for any() that involves custom types
@@ -58,7 +58,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.getAllPackStores())
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.getAllPackStores();
         // assert
@@ -88,7 +88,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.definePackStore(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.definePackStore(tPackStore);
         // assert
@@ -118,7 +118,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.updatePackStore(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.updatePackStore(tPackStore);
         // assert
@@ -148,7 +148,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.testPackStore(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.testPackStore(tPackStore);
         // assert
@@ -177,7 +177,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.deletePackStore(any()))
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.deletePackStore(tPackStore);
         // assert

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/data_set_remote_data_source.dart';
@@ -29,7 +29,7 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final dataset = await remoteDataSource.defineDataSet(input);
       if (dataset == null) {
-        return Err(ServerFailure('got null result for data set'));
+        return const Err(ServerFailure('got null result for data set'));
       }
       return Ok(dataset);
     } on ServerException catch (e) {
@@ -42,7 +42,7 @@ class DataSetRepositoryImpl extends DataSetRepository {
     try {
       final dataset = await remoteDataSource.updateDataSet(input);
       if (dataset == null) {
-        return Err(ServerFailure('got null result for data set'));
+        return const Err(ServerFailure('got null result for data set'));
       }
       return Ok(dataset);
     } on ServerException catch (e) {

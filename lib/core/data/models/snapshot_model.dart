@@ -1,25 +1,18 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
 
 class SnapshotModel extends Snapshot {
-  SnapshotModel({
-    required String checksum,
-    required Option<String> parent,
-    required DateTime startTime,
-    required Option<DateTime> endTime,
-    required int fileCount,
-    required String tree,
-  }) : super(
-          checksum: checksum,
-          parent: parent,
-          startTime: startTime,
-          endTime: endTime,
-          fileCount: fileCount,
-          tree: tree,
-        );
+  const SnapshotModel({
+    required super.checksum,
+    required super.parent,
+    required super.startTime,
+    required super.endTime,
+    required super.fileCount,
+    required super.tree,
+  });
 
   factory SnapshotModel.from(Snapshot snapshot) {
     return SnapshotModel(

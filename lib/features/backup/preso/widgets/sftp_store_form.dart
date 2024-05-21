@@ -10,7 +10,7 @@ import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 class SftpStoreForm extends PackStoreForm {
   final PackStore store;
 
-  const SftpStoreForm({Key? key, required this.store}) : super(key: key);
+  const SftpStoreForm({super.key, required this.store});
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {

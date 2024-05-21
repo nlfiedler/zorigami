@@ -1,18 +1,14 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/configuration.dart';
 
 class ConfigurationModel extends Configuration {
-  ConfigurationModel({
-    required String hostname,
-    required String username,
-    required String computerId,
-  }) : super(
-          hostname: hostname,
-          username: username,
-          computerId: computerId,
-        );
+  const ConfigurationModel({
+    required super.hostname,
+    required super.username,
+    required super.computerId,
+  });
 
   factory ConfigurationModel.fromJson(Map<String, dynamic> json) {
     return ConfigurationModel(

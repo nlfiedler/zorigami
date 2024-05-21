@@ -8,7 +8,7 @@ import 'package:zorigami/features/browse/preso/bloc/configuration_bloc.dart';
 import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 
 class Configuration extends ConsumerWidget {
-  const Configuration({Key? key}) : super(key: key);
+  const Configuration({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -65,8 +65,9 @@ class PackStoresBloc extends Bloc<PackStoresEvent, PackStoresState> {
       emit(result.mapOrElse(
         (stores) {
           // put the pack stores in a consistent order
-          stores.sort((a, b) => a.key.compareTo(b.key));
-          return Loaded(stores: stores);
+          final List<PackStore> modifiable = List.from(stores);
+          modifiable.sort((a, b) => a.key.compareTo(b.key));
+          return Loaded(stores: modifiable);
         },
         (failure) => Error(message: failure.toString()),
       ));

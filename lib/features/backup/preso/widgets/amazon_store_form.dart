@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
@@ -10,7 +10,7 @@ import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 class AmazonStoreForm extends PackStoreForm {
   final PackStore store;
 
-  AmazonStoreForm({Key? key, required this.store}) : super(key: key);
+  const AmazonStoreForm({super.key, required this.store});
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {

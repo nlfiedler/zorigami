@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -27,7 +27,7 @@ void main() {
 
   final tSnapshotModel = SnapshotModel(
     checksum: 'sha1-a6c930a6f7f9aa4eb8ef67980e9e8e32cd02fa2b',
-    parent: Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
+    parent: const Some('sha1-823bb0cf28e72fef2651cf1bb06abfc5fdc51634'),
     startTime: DateTime.parse('2020-03-15T05:36:04.960782134+00:00'),
     endTime: Some(
       DateTime.parse('2020-03-15T05:36:05.141905479+00:00'),

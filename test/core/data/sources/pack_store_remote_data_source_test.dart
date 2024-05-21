@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:graphql/client.dart' as gql;
@@ -39,11 +39,11 @@ void main() {
     registerFallbackValue(dummyRequest);
   });
 
-  final tPackStoreModel = PackStoreModel(
+  const tPackStoreModel = PackStoreModel(
     key: 'abc123',
     label: 'lstore',
     kind: StoreKind.local,
-    options: const {'basepath': '/home/user'},
+    options: {'basepath': '/home/user'},
   );
 
   void setUpMockDeleteGraphQLResponse() {
@@ -171,11 +171,11 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(1)));
-        final store = PackStoreModel(
+        const store = PackStoreModel(
           key: 'a1',
           label: 's1',
           kind: StoreKind.minio,
-          options: const {},
+          options: {},
         );
         expect(result, contains(store));
       },
@@ -220,11 +220,11 @@ void main() {
         // assert
         expect(result, isList);
         expect(result, hasLength(equals(3)));
-        final store = PackStoreModel(
+        const store = PackStoreModel(
           key: 'a1',
           label: 's1',
           kind: StoreKind.minio,
-          options: const {},
+          options: {},
         );
         expect(result, contains(store));
       },

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,16 +19,16 @@ void main() {
 
   final tSubsequent = Snapshot(
     checksum: 'cafebabe',
-    parent: Some('cafed00d'),
+    parent: const Some('cafed00d'),
     startTime: DateTime.now(),
-    endTime: None(),
+    endTime: const None(),
     fileCount: 101,
     tree: 'deadbeef',
   );
 
   final tParent = Snapshot(
     checksum: 'cafed00d',
-    parent: None(),
+    parent: const None(),
     startTime: DateTime.now(),
     endTime: Some(DateTime.now()),
     fileCount: 121,
@@ -104,7 +104,7 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       usecase = GetSnapshot(mockSnapshotRepository);
       when(() => mockSnapshotRepository.getSnapshot(any()))
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

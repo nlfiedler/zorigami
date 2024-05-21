@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/snapshot.dart';
@@ -13,17 +13,17 @@ void main() {
         expect(
           Snapshot(
             checksum: 'cafebabe',
-            parent: Some('cafed00d'),
+            parent: const Some('cafed00d'),
             startTime: DateTime.now(),
-            endTime: None(),
+            endTime: const None(),
             fileCount: 101,
             tree: 'deadbeef',
           ),
           equals(Snapshot(
             checksum: 'cafebabe',
-            parent: Some('cafed00d'),
+            parent: const Some('cafed00d'),
             startTime: DateTime.now(),
-            endTime: None(),
+            endTime: const None(),
             fileCount: 101,
             tree: 'deadbeef',
           )),
@@ -31,17 +31,17 @@ void main() {
         expect(
           Snapshot(
             checksum: 'cafebabe',
-            parent: Some('cafed00d'),
+            parent: const Some('cafed00d'),
             startTime: DateTime.now(),
-            endTime: None(),
+            endTime: const None(),
             fileCount: 101,
             tree: 'deadbeef',
           ),
           isNot(equals(Snapshot(
             checksum: 'cafed00d',
-            parent: None(),
+            parent: const None(),
             startTime: DateTime.now(),
-            endTime: None(),
+            endTime: const None(),
             fileCount: 121,
             tree: 'beefdead',
           ))),

@@ -15,7 +15,7 @@ import 'package:zorigami/features/backup/preso/bloc/pack_stores_bloc.dart'
 import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 
 class NewDataSetScreen extends ConsumerWidget {
-  const NewDataSetScreen({Key? key}) : super(key: key);
+  const NewDataSetScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,10 +67,10 @@ class NewDataSetScreen extends ConsumerWidget {
 
 class NewDataSetWidget extends StatelessWidget {
   NewDataSetWidget({
-    Key? key,
+    super.key,
     required this.dataset,
     required this.stores,
-  }) : super(key: key);
+  });
 
   final formKey = GlobalKey<FormBuilderState>();
   final DataSet dataset;

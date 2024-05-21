@@ -46,11 +46,11 @@ class DataSetForm extends StatefulWidget {
   final GlobalKey<FormBuilderState> formKey;
 
   const DataSetForm({
-    Key? key,
+    super.key,
     required this.dataset,
     required this.stores,
     required this.formKey,
-  }) : super(key: key);
+  });
 
   static Map<String, dynamic> initialValuesFrom(
     DataSet dataset,

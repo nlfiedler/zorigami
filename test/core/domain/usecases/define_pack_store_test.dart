@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,7 +20,7 @@ void main() {
     usecase = DefinePackStore(mockPackStoreRepository);
   });
 
-  final tPackStore = PackStore(
+  const tPackStore = PackStore(
     key: 'cafebabe',
     label: 'ok go',
     kind: StoreKind.local,
@@ -37,11 +37,11 @@ void main() {
     () async {
       // arrange
       when(() => mockPackStoreRepository.definePackStore(any()))
-          .thenAnswer((_) async => Ok<PackStore, Failure>(tPackStore));
+          .thenAnswer((_) async => const Ok<PackStore, Failure>(tPackStore));
       // act
-      final result = await usecase(Params(store: tPackStore));
+      final result = await usecase(const Params(store: tPackStore));
       // assert
-      expect(result, equals(Ok<PackStore, Failure>(tPackStore)));
+      expect(result, equals(const Ok<PackStore, Failure>(tPackStore)));
       verify(() => mockPackStoreRepository.definePackStore(any()));
       verifyNoMoreInteractions(mockPackStoreRepository);
     },

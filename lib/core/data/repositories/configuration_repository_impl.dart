@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/configuration_remote_data_source.dart';
@@ -20,7 +20,7 @@ class ConfigurationRepositoryImpl extends ConfigurationRepository {
     try {
       final configuration = await remoteDataSource.getConfiguration();
       if (configuration == null) {
-        return Err(ServerFailure('got null result for configuration'));
+        return const Err(ServerFailure('got null result for configuration'));
       }
       return Ok(configuration);
     } on ServerException catch (e) {

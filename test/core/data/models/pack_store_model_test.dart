@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'dart:convert';
 import 'package:zorigami/core/data/models/pack_store_model.dart';
@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../fixtures/fixture_reader.dart';
 
 void main() {
-  final tPackStoreModel = PackStoreModel(
+  const tPackStoreModel = PackStoreModel(
     key: '123',
     label: 'Label',
     kind: StoreKind.local,
@@ -44,7 +44,7 @@ void main() {
         final Map<String, dynamic> jsonMap =
             json.decode(fixture('pack_store_bad_kind.json'));
         // assert
-        final fn = () => PackStoreModel.fromJson(jsonMap);
+        fn() => PackStoreModel.fromJson(jsonMap);
         expect(fn, throwsArgumentError);
       },
     );
@@ -76,7 +76,7 @@ void main() {
   group('toJson and then fromJson', () {
     test('should convert all non-null options', () {
       // arrange
-      final model = PackStoreModel(
+      const model = PackStoreModel(
         key: 'abc123',
         label: 'MyLabel',
         kind: StoreKind.local,
@@ -90,7 +90,7 @@ void main() {
 
     test('should convert some null options', () {
       // arrange
-      final model = PackStoreModel(
+      const model = PackStoreModel(
         key: 'sftp321',
         label: 'SecureFTP',
         kind: StoreKind.sftp,

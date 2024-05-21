@@ -1,27 +1,19 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/domain/entities/request.dart';
 
 class RequestModel extends Request {
   const RequestModel({
-    required String tree,
-    required String entry,
-    required String filepath,
-    required String dataset,
-    required Option<DateTime> finished,
-    required int filesRestored,
-    required Option<String> errorMessage,
-  }) : super(
-          tree: tree,
-          entry: entry,
-          filepath: filepath,
-          dataset: dataset,
-          finished: finished,
-          filesRestored: filesRestored,
-          errorMessage: errorMessage,
-        );
+    required super.tree,
+    required super.entry,
+    required super.filepath,
+    required super.dataset,
+    required super.finished,
+    required super.filesRestored,
+    required super.errorMessage,
+  });
 
   factory RequestModel.from(Request request) {
     return RequestModel(

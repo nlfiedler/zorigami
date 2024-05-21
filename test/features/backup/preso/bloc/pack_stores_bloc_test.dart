@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +17,7 @@ void main() {
   late MockPackStoreRepository mockPackStoreRepository;
   late GetPackStores usecase;
 
-  final tPackStore = PackStore(
+  const tPackStore = PackStore(
     key: 'PackStore1',
     kind: StoreKind.local,
     label: 'Locally',
@@ -29,7 +29,7 @@ void main() {
       mockPackStoreRepository = MockPackStoreRepository();
       usecase = GetPackStores(mockPackStoreRepository);
       when(() => mockPackStoreRepository.getAllPackStores())
-          .thenAnswer((_) async => Ok([tPackStore]));
+          .thenAnswer((_) async => const Ok([tPackStore]));
     });
 
     blocTest(
@@ -44,7 +44,7 @@ void main() {
       act: (PackStoresBloc bloc) => bloc.add(LoadAllPackStores()),
       expect: () => [
         Loading(),
-        Loaded(stores: [tPackStore])
+        Loaded(stores: const [tPackStore])
       ],
     );
 
@@ -58,7 +58,7 @@ void main() {
       },
       expect: () => [
         Loading(),
-        Loaded(stores: [tPackStore]),
+        Loaded(stores: const [tPackStore]),
         Empty()
       ],
     );
@@ -69,7 +69,7 @@ void main() {
       mockPackStoreRepository = MockPackStoreRepository();
       usecase = GetPackStores(mockPackStoreRepository);
       when(() => mockPackStoreRepository.getAllPackStores())
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

@@ -12,7 +12,7 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class RestoreRequestsScreen extends ConsumerWidget {
-  const RestoreRequestsScreen({Key? key}) : super(key: key);
+  const RestoreRequestsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -83,7 +83,7 @@ Widget buildBody(BuildContext context, RestoresState state) {
 class RestoreListEntry extends StatelessWidget {
   final Request request;
 
-  const RestoreListEntry({Key? key, required this.request}) : super(key: key);
+  const RestoreListEntry({super.key, required this.request});
 
   @override
   Widget build(BuildContext context) {

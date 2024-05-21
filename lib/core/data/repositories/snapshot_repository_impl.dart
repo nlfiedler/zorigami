@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/snapshot_remote_data_source.dart';
@@ -21,7 +21,7 @@ class SnapshotRepositoryImpl extends SnapshotRepository {
     try {
       final snapshot = await remoteDataSource.getSnapshot(checksum);
       if (snapshot == null) {
-        return Err(ServerFailure('got null result for snapshot'));
+        return const Err(ServerFailure('got null result for snapshot'));
       }
       return Ok(snapshot);
     } on ServerException catch (e) {

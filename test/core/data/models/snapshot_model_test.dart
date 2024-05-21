@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/models/snapshot_model.dart';
@@ -10,9 +10,9 @@ void main() {
   group('SnapshotModel', () {
     final tSnapshotModel = SnapshotModel(
       checksum: 'cafebabe',
-      parent: None(),
+      parent: const None(),
       startTime: DateTime.now(),
-      endTime: None(),
+      endTime: const None(),
       fileCount: 123,
       tree: 'deadbeef',
     );
@@ -33,7 +33,7 @@ void main() {
         );
         final actual = SnapshotModel(
           checksum: 'cafebabe',
-          parent: Some('ebebebeb'),
+          parent: const Some('ebebebeb'),
           startTime: DateTime.now(),
           endTime: Some(DateTime.now()),
           fileCount: 1234567890,

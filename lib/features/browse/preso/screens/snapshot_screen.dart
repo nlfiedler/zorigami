@@ -15,7 +15,7 @@ class SnapshotScreen extends ConsumerWidget {
   // the data set under inspection
   final DataSet dataset;
 
-  const SnapshotScreen({Key? key, required this.dataset}) : super(key: key);
+  const SnapshotScreen({super.key, required this.dataset});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

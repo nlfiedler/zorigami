@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,7 +21,7 @@ import 'package:zorigami/features/backup/preso/widgets/sftp_store_form.dart';
 class PackStoresList extends ConsumerStatefulWidget {
   final List<PackStore> stores;
 
-  const PackStoresList({Key? key, required this.stores}) : super(key: key);
+  const PackStoresList({super.key, required this.stores});
 
   @override
   PackStoresListState createState() => PackStoresListState();
@@ -90,9 +90,9 @@ class PackStoresListState extends ConsumerState<PackStoresList> {
 
 class PackStoreListDetails extends StatelessWidget {
   PackStoreListDetails({
-    Key? key,
+    super.key,
     required this.store,
-  }) : super(key: key);
+  });
 
   final formKey = GlobalKey<FormBuilderState>();
   final PackStore store;

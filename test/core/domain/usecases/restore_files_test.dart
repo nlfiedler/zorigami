@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -25,7 +25,7 @@ void main() {
       // arrange
       when(() =>
               mockSnapshotRepository.restoreFiles(any(), any(), any(), any()))
-          .thenAnswer((_) async => Ok<bool, Failure>(true));
+          .thenAnswer((_) async => const Ok<bool, Failure>(true));
       // act
       final result = await usecase(const Params(
         tree: 'sha1-deadbeef',
@@ -34,7 +34,7 @@ void main() {
         dataset: 'homeset',
       ));
       // assert
-      expect(result, equals(Ok<bool, Failure>(true)));
+      expect(result, equals(const Ok<bool, Failure>(true)));
       verify(() =>
           mockSnapshotRepository.restoreFiles(any(), any(), any(), any()));
       verifyNoMoreInteractions(mockSnapshotRepository);

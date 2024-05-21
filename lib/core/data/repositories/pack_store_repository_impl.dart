@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:oxidized/oxidized.dart';
 import 'package:zorigami/core/data/sources/pack_store_remote_data_source.dart';
@@ -29,7 +29,7 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.definePackStore(input);
       if (packStore == null) {
-        return Err(ServerFailure('got null result for pack store'));
+        return const Err(ServerFailure('got null result for pack store'));
       }
       return Ok(packStore);
     } on ServerException catch (e) {
@@ -42,7 +42,7 @@ class PackStoreRepositoryImpl extends PackStoreRepository {
     try {
       final packStore = await remoteDataSource.updatePackStore(input);
       if (packStore == null) {
-        return Err(ServerFailure('got null result for pack store'));
+        return const Err(ServerFailure('got null result for pack store'));
       }
       return Ok(packStore);
     } on ServerException catch (e) {

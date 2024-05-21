@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +18,7 @@ void main() {
   late MockConfigurationRepository mockConfigurationRepository;
   late GetConfiguration usecase;
 
-  final tConfiguration = Configuration(
+  const tConfiguration = Configuration(
     hostname: 'localhost',
     username: 'charlie',
     computerId: '1642ceb7-02eb-4ada-94f9-27c14320b908',
@@ -29,7 +29,7 @@ void main() {
       mockConfigurationRepository = MockConfigurationRepository();
       usecase = GetConfiguration(mockConfigurationRepository);
       when(() => mockConfigurationRepository.getConfiguration())
-          .thenAnswer((_) async => Ok(tConfiguration));
+          .thenAnswer((_) async => const Ok(tConfiguration));
     });
 
     blocTest(
@@ -51,7 +51,7 @@ void main() {
       mockConfigurationRepository = MockConfigurationRepository();
       usecase = GetConfiguration(mockConfigurationRepository);
       when(() => mockConfigurationRepository.getConfiguration())
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

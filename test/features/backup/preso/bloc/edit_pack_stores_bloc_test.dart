@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +21,7 @@ void main() {
   late ups.UpdatePackStore updateUsecase;
   late tps.TestPackStore testUsecase;
 
-  final tPackStore = PackStore(
+  const tPackStore = PackStore(
     key: 'PackStore1',
     kind: StoreKind.local,
     label: 'Locally',
@@ -40,9 +40,9 @@ void main() {
       updateUsecase = ups.UpdatePackStore(mockPackStoreRepository);
       testUsecase = tps.TestPackStore(mockPackStoreRepository);
       when(() => mockPackStoreRepository.deletePackStore(any()))
-          .thenAnswer((_) async => Ok(tPackStore));
+          .thenAnswer((_) async => const Ok(tPackStore));
       when(() => mockPackStoreRepository.updatePackStore(any()))
-          .thenAnswer((_) async => Ok(tPackStore));
+          .thenAnswer((_) async => const Ok(tPackStore));
     });
 
     blocTest(
@@ -86,9 +86,9 @@ void main() {
       deleteUsecase = dps.DeletePackStore(mockPackStoreRepository);
       updateUsecase = ups.UpdatePackStore(mockPackStoreRepository);
       when(() => mockPackStoreRepository.deletePackStore(any()))
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
       when(() => mockPackStoreRepository.updatePackStore(any()))
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

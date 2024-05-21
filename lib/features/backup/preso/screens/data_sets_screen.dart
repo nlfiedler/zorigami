@@ -11,7 +11,7 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DataSetsScreen extends ConsumerWidget {
-  const DataSetsScreen({Key? key}) : super(key: key);
+  const DataSetsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -1,20 +1,15 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:zorigami/core/domain/entities/pack_store.dart';
 
 class PackStoreModel extends PackStore {
   const PackStoreModel({
-    required String key,
-    required String label,
-    required StoreKind kind,
-    required Map<String, dynamic> options,
-  }) : super(
-          key: key,
-          label: label,
-          kind: kind,
-          options: options,
-        );
+    required super.key,
+    required super.label,
+    required super.kind,
+    required super.options,
+  });
 
   factory PackStoreModel.fromStore(PackStore store) {
     return PackStoreModel(

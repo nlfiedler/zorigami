@@ -13,7 +13,7 @@ import 'package:zorigami/features/browse/preso/bloc/providers.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class DatabaseRestoreScreen extends ConsumerWidget {
-  const DatabaseRestoreScreen({Key? key}) : super(key: key);
+  const DatabaseRestoreScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -83,7 +83,7 @@ Widget buildNoStoresHelp(BuildContext context) {
 class PackStoreListEntry extends ConsumerWidget {
   final PackStore store;
 
-  const PackStoreListEntry({Key? key, required this.store}) : super(key: key);
+  const PackStoreListEntry({super.key, required this.store});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

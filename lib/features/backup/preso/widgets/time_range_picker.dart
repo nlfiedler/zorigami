@@ -59,10 +59,10 @@ class TimeRangePicker extends StatefulWidget {
   final PickedTime? end;
 
   const TimeRangePicker({
-    Key? key,
+    super.key,
     required this.start,
     required this.end,
-  }) : super(key: key);
+  });
 
   @override
   State<TimeRangePicker> createState() => _TimeRangePickerState();

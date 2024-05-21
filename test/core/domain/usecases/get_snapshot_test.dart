@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -22,9 +22,9 @@ void main() {
 
   final tSnapshot = Snapshot(
     checksum: 'cafebabe',
-    parent: None(),
+    parent: const None(),
     startTime: DateTime.now(),
-    endTime: None(),
+    endTime: const None(),
     fileCount: 101,
     tree: 'deadbeef',
   );
@@ -36,7 +36,7 @@ void main() {
       when(() => mockSnapshotRepository.getSnapshot(any()))
           .thenAnswer((_) async => Ok<Snapshot, Failure>(tSnapshot));
       // act
-      final result = await usecase(Params(checksum: 'deadbeef'));
+      final result = await usecase(const Params(checksum: 'deadbeef'));
       // assert
       expect(result, equals(Ok<Snapshot, Failure>(tSnapshot)));
       verify(() => mockSnapshotRepository.getSnapshot(any()));

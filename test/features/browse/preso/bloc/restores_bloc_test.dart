@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +40,7 @@ void main() {
           .thenAnswer((_) async => Ok(tRequests));
       when(() =>
               mockSnapshotRepository.cancelRestore(any(), any(), any(), any()))
-          .thenAnswer((_) async => Ok(true));
+          .thenAnswer((_) async => const Ok(true));
     });
 
     test('ensure Loaded implements Equatable', () {
@@ -103,7 +103,7 @@ void main() {
       mockSnapshotRepository = MockSnapshotRepository();
       getRestores = GetRestores(mockSnapshotRepository);
       when(() => mockSnapshotRepository.getAllRestores())
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,7 +18,7 @@ import 'package:zorigami/features/backup/preso/widgets/data_set_form.dart';
 class DataSetsList extends ConsumerWidget {
   final List<DataSet> sets;
 
-  const DataSetsList({Key? key, required this.sets}) : super(key: key);
+  const DataSetsList({super.key, required this.sets});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -86,10 +86,10 @@ class DataSetsListInner extends ConsumerStatefulWidget {
   final List<PackStore> stores;
 
   const DataSetsListInner({
-    Key? key,
+    super.key,
     required this.sets,
     required this.stores,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<DataSetsListInner> createState() => _DataSetsListState();
@@ -154,10 +154,10 @@ class _DataSetsListState extends ConsumerState<DataSetsListInner> {
 
 class DataSetListDetails extends StatelessWidget {
   DataSetListDetails({
-    Key? key,
+    super.key,
     required this.dataset,
     required this.stores,
-  }) : super(key: key);
+  });
 
   final formKey = GlobalKey<FormBuilderState>();
   final DataSet dataset;

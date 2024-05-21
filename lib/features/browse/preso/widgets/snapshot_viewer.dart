@@ -16,10 +16,10 @@ class SnapshotViewer extends StatelessWidget {
   final DataSet dataset;
 
   const SnapshotViewer({
-    Key? key,
+    super.key,
     required this.state,
     required this.dataset,
-  }) : super(key: key);
+  });
 
   VoidCallback? loadSubsequent(Loaded state, BuildContext context) {
     return state.hasSubsequent

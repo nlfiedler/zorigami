@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -21,7 +21,7 @@ void main() {
     usecase = GetPackStores(mockPackStoreRepository);
   });
 
-  final tPackStore = PackStore(
+  const tPackStore = PackStore(
     key: 'cafebabe',
     label: 'ok go',
     kind: StoreKind.local,

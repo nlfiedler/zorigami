@@ -11,7 +11,7 @@ import 'package:zorigami/features/backup/preso/widgets/pack_stores_list.dart';
 import 'package:zorigami/navigation_drawer.dart';
 
 class PackStoresScreen extends ConsumerWidget {
-  const PackStoresScreen({Key? key}) : super(key: key);
+  const PackStoresScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

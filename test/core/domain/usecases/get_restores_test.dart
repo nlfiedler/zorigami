@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -26,11 +26,11 @@ void main() {
     () async {
       // arrange
       when(() => mockSnapshotRepository.getAllRestores())
-          .thenAnswer((_) async => Ok<List<Request>, Failure>([]));
+          .thenAnswer((_) async => const Ok<List<Request>, Failure>([]));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, equals(Ok<List<Request>, Failure>([])));
+      expect(result, equals(const Ok<List<Request>, Failure>([])));
       verify(() => mockSnapshotRepository.getAllRestores());
       verifyNoMoreInteractions(mockSnapshotRepository);
     },

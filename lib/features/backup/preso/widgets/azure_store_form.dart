@@ -10,7 +10,7 @@ import 'package:zorigami/features/backup/preso/widgets/pack_store_form.dart';
 class AzureStoreForm extends PackStoreForm {
   final PackStore store;
 
-  AzureStoreForm({Key? key, required this.store}) : super(key: key);
+  const AzureStoreForm({super.key, required this.store});
 
   @override
   Map<String, dynamic> initialValuesFrom(PackStore store) {

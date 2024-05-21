@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -305,7 +305,7 @@ void main() {
           .thenAnswer((_) async => Ok(tTree1));
       when(() => mockSnapshotRepository.restoreFiles(
               'sha1-cafebabe', 'file1', 'file1', 'dataset1'))
-          .thenAnswer((_) async => Ok(true));
+          .thenAnswer((_) async => const Ok(true));
     });
 
     blocTest(
@@ -340,7 +340,7 @@ void main() {
       getTree = GetTree(mockTreeRepository);
       restoreFiles = RestoreFiles(mockSnapshotRepository);
       when(() => mockTreeRepository.getTree(any()))
-          .thenAnswer((_) async => Err(ServerFailure('oh no!')));
+          .thenAnswer((_) async => const Err(ServerFailure('oh no!')));
     });
 
     blocTest(

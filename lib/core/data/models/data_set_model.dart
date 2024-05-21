@@ -7,12 +7,9 @@ import 'package:zorigami/core/domain/entities/data_set.dart';
 
 class TimeRangeModel extends TimeRange {
   const TimeRangeModel({
-    required int start,
-    required int stop,
-  }) : super(
-          start: start,
-          stop: stop,
-        );
+    required super.start,
+    required super.stop,
+  });
 
   factory TimeRangeModel.from(TimeRange range) {
     return TimeRangeModel(
@@ -78,18 +75,12 @@ int convertToUtc(int inputSeconds) {
 
 class ScheduleModel extends Schedule {
   const ScheduleModel({
-    required Frequency frequency,
-    required Option<TimeRange> timeRange,
-    required Option<WeekOfMonth> weekOfMonth,
-    required Option<DayOfWeek> dayOfWeek,
-    required Option<int> dayOfMonth,
-  }) : super(
-          frequency: frequency,
-          timeRange: timeRange,
-          weekOfMonth: weekOfMonth,
-          dayOfWeek: dayOfWeek,
-          dayOfMonth: dayOfMonth,
-        );
+    required super.frequency,
+    required super.timeRange,
+    required super.weekOfMonth,
+    required super.dayOfWeek,
+    required super.dayOfMonth,
+  });
 
   factory ScheduleModel.from(Schedule schedule) {
     return ScheduleModel(
@@ -134,20 +125,13 @@ class ScheduleModel extends Schedule {
 
 class BackupStateModel extends BackupState {
   const BackupStateModel({
-    required bool paused,
-    required bool stopRequested,
-    required int changedFiles,
-    required int packsUploaded,
-    required int filesUploaded,
-    required int bytesUploaded,
-  }) : super(
-          paused: paused,
-          stopRequested: stopRequested,
-          changedFiles: changedFiles,
-          packsUploaded: packsUploaded,
-          filesUploaded: filesUploaded,
-          bytesUploaded: bytesUploaded,
-        );
+    required super.paused,
+    required super.stopRequested,
+    required super.changedFiles,
+    required super.packsUploaded,
+    required super.filesUploaded,
+    required super.bytesUploaded,
+  });
 
   factory BackupStateModel.from(BackupState state) {
     return BackupStateModel(
@@ -185,30 +169,18 @@ class BackupStateModel extends BackupState {
 
 class DataSetModel extends DataSet {
   const DataSetModel({
-    required String key,
-    required String computerId,
-    required String basepath,
-    required List<ScheduleModel> schedules,
-    required int packSize,
-    required List<String> stores,
-    required List<String> excludes,
-    required Option<SnapshotModel> snapshot,
-    required Status status,
-    required Option<BackupStateModel> backupState,
-    required Option<String> errorMsg,
-  }) : super(
-          key: key,
-          computerId: computerId,
-          basepath: basepath,
-          schedules: schedules,
-          packSize: packSize,
-          stores: stores,
-          excludes: excludes,
-          snapshot: snapshot,
-          status: status,
-          backupState: backupState,
-          errorMsg: errorMsg,
-        );
+    required super.key,
+    required super.computerId,
+    required super.basepath,
+    required List<ScheduleModel> super.schedules,
+    required super.packSize,
+    required super.stores,
+    required super.excludes,
+    required Option<SnapshotModel> super.snapshot,
+    required super.status,
+    required Option<BackupStateModel> super.backupState,
+    required super.errorMsg,
+  });
 
   factory DataSetModel.from(DataSet dataset) {
     final List<ScheduleModel> schedules = List.from(

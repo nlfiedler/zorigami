@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:zorigami/core/data/models/configuration_model.dart';
 import 'package:zorigami/core/domain/entities/configuration.dart';
@@ -12,7 +12,7 @@ void main() {
       'username': 'zorigami',
       'computerId': 'r9c7i5l6VFK5Smt8VkBBsQ'
     };
-    final tConfigurationModel = ConfigurationModel(
+    const tConfigurationModel = ConfigurationModel(
       hostname: 'kohaku',
       username: 'zorigami',
       computerId: 'r9c7i5l6VFK5Smt8VkBBsQ',

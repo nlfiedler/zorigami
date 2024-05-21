@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -23,7 +23,7 @@ void main() {
     );
   });
 
-  final tConfigurationModel = ConfigurationModel(
+  const tConfigurationModel = ConfigurationModel(
     hostname: 'kohaku',
     username: 'zorigami',
     computerId: 'r9c7i5l6VFK5Smt8VkBBsQ',
@@ -63,7 +63,7 @@ void main() {
       () async {
         // arrange
         when(() => mockRemoteDataSource.getConfiguration())
-            .thenThrow(ServerException());
+            .thenThrow(const ServerException());
         // act
         final result = await repository.getConfiguration();
         // assert

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,7 +23,7 @@ final List<NewStoreItem> storeItems = [
 ];
 
 class PackStoreHeader extends ConsumerWidget {
-  const PackStoreHeader({Key? key}) : super(key: key);
+  const PackStoreHeader({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +53,7 @@ class PackStoreHeader extends ConsumerWidget {
 }
 
 class PackStoreCreator extends StatefulWidget {
-  const PackStoreCreator({Key? key}) : super(key: key);
+  const PackStoreCreator({super.key});
 
   @override
   PackStoreCreatorState createState() => PackStoreCreatorState();

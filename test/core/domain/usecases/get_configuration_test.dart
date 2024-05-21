@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -22,7 +22,7 @@ void main() {
     usecase = GetConfiguration(mockConfigurationRepository);
   });
 
-  final tConfiguration = Configuration(
+  const tConfiguration = Configuration(
     hostname: 'localhost',
     username: 'charlie',
     computerId: '1642ceb7-02eb-4ada-94f9-27c14320b908',
@@ -32,12 +32,12 @@ void main() {
     'should get the configuration from the repository',
     () async {
       // arrange
-      when(() => mockConfigurationRepository.getConfiguration())
-          .thenAnswer((_) async => Ok<Configuration, Failure>(tConfiguration));
+      when(() => mockConfigurationRepository.getConfiguration()).thenAnswer(
+          (_) async => const Ok<Configuration, Failure>(tConfiguration));
       // act
       final result = await usecase(NoParams());
       // assert
-      expect(result, equals(Ok<Configuration, Failure>(tConfiguration)));
+      expect(result, equals(const Ok<Configuration, Failure>(tConfiguration)));
       verify(() => mockConfigurationRepository.getConfiguration());
       verifyNoMoreInteractions(mockConfigurationRepository);
     },

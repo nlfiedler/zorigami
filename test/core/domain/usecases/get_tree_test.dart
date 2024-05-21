@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -20,7 +20,7 @@ void main() {
     usecase = GetTree(mockTreeRepository);
   });
 
-  final tTreeReference = TreeReference(type: EntryType.file, value: 'cafebabe');
+  const tTreeReference = TreeReference(type: EntryType.file, value: 'cafebabe');
   final tTreeEntry = TreeEntry(
     name: 'filename.txt',
     reference: tTreeReference,
@@ -35,7 +35,7 @@ void main() {
       when(() => mockTreeRepository.getTree(any()))
           .thenAnswer((_) async => Ok<Tree, Failure>(tTree));
       // act
-      final result = await usecase(Params(checksum: 'deadbeef'));
+      final result = await usecase(const Params(checksum: 'deadbeef'));
       // assert
       expect(result, equals(Ok<Tree, Failure>(tTree)));
       verify(() => mockTreeRepository.getTree(any()));

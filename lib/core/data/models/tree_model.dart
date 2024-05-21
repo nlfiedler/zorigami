@@ -5,12 +5,9 @@ import 'package:zorigami/core/domain/entities/tree.dart';
 
 class TreeReferenceModel extends TreeReference {
   const TreeReferenceModel({
-    required EntryType type,
-    required String value,
-  }) : super(
-          type: type,
-          value: value,
-        );
+    required super.type,
+    required super.value,
+  });
 
   // Feed the entire tree entry to get the reference.
   factory TreeReferenceModel.fromJson(Map<String, dynamic> json) {
@@ -39,14 +36,10 @@ class TreeReferenceModel extends TreeReference {
 
 class TreeEntryModel extends TreeEntry {
   const TreeEntryModel({
-    required String name,
-    required DateTime modTime,
-    required TreeReference reference,
-  }) : super(
-          name: name,
-          modTime: modTime,
-          reference: reference,
-        );
+    required super.name,
+    required super.modTime,
+    required super.reference,
+  });
 
   factory TreeEntryModel.from(TreeEntry entry) {
     return TreeEntryModel(
@@ -77,8 +70,8 @@ class TreeEntryModel extends TreeEntry {
 
 class TreeModel extends Tree {
   const TreeModel({
-    required List<TreeEntry> entries,
-  }) : super(entries: entries);
+    required super.entries,
+  });
 
   factory TreeModel.fromJson(Map<String, dynamic> json) {
     final List<TreeEntryModel> entries = List.from(
