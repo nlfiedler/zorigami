@@ -153,7 +153,7 @@ impl entities::TreeEntry {
         self.name.clone()
     }
 
-    /// Modification time of the entry.
+    /// Modification time of the entry in UTC.
     fn mod_time(&self) -> DateTime<Utc> {
         self.mtime
     }
@@ -223,12 +223,12 @@ impl entities::Snapshot {
         self.parent.clone().map(|c| ChecksumGQL(c))
     }
 
-    /// Time when the snapshot was first created.
+    /// Time when the snapshot was first created in UTC.
     fn start_time(&self) -> DateTime<Utc> {
         self.start_time
     }
 
-    /// Time when the snapshot completely finished.
+    /// Time when the snapshot completely finished in UTC.
     fn end_time(&self) -> Option<DateTime<Utc>> {
         self.end_time
     }
@@ -399,13 +399,13 @@ impl entities::Dataset {
     }
 }
 
-#[juniper::graphql_object(name = "TimeRange", desc = "Range of time in which to run backup.")]
+#[juniper::graphql_object(name = "TimeRange", desc = "Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour.")]
 impl entities::schedule::TimeRange {
-    /// Seconds from midnight at which to start.
+    /// Seconds from midnight at which to start in UTC.
     fn start_time(&self) -> i32 {
         self.start as i32
     }
-    /// Seconds from midnight at which to stop.
+    /// Seconds from midnight at which to stop in UTC.
     fn stop_time(&self) -> i32 {
         self.stop as i32
     }
@@ -413,9 +413,9 @@ impl entities::schedule::TimeRange {
 
 #[derive(GraphQLInputObject)]
 pub struct InputTimeRange {
-    /// Seconds from midnight at which to start.
+    /// Seconds from midnight at which to start in UTC.
     pub start_time: i32,
-    /// Seconds from midnight at which to stop.
+    /// Seconds from midnight at which to stop in UTC.
     pub stop_time: i32,
 }
 
@@ -768,7 +768,7 @@ impl restore::Request {
         self.dataset.clone()
     }
 
-    /// The datetime when the request was completed.
+    /// The datetime when the request was completed in UTC.
     fn finished(&self) -> Option<DateTime<Utc>> {
         self.finished
     }

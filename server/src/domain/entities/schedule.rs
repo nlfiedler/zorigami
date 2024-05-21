@@ -52,8 +52,9 @@ impl From<u32> for DayOfWeek {
 
 ///
 /// Represents the range in time during the day in which to run the backup. The
-/// time is represented in 24-hour format, without a timezone (i.e. "naive").
-/// The start and stop times can be reversed so as to span the midnight hour.
+/// time is represented in 24-hour format, without a timezone (i.e. "naive"),
+/// but the values are assumed to represent UTC. The start and stop times can be
+/// reversed so as to span the midnight hour.
 ///
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TimeRange {
