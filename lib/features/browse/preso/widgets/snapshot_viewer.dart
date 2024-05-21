@@ -46,11 +46,6 @@ class SnapshotViewer extends StatelessWidget {
     final started = DateFormat.yMd().add_jm().format(
           state.snapshot.startTime.toLocal(),
         );
-    final stopped = state.snapshot.endTime.mapOrElse((v) {
-      return DateFormat.yMd().add_jm().format(v.toLocal());
-    }, () {
-      return '...';
-    });
     final status = dataset.describeStatus();
     return Column(
       children: <Widget>[
@@ -59,7 +54,7 @@ class SnapshotViewer extends StatelessWidget {
             leading: const Icon(Icons.timeline),
             title: Text('Snapshot: $digest'),
             subtitle: Text(
-              'Files: $count, Started: $started, Stopped: $stopped, Status: $status',
+              'Files: $count, Started: $started, Status: $status',
             ),
             isThreeLine: true,
             trailing: Row(

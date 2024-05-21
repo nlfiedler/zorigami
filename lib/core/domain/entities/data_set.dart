@@ -250,20 +250,13 @@ class DataSet extends Equatable {
     switch (status) {
       case Status.none:
         if (isFinished()) {
-          return 'finished';
+          return finishedLabel();
         }
         return 'not yet run';
       case Status.running:
         return backupState.match((s) => s.describeState(), () => 'in progress');
       case Status.finished:
-        final suffix = snapshot.mapOrElse(
-          (s) => s.endTime.mapOrElse(
-            (e) => ' at ${DateFormat.yMd().add_jm().format(e)}',
-            () => '',
-          ),
-          () => '',
-        );
-        return 'finished$suffix';
+        return finishedLabel();
       case Status.paused:
         return 'paused';
       case Status.failed:
@@ -271,6 +264,17 @@ class DataSet extends Equatable {
       default:
         throw ArgumentError('unrecognized status');
     }
+  }
+
+  String finishedLabel() {
+    final suffix = snapshot.mapOrElse(
+      (s) => s.endTime.mapOrElse(
+        (e) => ' at ${DateFormat.yMd().add_jm().format(e.toLocal())}',
+        () => '',
+      ),
+      () => '',
+    );
+    return 'finished$suffix';
   }
 
   bool isFinished() {

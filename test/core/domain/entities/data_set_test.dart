@@ -400,8 +400,8 @@ void main() {
         snapshot: Some(Snapshot(
           checksum: 'cafed00d',
           parent: const None(),
-          startTime: DateTime.now(),
-          endTime: Some(DateTime.now()),
+          startTime: DateTime(2021, 9, 29, 12, 42, 51),
+          endTime: Some(DateTime(2021, 9, 29, 16, 24, 15)),
           fileCount: 121,
           tree: 'beefdead',
         )),
@@ -409,7 +409,9 @@ void main() {
         backupState: const None(),
         errorMsg: const None(),
       );
-      expect(sut.describeStatus(), equals('finished'));
+      final dt = DateTime(2021, 9, 29, 16, 24, 15);
+      final localdt = DateFormat.yMd().add_jm().format(dt);
+      expect(sut.describeStatus(), equals('finished at $localdt'));
     });
 
     test('should say not yet run if no status or end time', () {
@@ -508,8 +510,8 @@ void main() {
         snapshot: Some(Snapshot(
           checksum: 'cafed00d',
           parent: const None(),
-          startTime: DateTime.utc(2021, 9, 29, 12, 42, 51),
-          endTime: Some(DateTime.utc(2021, 9, 29, 16, 24, 15)),
+          startTime: DateTime(2021, 9, 29, 12, 42, 51),
+          endTime: Some(DateTime(2021, 9, 29, 16, 24, 15)),
           fileCount: 121,
           tree: 'beefdead',
         )),
@@ -517,7 +519,7 @@ void main() {
         backupState: const None(),
         errorMsg: const None(),
       );
-      final dt = DateTime.utc(2021, 9, 29, 16, 24, 15);
+      final dt = DateTime(2021, 9, 29, 16, 24, 15);
       final localdt = DateFormat.yMd().add_jm().format(dt);
       expect(sut.describeStatus(), equals('finished at $localdt'));
     });
