@@ -181,6 +181,8 @@ class BackupState extends Equatable {
       return 'paused';
     } else if (stopRequested) {
       return 'stop requested';
+    } else if (changedFiles == 0) {
+      return 'scanning';
     } else {
       final f = NumberFormat();
       final u = f.format(filesUploaded);

@@ -462,6 +462,39 @@ void main() {
       expect(sut.describeStatus(), equals('in progress'));
     });
 
+    test('should say scanning if status running and changed files is 0', () {
+      final sut = DataSet(
+        key: '',
+        computerId: '',
+        basepath: '',
+        schedules: const [],
+        packSize: 0,
+        stores: const [],
+        excludes: const [],
+        snapshot: Some(Snapshot(
+          checksum: 'cafed00d',
+          parent: const None(),
+          startTime: DateTime.now(),
+          endTime: Some(DateTime.now()),
+          fileCount: 121,
+          tree: 'beefdead',
+        )),
+        status: Status.running,
+        backupState: const Some(
+          BackupState(
+            paused: false,
+            stopRequested: false,
+            changedFiles: 0,
+            packsUploaded: 0,
+            filesUploaded: 0,
+            bytesUploaded: 0,
+          ),
+        ),
+        errorMsg: const None(),
+      );
+      expect(sut.describeStatus(), equals('scanning'));
+    });
+
     test('should give details if status running and has state', () {
       final sut = DataSet(
         key: '',
