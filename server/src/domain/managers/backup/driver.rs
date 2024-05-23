@@ -97,6 +97,9 @@ impl<'a> BackupDriver<'a> {
                 self.dbase.insert_file(&file)?;
             }
             self.process_queue()?;
+        } else {
+            // count finished files for accurate progress tracking
+            self.record.file_already_uploaded();
         }
         Ok(())
     }
@@ -254,13 +257,6 @@ impl<'a> BackupDriver<'a> {
             let locations = self
                 .stores
                 .store_pack(&pack_path, &bucket_name, &object_name)?;
-            // report the number of bytes uploaded to provide some progress in
-            // case there is a very large file that spans many packs
-            let bytes_uploaded = self.record.count_bytes();
-            self.state.backup_event(BackupAction::UploadBytes(
-                self.dataset.id.clone(),
-                bytes_uploaded,
-            ));
             self.record
                 .record_completed_pack(self.dbase, &pack_digest, locations)?;
             self.state
@@ -268,12 +264,16 @@ impl<'a> BackupDriver<'a> {
         } else {
             info!("pack record already exists for {}", pack_digest);
         }
+        fs::remove_file(pack_path)?;
         let count = self
             .record
             .record_completed_files(self.dbase, &pack_digest)? as u64;
+        self.state.backup_event(BackupAction::UploadBytes(
+            self.dataset.id.clone(),
+            self.record.bytes_packed as u64,
+        ));
         self.state
             .backup_event(BackupAction::UploadFiles(self.dataset.id.clone(), count));
-        fs::remove_file(pack_path)?;
         self.record = Default::default();
         Ok(())
     }
@@ -329,6 +329,10 @@ fn calc_chunk_size(pack_size: u64) -> u32 {
 /// saving the results to the database.
 #[derive(Default)]
 pub struct PackRecord {
+    /// Count of previously completed files.
+    completed_files: usize,
+    /// Sum of the lengths of all chunks in this pack.
+    bytes_packed: usize,
     /// Those files that have been completed with this pack.
     files: HashMap<entities::Checksum, Vec<entities::Chunk>>,
     /// Those chunks that are contained in this pack.
@@ -341,18 +345,15 @@ impl PackRecord {
         self.files.insert(digest, chunks);
     }
 
-    /// Add a chunk to this pack.
-    fn add_chunk(&mut self, chunk: entities::Chunk) {
-        self.chunks.push(chunk);
+    /// Increment the number of files uploaded previously.
+    fn file_already_uploaded(&mut self) {
+        self.completed_files += 1;
     }
 
-    /// Count the total bytes of all of the chunks in this pack.
-    fn count_bytes(&self) -> u64 {
-        let mut result: u64 = 0;
-        for chunk in self.chunks.iter() {
-            result += chunk.length as u64;
-        }
-        result
+    /// Add a chunk to this pack.
+    fn add_chunk(&mut self, chunk: entities::Chunk) {
+        self.bytes_packed += chunk.length;
+        self.chunks.push(chunk);
     }
 
     /// Return true if the given (unencrypted) pack file contains everything
@@ -446,7 +447,7 @@ impl PackRecord {
             let file = entities::File::new(filesum.clone(), length, chunks);
             dbase.insert_file(&file)?;
         }
-        Ok(self.files.len())
+        Ok(self.files.len() + self.completed_files)
     }
 }
 
