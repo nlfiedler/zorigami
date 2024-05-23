@@ -19,6 +19,7 @@ fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestor
 }
 
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_backup_restore() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
@@ -274,6 +275,7 @@ fn copy_with_prefix(header: &str, infile: &Path, outfile: &Path) -> Result<(), E
 
 #[cfg(target_family = "unix")]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     use std::fs::Permissions;
     use std::os::unix::fs::PermissionsExt;
@@ -404,6 +406,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //       at the target location and its checksum matches the one being restored
 //
 // #[actix_rt::test]
+// #[serial_test::serial]
 // async fn test_backup_restore_over_existing() -> Result<(), Error> {
 //     // create the database
 //     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
@@ -512,6 +515,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 // }
 
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_backup_restore_symlink() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
@@ -678,6 +682,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
 }
 
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_backup_restore_small() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;

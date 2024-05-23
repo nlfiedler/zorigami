@@ -54,7 +54,7 @@ pub struct BackupDriver<'a> {
 }
 
 impl<'a> BackupDriver<'a> {
-    /// Build a BackupMaster.
+    /// Build a BackupDriver.
     pub fn new(
         dataset: &'a entities::Dataset,
         dbase: &'a Arc<dyn RecordRepository>,
@@ -64,6 +64,11 @@ impl<'a> BackupDriver<'a> {
     ) -> Result<Self, Error> {
         let stores = dbase.load_dataset_stores(dataset)?;
         let chunk_size = calc_chunk_size(dataset.pack_size);
+        // Because EXAF combines content into 16mb blocks, it is possible that
+        // it will produce something that is just under the desired pack size,
+        // and subsequently more chunks will be added, pushing it well past the
+        // desired pack size.
+        let target_size = (dataset.pack_size / 10) * 9;
         Ok(Self {
             dataset,
             dbase,
@@ -72,7 +77,7 @@ impl<'a> BackupDriver<'a> {
             stores,
             stop_time,
             chunk_size,
-            builder: pack::PackBuilder::new(dataset.pack_size).password(passphrase),
+            builder: pack::PackBuilder::new(target_size).password(passphrase),
             record: Default::default(),
             file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),
@@ -745,7 +750,7 @@ mod tests {
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
-        dataset.pack_size = 524288 as u64;
+        dataset.pack_size = 582540 as u64;
         let computer_id = entities::Configuration::generate_unique_id("mr.ed", "stable");
         dbase.put_computer_id(&dataset.id, &computer_id)?;
         fs::create_dir_all(&dataset.workspace)?;

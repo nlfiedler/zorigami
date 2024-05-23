@@ -25,6 +25,7 @@ fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestor
 // Test the full backup with a pack store that uses async calls.
 //
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_process_manager_async_store() -> Result<(), Error> {
     // set up the environment and remote connection
     dotenv().ok();
