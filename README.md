@@ -112,6 +112,10 @@ the values can be set at build-time using either command-line arguments or
 environment variables. See the `pubspec.yaml` for the names and the
 `environment_config` README for instructions.
 
+## Deploying
+
+See the [DEPLOY.md](./doc/DEPLOY.md) document for details and examples of building the application for deployment into different environments.
+
 ## Tools
 
 ### Finding Outdated Crates
