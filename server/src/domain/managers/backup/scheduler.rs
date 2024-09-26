@@ -15,7 +15,7 @@ use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, warn, trace};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::ops::Deref;
@@ -107,6 +107,7 @@ impl Scheduler for SchedulerImpl {
         if let Some(addr) = su_addr.deref() {
             addr.try_send(Start { dataset }).map_err(err_convert)
         } else {
+            warn!("supervisor not running, cannot start backup");
             Ok(())
         }
     }
@@ -119,6 +120,7 @@ impl Scheduler for SchedulerImpl {
         if let Some(addr) = su_addr.take() {
             addr.try_send(Stop()).map_err(err_convert)
         } else {
+            warn!("supervisor not running, cannot stop backup");
             Ok(())
         }
     }

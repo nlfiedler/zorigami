@@ -399,7 +399,10 @@ impl entities::Dataset {
     }
 }
 
-#[juniper::graphql_object(name = "TimeRange", desc = "Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour.")]
+#[juniper::graphql_object(
+    name = "TimeRange",
+    desc = "Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour."
+)]
 impl entities::schedule::TimeRange {
     /// Seconds from midnight at which to start in UTC.
     fn start_time(&self) -> i32 {
@@ -654,13 +657,25 @@ impl entities::Configuration {
     fn hostname(&self) -> String {
         self.hostname.clone()
     }
+
     /// Name of the user running this application.
     fn username(&self) -> String {
         self.username.clone()
     }
+
     /// Computer UUID for generating bucket names.
     fn computer_id(&self) -> String {
         self.computer_id.clone()
+    }
+
+    /// Name of the bucket used for storing the database snapshots.
+    fn computer_bucket(&self) -> String {
+        match blob_uuid::to_uuid(&self.computer_id) {
+            Ok(uuid) => uuid.simple().to_string(),
+            Err(_) => {
+                format!("could not convert unique ID: {}", self.computer_id)
+            }
+        }
     }
 }
 
@@ -1350,7 +1365,7 @@ impl MutationRoot {
         use crate::domain::usecases::start_backup::{Params, StartBackup};
         use crate::domain::usecases::UseCase;
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = StartBackup::new(Box::new(repo), ctx.processor.clone());
+        let usecase = StartBackup::new(Arc::new(repo), ctx.appstate.clone(), ctx.processor.clone());
         let params: Params = Params::new(id);
         usecase.call(params)?;
         Ok(true)

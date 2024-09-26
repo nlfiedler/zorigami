@@ -526,7 +526,7 @@ impl PackRepository for PackRepositoryImpl {
 ///
 /// Return the unique bucket name for this computer and user.
 ///
-pub fn computer_bucket_name(unique_id: &str) -> String {
+fn computer_bucket_name(unique_id: &str) -> String {
     match blob_uuid::to_uuid(unique_id) {
         Ok(uuid) => uuid.simple().to_string(),
         Err(err) => {

@@ -613,7 +613,7 @@ mod tests {
         // attempt to store an object in a bucket that exists but does not
         // belong to this project (yes, need to change this value whenever the
         // bucket suddenly becomes available again)
-        let bucket = "0fd96ca5-ec14-4fb1-a42c-661619507b0b".to_owned();
+        let bucket = "caefd289-4314-4ff3-bd0a-5be30c4fb8c2".to_owned();
         let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let result = source.store_pack_sync(packfile, &bucket, &object);
@@ -649,7 +649,7 @@ mod tests {
         // attempt to store an object in a bucket that exists but does not
         // belong to this project (yes, need to change this value whenever the
         // bucket suddenly becomes available again)
-        let bucket = "0fd96ca5-ec14-4fb1-a42c-661619507b0b".to_owned();
+        let bucket = "caefd289-4314-4ff3-bd0a-5be30c4fb8c2".to_owned();
         let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let location = source.store_database_sync(packfile, &bucket, &object)?;
