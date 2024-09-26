@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
@@ -43,10 +43,9 @@ impl GoogleStore {
 
     async fn connect(&self) -> Result<storage1::Storage<HttpsConnector<HttpConnector>>, Error> {
         let conn = storage1::hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
+            .with_native_roots()?
             .https_or_http()
             .enable_http1()
-            .enable_http2()
             .build();
         let https_client = storage1::hyper::Client::builder().build(conn);
         let account_key = storage1::oauth2::read_service_account_key(&self.credentials).await?;
@@ -61,10 +60,9 @@ impl GoogleStore {
         &self,
     ) -> Result<firestore1::Firestore<HttpsConnector<HttpConnector>>, Error> {
         let conn = firestore1::hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
+            .with_native_roots()?
             .https_or_http()
             .enable_http1()
-            .enable_http2()
             .build();
         let https_client = firestore1::hyper::Client::builder().build(conn);
         let account_key = firestore1::oauth2::read_service_account_key(&self.credentials).await?;
