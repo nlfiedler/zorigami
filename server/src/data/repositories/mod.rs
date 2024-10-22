@@ -1,14 +1,13 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::data::sources::{
-    EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
-};
+use crate::data::sources::{PackSourceBuilder, PackSourceBuilderImpl};
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::domain::sources::{EntityDataSource, PackDataSource};
 use anyhow::{anyhow, Context, Error, Result};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -31,19 +30,34 @@ lazy_static! {
 // to the data source trait, which works, but is ugly. It gets even uglier when
 // mocking the calls on the data source, which gets cloned during the test.
 pub struct RecordRepositoryImpl {
+    // read-first/write-first database
     datasource: Arc<dyn EntityDataSource>,
+    // if primary `datasource` is missing a record, consult this one
+    fallback: Option<Arc<dyn EntityDataSource>>,
 }
 
 impl RecordRepositoryImpl {
     pub fn new(datasource: Arc<dyn EntityDataSource>) -> Self {
-        Self { datasource }
+        Self {
+            datasource,
+            fallback: None,
+        }
     }
 }
 
 impl RecordRepository for RecordRepositoryImpl {
+    fn set_fallback(&mut self, fallback: Option<Arc<dyn EntityDataSource>>) {
+        self.fallback = fallback;
+    }
+
     fn get_configuration(&self) -> Result<Configuration, Error> {
         if let Some(conf) = self.datasource.get_configuration()? {
             return Ok(conf);
+        }
+        if let Some(ref fallback) = self.fallback {
+            if let Some(conf) = fallback.get_configuration()? {
+                return Ok(conf);
+            }
         }
         let config: Configuration = Default::default();
         self.datasource.put_configuration(&config)?;
@@ -51,8 +65,11 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_excludes(&self) -> Vec<PathBuf> {
-        let path = self.datasource.get_db_path();
-        vec![path]
+        let mut excludes: Vec<PathBuf> = vec![self.datasource.get_db_path()];
+        if let Some(ref fallback) = self.fallback {
+            excludes.push(fallback.get_db_path())
+        }
+        excludes
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
@@ -60,7 +77,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
-        self.datasource.get_computer_id(dataset)
+        let result = self.datasource.get_computer_id(dataset);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_computer_id(dataset);
+            }
+        }
+        result
     }
 
     fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
@@ -72,7 +95,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
-        self.datasource.get_latest_snapshot(dataset)
+        let result = self.datasource.get_latest_snapshot(dataset);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_latest_snapshot(dataset);
+            }
+        }
+        result
     }
 
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
@@ -84,7 +113,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error> {
-        self.datasource.get_chunk(digest)
+        let result = self.datasource.get_chunk(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_chunk(digest);
+            }
+        }
+        result
     }
 
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
@@ -96,15 +131,37 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
-        self.datasource.get_pack(digest)
+        let result = self.datasource.get_pack(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_pack(digest);
+            }
+        }
+        result
     }
 
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error> {
-        self.datasource.get_packs(store_id)
+        let result = self.datasource.get_packs(store_id);
+        if let Ok(ref packs) = result {
+            if packs.len() == 0 {
+                if let Some(ref fallback) = self.fallback {
+                    return fallback.get_packs(store_id);
+                }
+            }
+        }
+        result
     }
 
     fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
-        self.datasource.get_all_packs()
+        let result = self.datasource.get_all_packs();
+        if let Ok(ref packs) = result {
+            if packs.len() == 0 {
+                if let Some(ref fallback) = self.fallback {
+                    return fallback.get_all_packs();
+                }
+            }
+        }
+        result
     }
 
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
@@ -112,11 +169,25 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
-        self.datasource.get_database(digest)
+        let result = self.datasource.get_database(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_database(digest);
+            }
+        }
+        result
     }
 
     fn get_databases(&self) -> Result<Vec<Pack>, Error> {
-        self.datasource.get_databases()
+        let result = self.datasource.get_databases();
+        if let Ok(ref dbs) = result {
+            if dbs.len() == 0 {
+                if let Some(ref fallback) = self.fallback {
+                    return fallback.get_databases();
+                }
+            }
+        }
+        result
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
@@ -124,7 +195,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
-        self.datasource.get_xattr(digest)
+        let result = self.datasource.get_xattr(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_xattr(digest);
+            }
+        }
+        result
     }
 
     fn insert_file(&self, file: &File) -> Result<(), Error> {
@@ -132,7 +209,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error> {
-        self.datasource.get_file(digest)
+        let result = self.datasource.get_file(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_file(digest);
+            }
+        }
+        result
     }
 
     fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
@@ -140,7 +223,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
-        self.datasource.get_tree(digest)
+        let result = self.datasource.get_tree(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_tree(digest);
+            }
+        }
+        result
     }
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
@@ -151,11 +240,25 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_stores(&self) -> Result<Vec<Store>, Error> {
-        self.datasource.get_stores()
+        let result = self.datasource.get_stores();
+        if let Ok(ref stores) = result {
+            if stores.len() == 0 {
+                if let Some(ref fallback) = self.fallback {
+                    return fallback.get_stores();
+                }
+            }
+        }
+        result
     }
 
     fn get_store(&self, id: &str) -> Result<Option<Store>, Error> {
-        self.datasource.get_store(id)
+        let result = self.datasource.get_store(id);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_store(id);
+            }
+        }
+        result
     }
 
     fn delete_store(&self, id: &str) -> Result<(), Error> {
@@ -195,11 +298,25 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
-        self.datasource.get_datasets()
+        let result = self.datasource.get_datasets();
+        if let Ok(ref datasets) = result {
+            if datasets.len() == 0 {
+                if let Some(ref fallback) = self.fallback {
+                    return fallback.get_datasets();
+                }
+            }
+        }
+        result
     }
 
     fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error> {
-        self.datasource.get_dataset(id)
+        let result = self.datasource.get_dataset(id);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_dataset(id);
+            }
+        }
+        result
     }
 
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
@@ -211,7 +328,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
-        self.datasource.get_snapshot(digest)
+        let result = self.datasource.get_snapshot(digest);
+        if let Ok(None) = result {
+            if let Some(ref fallback) = self.fallback {
+                return fallback.get_snapshot(digest);
+            }
+        }
+        result
     }
 
     fn create_backup(&self, password: &str) -> Result<tempfile::TempPath, Error> {
@@ -230,6 +353,9 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
+        // The counts for the primary data source may not yet be valid but
+        // simply defering to the fallback, or some combination of the two,
+        // won't work either.
         self.datasource.get_entity_counts()
     }
 }
@@ -655,8 +781,9 @@ fn store_database_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::sources::{MockEntityDataSource, MockPackDataSource, MockPackSourceBuilder};
+    use crate::data::sources::MockPackSourceBuilder;
     use crate::domain::entities::{PackLocation, StoreType};
+    use crate::domain::sources::{MockEntityDataSource, MockPackDataSource};
     use mockall::predicate::*;
     use std::collections::HashMap;
     use std::path::PathBuf;

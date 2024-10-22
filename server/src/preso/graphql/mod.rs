@@ -5,13 +5,13 @@
 //! The `schema` module defines the GraphQL schema and resolvers.
 
 use crate::data::repositories::RecordRepositoryImpl;
-use crate::data::sources::EntityDataSource;
 use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::helpers;
 use crate::domain::managers::backup::Scheduler;
 use crate::domain::managers::restore::{self, Restorer};
 use crate::domain::managers::state::{self, StateStore};
 use crate::domain::repositories::RecordRepository;
+use crate::domain::sources::EntityDataSource;
 use chrono::prelude::*;
 use juniper::{
     EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
@@ -1510,10 +1510,10 @@ pub fn create_schema() -> Schema {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::sources::MockEntityDataSource;
     use crate::domain::managers::backup::scheduler::MockScheduler;
     use crate::domain::managers::restore::MockRestorer;
     use crate::domain::managers::state::MockStateStore;
+    use crate::domain::sources::MockEntityDataSource;
     use anyhow::anyhow;
     use juniper::{FromInputValue, InputValue, ToInputValue, Variables};
     use mockall::predicate::*;

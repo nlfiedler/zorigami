@@ -2,8 +2,9 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
+use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum};
+use server::domain::sources::EntityDataSource;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

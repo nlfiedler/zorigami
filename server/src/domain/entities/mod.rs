@@ -210,6 +210,25 @@ impl std::hash::Hash for Store {
     }
 }
 
+///
+/// Policy dictating how many snapshots to retain.
+///
+#[derive(Clone, Debug)]
+pub enum RetentionPolicy {
+    /// All snapshots will be retained indefinitely.
+    ALL,
+    /// Retain this many snapshots.
+    COUNT(u16),
+    /// Retain snapshots for this many days.
+    DAYS(u16),
+}
+
+impl Default for RetentionPolicy {
+    fn default() -> Self {
+        RetentionPolicy::ALL
+    }
+}
+
 /// Represents a directory tree that will be backed up according to a schedule,
 /// with pack files saved to a particular local or remote store.
 #[derive(Clone, Debug)]
@@ -228,6 +247,8 @@ pub struct Dataset {
     pub stores: Vec<String>,
     /// List of file/directory exclusion patterns.
     pub excludes: Vec<String>,
+    /// Policy for retaining snapshots over time.
+    pub retention: RetentionPolicy,
 }
 
 // Default pack size is 64mb just because. With a typical ADSL home broadband
@@ -253,6 +274,7 @@ impl Dataset {
             pack_size,
             stores: vec![],
             excludes: vec![],
+            retention: Default::default(),
         }
     }
 
@@ -277,6 +299,7 @@ impl Default for Dataset {
             pack_size: 0,
             stores: vec![],
             excludes: vec![],
+            retention: Default::default(),
         }
     }
 }

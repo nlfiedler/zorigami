@@ -5,16 +5,22 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
+use crate::domain::sources::EntityDataSource;
 use anyhow::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 ///
 /// Repository for entity records.
 ///
 #[cfg_attr(test, automock)]
 pub trait RecordRepository: Send + Sync {
+    /// Set the fallback data source to be consulting if the primary data source
+    /// is missing an entity.
+    fn set_fallback(&mut self, fallback: Option<Arc<dyn EntityDataSource>>);
+
     /// Retrieve the configuration, or build a new one using default values.
     fn get_configuration(&self) -> Result<Configuration, Error>;
 

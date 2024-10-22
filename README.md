@@ -1,29 +1,29 @@
 # zorigami
 
-A backup and restore application written in [Rust](https://www.rust-lang.org) and [Flutter](https://flutter.dev) with a [GraphQL](https://graphql.org) wire protocol.
+A backup and restore application written in [Rust](https://www.rust-lang.org) and [Flutter](https://flutter.dev) with a [GraphQL](https://graphql.org) wire protocol. Metadata is stored in [RocksDB](https://rocksdb.org) and file content is stored in encrypted packs using [EXAF](https://github.com/nlfiedler/exaf-rs).
 
 ## Features
 
-* Unlimited backup: all files of any size
+* Can backup any number of files of any size
 * Maintains multiple versions of files, not only the most recent
-* Efficiency: compression, de-duplication among and within files
-* Encryption: all remotely stored data is encrypted using AES256-GCM [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption)
-* Cloud service agnostic: Amazon, Azure, Google, MinIO, SFTP
+* Deduplication of files as well as content-defined chunking of large files
+* All remotely stored data is encrypted using AES256-GCM [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption)
+* Supports several remote stores: Amazon, Azure, Google, MinIO, SFTP
 * Restore entire directory tree as well as individual files
-* Local and Cloud storage
-* Scheduled backups
+* Backups can be stored both locally and remotely
+* Backups can be run manually, hourly, or daily at a set time of day
 * Cross Platform: Linux, macOS, Windows
 
 ## Shortcomings
 
-This project has been a work-in-progress since 2014 and there are still some items that have not yet been implemented. The most notable of these are:
+This project has been a work-in-progress since 2014, originally started as [akashita](https://github.com/nlfiedler/akashita). Despite all that time and the gradual progress, there are several notable shortcomings:
 
 * This software is provided "as-is", WITHOUT WARRANTY OF ANY KIND, see the `LICENSE` for details.
 * The database schema and pack file formats have changed radically over the years. It may happen again.
-* No automatic pruning of the snapshots which would keep the database size to a reasonable limit.
+* No automatic pruning of the snapshots (yet) which would keep the database size to a reasonable limit.
 * Object-to-bucket allocation is very primitive and needs improvement.
 * Restoring to dissimilar hardware is not yet an easy task.
-* No readily available binaries you will need to build and deploy it yourself.
+* No readily available binaries, you will need to build and deploy it yourself.
 * No QoS control on uploads over the network so a backup can slow everything else to a crawl.
 * Backup procedure operates file-by-file (not _point-in-time_) and hence may record changed content incorrectly or inconsistently (such as with database files).
 

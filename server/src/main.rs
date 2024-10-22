@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 
 //! The main application binary that starts the web server and spawns the
@@ -15,11 +15,12 @@ use juniper::http::GraphQLRequest;
 use lazy_static::lazy_static;
 use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::{EntityDataSource, EntityDataSourceImpl};
+use server::data::sources::EntityDataSourceImpl;
 use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
 use server::domain::managers::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
 use server::domain::managers::state::{self, StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
+use server::domain::sources::EntityDataSource;
 use server::preso::graphql;
 use std::env;
 use std::io;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2020 Nathan Fiedler
+// Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
 use std::cmp;
@@ -19,6 +19,7 @@ pub mod insert_file;
 pub mod new_dataset;
 pub mod new_store;
 pub mod prune_extra;
+pub mod prune_snapshots;
 pub mod query_restores;
 pub mod reassign_packs;
 pub mod restore_database;

@@ -3,8 +3,8 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, Snapshot, Store,
-    StoreType,
+    Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, RetentionPolicy,
+    Snapshot, Store, StoreType,
 };
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -162,6 +162,18 @@ pub struct StoreDef {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(remote = "RetentionPolicy")]
+pub enum RetentionPolicyDef {
+    /// All snapshots will be retained indefinitely.
+    ALL,
+    /// Retain this many snapshots.
+    COUNT(u16),
+    /// Retain snapshots for this many days.
+    DAYS(u16),
+}
+
+
+#[derive(Serialize, Deserialize)]
 #[serde(default)]
 #[serde(remote = "Dataset")]
 pub struct DatasetDef {
@@ -179,6 +191,8 @@ pub struct DatasetDef {
     pub stores: Vec<String>,
     #[serde(rename = "ex")]
     pub excludes: Vec<String>,
+    #[serde(rename = "rp", with = "RetentionPolicyDef")]
+    pub retention: RetentionPolicy,
 }
 
 impl Default for DatasetDef {
@@ -191,6 +205,7 @@ impl Default for DatasetDef {
             pack_size: 0,
             stores: vec![],
             excludes: vec![],
+            retention: Default::default(),
         }
     }
 }
