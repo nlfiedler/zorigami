@@ -199,7 +199,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
 ** TODO [#A] Snapshot Pruning
-*** Retention policy is per dataset, defaults to ~all~
+*** Retention policy is per dataset, normally defaults to ~all~
 *** TODO test: =EntityRepository= with empty main datasource and populated fallback
 *** DONE Entity repository will have two database references from now on
 **** A: read-first/write-first database
@@ -207,7 +207,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** read: if record missing from A, check B
 **** write: always go to A
 **** normally B is an =Option= and hence not consulted
-*** Phase 1: set up new database, have entity repo set B reference
+*** Phase 1: set up new database, have entity repo set fallback reference
 *** Phase 2: copy various records from fallback to primary [0/6]
 - [ ] configuration
 - [ ] computer_id
@@ -223,11 +223,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** datasets -> snapshots -> trees -> files -> chunks -> packs
 ***** also files -> xattrs
 ***** do not bother deserializing the records, just copy the raw bytes
-***** add new =get/set= functions on record repository that does not deserialize
-*** Phase 5: have entity repo clear B reference, delete database
+***** add new =get/set= functions on record repository that read/write raw bytes
+*** Phase 5: have entity repo clear fallback reference, delete database
 *** add logging to show progress and results of pruning
-*** GraphQL query/mutation for the retention policy
-*** Flutter fields for viewing, setting retention policy
+*** temporarily use a shorter default retention value until Leptos rewrite is done
 *** finish writing ~Database Integrity~ implementation
 ** Pack file pruning
 *** find unreferenced pack files and remove
