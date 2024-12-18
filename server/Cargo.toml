@@ -23,7 +23,6 @@ anyhow = "1.0.55"
 base64 = "0.22.1"
 blake3 = "1.5.1"
 blob-uuid = "0.5.0"
-bloomfilter = "1.0.9"
 chrono = { version = "0.4", features = ["serde"] }
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
@@ -51,7 +50,7 @@ store_local = { path = "../stores/store_local" }
 store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
 tempfile = "3.7.1"
-thiserror = "1.0.30"
+thiserror = "2.0.7"
 ulid = "1.1.2"
 uuid = { version = "1.1.2", features = ["serde", "v4", "v5"] }
 whoami = "1.5.1"

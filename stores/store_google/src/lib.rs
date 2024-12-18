@@ -5,11 +5,14 @@ extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
+use firestore1::hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use firestore1::hyper_util::client::legacy::connect::HttpConnector;
+use firestore1::hyper_util::client::legacy::Client;
+use firestore1::{hyper_util, Firestore};
 use std::collections::HashMap;
 use std::default::Default;
 use std::path::Path;
-use storage1::hyper::client::HttpConnector;
-use storage1::hyper_rustls::HttpsConnector;
+use storage1::{yup_oauth2, Storage};
 use store_core::{CollisionError, Coordinates};
 
 #[derive(Clone, Debug)]
@@ -41,36 +44,38 @@ impl GoogleStore {
         })
     }
 
-    async fn connect(&self) -> Result<storage1::Storage<HttpsConnector<HttpConnector>>, Error> {
-        let conn = storage1::hyper_rustls::HttpsConnectorBuilder::new()
+    async fn connect(&self) -> Result<Storage<HttpsConnector<HttpConnector>>, Error> {
+        let conn = HttpsConnectorBuilder::new()
             .with_native_roots()?
             .https_or_http()
             .enable_http1()
             .build();
-        let https_client = storage1::hyper::Client::builder().build(conn);
-        let account_key = storage1::oauth2::read_service_account_key(&self.credentials).await?;
-        let authenticator = storage1::oauth2::ServiceAccountAuthenticator::builder(account_key)
-            .hyper_client(https_client.clone())
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(conn);
+        let account_key = yup_oauth2::read_service_account_key(&self.credentials).await?;
+        //
+        // Would prefer to use with_client() instead of builder() in order to
+        // re-use the client connection, but it is seemingly impossible to get
+        // the correct types or gain access to CustomHyperClientBuilder in
+        // yup_oauth2.
+        //
+        let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
             .build()
             .await?;
-        Ok(storage1::Storage::new(https_client, authenticator))
+        Ok(Storage::new(client, authenticator))
     }
 
-    async fn connect_fire(
-        &self,
-    ) -> Result<firestore1::Firestore<HttpsConnector<HttpConnector>>, Error> {
-        let conn = firestore1::hyper_rustls::HttpsConnectorBuilder::new()
+    async fn connect_fire(&self) -> Result<Firestore<HttpsConnector<HttpConnector>>, Error> {
+        let conn = HttpsConnectorBuilder::new()
             .with_native_roots()?
             .https_or_http()
             .enable_http1()
             .build();
-        let https_client = firestore1::hyper::Client::builder().build(conn);
-        let account_key = firestore1::oauth2::read_service_account_key(&self.credentials).await?;
-        let authenticator = firestore1::oauth2::ServiceAccountAuthenticator::builder(account_key)
-            .hyper_client(https_client.clone())
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(conn);
+        let account_key = yup_oauth2::read_service_account_key(&self.credentials).await?;
+        let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
             .build()
             .await?;
-        Ok(firestore1::Firestore::new(https_client, authenticator))
+        Ok(Firestore::new(client, authenticator))
     }
 
     pub fn store_pack_sync(
@@ -120,7 +125,7 @@ impl GoogleStore {
                 // detect the case of a bucket that exists but belongs to
                 // another project, in which case we are forbidden to write to
                 // that bucket
-                storage1::client::Error::BadRequest(value) => {
+                storage1::Error::BadRequest(value) => {
                     if let Some(object) = value.as_object() {
                         if let Some(errobj) = object.get("error") {
                             if let Some(code) = errobj.get("code") {
@@ -144,18 +149,22 @@ impl GoogleStore {
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
+        use http_body_util::BodyExt;
+        use std::io::Write;
         let hub = self.connect().await?;
-        let (response, _object) = hub
+        let (mut response, _object) = hub
             .objects()
             .get(&location.bucket, &location.object)
             .param("alt", "media")
             .doit()
             .await?;
-        let buf = storage1::hyper::body::aggregate(response).await?;
-        use storage1::hyper::body::Buf;
-        let mut remote = buf.reader();
         let mut local = std::fs::File::create(outfile)?;
-        std::io::copy(&mut remote, &mut local)?;
+        while let Some(next) = response.frame().await {
+            let frame = next?;
+            if let Some(chunk) = frame.data_ref() {
+                local.write_all(chunk)?;
+            }
+        }
         Ok(())
     }
 
@@ -441,7 +450,7 @@ async fn create_bucket(
     // but may possibly be owned by some other project.
     if let Err(error) = hub.buckets().insert(req, project_id).doit().await {
         match &error {
-            storage1::client::Error::BadRequest(value) => {
+            storage1::Error::BadRequest(value) => {
                 if let Some(object) = value.as_object() {
                     if let Some(errobj) = object.get("error") {
                         if let Some(code) = errobj.get("code") {
