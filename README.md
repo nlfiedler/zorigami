@@ -23,7 +23,7 @@ This project has been a work-in-progress since 2014 and there are still some ite
 * No automatic pruning of the snapshots which would keep the database size to a reasonable limit.
 * Object-to-bucket allocation is very primitive and needs improvement.
 * Restoring to dissimilar hardware is not yet an easy task.
-* No readily available binaries you will need to build and deploy it yourself.
+* No readily available binaries, as such you will need to build and deploy for yourself.
 * No QoS control on uploads over the network so a backup can slow everything else to a crawl.
 * Backup procedure operates file-by-file (not _point-in-time_) and hence may record changed content incorrectly or inconsistently (such as with database files).
 
@@ -32,21 +32,14 @@ This project has been a work-in-progress since 2014 and there are still some ite
 ### Prerequisites
 
 * [Rust](https://www.rust-lang.org) stable (2021 edition)
-* [Flutter](https://flutter.dev) **stable** channel
+* [Dioxus](https://dioxuslabs.com/)
 
 ### Initial Setup
 
 #### macOS
 
-Use [fvm](https://pub.dev/packages/fvm) to select a specific version of Flutter
-to be installed and used by the application. This is the most reliable method
-and produces consistent results when building the application.
-
 ```shell
-brew install dart
-dart pub global activate fvm
-fvm install stable
-fvm flutter config --enable-web
+cargo install dioxus-cli
 ```
 
 #### Windows

@@ -1,4 +1,29 @@
 * Tasks
+** Dioxus
+*** initial setup [/]
+- [ ] add the crates
+- [ ] get it to build (ssr feature gating)
+- [ ] add Bulma CSS
+- [ ] show something on the screen
+*** prototype
+**** home page [0/3]
+- [ ] show computer identifier
+- [ ] light/dark color theme
+- [ ] navigation bar with empty pages
+**** data sets page [/]
+- [ ] show something
+**** pack stores page [/]
+- [ ] show something
+**** restore operations page [/]
+- [ ] show something
+**** snapshots page [/]
+- [ ] show something
+*** remove flutter [/]
+- [ ] tests
+- [ ] docker build
+- [ ] readme
+- [ ] lib
+- [ ] artifacts
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
