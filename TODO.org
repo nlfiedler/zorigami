@@ -1,11 +1,12 @@
 * Tasks
 ** Dioxus
-*** initial setup [/]
+*** TODO find out how to test the app; still unclear
+*** TODO initial setup [0/4]
 - [ ] add the crates
 - [ ] get it to build (ssr feature gating)
 - [ ] add Bulma CSS
 - [ ] show something on the screen
-*** prototype
+*** TODO prototype
 **** home page [0/3]
 - [ ] show computer identifier
 - [ ] light/dark color theme
@@ -16,14 +17,19 @@
 - [ ] show something
 **** restore operations page [/]
 - [ ] show something
-**** snapshots page [/]
+**** snapshots page [0/1]
 - [ ] show something
-*** remove flutter [/]
+*** TODO remove flutter [0/9]
+- [ ] android, ios, linux, macos, windows, web
+- [ ] fonts
 - [ ] tests
 - [ ] docker build
 - [ ] readme
 - [ ] lib
 - [ ] artifacts
+- [ ] pubspec.*
+- [ ] analysis_options.yaml
+** TODO replace =lazy_static= with =std::sync::LazyLock=
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
