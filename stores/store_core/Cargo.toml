@@ -8,7 +8,7 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0.55"
 md-5 = "0.10.1"
-thiserror = "1.0.30"
+thiserror = "2.0.7"
 
 [dev-dependencies]
 mockall = "0.13.0"

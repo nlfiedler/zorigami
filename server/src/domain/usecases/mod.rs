@@ -31,7 +31,6 @@ pub mod stop_backup;
 pub mod test_store;
 pub mod update_dataset;
 pub mod update_store;
-pub mod verify_snapshot;
 
 /// `UseCase` is the interface by which all use cases are invoked.
 pub trait UseCase<Type, Params> {
