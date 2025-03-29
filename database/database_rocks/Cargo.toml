@@ -8,5 +8,4 @@ license = "MIT"
 [dependencies]
 database_core = { path = "../database_core" }
 anyhow = "1.0.55"
-lazy_static = "1.3.0"
 rocksdb = "0.23.0"

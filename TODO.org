@@ -1,6 +1,4 @@
 * Tasks
-** TODO add a =/liveness= route for docker healthcheck
-** TODO replace =lazy_static= with new =LazyLock= in std
 ** TODO [#B] Replace Flutter with Leptos
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2025 Nathan Fiedler
 //
 use crate::data::sources::{
     EntityDataSource, PackDataSource, PackSourceBuilder, PackSourceBuilderImpl,
@@ -10,21 +10,18 @@ use crate::domain::entities::{
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use anyhow::{anyhow, Context, Error, Result};
-use lazy_static::lazy_static;
 use log::{error, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use store_core::CollisionError;
 
-lazy_static! {
-    // Name that will be returned by get_bucket_name(), unless of course it is
-    // blank, in which case a new name will be generated.
-    static ref BUCKET_NAME: Mutex<String> = Mutex::new("".into());
-    // Number of times get_bucket_name() has been called and returned the same
-    // bucket name. When the value is zero, a new name is generated.
-    static ref NAME_COUNT: Mutex<usize> = Mutex::new(0);
-}
+// Name that will be returned by get_bucket_name(), unless of course it is
+// blank, in which case a new name will be generated.
+static BUCKET_NAME: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new("".into()));
+// Number of times get_bucket_name() has been called and returned the same
+// bucket name. When the value is zero, a new name is generated.
+static NAME_COUNT: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(0));
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
 // using a `Box` instead, cloning it would involve adding fake clone operations

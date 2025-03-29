@@ -1,10 +1,9 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2025 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
-use lazy_static::lazy_static;
 use rusoto_core::{Region, RusotoError};
 use rusoto_dynamodb::{
     AttributeDefinition, AttributeValue, CreateTableError, CreateTableInput, DeleteItemInput,
@@ -20,14 +19,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use store_core::{CollisionError, Coordinates};
 
-lazy_static! {
-    // Names of all existing S3 buckets. Populated and used only when too many
-    // buckets have been created.
-    static ref BUCKET_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
-}
+// Names of all existing S3 buckets. Populated and used only when too many
+// buckets have been created.
+static BUCKET_NAMES: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 // Name of the table in DynomaDB for tracking bucket renames.
 const RENAMES_TABLE: &str = "zori_renames";
