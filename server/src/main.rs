@@ -207,6 +207,11 @@ async fn main() -> io::Result<()> {
             .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
             .service(Files::new("/", STATIC_PATH.clone()).index_file("index.html"))
+            .service(
+                web::resource("/liveness")
+                    .route(web::get().to(|| HttpResponse::Ok()))
+                    .route(web::head().to(|| HttpResponse::Ok())),
+            )
             .default_service(web::get().to(default_index))
     })
     .bind(addr)?

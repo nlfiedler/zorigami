@@ -63,6 +63,7 @@ VOLUME /database
 VOLUME /datasets
 VOLUME /packstore
 ENV DB_PATH "/database/dbase"
+ENV HEALTHCHECK_PATH="/liveness"
 ENV HOST "0.0.0.0"
 ENV PORT 8080
 ENV RUST_LOG info

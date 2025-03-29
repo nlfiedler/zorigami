@@ -1,4 +1,7 @@
 * Tasks
+** TODO add a =/liveness= route for docker healthcheck
+** TODO replace =lazy_static= with new =LazyLock= in std
+** TODO [#B] Replace Flutter with Leptos
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -197,31 +200,47 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** Snapshot Pruning
-*** Use a multi-phased approach with pruning and garbage collection
-*** Must not run collection while a backup is in progress
-*** Must prevent a backup from starting while pruning is in progress
-*** Phase 1: prune snapshots based on a policy
-**** set the child's parent reference to skip over stale snapshot
-**** e.g. remove snapshots more then N days old
-**** e.g. keep N snapshots per day, M per week, and P per month
-*** Phase 2: prune unreachable objects in the database
+** TODO [#A] Snapshot Pruning
+*** Retention policy is per dataset, normally defaults to ~all~
+*** TODO test: =RecordRepositoryImpl= with empty main datasource and populated fallback
+*** DONE Record repository will have two database references from now on
+**** A: read-first/write-first database
+**** B: fallback-read database, if present
+**** read: if record missing from A, check B
+**** write: always go to A
+**** normally B is an =Option= and hence not consulted
+*** Phase 1: set up new database, have entity repo set fallback reference
+*** Phase 2: copy various records from fallback to primary [0/6]
+- [ ] configuration
+- [ ] computer_id
+- [ ] datasets
+- [ ] latest_snapshot
+- [ ] databases
+- [ ] stores
+*** Phase 3: make snapshots disappear based on a policy
+**** e.g. retain snapshots for N days
+**** e.g. retain N snapshots
+*** Phase 4: prune unreachable objects in the database
 **** copy everything reachable to a new database instance
-****** datasets -> snapshots -> trees -> files -> chunks -> packs
-**** delete the old database
-*** Phase 3: prune unreferenced packs from pack store
-**** honor cloud data retention policies
-***** e.g. typically anything older than 90 days costs nothing to delete
-***** Google has different minimum storage durations for each storage class
-****** https://cloud.google.com/storage/docs/storage-classes
-***** user can specify their own value for each pack store if necessary
-*** Phase 4: prune old database snapshots (no need to keep old copies)
-**** honor cloud data retention policies
-**** use the =upload_time= in the =Pack= record to determine age
-*** Implementation should follow Clean Architecture to improve testability
-**** entities and use case separated from data sources via repositories
-**** this allows for easily mocking up data to feed the pruning use case
-***** i.e. when the use case asks for trees and such, give it mock data structures
+***** datasets -> snapshots -> trees -> files -> chunks -> packs
+***** also files -> xattrs
+***** do not bother deserializing the records, just copy the raw bytes
+***** add new =get/set= functions on record repository that read/write raw bytes
+*** Phase 5: have entity repo clear fallback reference, delete database
+*** add logging to show progress and results of pruning
+*** temporarily use a shorter default retention value until Leptos rewrite is done
+*** finish writing ~Database Integrity~ implementation
+** Pack file pruning
+*** find unreferenced pack files and remove
+*** honor cloud data retention policies
+**** e.g. typically anything older than 90 days costs nothing to delete
+**** Google has different minimum storage durations for each storage class
+***** https://cloud.google.com/storage/docs/storage-classes
+**** user can specify their own value for each pack store if necessary
+** Database backup pruning
+*** remove old database snapshots, no need to keep old copies
+*** honor cloud data retention policies
+*** use the =upload_time= in the =Pack= record to determine age
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -241,6 +260,26 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** e.g. database files can change during the backup, leading to invalid snapshots
 *** If available, use the OS functionality for FS snapshots
 **** ZFS has snapshot support
+**** APFS has snapshots, not sure what they are exactly
+***** how to determine that FS supports this feature?
+***** use =tmutil= to create, mount, and remove snapshots
+#+begin_src shell
+$ tmutil localsnapshot
+Created local snapshot with date: 2021-04-05-162425
+
+$ tmutil listlocalsnapshots /
+Snapshots for volume group containing disk /:
+com.apple.TimeMachine.2021-04-05-162416.local
+com.apple.TimeMachine.2021-04-05-162425.local
+
+# mount a specific snapshot
+mkdir -p /tmp/snapshot
+mount_apfs -s com.apple.TimeMachine.2021-04-05-162416.local / /tmp/snapshot
+open /tmp/snapshot
+
+$ tmutil deletelocalsnapshots 2021-04-05-162416
+Deleted local snapshot '2021-04-05-162416'
+#+end_src
 ** More Functionality
 *** TODO search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
@@ -297,8 +336,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Architecture Review
 *** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 *** Alternative databases
-**** try using a different database and benchmark backup, database integrity checks, etc
-**** sample data: =reassign_packs= updated ~4214~ pack records in ~2~ seconds
+**** DuckDB
+**** SQLite
 *** Rust dependency injection, is it helpful?
 **** https://github.com/AzureMarker/shaku
 **** https://github.com/p0lunin/teloc
@@ -342,21 +381,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Shared pack repository
 **** Current design basically forces each user/install to have a separate pack repo
 **** Otherwise the pack pruning would delete the packs for other users saving to the same repo
-*** Embedded Database
-**** Is the default RocksDB performance sufficient?
-**** Consider https://github.com/spacejam/sled/
-***** written in Rust, open source
-***** will need prefix key scanning
-****** looks like you just use a prefix of the key (sorts before the matching keys)
-***** will need backup/restore functions
-*** Client/Server
-**** Look at ways to secure the server, to allay fears of exploits
-**** A web conferencing tool was exploited via its hidden HTTP server
-** Time Machine style backup and retention policy
-*** hourly backups for 24 hours
-*** daily backups for 30 days
-*** weekly backups for everything else
-*** prune backups to maintain a certain size
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application
@@ -482,17 +506,21 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 | 4294967296 |     1 |
 ** Restore statistics
 *** 4 hours to restore 63GB (11k files) of ~tanuki~ data from Google over fiber
-** Parallelism
-*** more threads means more disk thrashing; SSD is well-suited to this approach
-*** shortening snapshot time
-**** mini parallelism is 8
-**** server parallelism is 4
-**** mini before: 555706 files after 3 minutes 2 seconds (original)
-**** mini after: 556625 files after 1 minutes 27 seconds (initial)
-**** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
-**** server before: 147769 files after 1 hours 20 minutes (original)
-**** server after: 147769 files after 52 minutes (initial)
-**** server after: 148142 files after 52 minutes (subsequent)
+** Performance improvements
+*** Parallelism
+**** more threads means more disk thrashing; SSD is well-suited to this approach
+**** shortening snapshot time
+***** mini parallelism is 8
+***** server parallelism is 4
+***** mini before: 555706 files after 3 minutes 2 seconds (original)
+***** mini after: 556625 files after 1 minutes 27 seconds (initial)
+***** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
+***** server before: 147769 files after 1 hours 20 minutes (original)
+***** server after: 147769 files after 52 minutes (initial)
+***** server after: 148142 files after 52 minutes (subsequent)
+*** SHA256 vs BLAKE3
+**** server before: 148142 files after 52 minutes (months ago)
+**** server after: 152166 files after 42 minutes
 ** Error Handling
 *** what happens to file errors during scanning?
 **** any errors during scan result in the entry being completely ignored
