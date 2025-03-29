@@ -1,26 +1,24 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2025 Nathan Fiedler
 //
 
 //! Manages instances of RocksDB associated with file paths.
 
 use anyhow::{anyhow, Error};
-use lazy_static::lazy_static;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::{Options, DB};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, LazyLock, Mutex, Weak};
 
-lazy_static! {
-    // Keep a map of weakly held references to shared DB instances. RocksDB
-    // itself is thread-safe for get/put/write, and the DB type implements Send
-    // and Sync. We just need to make sure the instance is eventually closed
-    // when the last reference is dropped.
-    //
-    // The key is the path to the database files.
-    static ref DBASE_REFS: Mutex<HashMap<PathBuf, Weak<DB>>> = Mutex::new(HashMap::new());
-}
+// Keep a map of weakly held references to shared DB instances. RocksDB itself
+// is thread-safe for get/put/write, and the DB type implements Send and Sync.
+// We just need to make sure the instance is eventually closed when the last
+// reference is dropped.
+//
+// The key is the path to the database files.
+static DBASE_REFS: LazyLock<Mutex<HashMap<PathBuf, Weak<DB>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 ///
 /// An instance of the database for reading and writing records to disk.

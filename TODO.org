@@ -1,5 +1,5 @@
 * Tasks
-** TODO replace =lazy_static= with new =LazyLock= in std
+** TODO [#B] Replace Flutter with Leptos
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -200,8 +200,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** e.g. accidentally saved large binaries
 ** TODO [#A] Snapshot Pruning
 *** Retention policy is per dataset, normally defaults to ~all~
-*** TODO test: =EntityRepository= with empty main datasource and populated fallback
-*** DONE Entity repository will have two database references from now on
+*** TODO test: =RecordRepositoryImpl= with empty main datasource and populated fallback
+*** DONE Record repository will have two database references from now on
 **** A: read-first/write-first database
 **** B: fallback-read database, if present
 **** read: if record missing from A, check B
@@ -334,8 +334,8 @@ Deleted local snapshot '2021-04-05-162416'
 ** Architecture Review
 *** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 *** Alternative databases
-**** try using a different database and benchmark backup, database integrity checks, etc
-**** sample data: =reassign_packs= updated ~4214~ pack records in ~2~ seconds
+**** DuckDB
+**** SQLite
 *** Rust dependency injection, is it helpful?
 **** https://github.com/AzureMarker/shaku
 **** https://github.com/p0lunin/teloc
@@ -379,16 +379,6 @@ Deleted local snapshot '2021-04-05-162416'
 *** Shared pack repository
 **** Current design basically forces each user/install to have a separate pack repo
 **** Otherwise the pack pruning would delete the packs for other users saving to the same repo
-*** Embedded Database
-**** Is the default RocksDB performance sufficient?
-**** Consider https://github.com/spacejam/sled/
-***** written in Rust, open source
-***** will need prefix key scanning
-****** looks like you just use a prefix of the key (sorts before the matching keys)
-***** will need backup/restore functions
-*** Client/Server
-**** Look at ways to secure the server, to allay fears of exploits
-**** A web conferencing tool was exploited via its hidden HTTP server
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application

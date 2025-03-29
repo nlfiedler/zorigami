@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2025 Nathan Fiedler
 //
 
 //! The main application binary that starts the web server and spawns the
@@ -12,7 +12,6 @@ use actix_web::{
 };
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
-use lazy_static::lazy_static;
 use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
@@ -25,7 +24,7 @@ use server::preso::graphql;
 use std::env;
 use std::io;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 // When running in test mode, the cwd is the server directory.
 #[cfg(test)]
@@ -47,37 +46,43 @@ fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestor
     Box::new(FileRestorerImpl::new(dbase))
 }
 
-lazy_static! {
-    // Application state store.
-    static ref STATE_STORE: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    // File restore implementation.
-    static ref FILE_RESTORER: Arc<dyn Restorer> = {
-        Arc::new(RestorerImpl::new(STATE_STORE.clone(), file_restorer_factory))
-    };
-    // Actual performer of the backups.
-    static ref BACKUP_PERFORMER: Arc<dyn Performer> = Arc::new(PerformerImpl::default());
-    // Supervisor for managing the running of backups.
-    static ref SCHEDULER: Arc<dyn Scheduler> = {
-        Arc::new(SchedulerImpl::new(STATE_STORE.clone(), BACKUP_PERFORMER.clone()))
-    };
-    // Path to the database files.
-    static ref DB_PATH: PathBuf = {
-        dotenv::dotenv().ok();
-        let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
-        PathBuf::from(path)
-    };
-    // Path to the static web files.
-    static ref STATIC_PATH: PathBuf = {
-        let path = env::var("STATIC_FILES").unwrap_or_else(|_| DEFAULT_WEB_PATH.to_owned());
-        PathBuf::from(path)
-    };
-    // Path of the fallback page for web requests.
-    static ref DEFAULT_INDEX: PathBuf = {
-        let mut path = STATIC_PATH.clone();
-        path.push("index.html");
-        path
-    };
-}
+// Application state store.
+static STATE_STORE: LazyLock<Arc<dyn StateStore>> =
+    LazyLock::new(|| Arc::new(StateStoreImpl::new()));
+// File restore implementation.
+static FILE_RESTORER: LazyLock<Arc<dyn Restorer>> = LazyLock::new(|| {
+    Arc::new(RestorerImpl::new(
+        STATE_STORE.clone(),
+        file_restorer_factory,
+    ))
+});
+// Actual performer of the backups.
+static BACKUP_PERFORMER: LazyLock<Arc<dyn Performer>> =
+    LazyLock::new(|| Arc::new(PerformerImpl::default()));
+// Supervisor for managing the running of backups.
+static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
+    Arc::new(SchedulerImpl::new(
+        STATE_STORE.clone(),
+        BACKUP_PERFORMER.clone(),
+    ))
+});
+// Path to the database files.
+static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+    dotenv::dotenv().ok();
+    let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
+    PathBuf::from(path)
+});
+// Path to the static web files.
+static STATIC_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+    let path = env::var("STATIC_FILES").unwrap_or_else(|_| DEFAULT_WEB_PATH.to_owned());
+    PathBuf::from(path)
+});
+// Path of the fallback page for web requests.
+static DEFAULT_INDEX: LazyLock<PathBuf> = LazyLock::new(|| {
+    let mut path = STATIC_PATH.clone();
+    path.push("index.html");
+    path
+});
 
 async fn graphiql() -> Result<HttpResponse> {
     let html = graphiql_source("/graphql", None);
@@ -208,6 +213,11 @@ async fn main() -> io::Result<()> {
             .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
             .service(Files::new("/", STATIC_PATH.clone()).index_file("index.html"))
+            .service(
+                web::resource("/liveness")
+                    .route(web::get().to(|| HttpResponse::Ok()))
+                    .route(web::head().to(|| HttpResponse::Ok())),
+            )
             .default_service(web::get().to(default_index))
     })
     .bind(addr)?
