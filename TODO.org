@@ -201,6 +201,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** TODO [#A] Snapshot Pruning
 *** Retention policy is per dataset, normally defaults to ~all~
 *** TODO test: =RecordRepositoryImpl= with empty main datasource and populated fallback
+**** ensure every get/set pair is exercised and the primary source is updated appropriately
+**** test that =get_configuration()= reads from fallback and puts to primary
 *** DONE Record repository will have two database references from now on
 **** A: read-first/write-first database
 **** B: fallback-read database, if present
@@ -222,8 +224,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** copy everything reachable to a new database instance
 ***** datasets -> snapshots -> trees -> files -> chunks -> packs
 ***** also files -> xattrs
-***** do not bother deserializing the records, just copy the raw bytes
-***** add new =get/set= functions on record repository that read/write raw bytes
 *** Phase 5: have entity repo clear fallback reference, delete database
 *** add logging to show progress and results of pruning
 *** temporarily use a shorter default retention value until Leptos rewrite is done

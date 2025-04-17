@@ -51,12 +51,15 @@ impl RecordRepository for RecordRepositoryImpl {
         if let Some(conf) = self.datasource.get_configuration()? {
             return Ok(conf);
         }
-        if let Some(ref fallback) = self.fallback {
+        let config: Configuration = if let Some(ref fallback) = self.fallback {
             if let Some(conf) = fallback.get_configuration()? {
-                return Ok(conf);
+                conf
+            } else {
+                Default::default()
             }
-        }
-        let config: Configuration = Default::default();
+        } else {
+            Default::default()
+        };
         self.datasource.put_configuration(&config)?;
         Ok(config)
     }
