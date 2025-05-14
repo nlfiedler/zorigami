@@ -1,4 +1,4 @@
-# Use tar for pack files
+# Use EXAF for pack files
 
 * Status: accepted
 * Deciders: Nathan Fiedler
@@ -6,7 +6,7 @@
 
 ## Context
 
-The application collects small files for backup, and chunks from larger files, into what are called "pack" files. These pack files are then uploaded to the pack stores, such as Amazon S3. Initially, the pack file format was simply a [tar](https://en.wikipedia.org/wiki/Tar_(computing)) with gzip-compressed chunks of data. However, the overhead per file was about one kilobyte so it seemed that finding a new format would be a worthwhile endeavor. An effort was made to use [7z](https://en.wikipedia.org/wiki/7z) with the `sevenz-rust` crate. However, it seems that the crate produces corrupted archives (see [issue 12](https://github.com/dyz1990/sevenz-rust/issues/12)). While that bug was fixed, it forced a lot of thought to be put into archiver/compressor solutions.
+The application collects small files for backup, and chunks from larger files, into what are called "pack" files. These pack files are then uploaded to the pack stores, such as Amazon S3. Initially, the pack file format was simply a [tar](https://en.wikipedia.org/wiki/Tar_(computing)) with gzip-compressed chunks of data. However, the overhead per file was about one kilobyte so it seemed that finding a new format would be a worthwhile endeavor. An effort was made to use [7z](https://en.wikipedia.org/wiki/7z) with the `sevenz-rust` crate. However, it came about that the crate was producing corrupted archives (see [issue 12](https://github.com/dyz1990/sevenz-rust/issues/12)). While that bug was fixed, it forced a lot of thought to be put into archiver/compressor solutions.
 
 There are, in fact, several problems with the current solution:
 
@@ -21,8 +21,8 @@ While there are quite a few file formats in existence, there are extremely few o
 EXAF offers several advantages:
 
 1. Very few dependencies
-1. Compresses using [Zstandard](http://facebook.github.io/zstd/)
-1. Encrypts using the AES256-GCM [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption) cipher
+1. Compresses large blocks of content using [Zstandard](http://facebook.github.io/zstd/)
+1. Encrypts data and metadata using AES256-GCM [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption)
 1. Packs can be extracted using the `exaf-rs` tool and the password (no database required)
 1. Overhead per entry is extremely low (tens of bytes)
 
