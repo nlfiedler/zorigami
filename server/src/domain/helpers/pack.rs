@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::Chunk;
 use anyhow::{anyhow, Context, Error};
@@ -77,8 +77,8 @@ impl PackBuilder {
         Ok(())
     }
 
-    /// Write the chunk data in compressed form to the pack file. Returns `true`
-    /// if the compressed data has exceeded the pack size given in `new()`.
+    /// Write the chunk data to the pack file. Returns `true` if the pack file
+    /// size has exceeded the value given in [`Self::new()`].
     pub fn add_chunk(&mut self, chunk: &Chunk) -> Result<bool, Error> {
         if self.bytes_packed > self.target_size {
             return Err(anyhow!("pack already full"));
@@ -106,6 +106,11 @@ impl PackBuilder {
         //
         // As such, hack the pack size limit to be based on the available data,
         // which is close enough for the purpose of testing the pack behavior.
+        //
+        // In practice, creating packs of 64mb for a data set with reasonably
+        // sized files (i.e. not all images and videos), the standard deviation
+        // of the size of the pack files is about 3 (not counting the very small
+        // packs that contained the left over chunks from a backup).
         if cfg!(test) {
             self.bytes_packed += chunk.length as u64;
         } else {
