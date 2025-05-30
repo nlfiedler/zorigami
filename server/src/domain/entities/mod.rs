@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
@@ -213,7 +213,7 @@ impl std::hash::Hash for Store {
 ///
 /// Policy dictating how many snapshots to retain.
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RetentionPolicy {
     /// All snapshots will be retained indefinitely.
     ALL,

@@ -5,7 +5,7 @@
 //! The `schema` module defines the GraphQL schema and resolvers.
 
 use crate::data::repositories::RecordRepositoryImpl;
-use crate::domain::entities::{self, Checksum, TreeReference};
+use crate::domain::entities::{self, Checksum, RetentionPolicy, TreeReference};
 use crate::domain::helpers;
 use crate::domain::managers::backup::Scheduler;
 use crate::domain::managers::restore::{self, Restorer};
@@ -396,6 +396,16 @@ impl entities::Dataset {
     /// List of paths to be excluded from backups.
     fn excludes(&self) -> Vec<String> {
         self.excludes.clone()
+    }
+
+    /// If non-null, the number of snapshots to be retained after invoking the
+    /// `pruneSnapshots` mutation.
+    fn retention_count(&self) -> Option<i32> {
+        match self.retention {
+            RetentionPolicy::ALL => None,
+            RetentionPolicy::DAYS(_) => None,
+            RetentionPolicy::COUNT(c) => Some(c as i32),
+        }
     }
 }
 
@@ -1050,6 +1060,8 @@ pub struct DatasetInput {
     pub stores: Vec<String>,
     /// List of paths to be excluded from backups. Can include * and ** wildcards.
     pub excludes: Vec<String>,
+    /// Number of snapshots to retain, or retain all if `null`.
+    pub retention_count: Option<i32>,
 }
 
 impl From<DatasetInput> for crate::domain::usecases::new_dataset::Params {
@@ -1074,6 +1086,7 @@ impl From<DatasetInput> for crate::domain::usecases::update_dataset::Params {
             val.pack_size.into(),
             val.stores,
             val.excludes,
+            val.retention_count.map(|v| v as u16),
         )
     }
 }
@@ -1476,6 +1489,20 @@ impl MutationRoot {
         let params: Params = Params::new(store_id);
         let result: u32 = usecase.call(params)?;
         Ok(result as i32)
+    }
+
+    /// Apply the retention policy to the named dataset, pruning snapshots and
+    /// everything that is no longer reachable (except for packs).
+    ///
+    /// Returns the number of snapshots removed from the dataset.
+    fn prune_snapshots(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<i32> {
+        use crate::domain::usecases::prune_snapshots::{Params, PruneSnapshots};
+        use crate::domain::usecases::UseCase;
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = PruneSnapshots::new(Box::new(repo));
+        let params: Params = Params::new(id.clone());
+        let count = usecase.call(params)?;
+        Ok(count as i32)
     }
 
     /// Create a missing file record from the given information.
@@ -2463,6 +2490,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec![],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2515,6 +2543,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2557,6 +2586,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec![],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2595,6 +2625,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec![],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2643,6 +2674,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec![],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(
@@ -2682,6 +2714,7 @@ mod tests {
             pack_size: BigInt(1048576),
             stores: vec![],
             excludes: vec![],
+            retention_count: None,
         };
         vars.insert("input".to_owned(), input.to_input_value());
         let (res, errors) = juniper::execute_sync(

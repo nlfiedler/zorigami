@@ -5,22 +5,16 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
-use crate::domain::sources::EntityDataSource;
 use anyhow::Error;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 ///
 /// Repository for entity records.
 ///
 #[cfg_attr(test, automock)]
 pub trait RecordRepository: Send + Sync {
-    /// Set the fallback data source to be consulting if the primary data source
-    /// is missing an entity.
-    fn set_fallback(&mut self, fallback: Option<Arc<dyn EntityDataSource>>);
-
     /// Retrieve the configuration, or build a new one using default values.
     fn get_configuration(&self) -> Result<Configuration, Error>;
 
@@ -51,6 +45,12 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve the chunk by the given digest, returning `None` if not found.
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
+
+    /// Retrieve the digests of all chunk records.
+    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the chunk record by the given identifier.
+    fn delete_chunk(&self, id: &str) -> Result<(), Error>;
 
     /// Insert the given pack into the repository, if one with the same digest
     /// does not already exist. Packs with the same digest are assumed to be
@@ -90,6 +90,12 @@ pub trait RecordRepository: Send + Sync {
     /// if not found.
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error>;
 
+    /// Retrieve the digests of all xattr records.
+    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the xattr record by the given identifier.
+    fn delete_xattr(&self, id: &str) -> Result<(), Error>;
+
     /// Insert the given file into the repository, if one with the same digest
     /// does not already exist. Files with the same digest are assumed to be
     /// identical.
@@ -98,6 +104,12 @@ pub trait RecordRepository: Send + Sync {
     /// Retrieve the file by the given digest, returning `None` if not found.
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error>;
 
+    /// Retrieve the digests of all file records.
+    fn get_all_file_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the file record by the given identifier.
+    fn delete_file(&self, id: &str) -> Result<(), Error>;
+
     /// Insert the given tree into the repository, if one with the same digest
     /// does not already exist. Trees with the same digest are assumed to be
     /// identical.
@@ -105,6 +117,12 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve the tree by the given digest, returning `None` if not found.
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error>;
+
+    /// Retrieve the digests of all tree records.
+    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the tree record by the given identifier.
+    fn delete_tree(&self, id: &str) -> Result<(), Error>;
 
     /// Save the given store to the repository.
     fn put_store(&self, store: &Store) -> Result<(), Error>;
@@ -144,6 +162,9 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
+
+    /// Remove the snapshot record by the given identifier.
+    fn delete_snapshot(&self, id: &str) -> Result<(), Error>;
 
     /// Create a backup of the database, returning the path of the archive file.
     fn create_backup(&self, password: &str) -> Result<tempfile::TempPath, Error>;

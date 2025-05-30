@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -35,7 +35,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),
@@ -293,7 +293,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),
@@ -531,7 +531,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),
@@ -698,7 +698,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),

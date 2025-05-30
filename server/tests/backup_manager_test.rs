@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
@@ -29,7 +29,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),
@@ -111,7 +111,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),
@@ -168,7 +168,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let mut local_props: HashMap<String, String> = HashMap::new();
     local_props.insert(
         "basepath".to_owned(),
-        pack_path.into_path().to_string_lossy().into(),
+        pack_path.keep().to_string_lossy().into(),
     );
     let store = entities::Store {
         id: "local123".to_owned(),

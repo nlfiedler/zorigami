@@ -51,3 +51,7 @@ Tested full backup and restore on the 300+GB shared dataset. Verified that a 30G
 Switched from the tar file abomination to [EXAF](https://github.com/nlfiedler/exaf-rs) for the pack files and the database archive. Both packs and database are now encrypted using the provided passphrase with a strong, standards-based encryption algorithm. This also allows for the database backup and pack files to be fetched and extracted manually if necessary.
 
 Replace all use of SHA256 with BLAKE3 for improved performance (the latter is about twice as fast as the former).
+
+## May 2025
+
+Added GraphQL mutation to enable pruning snapshots for a dataset, once a retention policy has been set. Policies include **keep all**, **keep N days**, and **keep N snapshots**. All unreachable non-pack records are removed from the database.

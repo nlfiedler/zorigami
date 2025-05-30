@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2022 Nathan Fiedler
 //
 
 //! The `driver` module defines the `BackupDriver` and `PackRecord` types.
@@ -576,7 +576,7 @@ mod tests {
         let mut local_props: HashMap<String, String> = HashMap::new();
         local_props.insert(
             "basepath".to_owned(),
-            pack_path.into_path().to_string_lossy().into(),
+            pack_path.keep().to_string_lossy().into(),
         );
         let store = entities::Store {
             id: "local123".to_owned(),
@@ -736,7 +736,7 @@ mod tests {
         let mut local_props: HashMap<String, String> = HashMap::new();
         local_props.insert(
             "basepath".to_owned(),
-            pack_path.into_path().to_string_lossy().into(),
+            pack_path.keep().to_string_lossy().into(),
         );
         let store = entities::Store {
             id: "local123".to_owned(),

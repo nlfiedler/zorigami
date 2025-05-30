@@ -43,6 +43,12 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve the chunk by the given digest, returning `None` if not found.
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
 
+    /// Retrieve the digests of all chunk records.
+    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the chunk record by the given identifier.
+    fn delete_chunk(&self, id: &str) -> Result<(), Error>;
+
     /// Insert the given pack into the data source, if one with the same digest
     /// does not already exist. Packs with the same digest are assumed to be
     /// identical.
@@ -81,6 +87,12 @@ pub trait EntityDataSource: Send + Sync {
     /// if not found.
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error>;
 
+    /// Retrieve the digests of all xattr records.
+    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the xattr record by the given identifier.
+    fn delete_xattr(&self, id: &str) -> Result<(), Error>;
+
     /// Insert the given file into the data source, if one with the same digest
     /// does not already exist. Files with the same digest are assumed to be
     /// identical.
@@ -89,6 +101,12 @@ pub trait EntityDataSource: Send + Sync {
     /// Retrieve the file by the given digest, returning `None` if not found.
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error>;
 
+    /// Retrieve the digests of all file records.
+    fn get_all_file_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the file record by the given identifier.
+    fn delete_file(&self, id: &str) -> Result<(), Error>;
+
     /// Insert the given tree into the data source, if one with the same digest
     /// does not already exist. Trees with the same digest are assumed to be
     /// identical.
@@ -96,6 +114,12 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Retrieve the tree by the given digest, returning `None` if not found.
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error>;
+
+    /// Retrieve the digests of all tree records.
+    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error>;
+
+    /// Remove the tree record by the given identifier.
+    fn delete_tree(&self, id: &str) -> Result<(), Error>;
 
     /// Save the given store to the data source.
     fn put_store(&self, store: &Store) -> Result<(), Error>;
@@ -126,6 +150,9 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Retrieve a snapshot by its digest, returning `None` if not found.
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error>;
+
+    /// Remove the snapshot record by the given identifier.
+    fn delete_snapshot(&self, id: &str) -> Result<(), Error>;
 
     /// Retrieve the path to the database files.
     fn get_db_path(&self) -> PathBuf;

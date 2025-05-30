@@ -3,6 +3,7 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
+use crate::domain::entities::RetentionPolicy;
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;
@@ -40,6 +41,11 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }
+        dataset.retention = if let Some(count) = params.retention_count {
+            RetentionPolicy::COUNT(count)
+        } else {
+            RetentionPolicy::ALL
+        };
         self.repo.put_dataset(&dataset)?;
         Ok(dataset)
     }
@@ -60,6 +66,8 @@ pub struct Params {
     stores: Vec<String>,
     /// List of file/directory exclusion patterns.
     excludes: Vec<String>,
+    /// Number of snapshots to retain, if set.
+    retention_count: Option<u16>,
 }
 
 impl Params {
@@ -71,6 +79,7 @@ impl Params {
         pack_size: u64,
         stores: Vec<String>,
         excludes: Vec<String>,
+        retention_count: Option<u16>,
     ) -> Self {
         Self {
             id,
@@ -80,6 +89,7 @@ impl Params {
             pack_size,
             stores,
             excludes,
+            retention_count,
         }
     }
 }
@@ -124,6 +134,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
+            retention_count: None,
         };
         let result = usecase.call(params);
         // assert
@@ -160,6 +171,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
+            retention_count: None,
         };
         let result = usecase.call(params);
         // assert
@@ -188,6 +200,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec!["".to_owned()],
+            retention_count: None,
         };
         let result = usecase.call(params);
         // assert
@@ -221,6 +234,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
+            retention_count: None,
         };
         let result = usecase.call(params);
         // assert

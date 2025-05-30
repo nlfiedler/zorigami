@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! Manages instances of RocksDB associated with file paths.
@@ -157,24 +157,24 @@ impl database_core::Database for Database {
         Ok(count)
     }
 
-    //     /// Find all those keys that start with the given prefix.
-    //     ///
-    //     /// Returns the key without the prefix.
-    //     fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
-    //         let pre_bytes = prefix.as_bytes();
-    //         // this only gets us started, we then have to check for the end of the range
-    //         let iter = self.db.prefix_iterator(pre_bytes);
-    //         let mut results: Vec<String> = Vec::new();
-    //         for (key, _value) in iter {
-    //             let pre = &key[..pre_bytes.len()];
-    //             if pre != pre_bytes {
-    //                 break;
-    //             }
-    //             let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
-    //             results.push(key_str.to_owned());
-    //         }
-    //         Ok(results)
-    //     }
+    /// Fetch the keys that start with the given prefix. The prefix is stripped
+    /// before being returned.
+    fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut results: Vec<String> = Vec::new();
+        for item in iter {
+            let (key, _value) = item?;
+            let pre = &key[..pre_bytes.len()];
+            if pre != pre_bytes {
+                break;
+            }
+            let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?;
+            results.push(key_str.to_owned());
+        }
+        Ok(results)
+    }
 
     /// Fetch the key/value pairs for those keys that start with the given
     /// prefix. The prefix is stripped from the keys before being returned.

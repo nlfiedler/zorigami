@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2022 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! Define traits and types for all database implementations.
@@ -38,6 +38,10 @@ pub trait Database {
 
     /// Count those keys that start with the given prefix.
     fn count_prefix(&self, prefix: &str) -> Result<usize, Error>;
+
+    /// Fetch the keys that start with the given prefix. The prefix is stripped
+    /// before being returned.
+    fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error>;
 
     /// Fetch the key/value pairs for those keys that start with the given
     /// prefix. The prefix is stripped from the keys before being returned.

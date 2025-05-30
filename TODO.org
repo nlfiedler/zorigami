@@ -1,5 +1,13 @@
 * Tasks
-** TODO [#B] Replace Flutter with Leptos
+** TODO Replace Flutter with Leptos
+*** TODO write ADR for why Leptos (can copy from tanuki)
+** TODO Why so many ~xattr~ records on file server? (more than double mac mini)
+** Test improvements
+*** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
+** Snapshot retention policy default
+*** once webui allows changing retention policy per dataset, change the default to ~ALL~
+*** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
+*** fix =update_dataset.rs= to take the correct retention policy type
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -52,6 +60,7 @@
 *** provide lots of logging and frequent webui status updates
 ** Snapshot browsing
 *** The whole display of snapshots needs to be improved
+*** page to show all snapshots over time in a list
 *** improve snapshot tree browser
 **** should sort entries by filename case-insensitively
 **** for larger number of entries, should use =PaginatedDataTable=
@@ -64,6 +73,8 @@
 **** scrolling no longer responds
 **** navigation, selection no longer respond
 **** probably an error is ocurring and it's invisible in production
+** Show history of one specific file/directory
+*** would be helpful to see all snapshots in which a file or directory changed
 ** Restore to dissimilar hardware
 *** Allow setting the configuration to change the identity
 *** Test by restoring a backup to a different system
@@ -198,47 +209,22 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** TODO [#A] Snapshot Pruning
-*** Retention policy is per dataset, normally defaults to ~all~
-*** TODO test: =RecordRepositoryImpl= with empty main datasource and populated fallback
-**** ensure every get/set pair is exercised and the primary source is updated appropriately
-**** test that =get_configuration()= reads from fallback and puts to primary
-*** DONE Record repository will have two database references from now on
-**** A: read-first/write-first database
-**** B: fallback-read database, if present
-**** read: if record missing from A, check B
-**** write: always go to A
-**** normally B is an =Option= and hence not consulted
-*** Phase 1: set up new database, have entity repo set fallback reference
-*** Phase 2: copy various records from fallback to primary [0/6]
-- [ ] configuration
-- [ ] computer_id
-- [ ] datasets
-- [ ] latest_snapshot
-- [ ] databases
-- [ ] stores
-*** Phase 3: make snapshots disappear based on a policy
-**** e.g. retain snapshots for N days
-**** e.g. retain N snapshots
-*** Phase 4: prune unreachable objects in the database
-**** copy everything reachable to a new database instance
-***** datasets -> snapshots -> trees -> files -> chunks -> packs
-***** also files -> xattrs
-*** Phase 5: have entity repo clear fallback reference, delete database
-*** add logging to show progress and results of pruning
-*** temporarily use a shorter default retention value until Leptos rewrite is done
-*** finish writing ~Database Integrity~ implementation
-** Pack file pruning
-*** find unreferenced pack files and remove
-*** honor cloud data retention policies
+** Pack file and database backup pruning
+*** add =upload_time= field to =Pack= record in order to determine age
+*** add a ~retention policy~ to pack store type
+**** initially retention policy would be ~delete after N days~ or retain all
+**** provide default value for ~N~ for each cloud provider
+**** default value would also likely depend on the chosen storage class
 **** e.g. typically anything older than 90 days costs nothing to delete
 **** Google has different minimum storage durations for each storage class
 ***** https://cloud.google.com/storage/docs/storage-classes
-**** user can specify their own value for each pack store if necessary
-** Database backup pruning
-*** remove old database snapshots, no need to keep old copies
-*** honor cloud data retention policies
-*** use the =upload_time= in the =Pack= record to determine age
+*** find unreferenced pack files and remove
+**** procedure
+1) collect all pack record digests
+2) scan all file and chunk records
+3) remove reachable pack digests from hash set
+4) for each remaining pack, get locations, delete objects, delete pack record
+*** database backups to be removed according to pack store retention policy
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours

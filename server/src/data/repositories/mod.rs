@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2025 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use crate::data::sources::{PackSourceBuilder, PackSourceBuilderImpl};
 use crate::domain::entities::{
@@ -27,49 +27,27 @@ static NAME_COUNT: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(0));
 // to the data source trait, which works, but is ugly. It gets even uglier when
 // mocking the calls on the data source, which gets cloned during the test.
 pub struct RecordRepositoryImpl {
-    // read-first/write-first database
     datasource: Arc<dyn EntityDataSource>,
-    // if primary `datasource` is missing a record, consult this one
-    fallback: Option<Arc<dyn EntityDataSource>>,
 }
 
 impl RecordRepositoryImpl {
     pub fn new(datasource: Arc<dyn EntityDataSource>) -> Self {
-        Self {
-            datasource,
-            fallback: None,
-        }
+        Self { datasource }
     }
 }
 
 impl RecordRepository for RecordRepositoryImpl {
-    fn set_fallback(&mut self, fallback: Option<Arc<dyn EntityDataSource>>) {
-        self.fallback = fallback;
-    }
-
     fn get_configuration(&self) -> Result<Configuration, Error> {
         if let Some(conf) = self.datasource.get_configuration()? {
             return Ok(conf);
         }
-        let config: Configuration = if let Some(ref fallback) = self.fallback {
-            if let Some(conf) = fallback.get_configuration()? {
-                conf
-            } else {
-                Default::default()
-            }
-        } else {
-            Default::default()
-        };
+        let config: Configuration = Default::default();
         self.datasource.put_configuration(&config)?;
         Ok(config)
     }
 
     fn get_excludes(&self) -> Vec<PathBuf> {
-        let mut excludes: Vec<PathBuf> = vec![self.datasource.get_db_path()];
-        if let Some(ref fallback) = self.fallback {
-            excludes.push(fallback.get_db_path())
-        }
-        excludes
+        vec![self.datasource.get_db_path()]
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
@@ -77,13 +55,7 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
-        let result = self.datasource.get_computer_id(dataset);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_computer_id(dataset);
-            }
-        }
-        result
+        self.datasource.get_computer_id(dataset)
     }
 
     fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
@@ -95,13 +67,7 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
-        let result = self.datasource.get_latest_snapshot(dataset);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_latest_snapshot(dataset);
-            }
-        }
-        result
+        self.datasource.get_latest_snapshot(dataset)
     }
 
     fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
@@ -113,13 +79,15 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error> {
-        let result = self.datasource.get_chunk(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_chunk(digest);
-            }
-        }
-        result
+        self.datasource.get_chunk(digest)
+    }
+
+    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error> {
+        self.datasource.get_all_chunk_digests()
+    }
+
+    fn delete_chunk(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_chunk(id)
     }
 
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
@@ -131,37 +99,15 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
-        let result = self.datasource.get_pack(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_pack(digest);
-            }
-        }
-        result
+        self.datasource.get_pack(digest)
     }
 
     fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error> {
-        let result = self.datasource.get_packs(store_id);
-        if let Ok(ref packs) = result {
-            if packs.len() == 0 {
-                if let Some(ref fallback) = self.fallback {
-                    return fallback.get_packs(store_id);
-                }
-            }
-        }
-        result
+        self.datasource.get_packs(store_id)
     }
 
     fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
-        let result = self.datasource.get_all_packs();
-        if let Ok(ref packs) = result {
-            if packs.len() == 0 {
-                if let Some(ref fallback) = self.fallback {
-                    return fallback.get_all_packs();
-                }
-            }
-        }
-        result
+        self.datasource.get_all_packs()
     }
 
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
@@ -169,25 +115,11 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
-        let result = self.datasource.get_database(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_database(digest);
-            }
-        }
-        result
+        self.datasource.get_database(digest)
     }
 
     fn get_databases(&self) -> Result<Vec<Pack>, Error> {
-        let result = self.datasource.get_databases();
-        if let Ok(ref dbs) = result {
-            if dbs.len() == 0 {
-                if let Some(ref fallback) = self.fallback {
-                    return fallback.get_databases();
-                }
-            }
-        }
-        result
+        self.datasource.get_databases()
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
@@ -195,13 +127,15 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error> {
-        let result = self.datasource.get_xattr(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_xattr(digest);
-            }
-        }
-        result
+        self.datasource.get_xattr(digest)
+    }
+
+    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error> {
+        self.datasource.get_all_xattr_digests()
+    }
+
+    fn delete_xattr(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_xattr(id)
     }
 
     fn insert_file(&self, file: &File) -> Result<(), Error> {
@@ -209,13 +143,15 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error> {
-        let result = self.datasource.get_file(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_file(digest);
-            }
-        }
-        result
+        self.datasource.get_file(digest)
+    }
+
+    fn get_all_file_digests(&self) -> Result<Vec<String>, Error> {
+        self.datasource.get_all_file_digests()
+    }
+
+    fn delete_file(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_file(id)
     }
 
     fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
@@ -223,13 +159,15 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error> {
-        let result = self.datasource.get_tree(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_tree(digest);
-            }
-        }
-        result
+        self.datasource.get_tree(digest)
+    }
+
+    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error> {
+        self.datasource.get_all_tree_digests()
+    }
+
+    fn delete_tree(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_tree(id)
     }
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
@@ -240,25 +178,11 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_stores(&self) -> Result<Vec<Store>, Error> {
-        let result = self.datasource.get_stores();
-        if let Ok(ref stores) = result {
-            if stores.len() == 0 {
-                if let Some(ref fallback) = self.fallback {
-                    return fallback.get_stores();
-                }
-            }
-        }
-        result
+        self.datasource.get_stores()
     }
 
     fn get_store(&self, id: &str) -> Result<Option<Store>, Error> {
-        let result = self.datasource.get_store(id);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_store(id);
-            }
-        }
-        result
+        self.datasource.get_store(id)
     }
 
     fn delete_store(&self, id: &str) -> Result<(), Error> {
@@ -298,25 +222,11 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_datasets(&self) -> Result<Vec<Dataset>, Error> {
-        let result = self.datasource.get_datasets();
-        if let Ok(ref datasets) = result {
-            if datasets.len() == 0 {
-                if let Some(ref fallback) = self.fallback {
-                    return fallback.get_datasets();
-                }
-            }
-        }
-        result
+        self.datasource.get_datasets()
     }
 
     fn get_dataset(&self, id: &str) -> Result<Option<Dataset>, Error> {
-        let result = self.datasource.get_dataset(id);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_dataset(id);
-            }
-        }
-        result
+        self.datasource.get_dataset(id)
     }
 
     fn delete_dataset(&self, id: &str) -> Result<(), Error> {
@@ -328,13 +238,11 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_snapshot(&self, digest: &Checksum) -> Result<Option<Snapshot>, Error> {
-        let result = self.datasource.get_snapshot(digest);
-        if let Ok(None) = result {
-            if let Some(ref fallback) = self.fallback {
-                return fallback.get_snapshot(digest);
-            }
-        }
-        result
+        self.datasource.get_snapshot(digest)
+    }
+
+    fn delete_snapshot(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_snapshot(id)
     }
 
     fn create_backup(&self, password: &str) -> Result<tempfile::TempPath, Error> {
@@ -353,9 +261,6 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
-        // The counts for the primary data source may not yet be valid but
-        // simply defering to the fallback, or some combination of the two,
-        // won't work either.
         self.datasource.get_entity_counts()
     }
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! Performs serde on entities and stores them in a database.
@@ -8,8 +8,8 @@ use crate::data::models::{
     ChunkDef, ConfigurationDef, DatasetDef, FileDef, PackDef, SnapshotDef, StoreDef,
 };
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, Snapshot,
-    Store, StoreType, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, Snapshot, Store, StoreType,
+    Tree,
 };
 use crate::domain::sources::{EntityDataSource, PackDataSource};
 use anyhow::Error;
@@ -151,6 +151,22 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
+    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error> {
+        let db = self.database.lock().unwrap();
+        let trees = db.find_prefix("chunk/")?;
+        let mut digests: Vec<String> = Vec::new();
+        for key in trees {
+            digests.push(key);
+        }
+        Ok(digests)
+    }
+
+    fn delete_chunk(&self, id: &str) -> Result<(), Error> {
+        let key = format!("chunk/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
+    }
+
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
         let key = format!("pack/{}", pack.digest);
         let mut encoded: Vec<u8> = Vec::new();
@@ -275,6 +291,22 @@ impl EntityDataSource for EntityDataSourceImpl {
         Ok(result.map(|v| v.to_vec()))
     }
 
+    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error> {
+        let db = self.database.lock().unwrap();
+        let trees = db.find_prefix("xattr/")?;
+        let mut digests: Vec<String> = Vec::new();
+        for key in trees {
+            digests.push(key);
+        }
+        Ok(digests)
+    }
+
+    fn delete_xattr(&self, id: &str) -> Result<(), Error> {
+        let key = format!("xattr/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
+    }
+
     fn insert_file(&self, file: &File) -> Result<(), Error> {
         let key = format!("file/{}", file.digest);
         let mut encoded: Vec<u8> = Vec::new();
@@ -299,6 +331,22 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
+    fn get_all_file_digests(&self) -> Result<Vec<String>, Error> {
+        let db = self.database.lock().unwrap();
+        let trees = db.find_prefix("file/")?;
+        let mut digests: Vec<String> = Vec::new();
+        for key in trees {
+            digests.push(key);
+        }
+        Ok(digests)
+    }
+
+    fn delete_file(&self, id: &str) -> Result<(), Error> {
+        let key = format!("file/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
+    }
+
     fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
         let key = format!("tree/{}", tree.digest);
         let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
@@ -318,6 +366,22 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+
+    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error> {
+        let db = self.database.lock().unwrap();
+        let trees = db.find_prefix("tree/")?;
+        let mut digests: Vec<String> = Vec::new();
+        for key in trees {
+            digests.push(key);
+        }
+        Ok(digests)
+    }
+
+    fn delete_tree(&self, id: &str) -> Result<(), Error> {
+        let key = format!("tree/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
@@ -428,6 +492,12 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
+    }
+
+    fn delete_snapshot(&self, id: &str) -> Result<(), Error> {
+        let key = format!("snapshot/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn get_db_path(&self) -> PathBuf {
