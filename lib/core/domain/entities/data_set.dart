@@ -146,8 +146,6 @@ class Schedule extends Equatable {
           return timeRange.unwrap().validate();
         }
         break;
-      default:
-        throw ArgumentError('frequency is not recognized');
     }
     return const Ok(0);
   }
@@ -263,8 +261,6 @@ class DataSet extends Equatable {
         return 'paused';
       case Status.failed:
         return 'error: ${errorMsg.unwrapOr("unknown")}';
-      default:
-        throw ArgumentError('unrecognized status');
     }
   }
 
@@ -313,8 +309,6 @@ String prettyFrequency(Frequency frequency) {
       return 'weekly';
     case Frequency.monthly:
       return 'monthly';
-    default:
-      throw ArgumentError('frequency is not recognized');
   }
 }
 
@@ -334,8 +328,6 @@ String prettyDayOfWeek(DayOfWeek dow) {
       return 'Friday';
     case DayOfWeek.sat:
       return 'Saturday';
-    default:
-      throw ArgumentError('day of week is not recognized');
   }
 }
 
@@ -351,7 +343,5 @@ String prettyWeekOfMonth(WeekOfMonth wom) {
       return 'fourth';
     case WeekOfMonth.fifth:
       return 'fifth';
-    default:
-      throw ArgumentError('week of month is not recognized');
   }
 }

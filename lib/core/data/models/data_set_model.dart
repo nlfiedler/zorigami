@@ -291,8 +291,6 @@ String encodeStatus(Status status) {
       return 'PAUSED';
     case Status.failed:
       return 'FAILED';
-    default:
-      throw ArgumentError('status is not recognized');
   }
 }
 
@@ -335,8 +333,6 @@ String encodeFrequency(Frequency frequency) {
       return 'WEEKLY';
     case Frequency.monthly:
       return 'MONTHLY';
-    default:
-      throw ArgumentError('frequency is not recognized');
   }
 }
 
@@ -371,8 +367,6 @@ String? encodeWeekOfMonth(Option<WeekOfMonth> weekOfMonth) {
         return 'FOURTH';
       case WeekOfMonth.fifth:
         return 'FIFTH';
-      default:
-        throw ArgumentError('weekOfMonth is not recognized');
     }
   }, null);
 }
@@ -416,8 +410,6 @@ String? encodeDayOfWeek(Option<DayOfWeek> dayOfWeek) {
         return 'FRI';
       case DayOfWeek.sat:
         return 'SAT';
-      default:
-        throw ArgumentError('dayOfWeek is not recognized');
     }
   }, null);
 }

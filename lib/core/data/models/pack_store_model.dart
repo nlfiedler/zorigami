@@ -75,8 +75,6 @@ String encodeKind(StoreKind kind) {
       return 'minio';
     case StoreKind.sftp:
       return 'sftp';
-    default:
-      throw ArgumentError('kind is not recognized');
   }
 }
 

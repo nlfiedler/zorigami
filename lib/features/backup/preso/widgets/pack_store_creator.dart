@@ -181,7 +181,5 @@ PackStore defaultPackStore(StoreKind kind) {
           'basepath': '.',
         },
       );
-    default:
-      throw ArgumentError('kind is not recognized');
   }
 }

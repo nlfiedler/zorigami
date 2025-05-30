@@ -50,8 +50,6 @@ String packStoreSubtitle(PackStore store) {
       return store.options['endpoint'];
     case StoreKind.sftp:
       return store.options['remote_addr'];
-    default:
-      throw ArgumentError('kind is not recognized');
   }
 }
 
@@ -69,7 +67,5 @@ String prettyKind(StoreKind kind) {
       return 'remote minio';
     case StoreKind.sftp:
       return 'remote SFTP';
-    default:
-      throw ArgumentError('kind is not recognized');
   }
 }

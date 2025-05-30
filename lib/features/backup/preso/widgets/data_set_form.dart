@@ -277,8 +277,6 @@ FrequencyOption frequencyFromDataSet(DataSet dataset) {
       // for now, only allow certain frequencies
       // return frequencyMonthly;
       return frequencyDaily;
-    default:
-      throw ArgumentError('frequency is not recognized');
   }
 }
 
@@ -324,8 +322,6 @@ TimeRange? timeRangeFromDataSet(DataSet dataset) {
     case Frequency.weekly:
     case Frequency.monthly:
       return dataset.schedules[0].timeRange.toNullable();
-    default:
-      throw ArgumentError('frequency is not recognized');
   }
 }
 
