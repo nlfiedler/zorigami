@@ -1,14 +1,17 @@
 //
-// Copyright (c) 2025 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
+#![recursion_limit = "256"] // helps leptos watch?
 
 //! The main application binary that starts the web server and spawns the
 //! supervisor threads to manage the backups.
 
 use actix_cors::Cors;
-use actix_files::{Files, NamedFile};
+#[cfg(feature = "ssr")]
+use actix_files::Files;
+#[cfg(feature = "ssr")]
 use actix_web::{
-    error::InternalError, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, Result,
+    error::InternalError, http, middleware, web, App, HttpResponse, HttpServer, Result,
 };
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
@@ -33,14 +36,6 @@ static DEFAULT_DB_PATH: &str = "../tmp/test/database";
 // Running in debug/release mode we assume cwd is root directory.
 #[cfg(not(test))]
 static DEFAULT_DB_PATH: &str = "./tmp/database";
-
-// When running in test mode, the cwd is the server directory.
-#[cfg(test)]
-static DEFAULT_WEB_PATH: &str = "../web/";
-
-// Running in debug/release mode we assume cwd is root directory.
-#[cfg(not(test))]
-static DEFAULT_WEB_PATH: &str = "./web/";
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))
@@ -68,22 +63,11 @@ static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
 });
 // Path to the database files.
 static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-    dotenv::dotenv().ok();
     let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
     PathBuf::from(path)
 });
-// Path to the static web files.
-static STATIC_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-    let path = env::var("STATIC_FILES").unwrap_or_else(|_| DEFAULT_WEB_PATH.to_owned());
-    PathBuf::from(path)
-});
-// Path of the fallback page for web requests.
-static DEFAULT_INDEX: LazyLock<PathBuf> = LazyLock::new(|| {
-    let mut path = STATIC_PATH.clone();
-    path.push("index.html");
-    path
-});
 
+#[cfg(feature = "ssr")]
 async fn graphiql() -> Result<HttpResponse> {
     let html = graphiql_source("/graphql", None);
     Ok(HttpResponse::Ok()
@@ -91,8 +75,9 @@ async fn graphiql() -> Result<HttpResponse> {
         .body(html))
 }
 
+#[cfg(feature = "ssr")]
 async fn graphql(
-    st: web::Data<Arc<graphql::Schema>>,
+    st: web::Data<(Arc<graphql::Schema>, leptos::config::LeptosOptions)>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
     let source = EntityDataSourceImpl::new(DB_PATH.as_path())
@@ -104,7 +89,7 @@ async fn graphql(
     let ctx = Arc::new(graphql::GraphContext::new(
         datasource, state, processor, restorer,
     ));
-    let res = data.execute(&st, &ctx).await;
+    let res = data.execute(&st.0, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
         .content_type("application/json")
@@ -176,29 +161,29 @@ fn log_state_changes(state: &state::State, _previous: Option<&state::State>) {
     }
 }
 
-// All requests that fail to match anything else will be directed to the index
-// page, where the client-side code will handle the routing and "page not found"
-// error condition.
-async fn default_index(_req: HttpRequest) -> Result<NamedFile> {
-    let file = NamedFile::open(DEFAULT_INDEX.as_path())?;
-    Ok(file.use_last_modified(true))
-}
-
+#[cfg(feature = "ssr")]
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
+    use leptos::config::get_configuration;
+    use leptos_actix::{generate_route_list, LeptosRoutes};
+    use server::preso::leptos::{shell, App};
+
+    let conf = get_configuration(None).unwrap();
+    let addr = conf.leptos_options.site_addr;
+
+    dotenv::dotenv().ok();
     env_logger::init();
     STATE_STORE.subscribe("super-manager", manage_supervisors);
     STATE_STORE.subscribe("backup-logger", log_state_changes);
     STATE_STORE.supervisor_event(state::SupervisorAction::Start);
     STATE_STORE.restorer_event(state::RestorerAction::Start);
-    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
-    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_owned());
-    let addr = format!("{}:{}", host, port);
-    info!("listening on http://{}/...", addr);
     HttpServer::new(move || {
-        let schema = web::Data::new(std::sync::Arc::new(graphql::create_schema()));
+        let routes = generate_route_list(App);
+        let leptos_options = &conf.leptos_options;
+        let site_root = leptos_options.site_root.to_string();
+        let schema = std::sync::Arc::new(graphql::create_schema());
         App::new()
-            .app_data(schema)
+            .app_data(web::Data::new((schema, leptos_options.to_owned())))
             .wrap(middleware::Logger::default())
             .wrap(
                 // Respond to OPTIONS requests for CORS support, which is common
@@ -210,35 +195,61 @@ async fn main() -> io::Result<()> {
                     .allowed_header(http::header::CONTENT_TYPE)
                     .max_age(3600),
             )
+            // serve up the compiled static assets
+            .service(
+                Files::new("/pkg", format!("{site_root}/pkg"))
+                    .use_etag(true)
+                    .use_last_modified(true),
+            )
+            // serve up the raw static assets
+            .service(
+                Files::new("/assets", site_root)
+                    .use_etag(true)
+                    .use_last_modified(true),
+            )
             .service(web::resource("/graphql").route(web::post().to(graphql)))
             .service(web::resource("/graphiql").route(web::get().to(graphiql)))
-            .service(Files::new("/", STATIC_PATH.clone()).index_file("index.html"))
+            .service(favicon)
             .service(
                 web::resource("/liveness")
                     .route(web::get().to(|| HttpResponse::Ok()))
                     .route(web::head().to(|| HttpResponse::Ok())),
             )
-            .default_service(web::get().to(default_index))
+            .leptos_routes(routes, {
+                let leptos_options = leptos_options.clone();
+                move || shell(leptos_options.clone())
+            })
     })
     .bind(addr)?
     .run()
     .await
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use actix_web::{test, web, App};
+#[cfg(not(any(feature = "ssr", feature = "csr")))]
+pub fn main() {
+    // no client-side main function
+    // unless we want this to work with e.g., Trunk for pure client-side testing
+    // see lib.rs for hydration function instead
+    // see optional feature `csr` instead
+}
 
-    #[actix_web::test]
-    async fn test_index_get() {
-        // arrange
-        let mut app =
-            test::init_service(App::new().default_service(web::get().to(default_index))).await;
-        // act
-        let req = test::TestRequest::default().to_request();
-        let resp = test::call_service(&mut app, req).await;
-        // assert
-        assert!(resp.status().is_success());
-    }
+#[cfg(all(not(feature = "ssr"), feature = "csr"))]
+pub fn main() {
+    // a client-side main function is required for using `trunk serve`
+    // prefer using `cargo leptos serve` instead
+    // to run: `trunk serve --open --features csr`
+    use crate::preso::leptos::*;
+    console_error_panic_hook::set_once();
+    leptos::mount_to_body(App);
+}
+
+#[cfg(feature = "ssr")]
+#[actix_web::get("favicon.ico")]
+async fn favicon(
+    st: web::Data<(Arc<graphql::Schema>, leptos::config::LeptosOptions)>,
+) -> actix_web::Result<actix_files::NamedFile> {
+    let site_root = &st.1.site_root;
+    Ok(actix_files::NamedFile::open(format!(
+        "{site_root}/favicon.ico"
+    ))?)
 }

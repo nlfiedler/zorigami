@@ -22,8 +22,8 @@ This project has been a work-in-progress since 2014, originally started as [akas
 * The database schema and pack file formats have changed radically over the years. It may happen again.
 * No automatic pruning of the snapshots (yet) which would keep the database size to a reasonable limit.
 * Object-to-bucket allocation is very primitive and needs improvement.
-* Restoring to dissimilar hardware is not yet an easy task.
-* No readily available binaries, you will need to build and deploy it yourself.
+* Restoring to dissimilar hardware is not (yet) an easy task.
+* No readily available binaries, so you will need to build and deploy it yourself.
 * No QoS control on uploads over the network so a backup can slow everything else to a crawl.
 * Backup procedure operates file-by-file (not _point-in-time_) and hence may record changed content incorrectly or inconsistently (such as with database files).
 
@@ -79,9 +79,7 @@ cargo test
 RUST_LOG=info cargo run
 ```
 
-For more verbose debugging output, use `RUST_LOG=debug` in the command above.
-For extremely verbose logging, use `RUST_LOG=trace` which will dump large
-volumes of output.
+For more verbose debugging output, use `RUST_LOG=debug` in the command above. For extremely verbose logging, use `RUST_LOG=trace` which will dump large volumes of output.
 
 To build or run tests for a single package, use the `-p` option, like so:
 
@@ -103,15 +101,6 @@ fvm flutter run -d chrome
 
 [Docker](https://www.docker.com) is used for testing some features of the application, such as the various remote pack stores. A Docker Compose file is located in the `containers` directory, which describes the services used for testing. With the services running, and an appropriately configured `.env` file in the base directory, the tests will leverage the services.
 
-### environment_config
-
-The frontend has some configuration that is set up at build time using the
-[environment_config](https://pub.dev/packages/environment_config) package. The
-generated file (`lib/environment_config.dart`) is not version controlled, and
-the values can be set at build-time using either command-line arguments or
-environment variables. See the `pubspec.yaml` for the names and the
-`environment_config` README for instructions.
-
 ## Deploying
 
 See the [DEPLOY.md](./doc/DEPLOY.md) document for details and examples of building the application for deployment into different environments.
@@ -124,7 +113,4 @@ Use https://github.com/kbknapp/cargo-outdated and run `cargo outdated`
 
 ## Origin of the name
 
-A zorigami is a clock possessed by a spirit, as described on the
-[Wikipedia](https://en.wikipedia.org/wiki/Tsukumogami) page about
-Tsukumogami, which includes zorigami. This has nothing at all do with
-this application, accept maybe for the association with time.
+A zorigami is a clock possessed by a spirit, as described on the [Wikipedia](https://en.wikipedia.org/wiki/Tsukumogami) page about Tsukumogami, which includes zorigami. This has nothing at all do with this application, accept maybe for the association with time.

@@ -1,13 +1,37 @@
 * Tasks
 ** TODO Replace Flutter with Leptos
+*** DONE delete everything Flutter and Dart
+*** DONE get a simple page to load [9/9]
+- [X] configure Cargo.toml
+- [X] feature gate everything in/out
+- [X] get =cargo leptos test= to pass
+- [X] change =main.rs= to load leptos
+- [X] get =cargo leptos watch= to show the home page
+- [X] add styles
+- [X] add navigation bar
+- [X] add favicon
+- [X] add dark mode switch
+*** TODO datasets page
+*** TODO pack stores page
+*** TODO snapshots page
+*** TODO restore database page
+*** TODO test building and running on Windows, update instructions
+*** TODO update =Dockerfile=
+**** built binary is now called =server= instead of =zorigami=
+*** TODO update =README.MD=
+*** TODO update =doc/DEPLOY.md=
+*** TODO update =doc/DESIGN.md=
+*** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
-** TODO Why so many ~xattr~ records on file server? (more than double mac mini)
+** TODO replace =dotenv= with =dotenvy=
 ** Test improvements
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Snapshot retention policy default
 *** once webui allows changing retention policy per dataset, change the default to ~ALL~
 *** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
 *** fix =update_dataset.rs= to take the correct retention policy type
+** Replace minio with SeaweedFS
+*** https://github.com/seaweedfs/seaweedfs
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -63,17 +87,10 @@
 *** page to show all snapshots over time in a list
 *** improve snapshot tree browser
 **** should sort entries by filename case-insensitively
-**** for larger number of entries, should use =PaginatedDataTable=
+**** for larger number of entries, should use pagination
 **** nice to have: sticky table header
 **** nice to have: sort by file type
-*** Stop using the list item view thing and the leading/trailing widgets
-*** Make sure buttons actually look like buttons
 *** Have fields for start time, stop time, current status, additional details, etc
-*** scrolling snapshot directory with lots of entries (239) sometimes becomes unresponsive
-**** scrolling no longer responds
-**** navigation, selection no longer respond
-**** probably an error is ocurring and it's invisible in production
-** Show history of one specific file/directory
 *** would be helpful to see all snapshots in which a file or directory changed
 ** Restore to dissimilar hardware
 *** Allow setting the configuration to change the identity
@@ -89,8 +106,6 @@
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
 *** consider how to change the passphrase but retain old ones for decrypting packs
-** Make error message text selectable/copyable
-*** file restore status shows an error message that cannot be selected and copied to the clipboard
 ** Loose backend issues
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
@@ -111,58 +126,17 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** default ulimit on macOS is 256, so something less would be ideal
 **** ran out of files in tanuki when rocksdb directory contained 217 files
 **** maybe consider a means of countering this error at runtime
-*** the monthly fuzzy schedule test fails on the 30th of the month
-*** eventually switch from =serde_cbor= to https://crates.io/crates/ciborium
-**** the docs have zero examples, no idea how to use the API
-** Loose GraphQL tasks
-*** where do errors go?
-**** database restore was failing but frontend reported nothing
-*** schema custom types need some unit tests
-**** especially the schedule validation code
-*** probably should use a better client cache
-**** c.f. =graphql_flutter= example that implements a =uuidFromObject()= function
-**** uses the "type" of the object and its unique identifier as the caching key
-**** our objects would need to have a "typename" for this to work
-*** find out how to document arguments to mutations
-**** c.f. juniper API docs: Attribute Macro juniper::object
 ** Loose WebUI tasks
-*** pack store ~test~ feature shows snackbar repeatedly
-*** sometimes get an HTTP error in GraphQL client
-**** should automatically retry the query a few times before giving up
 *** test with a smaller browser window to surface sizing issues
-*** when there are no snapshots, clicking the dataset row does nothing
 *** local store basepath and google credentials should use file picker
-**** https://pub.dev/packages/form_builder_file_picker
-*** improve the navigation drawer
-**** currently selected option should be highlighted, not actionable
 *** improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
 *** consider how to hide the minio secret key using a show/hide button
-*** consider approaches to l10n and i18n
-**** c.f. https://resocoder.com/2019/06/01/flutter-localization-the-easy-way-internationalization-with-json/
-*** improve the data sets form
-**** TODO FAB covers the =DELETE= button even when scrolled all the way down
-**** TODO use the =validate()= function on =DataSet= to ensure validity
-**** TODO should decode the computer ID to improve readability
 *** should sort the datasets so they are always in the same order
-**** maybe sort them by date, with most recent first
 *** tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
 ***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** should have ui for listing all snapshots in a dataset
-**** consider presenting in a style similar to Time Machine
-**** e.g. a timeline of the snapshots
-**** c.f. https://pub.dev/packages/flutter_timeline
-**** probably need paging in the ui and graphql api
-*** improve the page for defining stores
-**** TODO delete button should be far away from the other button(s)
-**** TODO delete button should require two clicks, with "are you sure?"
 *** use breadcrumbs in the tree navigator to get back to parent directories
-*** consider and improve accessibility
-**** enable testing for a11y sanity
-**** add hints to improve the presentation of information
-***** configuration panel
-***** snapshot browser
 ** Improved error handling
 *** webui: database restore fails to get archive, should display a sensible error
 **** cause 1: include mismatching instance identifier
@@ -333,9 +307,6 @@ Deleted local snapshot '2021-04-05-162416'
 *** Actor framework review, is actix still good?
 **** https://github.com/slawlor/ractor aims to be like Erlang
 **** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
-*** Flutter/Rust bridge, call Rust from Dart
-**** c.f. https://github.com/fzyzcjy/flutter_rust_bridge
-**** c.f. https://www.zaynetro.com/post/flutter-rust-bridge-2023/
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -411,7 +382,7 @@ Deleted local snapshot '2021-04-05-162416'
 ****** They change the SSH config to run the backup command with "append only" flag.
 *** TODO Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
-*** TODO Command-line option to dump database to json (separate by key prefix, e.g. ~chunk~)
+*** TODO GraphQL mutation to dump/load database to json
 *** TODO Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 ***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=

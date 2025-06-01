@@ -800,11 +800,12 @@ mod tests {
         // arrange
         let mut mock = MockEntityDataSource::new();
         mock.expect_create_backup()
-            .returning(|_| Ok(PathBuf::from("../test/features")));
+            .returning(|_| Ok(PathBuf::from("../test/fixtures/dataset_1")));
         mock.expect_restore_from_backup().returning(|_| Ok(()));
         // act
         let repo = RecordRepositoryImpl::new(Arc::new(mock));
         let result = repo.create_backup("Secret123");
+        println!("result: {:?}", result);
         // assert
         assert!(result.is_ok());
         // act
