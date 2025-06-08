@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2025 Nathan Fiedler
 //
+use crate::domain::entities::Dataset;
 use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::components::*;
@@ -71,4 +72,55 @@ fn NotFound() -> impl IntoView {
             </div>
         </section>
     }
+}
+
+#[cfg(feature = "ssr")]
+pub mod ssr {
+    use crate::data::repositories::RecordRepositoryImpl;
+    use crate::data::sources::EntityDataSourceImpl;
+    use crate::domain::sources::EntityDataSource;
+    use server_fn::error::ServerFnErrorErr;
+    use server_fn::ServerFnError;
+    use std::env;
+    use std::path::PathBuf;
+    use std::sync::{Arc, LazyLock};
+
+    // When running in test mode, the cwd is the server directory.
+    #[cfg(test)]
+    static DEFAULT_DB_PATH: &str = "../tmp/test/database";
+
+    // Running in debug/release mode we assume cwd is root directory.
+    #[cfg(not(test))]
+    static DEFAULT_DB_PATH: &str = "./tmp/database";
+
+    // Path to the database files.
+    static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+        let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
+        PathBuf::from(path)
+    });
+
+    /// Construct a repository implementation for the database.
+    pub fn db() -> Result<RecordRepositoryImpl, ServerFnError> {
+        let source = EntityDataSourceImpl::new(DB_PATH.as_path())
+            .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+        let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
+        let repo = RecordRepositoryImpl::new(datasource);
+        Ok(repo)
+    }
+}
+
+/// Retrieve all datasets.
+#[leptos::server]
+pub async fn datasets() -> Result<Vec<Dataset>, ServerFnError> {
+    use crate::domain::usecases::get_datasets::GetDatasets;
+    use crate::domain::usecases::{NoParams, UseCase};
+    use leptos::server_fn::error::ServerFnErrorErr;
+
+    let repo = ssr::db()?;
+    let usecase = GetDatasets::new(Box::new(repo));
+    let params = NoParams {};
+    let datasets: Vec<Dataset> = usecase
+        .call(params)
+        .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+    Ok(datasets)
 }

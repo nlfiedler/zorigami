@@ -4,10 +4,13 @@
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::prelude::*;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -66,6 +69,49 @@ impl Checksum {
     pub fn is_blake3(&self) -> bool {
         matches!(*self, Checksum::BLAKE3(_))
     }
+
+    /// Return a vector of bytes that represents this digest.
+    ///
+    /// The hash algorithm prefix is removed, the length of the vector will
+    /// indicate which of the two algorithms was in use.
+    pub fn to_hex(&self) -> Result<Vec<u8>, Error> {
+        match self {
+            Checksum::SHA1(hash) => Ok(decode_hex(&hash)?),
+            Checksum::BLAKE3(hash) => Ok(decode_hex(&hash)?),
+        }
+    }
+
+    /// Construct a Checksum from the given bytes.
+    ///
+    /// The algorithm will be inferred from the length of the slice.
+    pub fn from_hex(hex: &[u8]) -> Result<Self, Error> {
+        if hex.len() == 20 {
+            let digest = encode_hex(hex);
+            return Ok(Checksum::SHA1(digest));
+        } else if hex.len() == 32 {
+            let digest = encode_hex(hex);
+            return Ok(Checksum::BLAKE3(digest));
+        }
+        Err(anyhow!("input value of length {} not supported", hex.len()))
+    }
+}
+
+// Convert from a hexadecimal string to bytes.
+fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect()
+}
+
+// Convert from bytes to a hexadecimal string.
+fn encode_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        write!(&mut s, "{:02x}", b).unwrap();
+    }
+    s
 }
 
 impl Clone for Checksum {
@@ -211,7 +257,7 @@ impl std::hash::Hash for Store {
 ///
 /// Policy dictating how many snapshots to retain.
 ///
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RetentionPolicy {
     /// All snapshots will be retained indefinitely.
     ALL,
@@ -229,7 +275,7 @@ impl Default for RetentionPolicy {
 
 /// Represents a directory tree that will be backed up according to a schedule,
 /// with pack files saved to a particular local or remote store.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Dataset {
     /// Unique identifier of this dataset.
     pub id: String,
@@ -313,8 +359,8 @@ impl fmt::Display for Dataset {
 
 ///
 /// A `TreeReference` represents the "value" for a tree entry, which can be one
-/// of the following: the checksum of a tree, the checksum of a file, the
-/// contents of a symbolic link, or the contents of a very small file.
+/// of the following: the checksum of a tree, the checksum of a file, the raw
+/// contents of a symbolic link, or the raw contents of a very small file.
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TreeReference {
@@ -358,10 +404,18 @@ impl TreeReference {
         }
     }
 
-    /// Return the base64 encoded value for this symlink, if possible.
+    /// Return the raw value for this symlink, if possible.
     pub fn symlink(&self) -> Option<Vec<u8>> {
         match self {
             TreeReference::LINK(link) => Some(link.clone()),
+            _ => None,
+        }
+    }
+
+    /// Return the raw content for this small file, if possible.
+    pub fn content(&self) -> Option<Vec<u8>> {
+        match self {
+            TreeReference::SMALL(content) => Some(content.clone()),
             _ => None,
         }
     }
@@ -1065,6 +1119,22 @@ mod tests {
 
         let result: Result<Checksum, Error> = FromStr::from_str("foobar");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_checksum_hex() -> Result<(), Error> {
+        let original = Checksum::SHA1("e7505beb754bed863e3885f73e3bb6866bdd7f8c".into());
+        let as_hex = original.to_hex()?;
+        let actual = Checksum::from_hex(&as_hex)?;
+        assert_eq!(original, actual);
+
+        let original = Checksum::BLAKE3(
+            "7d084733ca51ea73bb3ee8f3bfa15abd117d750eb7cbcb463e2a1dadbd3a5536".into(),
+        );
+        let as_hex = original.to_hex()?;
+        let actual = Checksum::from_hex(&as_hex)?;
+        assert_eq!(original, actual);
+        Ok(())
     }
 
     #[test]

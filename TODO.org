@@ -11,11 +11,15 @@
 - [X] add navigation bar
 - [X] add favicon
 - [X] add dark mode switch
-*** TODO datasets page
+*** DONE rewrite serde for entities
+*** DONE look at design of other backup programs
 *** TODO pack stores page
+*** TODO datasets page
 *** TODO snapshots page
 *** TODO restore database page
 *** TODO test building and running on Windows, update instructions
+*** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
+**** include when EXAF was added, changed database and pack files
 *** TODO update =Dockerfile=
 **** built binary is now called =server= instead of =zorigami=
 *** TODO update =README.MD=
@@ -25,7 +29,13 @@
 *** TODO write ADR for why Leptos (can copy from tanuki)
 ** TODO replace =dotenv= with =dotenvy=
 ** Test improvements
+*** sometimes =test_process_manager_async_store()= fails
+*** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
+** Passphrase should be part of the dataset, add to webui
+*** should not store in plaintext in database
+*** maybe use KDF to create the real "pass phrase" for exaf-rs
+*** database backup needs its own pass phrase, probably from environment
 ** Snapshot retention policy default
 *** once webui allows changing retention policy per dataset, change the default to ~ALL~
 *** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
@@ -102,11 +112,17 @@
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
+** File changes during backup
+*** what if a file changes between the snapshot and the backup? is there a better approach
+*** if a file changes between snapshot and packing, it will get backed up again the next time
+*** large files will get chunked and therefore not backed up twice
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
 *** consider how to change the passphrase but retain old ones for decrypting packs
 ** Loose backend issues
+*** maybe use a thread pool for bridging async barrier in data sources
+**** currently the data sources all spawn a new thread every time
 *** neat way to getting filenames in a streamlined manner
 **** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
 *** should clean up dataset workspaces on startup and periodically
@@ -239,12 +255,12 @@ $ tmutil deletelocalsnapshots 2021-04-05-162416
 Deleted local snapshot '2021-04-05-162416'
 #+end_src
 ** More Functionality
-*** TODO search snapshots to find a file/directory by a given pattern
+*** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
-*** TODO store restore requests in database to tolerate application restart
+*** store restore requests in database to tolerate application restart
 **** currently restore requests are queued in memory only, so a crash means everything is forgotten
-*** TODO Perform a full backup on demand, discard all previous backups
+*** Perform a full backup on demand, discard all previous backups
 **** Wifey doesn't like the idea of accumulating old stuff
 **** Gives the user a chance to save space by removing old content
 **** remove all records that are _not_ stores and datasets
@@ -256,7 +272,7 @@ Deleted local snapshot '2021-04-05-162416'
 - dbase/
 - tree/
 **** Optionally prune all existing packs in the process
-*** TODO event dispatching for the web and desktop
+*** event dispatching for the web interface
 **** use the state management to manage "events" and state
 **** engine emits actions/events to the store
 ***** for backup and restore functions
@@ -265,35 +281,36 @@ Deleted local snapshot '2021-04-05-162416'
 **** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
-*** TODO consider how datasets can be modified after creation
+*** consider how datasets can be modified after creation
 **** cannot change stores assigned to dataset once there are snapshots
 **** basically would require starting over if changing stores, base path, etc
-*** TODO Secure FTP improvements
+*** Secure FTP improvements
 **** SFTP is twice as slow as MinIO, should investigate why
-**** TODO support SFTP with private key authentication
+**** support SFTP with private key authentication
 ***** use store form to take paths for public and private keys
-**** TODO allow private key that is locked with a passphrase
+**** allow private key that is locked with a passphrase
 ***** passphrase for private key would be provided by envar
-*** TODO Repair missing pack files in pack stores
+*** Repair missing pack files in pack stores
 **** expose the GraphQL operation via the graphical interface
 ** More Information
-*** TODO track start and finish time for a backup
+*** track start and finish time for a backup
 **** account for time when backup is paused due to schedule
-*** TODO show differences between any two snapshots
+*** show differences between any two snapshots
 **** collect the paths and sizes of all new/changed files
 **** somehow show all of that information in a scalable fashion
-*** TODO show =fileCounts= query for each of latest N snapshots to show recent data growth
-*** TODO Show details about snapshots and files
+*** show =fileCounts= query for each of latest N snapshots to show recent data growth
+*** Show details about snapshots and files
 **** show differences between two snapshots
 **** show pack/chunk metrics for   all   files in a snapshot
 **** show pack/chunk metrics for changed files in a snapshot
-*** TODO Query to see histogram of file sizes, number of chunks, etc
+*** Query to see histogram of file sizes, number of chunks, etc
 **** for a given snapshot
 ***** count number of files with N chunks for all values of N
-*** TODO Show number of packs stored in a pack store
+*** Show number of packs stored in a pack store
 ** Architecture Review
 *** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 *** Alternative databases
+**** some records are not suitable for relational DB, such as trees, chunks, and packs
 **** DuckDB
 **** SQLite
 *** Rust dependency injection, is it helpful?
@@ -355,16 +372,16 @@ Deleted local snapshot '2021-04-05-162416'
 **** Inform user that this pack store configuration is only temporary
 **** Select database to retrieve based on computer UUID
 **** Instruct user to restore as usual from dataset(s)
-*** TODO Restore file attributes from tree entry
+*** Restore file attributes from tree entry
 **** TODO File mode
 **** TODO File user/group
 **** TODO File extended attributes
-*** TODO Restore directories from snapshot
+*** Restore directories from snapshot
 **** restoring an empty directory does nothing, should create the directory
 **** restore directory mode bits, user/group ownership, extended attributes
-*** TODO Detect and prune stale snapshots that never completely uploaded
+*** Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere
-*** TODO Support snapshots consisting only of mode/owner changes
+*** Support snapshots consisting only of mode/owner changes
 **** i.e. no file content changes, just the database records
 ** More Better
 *** Ransomware protection
@@ -380,10 +397,10 @@ Deleted local snapshot '2021-04-05-162416'
 : system can also wipe its old backups. To prevent this the backup must permit
 : append-only backups (also called add-only backups).
 ****** They change the SSH config to run the backup command with "append only" flag.
-*** TODO Permit scheduling upload hours for each day of the week
+*** Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
-*** TODO GraphQL mutation to dump/load database to json
-*** TODO Support deduplication across multiple computers
+*** GraphQL mutation to dump/load database to json
+*** Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
 ***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
 **** RocksDB replication story as of 2019-02-20:
@@ -397,13 +414,13 @@ Deleted local snapshot '2021-04-05-162416'
 ***** Use that to form the URL with which to =sync=
 **** Share the chunks and packs documents with a ~peer~ installation
 **** At the start of backup, sync with the ~peer~ to get latest chunks/packs
-*** TODO Consider how to deal with partial uploads
+*** Consider how to deal with partial uploads
 **** e.g. Minio/S3 has a means of handling these
-*** TODO Permit removing a store from a dataset
+*** Permit removing a store from a dataset
 **** would encourage user to clean up the remote files
 **** for local store, could remove the files immediately
 **** must invalidate all of the snapshots effected by the missing store
-*** TODO Permit moving from one store to another
+*** Permit moving from one store to another
 **** would mean downloading the packs and uploading them to the new store
 * Documentation
 ** Duplicati has a fun description of how the backup works

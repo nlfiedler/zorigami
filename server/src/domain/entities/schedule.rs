@@ -2,9 +2,10 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// The day of the week, for weekly and monthly schedules.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum DayOfWeek {
     Sun,
     Mon,
@@ -23,7 +24,10 @@ impl DayOfWeek {
     }
 
     /// Return the number for the day of the week, starting with Sunday as 1.
-    fn number_from_sunday(self) -> u32 {
+    ///
+    /// This is the same value as `chrono::Weekday::number_from_sunday()` for
+    /// the purpose of comparing this to a `DateTime`.
+    pub fn number_from_sunday(&self) -> u32 {
         match self {
             DayOfWeek::Sun => 1,
             DayOfWeek::Mon => 2,
@@ -56,7 +60,7 @@ impl From<u32> for DayOfWeek {
 /// but the values are assumed to represent UTC. The start and stop times can be
 /// reversed so as to span the midnight hour.
 ///
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TimeRange {
     /// Seconds from midnight at which to start.
     pub start: u32,
@@ -108,7 +112,7 @@ impl TimeRange {
 }
 
 /// The day of the month, for monthly schedules.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum DayOfMonth {
     First(DayOfWeek),
     Second(DayOfWeek),
@@ -131,6 +135,32 @@ impl DayOfMonth {
             DayOfMonth::Fifth(ref dow) => day > 28 && dow.same_day(datetime),
         }
     }
+
+    /// Convert the u16 from [Self::encode_into_u16()] into `DayOfMonth`.
+    pub fn decode_from_u16(value: u16) -> Self {
+        let high = value & 0xff00;
+        let low = value & 0x00ff;
+        match high {
+            0x0100 => DayOfMonth::First(DayOfWeek::from(low as u32)),
+            0x0200 => DayOfMonth::Second(DayOfWeek::from(low as u32)),
+            0x0300 => DayOfMonth::Third(DayOfWeek::from(low as u32)),
+            0x0400 => DayOfMonth::Fourth(DayOfWeek::from(low as u32)),
+            0x0500 => DayOfMonth::Fifth(DayOfWeek::from(low as u32)),
+            _ => DayOfMonth::Day(low as u8),
+        }
+    }
+
+    /// Convert this value to a `u16` for the purpose of serde.
+    pub fn encode_into_u16(self) -> u16 {
+        match self {
+            DayOfMonth::Day(d) => d as u16,
+            DayOfMonth::First(ref dow) => (0x0100 + dow.number_from_sunday()) as u16,
+            DayOfMonth::Second(ref dow) => (0x0200 + dow.number_from_sunday()) as u16,
+            DayOfMonth::Third(ref dow) => (0x0300 + dow.number_from_sunday()) as u16,
+            DayOfMonth::Fourth(ref dow) => (0x0400 + dow.number_from_sunday()) as u16,
+            DayOfMonth::Fifth(ref dow) => (0x0500 + dow.number_from_sunday()) as u16,
+        }
+    }
 }
 
 impl From<u32> for DayOfMonth {
@@ -140,7 +170,7 @@ impl From<u32> for DayOfMonth {
 }
 
 /// A schedule for when to run the backup.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum Schedule {
     Hourly,
     Daily(Option<TimeRange>),
@@ -230,6 +260,39 @@ impl Schedule {
 mod tests {
     use super::*;
     use chrono::Duration;
+
+    #[test]
+    fn test_day_of_month_encode_decode() {
+        let original = DayOfMonth::Fifth(DayOfWeek::Sun);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+
+        let original = DayOfMonth::Second(DayOfWeek::Tue);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+
+        let original = DayOfMonth::Third(DayOfWeek::Fri);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+
+        let original = DayOfMonth::Fourth(DayOfWeek::Wed);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+
+        let original = DayOfMonth::Fifth(DayOfWeek::Thu);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+
+        let original = DayOfMonth::Day(15);
+        let encoded = original.encode_into_u16();
+        let decoded = DayOfMonth::decode_from_u16(encoded);
+        assert_eq!(decoded, original);
+    }
 
     #[test]
     fn test_time_range() {

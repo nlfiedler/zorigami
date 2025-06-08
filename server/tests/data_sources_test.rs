@@ -424,8 +424,14 @@ fn test_put_get_snapshot() -> Result<(), Error> {
     let actual = option.unwrap();
     assert_eq!(actual.digest, snapshot.digest);
     assert_eq!(actual.parent, snapshot.parent);
-    assert_eq!(actual.start_time, snapshot.start_time);
-    assert_eq!(actual.end_time, snapshot.end_time);
+    assert_eq!(
+        actual.start_time.timestamp(),
+        snapshot.start_time.timestamp()
+    );
+    assert_eq!(
+        actual.end_time.map(|v| v.timestamp()),
+        snapshot.end_time.map(|v| v.timestamp())
+    );
     assert_eq!(actual.file_counts, snapshot.file_counts);
     assert_eq!(actual.tree, snapshot.tree);
     Ok(())

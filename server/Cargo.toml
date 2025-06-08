@@ -27,6 +27,7 @@ base64 = "0.22.1"
 blake3 = "1.5.1"
 blob-uuid = { version = "0.5.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
+ciborium = "0.2.2"
 codee = { version = "0.3.0", features = ["json_serde"] }
 console_log = "1.0.0"
 console_error_panic_hook = "0.1.7"
@@ -53,7 +54,6 @@ os_str_bytes = { version = "7.0.0", features = [
 reducer = { version = "3.0", optional = true }
 send_wrapper = "0.6.0"
 serde = { version = "1.0.182", features = ["derive"] }
-serde_cbor = "0.11"
 serde_json = "1.0.79"
 server_fn = { version = "0.7.8", features = ["json", "cbor", "multipart", "url"] }
 sha1 = "0.10.6"

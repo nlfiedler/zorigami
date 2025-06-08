@@ -4,9 +4,7 @@
 
 //! Performs serde on entities and stores them in a database.
 
-use crate::data::models::{
-    ChunkDef, ConfigurationDef, DatasetDef, FileDef, PackDef, SnapshotDef, StoreDef,
-};
+use crate::data::models::Model;
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, Snapshot, Store, StoreType,
     Tree,
@@ -57,8 +55,8 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let result = ConfigurationDef::deserialize(&mut de)?;
+                let blank_key: Vec<u8> = vec![];
+                let result = Configuration::from_bytes(&blank_key, &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -67,11 +65,9 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn put_configuration(&self, config: &Configuration) -> Result<(), Error> {
         let key = "configuration";
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        ConfigurationDef::serialize(config, &mut ser)?;
+        let as_bytes = config.to_bytes()?;
         let db = self.database.lock().unwrap();
-        db.put_document(key.as_bytes(), &encoded)
+        db.put_document(key.as_bytes(), &as_bytes)
     }
 
     fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
@@ -129,9 +125,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
         let key = format!("chunk/{}", chunk.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        ChunkDef::serialize(chunk, &mut ser)?;
+        let encoded = chunk.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.insert_document(key.as_bytes(), &encoded)
     }
@@ -142,9 +136,8 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = ChunkDef::deserialize(&mut de)?;
-                result.digest = digest.clone();
+                // converting from str to bytes and back is unavoidable
+                let result = Chunk::from_bytes(&key[6..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -169,20 +162,16 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error> {
         let key = format!("pack/{}", pack.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        PackDef::serialize(pack, &mut ser)?;
+        let as_bytes = pack.to_bytes()?;
         let db = self.database.lock().unwrap();
-        db.insert_document(key.as_bytes(), &encoded)
+        db.insert_document(key.as_bytes(), &as_bytes)
     }
 
     fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
         let key = format!("pack/{}", pack.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        PackDef::serialize(pack, &mut ser)?;
+        let as_bytes = pack.to_bytes()?;
         let db = self.database.lock().unwrap();
-        db.put_document(key.as_bytes(), &encoded)
+        db.put_document(key.as_bytes(), &as_bytes)
     }
 
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
@@ -191,9 +180,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = PackDef::deserialize(&mut de)?;
-                result.digest = digest.clone();
+                let result = Pack::from_bytes(&key[5..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -205,17 +192,11 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("pack/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let mut de = serde_cbor::Deserializer::from_slice(&value);
-            let mut result = PackDef::deserialize(&mut de)?;
+            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
             // pack must have at least one pack location whose store identifier
             // matches the one given
             if result.locations.iter().any(|l| l.store == store_id) {
-                // strip leading "pack/" from 'key' and convert to a Checksum
-                let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-                if let Ok(value) = digest {
-                    result.digest = value;
-                    results.push(result);
-                }
+                results.push(result);
             }
         }
         Ok(results)
@@ -226,25 +207,17 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("pack/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let mut de = serde_cbor::Deserializer::from_slice(&value);
-            let mut result = PackDef::deserialize(&mut de)?;
-            // strip leading "pack/" from 'key' and convert to a Checksum
-            let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-            if let Ok(value) = digest {
-                result.digest = value;
-                results.push(result);
-            }
+            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
+            results.push(result);
         }
         Ok(results)
     }
 
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
         let key = format!("dbase/{}", pack.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        PackDef::serialize(pack, &mut ser)?;
+        let as_bytes = pack.to_bytes()?;
         let db = self.database.lock().unwrap();
-        db.insert_document(key.as_bytes(), &encoded)
+        db.insert_document(key.as_bytes(), &as_bytes)
     }
 
     fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
@@ -253,9 +226,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = PackDef::deserialize(&mut de)?;
-                result.digest = digest.clone();
+                let result = Pack::from_bytes(&key[6..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -267,13 +238,8 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("dbase/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let mut de = serde_cbor::Deserializer::from_slice(&value);
-            let mut result = PackDef::deserialize(&mut de)?;
-            let digest: Result<Checksum, Error> = FromStr::from_str(&key);
-            if let Ok(value) = digest {
-                result.digest = value;
-                results.push(result);
-            }
+            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
+            results.push(result);
         }
         Ok(results)
     }
@@ -309,9 +275,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn insert_file(&self, file: &File) -> Result<(), Error> {
         let key = format!("file/{}", file.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        FileDef::serialize(file, &mut ser)?;
+        let encoded = file.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.insert_document(key.as_bytes(), &encoded)
     }
@@ -322,9 +286,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = FileDef::deserialize(&mut de)?;
-                result.digest = digest.clone();
+                let result = File::from_bytes(&key[5..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -349,7 +311,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn insert_tree(&self, tree: &Tree) -> Result<(), Error> {
         let key = format!("tree/{}", tree.digest);
-        let encoded: Vec<u8> = serde_cbor::to_vec(&tree)?;
+        let encoded = tree.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.insert_document(key.as_bytes(), &encoded)
     }
@@ -360,8 +322,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut result: Tree = serde_cbor::from_slice(&value)?;
-                result.digest = digest.clone();
+                let result = Tree::from_bytes(&key[5..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -386,9 +347,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn put_store(&self, store: &Store) -> Result<(), Error> {
         let key = format!("store/{}", store.id);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        StoreDef::serialize(store, &mut ser)?;
+        let encoded = store.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.put_document(key.as_bytes(), &encoded)
     }
@@ -398,9 +357,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let stores = db.fetch_prefix("store/")?;
         let mut results: Vec<Store> = Vec::new();
         for (key, value) in stores {
-            let mut de = serde_cbor::Deserializer::from_slice(&value);
-            let mut result = StoreDef::deserialize(&mut de)?;
-            result.id = key;
+            let result = Store::from_bytes(&key.as_bytes(), &value)?;
             results.push(result);
         }
         Ok(results)
@@ -412,9 +369,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = StoreDef::deserialize(&mut de)?;
-                result.id = id.to_owned();
+                let result = Store::from_bytes(&key[6..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -429,9 +384,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn put_dataset(&self, dataset: &Dataset) -> Result<(), Error> {
         let key = format!("dataset/{}", dataset.id);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        DatasetDef::serialize(dataset, &mut ser)?;
+        let encoded = dataset.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.put_document(key.as_bytes(), &encoded)
     }
@@ -440,9 +393,11 @@ impl EntityDataSource for EntityDataSourceImpl {
         let db = self.database.lock().unwrap();
         let datasets = db.fetch_prefix("dataset/")?;
         let mut results: Vec<Dataset> = Vec::new();
+        let blank_key: Vec<u8> = vec![];
         for (key, value) in datasets {
-            let mut de = serde_cbor::Deserializer::from_slice(&value);
-            let mut result = DatasetDef::deserialize(&mut de)?;
+            // because fetch_prefix() already converts the key from bytes to
+            // string, let's not do it again in from_bytes()
+            let mut result = Dataset::from_bytes(&blank_key, &value)?;
             result.id = key;
             results.push(result);
         }
@@ -455,8 +410,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = DatasetDef::deserialize(&mut de)?;
+                let blank_key: Vec<u8> = vec![];
+                // because fetch_prefix() already converts the key from bytes to
+                // string, let's not do it again in from_bytes()
+                let mut result = Dataset::from_bytes(&blank_key, &value)?;
                 result.id = id.to_owned();
                 Ok(Some(result))
             }
@@ -472,9 +429,7 @@ impl EntityDataSource for EntityDataSourceImpl {
 
     fn put_snapshot(&self, snapshot: &Snapshot) -> Result<(), Error> {
         let key = format!("snapshot/{}", snapshot.digest);
-        let mut encoded: Vec<u8> = Vec::new();
-        let mut ser = serde_cbor::Serializer::new(&mut encoded);
-        SnapshotDef::serialize(snapshot, &mut ser)?;
+        let encoded = snapshot.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.put_document(key.as_bytes(), &encoded)
     }
@@ -485,9 +440,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let mut de = serde_cbor::Deserializer::from_slice(&value);
-                let mut result = SnapshotDef::deserialize(&mut de)?;
-                result.digest = digest.clone();
+                let result = Snapshot::from_bytes(&key[9..].as_bytes(), &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
