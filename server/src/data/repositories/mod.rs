@@ -554,26 +554,20 @@ impl PackRepository for PackRepositoryImpl {
     }
 }
 
-///
-/// Return the unique bucket name for this computer and user.
-///
+// Return the unique bucket name for this computer and user.
 fn computer_bucket_name(unique_id: &str) -> String {
-    match blob_uuid::to_uuid(unique_id) {
+    match uuid::Uuid::try_parse(unique_id) {
         Ok(uuid) => uuid.simple().to_string(),
         Err(err) => {
-            error!("failed to convert unique ID: {:?}", err);
+            error!("failed to parse UUID: {:?}", err);
             ulid::Ulid::new().to_string().to_lowercase()
         }
     }
 }
 
 // Generate a suitable bucket name, using a ULID and the given unique ID.
-//
-// The unique ID is assumed to be a shorted version of the UUID returned from
-// `generate_unique_id()`, and will be converted back to a full UUID for the
-// purposes of generating a bucket name consisting only of lowercase letters.
 fn generate_bucket_name(unique_id: &str) -> String {
-    match blob_uuid::to_uuid(unique_id) {
+    match uuid::Uuid::try_parse(unique_id) {
         Ok(uuid) => {
             let shorter = uuid.simple().to_string();
             let mut ulid = ulid::Ulid::new().to_string();

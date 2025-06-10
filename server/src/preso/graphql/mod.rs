@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 
 //! The `schema` module defines the GraphQL schema and resolvers.
@@ -680,12 +680,7 @@ impl entities::Configuration {
 
     /// Name of the bucket used for storing the database snapshots.
     fn computer_bucket(&self) -> String {
-        match blob_uuid::to_uuid(&self.computer_id) {
-            Ok(uuid) => uuid.simple().to_string(),
-            Err(_) => {
-                format!("could not convert unique ID: {}", self.computer_id)
-            }
-        }
+        self.computer_id.clone()
     }
 }
 

@@ -990,10 +990,6 @@ pub struct Configuration {
 
 impl Configuration {
     /// Generate a type 5 UUID based on the given values.
-    ///
-    /// Returns a shortened version of the UUID to minimize storage and reduce
-    /// the display width on screen. It can be converted back to a UUID using
-    /// `blob_uuid::to_uuid()` if necessary.
     pub fn generate_unique_id(username: &str, hostname: &str) -> String {
         #[cfg(feature = "ssr")]
         {
@@ -1001,9 +997,8 @@ impl Configuration {
             let mut name = String::from(username);
             name.push(':');
             name.push_str(hostname);
-            let bytes = name.into_bytes();
-            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, &bytes);
-            blob_uuid::to_blob(&uuid)
+            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes());
+            uuid.to_string()
         }
         #[cfg(not(feature = "ssr"))]
         {
@@ -1168,8 +1163,7 @@ mod tests {
     fn test_generate_unique_id() {
         let uuid = Configuration::generate_unique_id("charlie", "localhost");
         #[cfg(feature = "ssr")]
-        // UUIDv5 = 747267d5-6e70-5711-8a9a-a40c24c1730f
-        assert_eq!(uuid, "dHJn1W5wVxGKmqQMJMFzDw");
+        assert_eq!(uuid, "747267d5-6e70-5711-8a9a-a40c24c1730f");
         #[cfg(not(feature = "ssr"))]
         assert_eq!(uuid, "charlie@localhost");
     }

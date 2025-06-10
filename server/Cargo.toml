@@ -25,7 +25,6 @@ actix-web = { version = "4.3.0", optional = true }
 anyhow = "1.0.55"
 base64 = "0.22.1"
 blake3 = "1.5.1"
-blob-uuid = { version = "0.5.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 ciborium = "0.2.2"
 codee = { version = "0.3.0", features = ["json_serde"] }
@@ -97,7 +96,6 @@ ssr = [
     "dep:actix-files",
     "dep:actix-rt",
     "dep:actix-web",
-    "dep:blob-uuid",
     "dep:database_core",
     "dep:database_rocks",
     "dep:env_logger",
