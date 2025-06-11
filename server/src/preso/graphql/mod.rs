@@ -5,7 +5,7 @@
 //! The `schema` module defines the GraphQL schema and resolvers.
 
 use crate::data::repositories::RecordRepositoryImpl;
-use crate::domain::entities::{self, Checksum, RetentionPolicy, TreeReference};
+use crate::domain::entities::{self, Checksum, SnapshotRetention, TreeReference};
 use crate::domain::helpers;
 use crate::domain::managers::backup::Scheduler;
 use crate::domain::managers::restore::{self, Restorer};
@@ -311,16 +311,6 @@ impl entities::Dataset {
         self.id.clone()
     }
 
-    /// Unique computer identifier.
-    fn computer_id(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<String> {
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        if let Ok(value) = repo.get_computer_id(&self.id) {
-            value
-        } else {
-            None
-        }
-    }
-
     /// Path that is being backed up.
     fn basepath(&self) -> String {
         self.basepath
@@ -375,8 +365,8 @@ impl entities::Dataset {
     /// Most recent snapshot for this dataset, if any.
     fn latest_snapshot(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<entities::Snapshot> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        if let Ok(Some(digest)) = repo.get_latest_snapshot(&self.id) {
-            if let Ok(result) = repo.get_snapshot(&digest) {
+        if let Some(ref digest) = self.snapshot {
+            if let Ok(result) = repo.get_snapshot(digest) {
                 return result;
             }
         }
@@ -402,9 +392,9 @@ impl entities::Dataset {
     /// `pruneSnapshots` mutation.
     fn retention_count(&self) -> Option<i32> {
         match self.retention {
-            RetentionPolicy::ALL => None,
-            RetentionPolicy::DAYS(_) => None,
-            RetentionPolicy::COUNT(c) => Some(c as i32),
+            SnapshotRetention::ALL => None,
+            SnapshotRetention::DAYS(_) => None,
+            SnapshotRetention::COUNT(c) => Some(c as i32),
         }
     }
 }
@@ -1532,13 +1522,12 @@ pub fn create_schema() -> Schema {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::managers::backup::scheduler::MockScheduler;
+    use crate::domain::{entities::PackRetention, managers::backup::scheduler::MockScheduler};
     use crate::domain::managers::restore::MockRestorer;
     use crate::domain::managers::state::MockStateStore;
     use crate::domain::sources::MockEntityDataSource;
     use anyhow::anyhow;
     use juniper::{FromInputValue, InputValue, ToInputValue, Variables};
-    use mockall::predicate::*;
 
     fn make_context(mock: MockEntityDataSource) -> Arc<GraphContext> {
         // build the most basic GraphContext
@@ -1641,6 +1630,7 @@ mod tests {
             store_type: crate::domain::entities::StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         }];
         let mut mock = MockEntityDataSource::new();
         mock.expect_get_stores()
@@ -1894,7 +1884,7 @@ mod tests {
         let schema = create_schema();
         let (res, errors) = juniper::execute_sync(
             r#"query {
-                datasets { computerId }
+                datasets { id }
             }"#,
             None,
             &schema,
@@ -2467,9 +2457,6 @@ mod tests {
         mock.expect_get_configuration()
             .returning(move || Ok(Some(config.clone())));
         mock.expect_put_dataset().returning(|_| Ok(()));
-        mock.expect_put_computer_id()
-            .with(always(), always())
-            .returning(|_, _| Ok(()));
         let ctx = make_context(mock);
         // act
         let schema = create_schema();
@@ -2601,140 +2588,10 @@ mod tests {
     }
 
     #[test]
-    fn test_mutation_update_dataset_ok() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_put_dataset().returning(|_| Ok(()));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        let cwd = std::env::current_dir().unwrap();
-        let mut ws = cwd.clone();
-        ws.push(".tmp");
-        let input = DatasetInput {
-            id: Some("cafebabe".to_owned()),
-            basepath: cwd.to_str().unwrap().to_owned(),
-            schedules: vec![],
-            workspace: None,
-            pack_size: BigInt(1048576),
-            stores: vec![],
-            excludes: vec![],
-            retention_count: None,
-        };
-        vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"mutation Update($input: DatasetInput!) {
-                updateDataset(input: $input) {
-                    basepath workspace packSize
-                }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("updateDataset").unwrap();
-        let object = res.as_object_value().unwrap();
-        let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
-        assert_eq!(value, cwd.to_str().unwrap());
-        let field = object.get_field_value("workspace").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
-        assert_eq!(value, ws.to_str().unwrap());
-        let field = object.get_field_value("packSize").unwrap();
-        // packSize is a bigint that comes over the wire as a string
-        let value = field.as_scalar_value::<String>().unwrap();
-        assert_eq!(value, "1048576");
-    }
-
-    #[test]
-    fn test_mutation_update_dataset_store() {
-        // arrange
-        let mock = MockEntityDataSource::new();
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        let cwd = std::env::current_dir().unwrap();
-        let input = DatasetInput {
-            id: None,
-            basepath: cwd.to_str().unwrap().to_owned(),
-            schedules: vec![],
-            workspace: None,
-            pack_size: BigInt(1048576),
-            stores: vec![],
-            excludes: vec![],
-            retention_count: None,
-        };
-        vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"mutation Update($input: DatasetInput!) {
-                updateDataset(input: $input) {
-                    basepath packSize
-                }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("dataset without id"));
-    }
-
-    #[test]
-    fn test_mutation_update_dataset_err() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_put_dataset()
-            .returning(|_| Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        let cwd = std::env::current_dir().unwrap();
-        let input = DatasetInput {
-            id: Some("cafebabe".to_owned()),
-            basepath: cwd.to_str().unwrap().to_owned(),
-            schedules: vec![],
-            workspace: None,
-            pack_size: BigInt(1048576),
-            stores: vec![],
-            excludes: vec![],
-            retention_count: None,
-        };
-        vars.insert("input".to_owned(), input.to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"mutation Update($input: DatasetInput!) {
-                updateDataset(input: $input) { id }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
-
-    #[test]
     fn test_mutation_delete_dataset_ok() {
         // arrange
         let mut mock = MockEntityDataSource::new();
         mock.expect_delete_dataset().returning(|_| Ok(()));
-        mock.expect_delete_computer_id().returning(|_| Ok(()));
-        mock.expect_delete_latest_snapshot().returning(|_| Ok(()));
         let ctx = make_context(mock);
         // act
         let schema = create_schema();

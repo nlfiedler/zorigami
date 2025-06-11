@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::domain::entities::{Checksum, RetentionPolicy, TreeReference};
+use crate::domain::entities::{Checksum, SnapshotRetention, TreeReference};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{anyhow, Error};
 use log::info;
@@ -196,7 +196,7 @@ impl PruneSnapshots {
         //
         let datasets = self.repo.get_datasets()?;
         for dataset in datasets {
-            if let Some(latest) = self.repo.get_latest_snapshot(&dataset.id)? {
+            if let Some(latest) = dataset.snapshot.clone() {
                 let mut digest = latest;
                 loop {
                     let snapshot = self
@@ -258,20 +258,19 @@ impl super::UseCase<usize, Params> for PruneSnapshots {
             .repo
             .get_dataset(&params.dataset)?
             .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", &params.dataset)))?;
-        let latest_hash = self
-            .repo
-            .get_latest_snapshot(&dataset.id)?
+        let latest_hash = dataset
+            .snapshot.clone()
             .ok_or_else(|| anyhow!(format!("no snapshots for dataset: {:?}", &params.dataset)))?;
         let maybe_oldest_snapshot: Option<Checksum> = match dataset.retention {
-            RetentionPolicy::ALL => {
+            SnapshotRetention::ALL => {
                 info!("will retain all snapshots for dataset {}", dataset.id);
                 None
             }
-            RetentionPolicy::COUNT(count) => {
+            SnapshotRetention::COUNT(count) => {
                 info!("will retain {} snapshots for dataset {}", count, dataset.id);
                 self.visit_count_snapshots(latest_hash, count)?
             }
-            RetentionPolicy::DAYS(days) => {
+            SnapshotRetention::DAYS(days) => {
                 info!(
                     "will retain {} days of snapshots for dataset {}",
                     days, dataset.id
@@ -883,11 +882,11 @@ mod tests {
 
         // dataset retains 3 snapshots
         let mut dataset1 = Dataset::new(std::path::Path::new("/home/planet"));
-        dataset1.retention = RetentionPolicy::COUNT(3);
+        dataset1.retention = SnapshotRetention::COUNT(3);
+        dataset1.snapshot = Some(snapshot_a2.clone());
         let dataset1_1 = dataset1.clone();
         let dataset1_id = dataset1.id.clone();
         let dataset1_id2 = dataset1.id.clone();
-        let dataset1_id3 = dataset1.id.clone();
         mock.expect_get_datasets()
             .once()
             .returning(move || Ok(vec![dataset1.clone()]));
@@ -895,10 +894,6 @@ mod tests {
             .once()
             .withf(move |id| id == &dataset1_id)
             .returning(move |_| Ok(Some(dataset1_1.clone())));
-        mock.expect_get_latest_snapshot()
-            .times(2)
-            .withf(move |id| id == &dataset1_id3)
-            .returning(move |_| Ok(Some(snapshot_a2.clone())));
 
         mock.expect_get_all_tree_digests()
             .once()

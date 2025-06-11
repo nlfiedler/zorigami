@@ -163,7 +163,7 @@ fn patch_location(missing: &Pack, locations: &[PackLocation], store_id: &str) ->
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::{Pack, PackLocation, Store, StoreType};
+    use crate::domain::entities::{Pack, PackLocation, PackRetention, Store, StoreType};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use mockall::predicate::*;
     use std::collections::HashMap;
@@ -178,6 +178,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "source_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("basepath".to_owned(), "/users/lucile".to_owned());
@@ -186,6 +187,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "target_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -226,6 +228,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "source_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("basepath".to_owned(), "/users/lucile".to_owned());
@@ -234,6 +237,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "target_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -294,6 +298,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "source_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("basepath".to_owned(), "/users/lucile".to_owned());
@@ -302,6 +307,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "target_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -376,6 +382,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "source_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("basepath".to_owned(), "/users/lucile".to_owned());
@@ -384,6 +391,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "target_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -459,6 +467,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "source_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("basepath".to_owned(), "/users/lucile".to_owned());
@@ -467,6 +476,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "target_store".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -579,6 +589,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()

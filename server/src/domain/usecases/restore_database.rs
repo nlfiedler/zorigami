@@ -109,7 +109,7 @@ impl<'a> cmp::Eq for Params<'a> {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::{Configuration, Store, StoreType};
+    use crate::domain::entities::{Configuration, PackRetention, Store, StoreType};
     use crate::domain::managers::state::MockStateStore;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use mockall::predicate::*;
@@ -125,6 +125,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()
@@ -177,6 +178,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockRecordRepository::new();
         mock.expect_get_store()

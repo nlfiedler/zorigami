@@ -16,7 +16,6 @@ use database_rocks;
 use log::debug;
 #[cfg(test)]
 use mockall::automock;
-use std::str::FromStr;
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
@@ -68,59 +67,6 @@ impl EntityDataSource for EntityDataSourceImpl {
         let as_bytes = config.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.put_document(key.as_bytes(), &as_bytes)
-    }
-
-    fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
-        let key = format!("computer/{}", dataset);
-        let db = self.database.lock().unwrap();
-        db.put_document(key.as_bytes(), computer_id.as_bytes())
-    }
-
-    fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
-        let key = format!("computer/{}", dataset);
-        let db = self.database.lock().unwrap();
-        let option = db.get_document(key.as_bytes())?;
-        match option {
-            Some(value) => {
-                let result = String::from_utf8(value)?;
-                Ok(Some(result))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
-        let key = format!("computer/{}", dataset);
-        let db = self.database.lock().unwrap();
-        db.delete_document(key.as_bytes())
-    }
-
-    fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
-        let key = format!("latest/{}", dataset);
-        // use simple approach as serde can be tricky to compile
-        let as_string = latest.to_string();
-        let db = self.database.lock().unwrap();
-        db.put_document(key.as_bytes(), as_string.as_bytes())
-    }
-
-    fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
-        let key = format!("latest/{}", dataset);
-        let db = self.database.lock().unwrap();
-        let option = db.get_document(key.as_bytes())?;
-        match option {
-            Some(value) => {
-                let as_string = String::from_utf8(value)?;
-                let result: Result<Checksum, Error> = FromStr::from_str(&as_string);
-                result.map(Some)
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
-        let key = format!("latest/{}", dataset);
-        let db = self.database.lock().unwrap();
-        db.delete_document(key.as_bytes())
     }
 
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
@@ -533,6 +479,7 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::entities::PackRetention;
     use std::collections::HashMap;
 
     #[test]
@@ -545,6 +492,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let source = builder.build_source(&store).unwrap();
         assert!(source.is_local());
@@ -564,6 +512,7 @@ mod tests {
             store_type: StoreType::MINIO,
             label: "s3clone".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let source = builder.build_source(&store).unwrap();
         assert!(!source.is_local());
@@ -581,6 +530,7 @@ mod tests {
             store_type: StoreType::SFTP,
             label: "other_server".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let source = builder.build_source(&store).unwrap();
         assert!(!source.is_local());

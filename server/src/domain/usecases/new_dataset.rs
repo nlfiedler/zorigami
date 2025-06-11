@@ -21,8 +21,6 @@ impl NewDataset {
 
 impl super::UseCase<Dataset, Params> for NewDataset {
     fn call(&self, params: Params) -> Result<Dataset, Error> {
-        // use the constructor to generate a new identifier and then copy
-        // everything over
         let mut dataset = Dataset::with_pack_size(&params.basepath, params.pack_size);
         dataset.excludes = params
             .excludes
@@ -37,10 +35,6 @@ impl super::UseCase<Dataset, Params> for NewDataset {
             dataset.add_store(store);
         }
         self.repo.put_dataset(&dataset)?;
-        // for new datasets we need to save the computer id
-        let config = self.repo.get_configuration()?;
-        self.repo
-            .put_computer_id(&dataset.id, &config.computer_id)?;
         Ok(dataset)
     }
 }
@@ -94,26 +88,18 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::Configuration;
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
-    use mockall::predicate::*;
 
     #[test]
     fn test_new_dataset_ok() {
         // arrange
-        let config: Configuration = Default::default();
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_configuration()
-            .returning(move || Ok(config.clone()));
         mock.expect_put_dataset().returning(|_| Ok(()));
-        mock.expect_put_computer_id()
-            .with(always(), always())
-            .returning(|_, _| Ok(()));
         // act
-        #[cfg(target_family="unix")]
+        #[cfg(target_family = "unix")]
         let basepath = "/home/planet";
-        #[cfg(target_family="windows")]
+        #[cfg(target_family = "windows")]
         let basepath = "\\home\\planet";
         let usecase = NewDataset::new(Box::new(mock));
         let params = Params {
@@ -128,9 +114,9 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath.to_string_lossy(), basepath);
-        #[cfg(target_family="unix")]
+        #[cfg(target_family = "unix")]
         let expected_workspace = "/home/planet/.tmp";
-        #[cfg(target_family="windows")]
+        #[cfg(target_family = "windows")]
         let expected_workspace = "\\home\\planet\\.tmp";
         assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
@@ -142,19 +128,13 @@ mod tests {
     #[test]
     fn test_new_dataset_empty_excludes() {
         // arrange
-        let config: Configuration = Default::default();
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_configuration()
-            .returning(move || Ok(config.clone()));
         mock.expect_put_dataset().returning(|_| Ok(()));
-        mock.expect_put_computer_id()
-            .with(always(), always())
-            .returning(|_, _| Ok(()));
         // act
         let usecase = NewDataset::new(Box::new(mock));
-        #[cfg(target_family="unix")]
+        #[cfg(target_family = "unix")]
         let basepath = "/home/planet";
-        #[cfg(target_family="windows")]
+        #[cfg(target_family = "windows")]
         let basepath = "\\home\\planet";
         let params = Params {
             basepath: PathBuf::from(basepath),
@@ -168,9 +148,9 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath.to_string_lossy(), basepath);
-        #[cfg(target_family="unix")]
+        #[cfg(target_family = "unix")]
         let expected_workspace = "/home/planet/.tmp";
-        #[cfg(target_family="windows")]
+        #[cfg(target_family = "windows")]
         let expected_workspace = "\\home\\planet\\.tmp";
         assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
@@ -182,15 +162,9 @@ mod tests {
     #[test]
     fn test_new_dataset_err() {
         // arrange
-        let config: Configuration = Default::default();
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_configuration()
-            .returning(move || Ok(config.clone()));
         mock.expect_put_dataset()
             .returning(|_| Err(anyhow!("oh no")));
-        mock.expect_put_computer_id()
-            .with(always(), always())
-            .returning(|_, _| Ok(()));
         // act
         let usecase = NewDataset::new(Box::new(mock));
         let params = Params {

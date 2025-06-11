@@ -3,7 +3,7 @@
 //
 use anyhow::Error;
 use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::{self, Checksum};
+use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::sources::EntityDataSource;
 use std::collections::HashMap;
 use std::fs;
@@ -197,6 +197,7 @@ fn test_put_get_delete_store() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "local disk".to_owned(),
         properties,
+        retention: PackRetention::ALL,
     };
     datasource.put_store(&store).unwrap();
     properties = HashMap::new();
@@ -206,6 +207,7 @@ fn test_put_get_delete_store() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "minio host".to_owned(),
         properties,
+        retention: PackRetention::ALL,
     };
     datasource.put_store(&store).unwrap();
 
@@ -283,47 +285,6 @@ fn test_put_get_configuration() -> Result<(), Error> {
     assert_eq!(actual.username, expected.username);
     assert_eq!(actual.hostname, expected.hostname);
     assert_eq!(actual.computer_id, expected.computer_id);
-    Ok(())
-}
-
-#[test]
-fn test_put_get_computer_id() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-
-    datasource
-        .put_computer_id("cafebabe", "charlietuna")
-        .unwrap();
-    let opt = datasource.get_computer_id("deadbeef").unwrap();
-    assert!(opt.is_none());
-    let opt = datasource.get_computer_id("cafebabe").unwrap();
-    assert!(opt.is_some());
-    assert_eq!(opt.unwrap(), "charlietuna");
-    datasource.delete_computer_id("cafebabe").unwrap();
-    let opt = datasource.get_computer_id("cafebabe").unwrap();
-    assert!(opt.is_none());
-    Ok(())
-}
-
-#[test]
-fn test_put_get_latest_snapshot() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-
-    let digest = Checksum::SHA1("e1c3cc593da3c696ddc3200ad137ef79681c8052".to_owned());
-    datasource.put_latest_snapshot("cafebabe", &digest).unwrap();
-    let opt = datasource.get_latest_snapshot("deadbeef").unwrap();
-    assert!(opt.is_none());
-    let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
-    assert!(opt.is_some());
-    assert_eq!(opt.unwrap(), digest);
-    datasource.delete_latest_snapshot("cafebabe").unwrap();
-    let opt = datasource.get_latest_snapshot("cafebabe").unwrap();
-    assert!(opt.is_none());
     Ok(())
 }
 
@@ -444,11 +405,6 @@ fn test_record_counts() -> Result<(), Error> {
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
 
-    // computer identifier(s) are not counted
-    datasource
-        .put_computer_id("cafebabe", "charlietuna")
-        .unwrap();
-
     // file(s)
     let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
     let file_digest = Checksum::BLAKE3(String::from(blake3sum));
@@ -518,7 +474,10 @@ fn test_backup_restore() -> Result<(), Error> {
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    assert!(datasource.put_computer_id("charlie", "localhost").is_ok());
+    let mut config: entities::Configuration = Default::default();
+    config.hostname = "localhost".into();
+    config.username = "charlie".into();
+    datasource.put_configuration(&config)?;
 
     // backup the database
     let backup_path = tempfile::tempdir_in(&db_base)?;
@@ -527,7 +486,8 @@ fn test_backup_restore() -> Result<(), Error> {
         .unwrap();
 
     // modify the database
-    assert!(datasource.put_computer_id("charlie", "remotehost").is_ok());
+    config.hostname = "remotehost".into();
+    datasource.put_configuration(&config)?;
 
     // restore from backup
     datasource
@@ -535,11 +495,10 @@ fn test_backup_restore() -> Result<(), Error> {
         .unwrap();
 
     // verify contents of restored database
-    match datasource.get_computer_id("charlie") {
-        Ok(Some(value)) => assert_eq!(value, "localhost"),
-        Ok(None) => panic!("missing computer id record"),
-        Err(e) => panic!("error: {}", e),
-    };
+    let actual = datasource.get_configuration()?;
+    assert!(actual.is_some());
+    let config = actual.unwrap();
+    assert_eq!(config.hostname, "localhost");
     let _ = std::fs::remove_dir_all(backup_path);
     Ok(())
 }

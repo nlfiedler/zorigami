@@ -4,7 +4,7 @@
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities;
+use server::domain::entities::{self, PackRetention};
 use server::domain::managers::backup::{OutOfTimeFailure, Performer, PerformerImpl, Request};
 use server::domain::managers::state::{StateStore, StateStoreImpl};
 use server::domain::repositories::RecordRepository;
@@ -36,6 +36,7 @@ fn test_continue_backup() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -46,15 +47,14 @@ fn test_continue_backup() -> Result<(), Error> {
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
+    let dataset_id = dataset.id.clone();
 
     // perform the first backup
     let performer = PerformerImpl::default();
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
     let request = Request::new(
-        dataset.clone(),
+        dataset,
         dbase.clone(),
         state.clone(),
         &passphrase,
@@ -65,6 +65,8 @@ fn test_continue_backup() -> Result<(), Error> {
     let backup_opt = performer.backup(request)?;
     assert!(backup_opt.is_some());
     let first_sha1 = backup_opt.unwrap();
+    let dataset = dbase.get_dataset(&dataset_id)?.unwrap();
+    assert_eq!(dataset.snapshot, Some(first_sha1.clone()));
 
     // fake an incomplete backup by resetting the end_time field
     let mut snapshot = dbase.get_snapshot(&first_sha1)?.unwrap();
@@ -73,7 +75,7 @@ fn test_continue_backup() -> Result<(), Error> {
 
     // run the backup again to make sure it is finished
     let request = Request::new(
-        dataset.clone(),
+        dataset,
         dbase.clone(),
         state.clone(),
         &passphrase,
@@ -82,6 +84,8 @@ fn test_continue_backup() -> Result<(), Error> {
     let backup_opt = performer.backup(request)?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();
+    let dataset = dbase.get_dataset(&dataset_id)?.unwrap();
+    assert_eq!(dataset.snapshot, Some(first_sha1.clone()));
     assert_eq!(first_sha1, second_sha1);
     let snapshot = dbase.get_snapshot(&first_sha1)?.unwrap();
     assert!(snapshot.end_time.is_some());
@@ -118,6 +122,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -128,8 +133,6 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // start the backup manager after the stop time has already passed; should
     // return an "out of time" error
@@ -175,6 +178,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -185,8 +189,6 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform a backup where there is only an empty file
     let performer = PerformerImpl::default();

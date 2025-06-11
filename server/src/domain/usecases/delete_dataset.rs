@@ -19,10 +19,6 @@ impl DeleteDataset {
 impl super::UseCase<(), Params> for DeleteDataset {
     fn call(&self, params: Params) -> Result<(), Error> {
         self.repo.delete_dataset(&params.dataset_id)?;
-        // ignore any errors when deleting records that may or may not be
-        // present in the data source
-        let _ = self.repo.delete_computer_id(&params.dataset_id);
-        let _ = self.repo.delete_latest_snapshot(&params.dataset_id);
         Ok(())
     }
 }
@@ -64,8 +60,6 @@ mod tests {
         // arrange
         let mut mock = MockRecordRepository::new();
         mock.expect_delete_dataset().returning(|_| Ok(()));
-        mock.expect_delete_computer_id().returning(|_| Ok(()));
-        mock.expect_delete_latest_snapshot().returning(|_| Ok(()));
         // act
         let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {

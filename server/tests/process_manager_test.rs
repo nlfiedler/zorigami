@@ -6,7 +6,7 @@ use dotenv::dotenv;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::schedule::Schedule;
-use server::domain::entities::{self, Checksum};
+use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
 use server::domain::managers::restore::*;
 use server::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
@@ -57,6 +57,7 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
         store_type: entities::StoreType::MINIO,
         label: "s3clone".to_owned(),
         properties: minio_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -68,8 +69,6 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     dataset.add_store("minio123");
     dataset.add_schedule(Schedule::Hourly);
     dbase.put_dataset(&dataset)?;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "homebase");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform a single backup
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
@@ -89,9 +88,9 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     println!("backup finished");
 
     // restore a file from backup
-    let maybe_snapshot = dbase.get_latest_snapshot(&dataset.id)?;
-    assert!(maybe_snapshot.is_some(), "latest snapshot not available");
-    let snapshot_sha1 = maybe_snapshot.unwrap();
+    let dataset = dbase.get_dataset(&dataset.id)?.unwrap();
+    assert!(dataset.snapshot.is_some(), "latest snapshot not available");
+    let snapshot_sha1 = dataset.snapshot.unwrap();
     #[cfg(target_family = "unix")]
     let digest_expected = Checksum::BLAKE3(String::from(
         "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",

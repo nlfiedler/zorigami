@@ -253,8 +253,8 @@ impl<'a> BackupDriver<'a> {
         // encryption involves a random nonce per archive content block
         if self.dbase.get_pack(&pack_digest)?.is_none() {
             // new pack file, need to upload this and record to database
-            let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
-            let bucket_name = self.stores.get_bucket_name(&computer_id);
+            let config = self.dbase.get_configuration()?;
+            let bucket_name = self.stores.get_bucket_name(&config.computer_id);
             let object_name = format!("{}", pack_digest);
             // capture and record the remote object name, in case it differs from
             // the name we generated ourselves; either value is expected to be
@@ -302,8 +302,8 @@ impl<'a> BackupDriver<'a> {
         // to a special place in the pack store, then record the pseudo-pack to
         // enable accurate pack pruning.
         let backup_path = self.dbase.create_backup(&self.passphrase)?;
-        let computer_id = self.dbase.get_computer_id(&self.dataset.id)?.unwrap();
-        let coords = self.stores.store_database(&computer_id, &backup_path)?;
+        let config = self.dbase.get_configuration()?;
+        let coords = self.stores.store_database(&config.computer_id, &backup_path)?;
         let digest = entities::Checksum::blake3_from_file(&backup_path)?;
         let pack = entities::Pack::new(digest.clone(), coords);
         self.dbase.insert_database(&pack)?;
@@ -461,7 +461,7 @@ mod tests {
     use super::*;
     use crate::data::repositories::RecordRepositoryImpl;
     use crate::data::sources::EntityDataSourceImpl;
-    use crate::domain::entities::Checksum;
+    use crate::domain::entities::{Checksum, PackRetention};
     use crate::domain::managers::backup::ChangedFile;
     use crate::domain::managers::state::{StateStore, StateStoreImpl};
     use std::path::PathBuf;
@@ -583,6 +583,7 @@ mod tests {
             store_type: entities::StoreType::LOCAL,
             label: "my local".to_owned(),
             properties: local_props,
+            retention: PackRetention::ALL,
         };
         dbase.put_store(&store)?;
 
@@ -591,8 +592,6 @@ mod tests {
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
         dataset.pack_size = 131072 as u64;
-        let computer_id = entities::Configuration::generate_unique_id("mr.ed", "stable");
-        dbase.put_computer_id(&dataset.id, &computer_id)?;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
         fs::create_dir_all(&workspace)?;
@@ -743,6 +742,7 @@ mod tests {
             store_type: entities::StoreType::LOCAL,
             label: "my local".to_owned(),
             properties: local_props,
+            retention: PackRetention::ALL,
         };
         dbase.put_store(&store)?;
 
@@ -751,8 +751,6 @@ mod tests {
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
         dataset.pack_size = 582540 as u64;
-        let computer_id = entities::Configuration::generate_unique_id("mr.ed", "stable");
-        dbase.put_computer_id(&dataset.id, &computer_id)?;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
         fs::create_dir_all(&workspace)?;

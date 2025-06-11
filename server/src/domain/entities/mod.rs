@@ -21,7 +21,7 @@ pub mod schedule;
 /// The `Checksum` represents a hash digest for an object, such as a tree,
 /// snapshot, file, chunk, or pack file.
 ///
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Hash, Serialize)]
 pub enum Checksum {
     SHA1(String),
     BLAKE3(String),
@@ -235,6 +235,23 @@ impl FromStr for StoreType {
     }
 }
 
+///
+/// Policy dictating the retention policy for pack files and database backups.
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PackRetention {
+    /// All pack files will be retained indefinitely.
+    ALL,
+    /// Retain pack files for this many days.
+    DAYS(u16),
+}
+
+impl Default for PackRetention {
+    fn default() -> Self {
+        PackRetention::ALL
+    }
+}
+
 /// Store defines a location where packs will be saved.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Store {
@@ -246,6 +263,8 @@ pub struct Store {
     pub label: String,
     /// Name/value pairs that make up this store configuration.
     pub properties: HashMap<String, String>,
+    /// Policy for retaining pack files over time.
+    pub retention: PackRetention,
 }
 
 impl std::hash::Hash for Store {
@@ -258,7 +277,7 @@ impl std::hash::Hash for Store {
 /// Policy dictating how many snapshots to retain.
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum RetentionPolicy {
+pub enum SnapshotRetention {
     /// All snapshots will be retained indefinitely.
     ALL,
     /// Retain this many snapshots.
@@ -267,9 +286,9 @@ pub enum RetentionPolicy {
     DAYS(u16),
 }
 
-impl Default for RetentionPolicy {
+impl Default for SnapshotRetention {
     fn default() -> Self {
-        RetentionPolicy::ALL
+        SnapshotRetention::ALL
     }
 }
 
@@ -283,6 +302,8 @@ pub struct Dataset {
     pub basepath: PathBuf,
     /// Set of schedules for when to run the backup.
     pub schedules: Vec<schedule::Schedule>,
+    /// Latest snapshot reference, if any.
+    pub snapshot: Option<Checksum>,
     /// Path for temporary pack building.
     pub workspace: PathBuf,
     /// Target size in bytes for pack files.
@@ -292,7 +313,7 @@ pub struct Dataset {
     /// List of file/directory exclusion patterns.
     pub excludes: Vec<String>,
     /// Policy for retaining snapshots over time.
-    pub retention: RetentionPolicy,
+    pub retention: SnapshotRetention,
 }
 
 // Default pack size is 64mb just because. With a typical ADSL home broadband
@@ -317,6 +338,7 @@ impl Dataset {
             id,
             basepath: basepath.to_owned(),
             schedules: vec![],
+            snapshot: None,
             workspace,
             pack_size,
             stores: vec![],
@@ -342,6 +364,7 @@ impl Default for Dataset {
             id: String::new(),
             basepath: PathBuf::new(),
             schedules: vec![],
+            snapshot: None,
             workspace: PathBuf::new(),
             pack_size: 0,
             stores: vec![],
@@ -725,7 +748,7 @@ impl File {
 pub struct FileCounts {
     pub directories: u32,
     pub symlinks: u32,
-    /// very small files are <= 80 bytes
+    /// very small files are <= 64 bytes
     pub very_small_files: u32,
     /// very large files are >= 4 gb
     pub very_large_files: u32,
@@ -733,9 +756,8 @@ pub struct FileCounts {
     pub file_sizes: HashMap<u8, u32>,
 }
 
-// Size of a file that is smaller than the corresponding FileDef record. As
-// such, storing it directly in the tree would be appropriate.
-pub const FILE_SIZE_SMALL: u64 = 80;
+// Files with sizes at or below this value will be stored directly in the tree.
+pub const FILE_SIZE_SMALL: u64 = 64;
 
 impl FileCounts {
     /// Update the the file counts to track the given file size.
@@ -900,6 +922,8 @@ pub struct Pack {
     pub digest: Checksum,
     /// List of pack locations.
     pub locations: Vec<PackLocation>,
+    /// Date/time of successful upload.
+    pub upload_time: DateTime<Utc>,
 }
 
 impl Pack {
@@ -909,6 +933,7 @@ impl Pack {
         Self {
             digest,
             locations: coords,
+            upload_time: Utc::now(),
         }
     }
 }

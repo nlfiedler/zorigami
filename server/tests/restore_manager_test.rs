@@ -4,7 +4,7 @@
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::{self, Checksum};
+use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::managers::backup::{self, Performer, PerformerImpl};
 use server::domain::managers::restore::*;
 use server::domain::managers::state::{StateStore, StateStoreImpl};
@@ -42,6 +42,7 @@ async fn test_backup_restore() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -53,8 +54,6 @@ async fn test_backup_restore() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
     let performer = PerformerImpl::default();
@@ -300,6 +299,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -311,8 +311,6 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.pack_size = 65536 as u64;
     dbase.put_dataset(&dataset)?;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
     let performer = PerformerImpl::default();
@@ -538,6 +536,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -549,8 +548,6 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
     let performer = PerformerImpl::default();
@@ -623,7 +620,9 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     assert_eq!(counts.tree, 2);
 
     // restore the normal symlink from the first snapshot
-    let snapshot = dbase.get_snapshot(&first_backup.as_ref().unwrap())?.unwrap();
+    let snapshot = dbase
+        .get_snapshot(&first_backup.as_ref().unwrap())?
+        .unwrap();
     let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
     let result = sut.start(dbase.clone());
     assert!(result.is_ok());
@@ -650,7 +649,9 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     // restore the weird symlink from the first snapshot but also remove
     // the symlink from the dataset to ensure restore functions correctly
     fs::remove_file(&fake_dest).unwrap();
-    let snapshot = dbase.get_snapshot(&first_backup.as_ref().unwrap())?.unwrap();
+    let snapshot = dbase
+        .get_snapshot(&first_backup.as_ref().unwrap())?
+        .unwrap();
     let sut = RestorerImpl::new(state, file_restorer_factory);
     let result = sut.start(dbase);
     assert!(result.is_ok());
@@ -705,6 +706,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
         store_type: entities::StoreType::LOCAL,
         label: "my local".to_owned(),
         properties: local_props,
+        retention: PackRetention::ALL,
     };
     dbase.put_store(&store)?;
 
@@ -716,8 +718,6 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.pack_size = 131072 as u64;
     dbase.put_dataset(&dataset)?;
-    let computer_id = entities::Configuration::generate_unique_id("charlie", "horse");
-    dbase.put_computer_id(&dataset.id, &computer_id)?;
 
     // perform the first backup
     let performer = PerformerImpl::default();

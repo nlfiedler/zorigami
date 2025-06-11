@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2021 Nathan Fiedler
 //
-use crate::domain::entities::{Store, StoreType};
+use crate::domain::entities::{PackRetention, Store, StoreType};
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;
@@ -27,6 +27,7 @@ impl super::UseCase<(), Params> for TestStore {
             store_type,
             label: params.label,
             properties: params.properties,
+            retention: PackRetention::ALL,
         };
         let pack_repo = self.repo.build_pack_repo(&store)?;
         pack_repo.test_store(&store.id)

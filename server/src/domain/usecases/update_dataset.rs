@@ -3,9 +3,9 @@
 //
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
-use crate::domain::entities::RetentionPolicy;
+use crate::domain::entities::SnapshotRetention;
 use crate::domain::repositories::RecordRepository;
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;
@@ -22,29 +22,29 @@ impl UpdateDataset {
 
 impl super::UseCase<Dataset, Params> for UpdateDataset {
     fn call(&self, params: Params) -> Result<Dataset, Error> {
-        // use the constructor to leverage some of the default behavior in case
-        // not everything has been defined in the params
-        let mut dataset = Dataset::with_pack_size(&params.basepath, params.pack_size);
-        dataset.id = params.id;
+        // read the existing dataset and overwrite certain properties, retaining
+        // hidden values like the latest snapshot
+        let mut dataset = self
+            .repo
+            .get_dataset(&params.id)?
+            .ok_or_else(|| anyhow!("no such dataset: {}", params.id))?;
+        dataset.basepath = params.basepath;
+        dataset.pack_size = params.pack_size;
         dataset.excludes = params
             .excludes
             .into_iter()
             .map(|e| e.trim().to_owned())
             .filter(|e| !e.is_empty())
             .collect();
-        for schedule in params.schedules {
-            dataset.add_schedule(schedule);
-        }
-        for store in params.stores.iter() {
-            dataset.add_store(store);
-        }
+        dataset.schedules = params.schedules;
+        dataset.stores = params.stores;
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }
         dataset.retention = if let Some(count) = params.retention_count {
-            RetentionPolicy::COUNT(count)
+            SnapshotRetention::COUNT(count)
         } else {
-            RetentionPolicy::ALL
+            SnapshotRetention::ALL
         };
         self.repo.put_dataset(&dataset)?;
         Ok(dataset)
@@ -118,17 +118,20 @@ mod tests {
     #[test]
     fn test_update_dataset_ok() {
         // arrange
+        #[cfg(target_family = "unix")]
+        let basepath = PathBuf::from("/home/planet");
+        #[cfg(target_family = "windows")]
+        let basepath = PathBuf::from("C:\\home\\planet");
+        let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
-        #[cfg(target_family="unix")]
-        let basepath = "/home/planet";
-        #[cfg(target_family="windows")]
-        let basepath = "\\home\\planet";
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from(basepath),
+            basepath: basepath.clone(),
             schedules: vec![],
             workspace: None,
             pack_size: 33_554_432,
@@ -140,34 +143,37 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), basepath);
-        #[cfg(target_family="unix")]
+        assert_eq!(actual.basepath, basepath);
+        #[cfg(target_family = "unix")]
         let expected_workspace = "/home/planet/.tmp";
-        #[cfg(target_family="windows")]
-        let expected_workspace = "\\home\\planet\\.tmp";
+        #[cfg(target_family = "windows")]
+        let expected_workspace = "C:\\home\\planet\\.tmp";
         assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
     }
 
     #[test]
     fn test_update_dataset_workspace() {
         // arrange
+        #[cfg(target_family = "unix")]
+        let basepath = PathBuf::from("/home/planet");
+        #[cfg(target_family = "windows")]
+        let basepath = PathBuf::from("C:\\home\\planet");
+        let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
-        #[cfg(target_family="unix")]
-        let basepath = "/home/planet";
-        #[cfg(target_family="windows")]
-        let basepath = "\\home\\planet";
-        #[cfg(target_family="unix")]
-        let workspace = "/home/planet/tmpdir";
-        #[cfg(target_family="windows")]
-        let workspace = "\\home\\planet\\tmpdir";
+        #[cfg(target_family = "unix")]
+        let workspace = PathBuf::from("/home/planet/tmpdir");
+        #[cfg(target_family = "windows")]
+        let workspace = PathBuf::from("C:\\home\\planet\\tmpdir");
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from(basepath),
+            basepath: basepath.clone(),
             schedules: vec![],
-            workspace: Some(PathBuf::from(workspace)),
+            workspace: Some(workspace.clone()),
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -177,24 +183,27 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), basepath);
-        assert_eq!(actual.workspace.to_string_lossy(), workspace);
+        assert_eq!(actual.basepath, basepath);
+        assert_eq!(actual.workspace, workspace);
     }
 
     #[test]
     fn test_update_dataset_empty_excludes() {
         // arrange
+        #[cfg(target_family = "unix")]
+        let basepath = PathBuf::from("/home/planet");
+        #[cfg(target_family = "windows")]
+        let basepath = PathBuf::from("C:\\home\\planet");
+        let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
-        #[cfg(target_family="unix")]
-        let basepath = "/home/planet";
-        #[cfg(target_family="windows")]
-        let basepath = "\\home\\planet";
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from(basepath),
+            basepath: basepath.clone(),
             workspace: None,
             schedules: vec![],
             pack_size: 33_554_432,
@@ -206,12 +215,12 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
-        assert_eq!(actual.basepath.to_string_lossy(), basepath);
-        #[cfg(target_family="unix")]
-        let expected_workspace = "/home/planet/.tmp";
-        #[cfg(target_family="windows")]
-        let expected_workspace = "\\home\\planet\\.tmp";
-        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
+        assert_eq!(actual.basepath, basepath);
+        #[cfg(target_family = "unix")]
+        let expected_workspace = PathBuf::from("/home/planet/.tmp");
+        #[cfg(target_family = "windows")]
+        let expected_workspace = PathBuf::from("C:\\home\\planet\\.tmp");
+        assert_eq!(actual.workspace, expected_workspace);
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");
@@ -221,14 +230,21 @@ mod tests {
     #[test]
     fn test_update_dataset_err() {
         // arrange
+        #[cfg(target_family = "unix")]
+        let basepath = PathBuf::from("/home/planet");
+        #[cfg(target_family = "windows")]
+        let basepath = PathBuf::from("C:\\home\\planet");
+        let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
         mock.expect_put_dataset()
             .returning(|_| Err(anyhow!("oh no")));
         // act
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: PathBuf::from("/home/planet"),
+            basepath: basepath,
             schedules: vec![],
             workspace: None,
             pack_size: 33_554_432,

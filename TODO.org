@@ -17,6 +17,10 @@
 *** TODO datasets page
 *** TODO snapshots page
 *** TODO restore database page
+*** TODO settings page
+**** fields to set the hostname and username
+**** show computer UUID based on inputs
+**** explain how these are used to generate bucket names
 *** TODO test building and running on Windows, update instructions
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files

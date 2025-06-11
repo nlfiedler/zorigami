@@ -32,8 +32,8 @@
 
 use crate::domain::entities::schedule::{DayOfMonth, DayOfWeek, Schedule, TimeRange};
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, RetentionPolicy,
-    Snapshot, Store, StoreType, Tree, TreeEntry, TreeReference,
+    Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, PackRetention,
+    Snapshot, SnapshotRetention, Store, StoreType, Tree, TreeEntry, TreeReference,
 };
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
@@ -323,6 +323,7 @@ impl Model for Store {
         let mut store_type = StoreType::LOCAL;
         let mut store_label = String::from("default");
         let mut store_props: HashMap<String, String> = HashMap::new();
+        let mut retention = PackRetention::ALL;
 
         let raw_value: Value =
             ciborium::de::from_reader(value).map_err(|err| anyhow!("cbor read error: {}", err))?;
@@ -357,6 +358,16 @@ impl Model for Store {
                             .map_err(|_| anyhow!("prop-value: cbor into_text() error"))?;
                         store_props.insert(name_str, value_str);
                     }
+                } else if name == "retain_all" {
+                    // retention (all)
+                    retention = PackRetention::ALL;
+                } else if name == "retain_days" {
+                    // retention (days)
+                    let iv: ciborium::value::Integer = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("retain_days: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    retention = PackRetention::DAYS(ii as u16);
                 }
             }
         }
@@ -366,6 +377,7 @@ impl Model for Store {
             store_type,
             label: store_label,
             properties: store_props,
+            retention,
         })
     }
 
@@ -389,6 +401,19 @@ impl Model for Store {
             properties.push((Value::Text(name.to_owned()), Value::Text(value.to_owned())));
         }
         fields.push((Value::Text("properties".into()), Value::Map(properties)));
+
+        // retention
+        match self.retention {
+            PackRetention::ALL => {
+                fields.push((Value::Text("retain_all".into()), Value::Null));
+            }
+            PackRetention::DAYS(days) => {
+                fields.push((
+                    Value::Text("retain_days".into()),
+                    Value::Integer(days.into()),
+                ));
+            }
+        }
 
         let doc = Value::Map(fields);
         let mut encoded: Vec<u8> = Vec::new();
@@ -432,6 +457,14 @@ impl Model for Dataset {
                         let schedule = Schedule::from_bytes(&unused_key, &as_hex)?;
                         dataset.schedules.push(schedule);
                     }
+                } else if name == "snapshot" {
+                    // snapshot
+                    if !value.is_null() {
+                        let as_bytes = value
+                            .into_bytes()
+                            .map_err(|_| anyhow!("snapshot: cbor into_bytes() error"))?;
+                        dataset.snapshot = Some(Checksum::from_hex(&as_bytes)?);
+                    }
                 } else if name == "workspace" {
                     // workspace
                     let workspace: String = value
@@ -469,21 +502,21 @@ impl Model for Dataset {
                     }
                 } else if name == "retain_all" {
                     // retention (all)
-                    dataset.retention = RetentionPolicy::ALL;
+                    dataset.retention = SnapshotRetention::ALL;
                 } else if name == "retain_count" {
                     // retention (count)
                     let iv: ciborium::value::Integer = value
                         .into_integer()
                         .map_err(|_| anyhow!("retain_count: cbor into_integer() error"))?;
                     let ii: i128 = ciborium::value::Integer::into(iv);
-                    dataset.retention = RetentionPolicy::COUNT(ii as u16);
+                    dataset.retention = SnapshotRetention::COUNT(ii as u16);
                 } else if name == "retain_days" {
                     // retention (days)
                     let iv: ciborium::value::Integer = value
                         .into_integer()
                         .map_err(|_| anyhow!("retain_days: cbor into_integer() error"))?;
                     let ii: i128 = ciborium::value::Integer::into(iv);
-                    dataset.retention = RetentionPolicy::DAYS(ii as u16);
+                    dataset.retention = SnapshotRetention::DAYS(ii as u16);
                 }
             }
         }
@@ -510,6 +543,14 @@ impl Model for Dataset {
             schedules.push(Value::Bytes(as_bytes));
         }
         fields.push((Value::Text("schedules".into()), Value::Array(schedules)));
+
+        // snapshot
+        if let Some(ref latest) = self.snapshot {
+            let as_hex = latest.to_hex()?;
+            fields.push((Value::Text("snapshot".into()), Value::Bytes(as_hex)));
+        } else {
+            fields.push((Value::Text("snapshot".into()), Value::Null));
+        }
 
         // workspace
         let workspace_string = self.workspace.to_string_lossy();
@@ -540,16 +581,16 @@ impl Model for Dataset {
 
         // retention
         match self.retention {
-            RetentionPolicy::ALL => {
+            SnapshotRetention::ALL => {
                 fields.push((Value::Text("retain_all".into()), Value::Null));
             }
-            RetentionPolicy::COUNT(count) => {
+            SnapshotRetention::COUNT(count) => {
                 fields.push((
                     Value::Text("retain_count".into()),
                     Value::Integer(count.into()),
                 ));
             }
-            RetentionPolicy::DAYS(days) => {
+            SnapshotRetention::DAYS(days) => {
                 fields.push((
                     Value::Text("retain_days".into()),
                     Value::Integer(days.into()),
@@ -1272,6 +1313,15 @@ impl Model for Pack {
                         }
                         pack.locations.push(pl);
                     }
+                } else if name == "u" {
+                    // upload_time
+                    let upload_vec = value
+                        .into_bytes()
+                        .map_err(|_| anyhow!("u: cbor into_bytes() error"))?;
+                    let upload_arr: [u8; 8] = upload_vec[0..8].try_into()?;
+                    let secs = i64::from_be_bytes(upload_arr);
+                    pack.upload_time = DateTime::from_timestamp(secs, 0)
+                        .ok_or_else(|| anyhow!("'u' from_timestamp() failed"))?;
                 }
             }
         }
@@ -1295,6 +1345,13 @@ impl Model for Pack {
         }
         fields.push((Value::Text("l".into()), Value::Array(locations)));
 
+        // upload_time
+        let upload_s = self.upload_time.timestamp();
+        let upload_bytes = i64::to_be_bytes(upload_s);
+        let mut upload_vec: Vec<u8> = vec![];
+        upload_vec.extend_from_slice(&upload_bytes);
+        fields.push((Value::Text("u".into()), Value::Bytes(upload_vec)));
+
         let doc = Value::Map(fields);
         let mut encoded: Vec<u8> = Vec::new();
         ciborium::ser::into_writer(&doc, &mut encoded)
@@ -1307,7 +1364,7 @@ impl Model for Pack {
 mod tests {
     use super::*;
     use crate::domain::entities::schedule::TimeRange;
-    use crate::domain::entities::{Tree, TreeEntry, TreeReference};
+    use crate::domain::entities::{PackRetention, Tree, TreeEntry, TreeReference};
     use anyhow::Error;
     use std::path::Path;
 
@@ -1343,23 +1400,48 @@ mod tests {
         properties.insert("basepath".to_owned(), "/home/planet".to_owned());
         properties.insert("format".to_owned(), "ZFS".to_owned());
         let store = Store {
-            id: "cafebabe".to_owned(),
+            id: "retainall".to_owned(),
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         // act
         let encoded = store.to_bytes()?;
-        assert_eq!(encoded.len(), 82);
-        let key = "cafebabe";
+        assert_eq!(encoded.len(), 94);
+        let key = "retainall";
         let actual = Store::from_bytes(key.as_bytes(), &encoded)?;
         // assert
-        assert_eq!(actual.id, "cafebabe");
+        assert_eq!(actual.id, "retainall");
         assert_eq!(actual.store_type, StoreType::LOCAL);
         assert_eq!(actual.label, "mylocalstore");
         assert_eq!(actual.properties.len(), 2);
         assert_eq!(actual.properties["basepath"], "/home/planet");
         assert_eq!(actual.properties["format"], "ZFS");
+        assert_eq!(actual.retention, PackRetention::ALL);
+
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "retaindays".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties,
+            retention: PackRetention::DAYS(90),
+        };
+        // act
+        let encoded = store.to_bytes()?;
+        assert_eq!(encoded.len(), 85);
+        let key = "retaindays";
+        let actual = Store::from_bytes(key.as_bytes(), &encoded)?;
+        // assert
+        assert_eq!(actual.id, "retaindays");
+        assert_eq!(actual.store_type, StoreType::LOCAL);
+        assert_eq!(actual.label, "mylocalstore");
+        assert_eq!(actual.properties.len(), 1);
+        assert_eq!(actual.properties["basepath"], "/home/planet");
+        assert_eq!(actual.retention, PackRetention::DAYS(90));
         Ok(())
     }
 
@@ -1421,7 +1503,7 @@ mod tests {
         // bare minimum
         let original = Dataset::new(Path::new("/home/planet"));
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 106);
+        assert_eq!(as_bytes.len(), 116);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);
@@ -1436,13 +1518,16 @@ mod tests {
         original.schedules.push(schedule_1.clone());
         let schedule_2 = Schedule::Hourly;
         original.schedules.push(schedule_2.clone());
+        original.snapshot = Some(Checksum::SHA1(String::from(
+            "811ea7199968a119eeba4b65ace06cc7f835c497",
+        )));
         original.stores.push("abcstore".into());
         original.stores.push("7-Eleven".into());
         original.excludes.push(".DS_Store".into());
         original.excludes.push("target".into());
-        original.retention = RetentionPolicy::COUNT(10);
+        original.retention = SnapshotRetention::COUNT(10);
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 159);
+        assert_eq!(as_bytes.len(), 189);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);
@@ -1450,6 +1535,10 @@ mod tests {
         assert_eq!(actual.schedules.len(), 2);
         assert_eq!(actual.schedules[0], schedule_1);
         assert_eq!(actual.schedules[1], schedule_2);
+        assert_eq!(
+            actual.snapshot.map(|v| v.to_string()),
+            Some("sha1-811ea7199968a119eeba4b65ace06cc7f835c497".to_owned())
+        );
         assert_eq!(actual.stores.len(), 2);
         assert_eq!(actual.stores[0], "abcstore");
         assert_eq!(actual.stores[1], "7-Eleven");
@@ -1545,7 +1634,7 @@ mod tests {
         let original = Pack::new(digest, coords);
         // act
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 64);
+        assert_eq!(as_bytes.len(), 75);
         let key = "sha1-65ace06cc7f835c497811ea7199968a119eeba4b";
         let actual = Pack::from_bytes(key.as_bytes(), &as_bytes)?;
         // assert
@@ -1556,6 +1645,10 @@ mod tests {
         assert_eq!(actual.locations[1].store, "store1");
         assert_eq!(actual.locations[1].bucket, "bucket2");
         assert_eq!(actual.locations[1].object, "object2");
+        assert_eq!(
+            actual.upload_time.timestamp(),
+            original.upload_time.timestamp()
+        );
         Ok(())
     }
 
@@ -1652,7 +1745,28 @@ mod tests {
     }
 
     #[test]
-    fn test_file_serde() -> Result<(), Error> {
+    fn test_file_serde_single_chunk() -> Result<(), Error> {
+        // arrange
+        let file_digest = Checksum::SHA1("c648ebac0ed42e3ce4bd5e042b6cbd33a924baa8".into());
+        let c1_digest = Checksum::SHA1("ad85838aff89a46a4d747056179457f7a031f4ff".into());
+        let chunks = vec![(0, c1_digest.clone())];
+        let file = File::new(file_digest.clone(), 3129, chunks);
+        // act
+        let encoded = file.to_bytes()?;
+        assert_eq!(encoded.len(), 39);
+        let key = "sha1-c648ebac0ed42e3ce4bd5e042b6cbd33a924baa8";
+        let actual = File::from_bytes(&key.as_bytes(), &encoded)?;
+        // assert
+        assert_eq!(actual.digest, file_digest);
+        assert_eq!(actual.length, file.length);
+        assert_eq!(actual.chunks.len(), 1);
+        assert_eq!(actual.chunks[0].0, 0);
+        assert_eq!(actual.chunks[0].1, c1_digest);
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_serde_multi_chunk() -> Result<(), Error> {
         // arrange
         let file_digest = Checksum::SHA1("c648ebac0ed42e3ce4bd5e042b6cbd33a924baa8".into());
         let c1_digest = Checksum::SHA1("ad85838aff89a46a4d747056179457f7a031f4ff".into());

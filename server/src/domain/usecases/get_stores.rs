@@ -26,7 +26,7 @@ impl super::UseCase<Vec<Store>, NoParams> for GetStores {
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::StoreType;
+    use crate::domain::entities::{PackRetention, StoreType};
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
     use std::collections::HashMap;
@@ -41,6 +41,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "mylocalstore".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         }];
         let mut mock = MockRecordRepository::new();
         mock.expect_get_stores()

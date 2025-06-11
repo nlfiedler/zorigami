@@ -97,7 +97,7 @@ impl Performer for PerformerImpl {
         })?;
         // Check if latest snapshot exists and lacks an end time, which indicates
         // that the previous backup did not complete successfully.
-        let latest_snapshot = request.repo.get_latest_snapshot(&request.dataset.id)?;
+        let latest_snapshot = request.dataset.snapshot.clone();
         if let Some(latest) = latest_snapshot.as_ref() {
             if let Some(snapshot) = request.repo.get_snapshot(latest)? {
                 if snapshot.end_time.is_none() {
@@ -149,18 +149,18 @@ impl Performer for PerformerImpl {
                     .backup_event(BackupAction::Finish(request.dataset.id.clone()));
                 Ok(None)
             }
-            Some(current_sha1) => {
-                request
-                    .repo
-                    .put_latest_snapshot(&request.dataset.id, &current_sha1)?;
-                debug!("backup: starting new snapshot {}", &current_sha1);
+            Some(new_snapshot) => {
+                let mut ds = request.dataset.clone();
+                ds.snapshot = Some(new_snapshot.clone());
+                request.repo.put_dataset(&ds)?;
+                debug!("backup: starting new snapshot {}", &new_snapshot);
                 continue_backup(
-                    &request.dataset,
+                    &ds,
                     &request.repo,
                     &request.state,
                     &request.passphrase,
                     latest_snapshot,
-                    current_sha1,
+                    new_snapshot,
                     request.stop_time,
                 )
             }

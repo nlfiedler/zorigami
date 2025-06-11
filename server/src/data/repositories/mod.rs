@@ -50,30 +50,6 @@ impl RecordRepository for RecordRepositoryImpl {
         vec![self.datasource.get_db_path()]
     }
 
-    fn put_computer_id(&self, dataset: &str, computer_id: &str) -> Result<(), Error> {
-        self.datasource.put_computer_id(dataset, computer_id)
-    }
-
-    fn get_computer_id(&self, dataset: &str) -> Result<Option<String>, Error> {
-        self.datasource.get_computer_id(dataset)
-    }
-
-    fn delete_computer_id(&self, dataset: &str) -> Result<(), Error> {
-        self.datasource.delete_computer_id(dataset)
-    }
-
-    fn put_latest_snapshot(&self, dataset: &str, latest: &Checksum) -> Result<(), Error> {
-        self.datasource.put_latest_snapshot(dataset, latest)
-    }
-
-    fn get_latest_snapshot(&self, dataset: &str) -> Result<Option<Checksum>, Error> {
-        self.datasource.get_latest_snapshot(dataset)
-    }
-
-    fn delete_latest_snapshot(&self, dataset: &str) -> Result<(), Error> {
-        self.datasource.delete_latest_snapshot(dataset)
-    }
-
     fn insert_chunk(&self, chunk: &Chunk) -> Result<(), Error> {
         self.datasource.insert_chunk(chunk)
     }
@@ -681,7 +657,7 @@ fn store_database_retry(
 mod tests {
     use super::*;
     use crate::data::sources::MockPackSourceBuilder;
-    use crate::domain::entities::{PackLocation, StoreType};
+    use crate::domain::entities::{PackLocation, PackRetention, StoreType};
     use crate::domain::sources::{MockEntityDataSource, MockPackDataSource};
     use mockall::predicate::*;
     use std::collections::HashMap;
@@ -738,6 +714,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "my local".to_owned(),
             properties: local_props,
+            retention: PackRetention::ALL,
         };
         let mut mock = MockEntityDataSource::new();
         mock.expect_get_store()
@@ -780,6 +757,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "my local".to_owned(),
             properties: local_props,
+            retention: PackRetention::ALL,
         };
         let mock = MockEntityDataSource::new();
         // act
@@ -821,6 +799,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -851,6 +830,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -892,6 +872,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -925,6 +906,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -956,18 +938,21 @@ mod tests {
                 store_type: StoreType::LOCAL,
                 label: "temporary".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
             Store {
                 id: "minio".to_owned(),
                 store_type: StoreType::MINIO,
                 label: "server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
             Store {
                 id: "secureftp".to_owned(),
                 store_type: StoreType::SFTP,
                 label: "other_server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
         ];
         // act
@@ -1014,18 +999,21 @@ mod tests {
                 store_type: StoreType::LOCAL,
                 label: "temporary".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
             Store {
                 id: "minio123".to_owned(),
                 store_type: StoreType::MINIO,
                 label: "server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
             Store {
                 id: "sftp123".to_owned(),
                 store_type: StoreType::SFTP,
                 label: "other_server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
         ];
         // act
@@ -1071,12 +1059,14 @@ mod tests {
                 store_type: StoreType::MINIO,
                 label: "server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
             Store {
                 id: "sftp123".to_owned(),
                 store_type: StoreType::SFTP,
                 label: "other_server".to_owned(),
                 properties: HashMap::new(),
+                retention: PackRetention::ALL,
             },
         ];
         // act
@@ -1114,6 +1104,7 @@ mod tests {
             store_type: StoreType::SFTP,
             label: "other_server".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1144,6 +1135,7 @@ mod tests {
             store_type: StoreType::SFTP,
             label: "other_server".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1176,6 +1168,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1202,6 +1195,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1228,6 +1222,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1261,6 +1256,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1297,6 +1293,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1321,6 +1318,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1348,6 +1346,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1389,6 +1388,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1433,6 +1433,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1470,6 +1471,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1510,6 +1512,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1552,6 +1555,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1579,6 +1583,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1620,6 +1625,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1668,6 +1674,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1704,6 +1711,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
@@ -1774,6 +1782,7 @@ mod tests {
             store_type: StoreType::LOCAL,
             label: "temporary".to_owned(),
             properties: HashMap::new(),
+            retention: PackRetention::ALL,
         }];
         // act
         let result = PackRepositoryImpl::new(stores, Box::new(builder));

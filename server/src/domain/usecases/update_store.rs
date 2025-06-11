@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::{Store, StoreType};
+use crate::domain::entities::{PackRetention, Store, StoreType};
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;
@@ -27,6 +27,7 @@ impl super::UseCase<Store, Params> for UpdateStore {
             store_type,
             label: params.label,
             properties: params.properties,
+            retention: PackRetention::ALL,
         };
         self.repo.put_store(&store)?;
         Ok(store)
