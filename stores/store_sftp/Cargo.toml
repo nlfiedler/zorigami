@@ -6,10 +6,12 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-dotenv = "0.15.0"
 anyhow = "1.0.55"
 ssh2 = "0.9.4"
 store_core = { path = "../store_core" }
+
+[dev-dependencies]
+dotenvy = "0.15.7"
 tempfile = "3.7.1"
 
 [target.'cfg(windows)'.dependencies]

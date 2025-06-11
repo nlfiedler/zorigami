@@ -8,4 +8,6 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0.55"
 store_core = { path = "../store_core" }
+
+[dev-dependencies]
 tempfile = "3.7.1"

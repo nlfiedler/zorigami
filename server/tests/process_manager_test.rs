@@ -2,7 +2,7 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::schedule::Schedule;

@@ -11,10 +11,12 @@ azure_core = "0.21.0"
 azure_storage = "0.21.0"
 azure_storage_blobs = "0.21.0"
 bytes = "1.0"
-dotenv = "0.15.0"
 futures = "0.3"
 md-5 = "0.10.5"
 store_core = { path = "../store_core" }
-tempfile = "3.7.1"
 tokio = { version = "1.24.2", features = ["fs", "rt-multi-thread", "time"] }
 xid = "1.0.3"
+
+[dev-dependencies]
+dotenvy = "0.15.7"
+tempfile = "3.7.1"

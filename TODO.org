@@ -31,8 +31,8 @@
 *** TODO update =doc/DESIGN.md=
 *** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
-** TODO replace =dotenv= with =dotenvy=
 ** Test improvements
+*** sometimes =test_get_bucket_name()= fails
 *** sometimes =test_process_manager_async_store()= fails
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)

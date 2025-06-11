@@ -19,6 +19,6 @@ tokio = { version = "1.24.2", features = ["fs", "io-util", "macros", "rt", "rt-m
 uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
-dotenv = "0.15"
+dotenvy = "0.15.7"
 tempfile = "3.7.1"
 xid = "1.0.0"

@@ -6,9 +6,8 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-bytes = "1.0"
-dotenv = "0.15.0"
 anyhow = "1.0.55"
+bytes = "1.0"
 futures = "0.3"
 rand = "0.8.5"
 rusoto_core = "0.48.0"
@@ -16,10 +15,11 @@ rusoto_credential = "0.48.0"
 rusoto_dynamodb = "0.48.0"
 rusoto_s3 = "0.48.0"
 store_core = { path = "../store_core" }
-tempfile = "3.7.1"
 thiserror = "2.0.7"
 tokio = { version = "1.24.2", features = ["fs", "rt-multi-thread", "time"] }
 uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
+dotenvy = "0.15.7"
+tempfile = "3.7.1"
 xid = "1.0.0"

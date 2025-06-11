@@ -32,7 +32,7 @@ console_log = "1.0.0"
 console_error_panic_hook = "0.1.7"
 database_core = { path = "../database/database_core", optional = true }
 database_rocks = { path = "../database/database_rocks", optional = true }
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 env_logger = { version = "0.11.0", optional = true }
 exaf-rs = { version = "1.1.1", optional = true }
 fastcdc = { version = "3.0.0", optional = true }

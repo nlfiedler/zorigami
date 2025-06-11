@@ -314,7 +314,7 @@ fn md5sum_blob<T: AsRef<[u8]>>(data: T) -> Result<[u8; 16], Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dotenv::dotenv;
+    use dotenvy::dotenv;
     use std::env;
     use tempfile::tempdir;
 

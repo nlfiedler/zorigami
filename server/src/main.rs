@@ -171,7 +171,7 @@ async fn main() -> io::Result<()> {
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
 
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
     env_logger::init();
     STATE_STORE.subscribe("super-manager", manage_supervisors);
     STATE_STORE.subscribe("backup-logger", log_state_changes);

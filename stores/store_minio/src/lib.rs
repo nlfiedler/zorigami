@@ -309,7 +309,7 @@ fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dotenv::dotenv;
+    use dotenvy::dotenv;
     use std::env;
     use tempfile::tempdir;
 
