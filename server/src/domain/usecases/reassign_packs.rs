@@ -11,7 +11,7 @@ use std::fmt;
 ///
 /// Change the store identifier from `source` to `target`, updating all pack
 /// records that have a matching location entry.
-/// 
+///
 /// Note that this action may result in pack records that refer to locations
 /// that do not really exist. For simple pack stores like the local or sftp
 /// stores, this should be safe. However, pack stores that rely on cloud storage

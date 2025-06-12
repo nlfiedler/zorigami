@@ -66,7 +66,8 @@ mod tests {
     fn test_get_stores_err() {
         // arrange
         let mut mock = MockRecordRepository::new();
-        mock.expect_get_entity_counts().returning(|| Err(anyhow!("oh no")));
+        mock.expect_get_entity_counts()
+            .returning(|| Err(anyhow!("oh no")));
         // act
         let usecase = GetCounts::new(Box::new(mock));
         let params = NoParams {};

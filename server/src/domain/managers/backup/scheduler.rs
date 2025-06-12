@@ -15,7 +15,7 @@ use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use chrono::prelude::*;
-use log::{debug, error, info, warn, trace};
+use log::{debug, error, info, trace, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::ops::Deref;
@@ -803,10 +803,7 @@ mod tests {
         // indicate that the backup started but then failed
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         state.backup_event(BackupAction::Start(dataset_id_1));
-        state.backup_event(BackupAction::Error(
-            dataset_id_2,
-            String::from("oh no"),
-        ));
+        state.backup_event(BackupAction::Error(dataset_id_2, String::from("oh no")));
         // act
         let result = should_run(&repo, &state, &dataset_clone);
         // assert
@@ -888,10 +885,7 @@ mod tests {
         // indicate that the backup started but then failed
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         state.backup_event(BackupAction::Start(dataset_id_1));
-        state.backup_event(BackupAction::Error(
-            dataset_id_2,
-            String::from("oh no"),
-        ));
+        state.backup_event(BackupAction::Error(dataset_id_2, String::from("oh no")));
         // act
         let result = should_run(&repo, &state, &dataset_clone);
         // assert

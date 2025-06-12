@@ -48,7 +48,8 @@ impl<'a> super::UseCase<String, Params<'a>> for RestoreDatabase {
             // stop the backup before trying again. Of course, a running backup
             // would be unlikely given the use case scenario.
             info!("restoring database from backup...");
-            self.repo.restore_from_backup(&archive_path, &params.passphrase)
+            self.repo
+                .restore_from_backup(&archive_path, &params.passphrase)
         } else {
             Err(anyhow!("no pack stores defined"))
         };
@@ -143,16 +144,12 @@ mod tests {
             .returning(move || Ok(config.clone()));
         mock.expect_restore_from_backup().returning(|_, _| Ok(()));
         let mut stater = MockStateStore::new();
-        stater
-            .expect_stop_supervisor()
-            .return_const(());
+        stater.expect_stop_supervisor().return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
-        stater
-            .expect_stop_restorer()
-            .return_const(());
+        stater.expect_stop_restorer().return_const(());
         stater
             .expect_restorer_event()
             .with(eq(RestorerAction::Start))
@@ -197,16 +194,12 @@ mod tests {
         mock.expect_restore_from_backup()
             .returning(|_, _| Err(anyhow!("no database archives available")));
         let mut stater = MockStateStore::new();
-        stater
-            .expect_stop_supervisor()
-            .return_const(());
+        stater.expect_stop_supervisor().return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
-        stater
-            .expect_stop_restorer()
-            .return_const(());
+        stater.expect_stop_restorer().return_const(());
         stater
             .expect_restorer_event()
             .with(eq(RestorerAction::Start))
@@ -230,16 +223,12 @@ mod tests {
             .with(eq("cafebabe"))
             .returning(move |_| Ok(None));
         let mut stater = MockStateStore::new();
-        stater
-            .expect_stop_supervisor()
-            .return_const(());
+        stater.expect_stop_supervisor().return_const(());
         stater
             .expect_supervisor_event()
             .with(eq(SupervisorAction::Start))
             .return_const(());
-        stater
-            .expect_stop_restorer()
-            .return_const(());
+        stater.expect_stop_restorer().return_const(());
         stater
             .expect_restorer_event()
             .with(eq(RestorerAction::Start))

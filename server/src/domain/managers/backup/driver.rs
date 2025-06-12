@@ -303,7 +303,9 @@ impl<'a> BackupDriver<'a> {
         // enable accurate pack pruning.
         let backup_path = self.dbase.create_backup(&self.passphrase)?;
         let config = self.dbase.get_configuration()?;
-        let coords = self.stores.store_database(&config.computer_id, &backup_path)?;
+        let coords = self
+            .stores
+            .store_database(&config.computer_id, &backup_path)?;
         let digest = entities::Checksum::blake3_from_file(&backup_path)?;
         let pack = entities::Pack::new(digest.clone(), coords);
         self.dbase.insert_database(&pack)?;

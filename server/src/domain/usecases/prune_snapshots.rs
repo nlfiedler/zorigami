@@ -259,7 +259,8 @@ impl super::UseCase<usize, Params> for PruneSnapshots {
             .get_dataset(&params.dataset)?
             .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", &params.dataset)))?;
         let latest_hash = dataset
-            .snapshot.clone()
+            .snapshot
+            .clone()
             .ok_or_else(|| anyhow!(format!("no snapshots for dataset: {:?}", &params.dataset)))?;
         let maybe_oldest_snapshot: Option<Checksum> = match dataset.retention {
             SnapshotRetention::ALL => {

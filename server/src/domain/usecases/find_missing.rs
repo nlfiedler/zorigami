@@ -84,7 +84,7 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::{Pack, PackRetention, PackLocation, Store, StoreType};
+    use crate::domain::entities::{Pack, PackLocation, PackRetention, Store, StoreType};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use mockall::predicate::*;
     use std::collections::HashMap;

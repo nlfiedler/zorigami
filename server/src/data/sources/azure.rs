@@ -5,8 +5,8 @@ use crate::data::sources::PackDataSource;
 use crate::domain::entities::{PackLocation, Store};
 use anyhow::Error;
 use std::path::Path;
-use store_core::Coordinates;
 use store_azure::AzureStore;
+use store_core::Coordinates;
 
 ///
 /// A `PackDataSource` implementation for Azure Blob Storage.

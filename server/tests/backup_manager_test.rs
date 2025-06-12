@@ -53,13 +53,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let performer = PerformerImpl::default();
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
-    let request = Request::new(
-        dataset,
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
+    let request = Request::new(dataset, dbase.clone(), state.clone(), &passphrase, None);
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
     let backup_opt = performer.backup(request)?;
@@ -74,13 +68,7 @@ fn test_continue_backup() -> Result<(), Error> {
     dbase.put_snapshot(&snapshot)?;
 
     // run the backup again to make sure it is finished
-    let request = Request::new(
-        dataset,
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
+    let request = Request::new(dataset, dbase.clone(), state.clone(), &passphrase, None);
     let backup_opt = performer.backup(request)?;
     assert!(backup_opt.is_some());
     let second_sha1 = backup_opt.unwrap();

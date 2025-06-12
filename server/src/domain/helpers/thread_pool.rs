@@ -5,7 +5,7 @@
 //! Create a pool of threads to run arbitrary functions. The pool of threads
 //! will remain active until the pool is dropped.
 
-use log::{debug, error, warn, trace};
+use log::{debug, error, trace, warn};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 

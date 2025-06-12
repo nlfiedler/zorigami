@@ -1522,10 +1522,10 @@ pub fn create_schema() -> Schema {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{entities::PackRetention, managers::backup::scheduler::MockScheduler};
     use crate::domain::managers::restore::MockRestorer;
     use crate::domain::managers::state::MockStateStore;
     use crate::domain::sources::MockEntityDataSource;
+    use crate::domain::{entities::PackRetention, managers::backup::scheduler::MockScheduler};
     use anyhow::anyhow;
     use juniper::{FromInputValue, InputValue, ToInputValue, Variables};
 
