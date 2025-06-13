@@ -29,6 +29,7 @@
 *** TODO update =README.MD=
 *** TODO update =doc/DEPLOY.md=
 *** TODO update =doc/DESIGN.md=
+*** TODO copy =doc/LEPTOS.md= from tanuki
 *** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
 ** Test improvements
@@ -36,10 +37,6 @@
 *** sometimes =test_process_manager_async_store()= fails
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
-** Passphrase should be part of the dataset, add to webui
-*** should not store in plaintext in database
-*** maybe use KDF to create the real "pass phrase" for exaf-rs
-*** database backup needs its own pass phrase, probably from environment
 ** Snapshot retention policy default
 *** once webui allows changing retention policy per dataset, change the default to ~ALL~
 *** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
@@ -65,7 +62,7 @@
 #+end_src
 **** should try to set a timeout to something reasonble (1-2 minutes)
 *** add a =status_msg= property to =Request= for showing detailed progress
-**** normally show the current path of the file being restore
+**** normally show the current path of the file being restored
 **** if very large file, show ~fetching very large file~
 **** if waiting for a long time for a pack file, indicate in status
 *** add the request status field to the graphql entity
@@ -76,6 +73,7 @@
 **** ensure all referenced records actually exist
 **** like git fsck, start at the top and traverse everything
 **** find and report dangling objects
+**** TODO restore deleted =verify_snapshot.rs= from commit =d414266=
 **** TODO finish writing =verify_snapshot= use case tests
 **** TODO add GraphQL query to invoke =VerifySnapshot= usecase
 ** Improve backup reliability
@@ -123,6 +121,7 @@
 ** Manage user passphrase
 *** introduce a setup phase in which user is prompted for passphrase
 *** store passphrase in the local key store
+*** each dataset could/should have its own passphrase
 *** consider how to change the passphrase but retain old ones for decrypting packs
 ** Loose backend issues
 *** maybe use a thread pool for bridging async barrier in data sources
@@ -196,6 +195,8 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** c.f. https://fettblog.eu/rust-enums-wrapping-errors/
 *** Look at https://github.com/dtolnay/thiserror for defining error types
 ** Remote pack store interaction
+*** Store impl needs to consider chosen storage class when answering ~fast~ or ~slow~ question
+**** e.g. Google ~coldline~ is slow but ~nearline~ is fast
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
 **** probably minio and S3 have similar default limits
@@ -204,10 +205,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
 ** Pack file and database backup pruning
-*** add =upload_time= field to =Pack= record in order to determine age
-*** add a ~retention policy~ to pack store type
-**** initially retention policy would be ~delete after N days~ or retain all
-**** provide default value for ~N~ for each cloud provider
+*** use =upload_time= field of =Pack= record to determine age
+*** use =retention= field of =Store= to prune appropriately
+**** either retain ~all~ or ~delete after N days~
+**** provide default value for ~N days~ for each cloud provider
 **** default value would also likely depend on the chosen storage class
 **** e.g. typically anything older than 90 days costs nothing to delete
 **** Google has different minimum storage durations for each storage class
@@ -285,9 +286,6 @@ Deleted local snapshot '2021-04-05-162416'
 **** supervisor threads register as subscribers to the store
 **** clients will use GraphQL subscriptions to receive updates
 **** supervisor threads emit GraphQL subscription events
-*** consider how datasets can be modified after creation
-**** cannot change stores assigned to dataset once there are snapshots
-**** basically would require starting over if changing stores, base path, etc
 *** Secure FTP improvements
 **** SFTP is twice as slow as MinIO, should investigate why
 **** support SFTP with private key authentication
@@ -403,6 +401,7 @@ Deleted local snapshot '2021-04-05-162416'
 ****** They change the SSH config to run the backup command with "append only" flag.
 *** Permit scheduling upload hours for each day of the week
 **** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
+**** simply combine more than one schedule per dataset
 *** GraphQL mutation to dump/load database to json
 *** Support deduplication across multiple computers
 **** Place the chunks and packs in a seperate "database" for syncing
