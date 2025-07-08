@@ -22,7 +22,7 @@ pub async fn stores() -> Result<Vec<Store>, ServerFnError> {
     let params = NoParams {};
     let stores: Vec<Store> = usecase
         .call(params)
-        .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(stores)
 }
 
@@ -41,7 +41,7 @@ pub async fn get_store(id: Option<String>) -> Result<Option<Store>, ServerFnErro
         let params = NoParams {};
         let stores: Vec<Store> = usecase
             .call(params)
-            .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+            .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
         for store in stores.into_iter() {
             if store.id == id {
                 return Ok(Some(store));
@@ -156,7 +156,7 @@ async fn create_store(store: Store) -> Result<String, ServerFnError> {
     let params: Params = Params::from(store);
     let result = usecase
         .call(params)
-        .map_err(|e| ServerFnErrorErr::<Error>::ServerError(e.to_string()))?;
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(result.id)
 }
 
@@ -176,7 +176,7 @@ async fn test_store(store: Store) -> Result<(), ServerFnError> {
     if let Err(ref err) = result {
         log::error!("test_store failed: {}", err);
     }
-    result.map_err(|e| ServerFnErrorErr::<Error>::ServerError(e.to_string()))?;
+    result.map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(())
 }
 
@@ -194,7 +194,7 @@ async fn update_store(store: Store) -> Result<(), ServerFnError> {
     let params: Params = Params::from(store);
     usecase
         .call(params)
-        .map_err(|e| ServerFnErrorErr::<Error>::ServerError(e.to_string()))?;
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(())
 }
 
@@ -212,7 +212,7 @@ async fn delete_store(id: String) -> Result<(), ServerFnError> {
     let params: Params = Params::new(id);
     usecase
         .call(params)
-        .map_err(|e| ServerFnErrorErr::<Error>::ServerError(e.to_string()))?;
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(())
 }
 

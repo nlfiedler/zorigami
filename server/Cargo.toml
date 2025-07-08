@@ -39,13 +39,13 @@ fastcdc = { version = "3.0.0", optional = true }
 globset = { version = "0.4.13", optional = true }
 gloo = "0.11.0"
 juniper = { version = "0.16.1", features = ["chrono"], optional = true }
-leptos = "0.7.8"
-leptos_actix = { version = "0.7.8", optional = true }
-leptos_meta = "0.7.8"
-leptos_router = "0.7.8"
+leptos = "0.8.2"
+leptos_actix = { version = "0.8.2", optional = true }
+leptos_meta = "0.8.2"
+leptos_router = "0.8.2"
 # leptos-use is tightly coupled with leptos and almost certainly needs to be
 # updated whenever leptos is updated
-leptos-use = "0.15.7"
+leptos-use = "0.16.2"
 libc = { version = "0.2.119", optional = true }
 log = "0.4.7"
 memmap2 = { version = "0.9.4", optional = true }
@@ -56,7 +56,7 @@ reducer = { version = "3.0", optional = true }
 send_wrapper = "0.6.0"
 serde = { version = "1.0.182", features = ["derive"] }
 serde_json = "1.0.79"
-server_fn = { version = "0.7.8", features = ["json", "cbor", "multipart", "url"] }
+server_fn = { version = "0.8.2", features = ["cbor", "multipart"] }
 sha1 = "0.10.6"
 store_amazon = { path = "../stores/store_amazon", optional = true }
 store_azure = { path = "../stores/store_azure", optional = true }

@@ -13,7 +13,7 @@ rusoto_core = "0.48.0"
 rusoto_credential = "0.48.0"
 rusoto_s3 = "0.48.0"
 store_core = { path = "../store_core" }
-tokio = { version = "1.24.2", features = ["fs", "rt-multi-thread", "time"] }
+tokio = { version = "1.46.1", features = ["fs", "rt-multi-thread", "time"] }
 
 [dev-dependencies]
 dotenvy = "0.15.7"

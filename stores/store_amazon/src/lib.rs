@@ -130,9 +130,9 @@ impl AmazonStore {
                         // remove any buckets so the list remains static).
                         *names = self.list_buckets().await?;
                     }
-                    use rand::{thread_rng, Rng};
-                    let mut rng = thread_rng();
-                    let idx = rng.gen_range(0..names.len());
+                    use rand::Rng;
+                    let mut rng = rand::rng();
+                    let idx = rng.random_range(0..names.len());
                     Ok(names[idx].to_owned())
                 }
                 Err(err) => Err(err),

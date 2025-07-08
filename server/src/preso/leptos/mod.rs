@@ -114,7 +114,7 @@ pub mod ssr {
     /// Construct a repository implementation for the database.
     pub fn db() -> Result<RecordRepositoryImpl, ServerFnError> {
         let source = EntityDataSourceImpl::new(DB_PATH.as_path())
-            .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+            .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
         let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
         let repo = RecordRepositoryImpl::new(datasource);
         Ok(repo)
@@ -133,6 +133,6 @@ pub async fn datasets() -> Result<Vec<Dataset>, ServerFnError> {
     let params = NoParams {};
     let datasets: Vec<Dataset> = usecase
         .call(params)
-        .map_err(|e| ServerFnErrorErr::WrappedServerError(e))?;
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
     Ok(datasets)
 }
