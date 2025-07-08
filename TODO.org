@@ -1,27 +1,27 @@
 * Tasks
-** TODO Replace Flutter with Leptos
-*** DONE delete everything Flutter and Dart
-*** DONE get a simple page to load [9/9]
-- [X] configure Cargo.toml
-- [X] feature gate everything in/out
-- [X] get =cargo leptos test= to pass
-- [X] change =main.rs= to load leptos
-- [X] get =cargo leptos watch= to show the home page
-- [X] add styles
-- [X] add navigation bar
-- [X] add favicon
-- [X] add dark mode switch
-*** DONE rewrite serde for entities
-*** DONE look at design of other backup programs
-*** TODO pack stores page
+** TODO [#A] Replace Flutter with Leptos
+*** TODO update leptos (0.8) and related crates (leptos-use)
+*** TODO secret fields should be hidden with option to show them
+*** TODO add button to test the pack store connection
+*** TODO add some label or something that shows the type of pack store
+**** not entirely obvious what you're looking at with just the form labels
 *** TODO datasets page
 *** TODO snapshots page
+**** consider showing list of snapshots with pagination
 *** TODO restore database page
 *** TODO settings page
 **** fields to set the hostname and username
 **** show computer UUID based on inputs
 **** explain how these are used to generate bucket names
+*** TODO browse page
+**** maybe name it ~Home~ and show summary of datasets, packs, latest snapshot
+**** when there are no stores, suggest visiting stores page to start setup
 *** TODO test building and running on Windows, update instructions
+*** TODO delete temp database and refine initial setup experience
+**** when there are no stores, say so, prominently show ~add~ button
+**** when there are no datasets, say so, prominently show ~add~ button
+**** when there are no snapshots, indicate that something will happen eventually
+**** when there are no stores, ~Restore~ page should suggest going to stores page to define some stores
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
 *** TODO update =Dockerfile=
@@ -32,12 +32,23 @@
 *** TODO copy =doc/LEPTOS.md= from tanuki
 *** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
+** Leptos improvements
+*** pack stores page
+**** deleting the current store needs to refresh the parent route
+**** updating store label needs to refresh parent route
+*** nav bar items should highlight for matching route (e.g. ~Stores~ highlights for =/stores*=)
+*** find all =log:error= that could be handled better
+** Log rotation (for macOS)
+*** alternative to logging to stdout/stderr, write to log files
+*** macOS/launchd does not have a good way of managing log file sizes
+*** should configure logging via envars (?) to write to files that are rotated
+*** https://github.com/estk/log4rs use envars and configuration file
 ** Test improvements
 *** sometimes =test_get_bucket_name()= fails
 *** sometimes =test_process_manager_async_store()= fails
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
-** Snapshot retention policy default
+** [#B] Snapshot retention policy default
 *** once webui allows changing retention policy per dataset, change the default to ~ALL~
 *** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
 *** fix =update_dataset.rs= to take the correct retention policy type
@@ -204,7 +215,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** Pack file and database backup pruning
+** [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
 **** either retain ~all~ or ~delete after N days~
@@ -234,6 +245,9 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** Support time-range in schedule
 ** Filters for excluding files by size
 *** allow adding rules on a dataset to ignore files that are too small/large
+** Support ~archive~ storage classes
+*** Azure, Amazon, and Google all support very slow response time storage
+*** requires subscribing to notifications (?) to facilitate file retrieval
 ** Point-in-time snapshots
 *** Backup procedure is file-by-file, which may yield broken snapshots
 **** e.g. database files can change during the backup, leading to invalid snapshots

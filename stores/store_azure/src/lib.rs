@@ -36,7 +36,8 @@ impl AzureStore {
         let access_key = props
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
-        let custom_uri = props.get("custom_uri");
+        // an empty URI must be nullified to avoid errors from Azure
+        let custom_uri = props.get("custom_uri").take_if(|c| c.is_empty());
         let access_tier = props.get("access_tier").and_then(|tier| {
             if tier.to_lowercase() == "hot" {
                 Some(AccessTier::Hot)

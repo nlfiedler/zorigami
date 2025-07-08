@@ -54,6 +54,16 @@ impl Params {
     }
 }
 
+impl From<Store> for Params {
+    fn from(val: Store) -> Self {
+        Params::new(
+            val.store_type.to_string(),
+            val.label,
+            val.properties,
+        )
+    }
+}
+
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Params({})", self.type_name)

@@ -9,6 +9,7 @@ use leptos_router::path;
 
 mod home;
 mod nav;
+mod stores;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -41,6 +42,17 @@ pub fn App() -> impl IntoView {
             <main>
                 <Routes fallback=NotFound>
                     <Route path=path!("") view=home::HomePage />
+                    <ParentRoute path=path!("/stores") view=stores::StoresPage>
+                        <Route path=path!(":id") view=stores::StoreDetails />
+                        <Route
+                            path=path!("")
+                            view=|| view! {
+                                <div class="m-4">
+                                    <p class="subtitle is-5">Select a store to view details.</p>
+                                </div>
+                            }
+                        />
+                    </ParentRoute>
                 </Routes>
             </main>
         </Router>

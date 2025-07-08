@@ -43,6 +43,8 @@ leptos = "0.7.8"
 leptos_actix = { version = "0.7.8", optional = true }
 leptos_meta = "0.7.8"
 leptos_router = "0.7.8"
+# leptos-use is tightly coupled with leptos and almost certainly needs to be
+# updated whenever leptos is updated
 leptos-use = "0.15.7"
 libc = { version = "0.2.119", optional = true }
 log = "0.4.7"

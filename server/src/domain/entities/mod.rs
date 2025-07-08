@@ -196,7 +196,7 @@ impl Chunk {
 }
 
 /// StoreType identifies a kind of store.
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub enum StoreType {
     AMAZON,
     AZURE,
@@ -253,7 +253,7 @@ impl Default for PackRetention {
 }
 
 /// Store defines a location where packs will be saved.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Store {
     /// Unique identifier for this store.
     pub id: String,

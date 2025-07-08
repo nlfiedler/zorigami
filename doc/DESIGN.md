@@ -76,6 +76,7 @@ The packs are stored in buckets whose names are described below.
 * Pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
     - entry names are the chunk hash digest plus algorithm prefix
     - encrypted with key derived from passphrase and random salt
+* File metadata is _not_ stored in pack files because of chunking
 
 ### Database Schema
 
