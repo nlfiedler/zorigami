@@ -805,6 +805,7 @@ where
         }
     };
     let (test_error_msg, set_test_error_msg) = signal(String::new());
+    let secret_visible = RwSignal::new(false);
 
     view! {
         <h2 class="m-4 title">Amazon S3</h2>
@@ -913,11 +914,11 @@ where
                     </label>
                 </div>
                 <div class="field-body">
-                    <div class="field">
-                        <p class="control is-expanded has-icons-left">
+                    <div class="field has-addons">
+                        <div class="control is-expanded has-icons-left">
                             <input
                                 class="input"
-                                type="text"
+                                type=move || if secret_visible.get() { "text" } else { "password" }
                                 id="secret-input"
                                 node_ref=secret_input_ref
                                 placeholder="Secret access key."
@@ -926,7 +927,23 @@ where
                             <span class="icon is-small is-left">
                                 <i class="fa-solid fa-key"></i>
                             </span>
-                        </p>
+                        </div>
+                        <div class="control">
+                            <button
+                                class="button"
+                                on:click=move |_| secret_visible.update(|v| { *v = !*v })
+                            >
+                                <span class="icon is-small">
+                                    <i class=move || {
+                                        if secret_visible.get() {
+                                            "fas fa-eye-slash"
+                                        } else {
+                                            "fas fa-eye"
+                                        }
+                                    }></i>
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1018,6 +1035,7 @@ where
         }
     };
     let (test_error_msg, set_test_error_msg) = signal(String::new());
+    let secret_visible = RwSignal::new(false);
 
     view! {
         <h2 class="m-4 title">Azure Blob Storage</h2>
@@ -1101,11 +1119,11 @@ where
                     </label>
                 </div>
                 <div class="field-body">
-                    <div class="field">
-                        <p class="control is-expanded has-icons-left">
+                    <div class="field has-addons">
+                        <div class="control is-expanded has-icons-left">
                             <input
                                 class="input"
-                                type="text"
+                                type=move || if secret_visible.get() { "text" } else { "password" }
                                 id="access-input"
                                 node_ref=access_input_ref
                                 placeholder="Access key."
@@ -1114,7 +1132,23 @@ where
                             <span class="icon is-small is-left">
                                 <i class="fa-solid fa-key"></i>
                             </span>
-                        </p>
+                        </div>
+                        <div class="control">
+                            <button
+                                class="button"
+                                on:click=move |_| secret_visible.update(|v| { *v = !*v })
+                            >
+                                <span class="icon is-small">
+                                    <i class=move || {
+                                        if secret_visible.get() {
+                                            "fas fa-eye-slash"
+                                        } else {
+                                            "fas fa-eye"
+                                        }
+                                    }></i>
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1435,6 +1469,7 @@ where
         }
     };
     let (test_error_msg, set_test_error_msg) = signal(String::new());
+    let secret_visible = RwSignal::new(false);
 
     view! {
         <h2 class="m-4 title">MinIO Object Storage</h2>
@@ -1568,11 +1603,11 @@ where
                     </label>
                 </div>
                 <div class="field-body">
-                    <div class="field">
-                        <p class="control is-expanded has-icons-left">
+                    <div class="field has-addons">
+                        <div class="control is-expanded has-icons-left">
                             <input
                                 class="input"
-                                type="text"
+                                type=move || if secret_visible.get() { "text" } else { "password" }
                                 id="secret-input"
                                 node_ref=secret_input_ref
                                 placeholder="Secret access key."
@@ -1581,7 +1616,23 @@ where
                             <span class="icon is-small is-left">
                                 <i class="fa-solid fa-key"></i>
                             </span>
-                        </p>
+                        </div>
+                        <div class="control">
+                            <button
+                                class="button"
+                                on:click=move |_| secret_visible.update(|v| { *v = !*v })
+                            >
+                                <span class="icon is-small">
+                                    <i class=move || {
+                                        if secret_visible.get() {
+                                            "fas fa-eye-slash"
+                                        } else {
+                                            "fas fa-eye"
+                                        }
+                                    }></i>
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1640,6 +1691,7 @@ where
         }
     };
     let (test_error_msg, set_test_error_msg) = signal(String::new());
+    let secret_visible = RwSignal::new(false);
 
     view! {
         <h2 class="m-4 title">Secure FTP</h2>
@@ -1748,11 +1800,11 @@ where
                     </label>
                 </div>
                 <div class="field-body">
-                    <div class="field">
-                        <p class="control is-expanded has-icons-left">
+                    <div class="field has-addons">
+                        <div class="control is-expanded has-icons-left">
                             <input
                                 class="input"
-                                type="text"
+                                type=move || if secret_visible.get() { "text" } else { "password" }
                                 id="password-input"
                                 node_ref=passwd_input_ref
                                 placeholder="Password for user account."
@@ -1761,9 +1813,25 @@ where
                             <span class="icon is-small is-left">
                                 <i class="fa-solid fa-key"></i>
                             </span>
-                        </p>
+                        </div>
                     </div>
+                    <div class="control">
+                    <button
+                        class="button"
+                        on:click=move |_| secret_visible.update(|v| { *v = !*v })
+                    >
+                        <span class="icon is-small">
+                            <i class=move || {
+                                if secret_visible.get() {
+                                    "fas fa-eye-slash"
+                                } else {
+                                    "fas fa-eye"
+                                }
+                            }></i>
+                        </span>
+                    </button>
                 </div>
+        </div>
             </div>
 
             <div class="field is-horizontal">

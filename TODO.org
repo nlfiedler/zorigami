@@ -1,10 +1,5 @@
 * Tasks
 ** TODO [#A] Replace Flutter with Leptos
-*** TODO update leptos (0.8) and related crates (leptos-use)
-*** TODO secret fields should be hidden with option to show them
-*** TODO add button to test the pack store connection
-*** TODO add some label or something that shows the type of pack store
-**** not entirely obvious what you're looking at with just the form labels
 *** TODO datasets page
 *** TODO snapshots page
 **** consider showing list of snapshots with pagination
