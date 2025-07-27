@@ -1,6 +1,5 @@
 * Tasks
 ** TODO [#A] Replace Flutter with Leptos
-*** TODO datasets page
 *** TODO snapshots page
 **** consider showing list of snapshots with pagination
 *** TODO restore database page
@@ -9,8 +8,14 @@
 **** show computer UUID based on inputs
 **** explain how these are used to generate bucket names
 *** TODO browse page
-**** maybe name it ~Home~ and show summary of datasets, packs, latest snapshot
+**** maybe name it ~Home~ and show summary of datasets
+**** for each dataset, show date/time of latest snapshot
+**** for each dataset, show how many snapshots exist
+**** for each dataset, show retention policy, provide button to prune according to policy
 **** when there are no stores, suggest visiting stores page to start setup
+**** when there are no data sets, suggest visiting datasets page to start setup
+*** TODO maybe replace the navbar icon with a fontawesome icon
+*** TODO look for ~issues~ in browser tools on every page
 *** TODO test building and running on Windows, update instructions
 *** TODO delete temp database and refine initial setup experience
 **** when there are no stores, say so, prominently show ~add~ button
@@ -27,6 +32,8 @@
 *** TODO copy =doc/LEPTOS.md= from tanuki
 *** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
+** TODO rename all of the =mod.rs= files
+*** can now have =foobar.rs= and =foobar/other.rs= without the =foobar/mod.rs=
 ** Leptos improvements
 *** pack stores page
 **** deleting the current store needs to refresh the parent route
@@ -43,10 +50,6 @@
 *** sometimes =test_process_manager_async_store()= fails
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
-** [#B] Snapshot retention policy default
-*** once webui allows changing retention policy per dataset, change the default to ~ALL~
-*** remove the =retention= override in =server/src/data/models/mod.rs= currently =COUNT(3)=
-*** fix =update_dataset.rs= to take the correct retention policy type
 ** Replace minio with SeaweedFS
 *** https://github.com/seaweedfs/seaweedfs
 ** Restore improvements
@@ -210,7 +213,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** [#C] Pack file and database backup pruning
+** [#B] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
 **** either retain ~all~ or ~delete after N days~

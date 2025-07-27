@@ -1,12 +1,13 @@
 //
 // Copyright (c) 2025 Nathan Fiedler
 //
-use crate::domain::entities::Dataset;
+use crate::domain::entities::{Dataset, Store};
 use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::components::*;
 use leptos_router::path;
 
+mod datasets;
 mod home;
 mod nav;
 mod stores;
@@ -42,6 +43,17 @@ pub fn App() -> impl IntoView {
             <main>
                 <Routes fallback=NotFound>
                     <Route path=path!("") view=home::HomePage />
+                    <ParentRoute path=path!("/datasets") view=datasets::DatasetsPage>
+                        <Route path=path!(":id") view=datasets::DatasetDetails />
+                        <Route
+                            path=path!("")
+                            view=|| view! {
+                                <div class="m-4">
+                                    <p class="subtitle is-5">Select a data set to view details.</p>
+                                </div>
+                            }
+                        />
+                    </ParentRoute>
                     <ParentRoute path=path!("/stores") view=stores::StoresPage>
                         <Route path=path!(":id") view=stores::StoreDetails />
                         <Route
@@ -119,6 +131,22 @@ pub mod ssr {
         let repo = RecordRepositoryImpl::new(datasource);
         Ok(repo)
     }
+}
+
+/// Retrieve all pack stores.
+#[leptos::server]
+pub async fn stores() -> Result<Vec<Store>, ServerFnError> {
+    use crate::domain::usecases::get_stores::GetStores;
+    use crate::domain::usecases::{NoParams, UseCase};
+    use leptos::server_fn::error::ServerFnErrorErr;
+
+    let repo = ssr::db()?;
+    let usecase = GetStores::new(Box::new(repo));
+    let params = NoParams {};
+    let stores: Vec<Store> = usecase
+        .call(params)
+        .map_err(|e| ServerFnErrorErr::ServerError(e.to_string()))?;
+    Ok(stores)
 }
 
 /// Retrieve all datasets.

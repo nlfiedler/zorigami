@@ -70,6 +70,18 @@ impl Params {
     }
 }
 
+impl From<Dataset> for Params {
+    fn from(val: Dataset) -> Self {
+        Params::new(
+            val.basepath,
+            val.schedules,
+            val.pack_size,
+            val.stores,
+            val.excludes,
+        )
+    }
+}
+
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Params({})", self.basepath.to_string_lossy())

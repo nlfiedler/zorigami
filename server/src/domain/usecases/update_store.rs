@@ -27,7 +27,7 @@ impl super::UseCase<Store, Params> for UpdateStore {
             store_type,
             label: params.label,
             properties: params.properties,
-            retention: PackRetention::ALL,
+            retention: params.retention,
         };
         self.repo.put_store(&store)?;
         Ok(store)
@@ -43,6 +43,8 @@ pub struct Params {
     label: String,
     /// Name/value pairs that make up this store configuration.
     properties: HashMap<String, String>,
+    /// Pack retention policy.
+    retention: PackRetention,
 }
 
 impl Params {
@@ -51,12 +53,14 @@ impl Params {
         type_name: String,
         label: String,
         properties: HashMap<String, String>,
+        retention: PackRetention,
     ) -> Self {
         Self {
             store_id,
             type_name,
             label,
             properties,
+            retention,
         }
     }
 }
@@ -68,6 +72,7 @@ impl From<Store> for Params {
             val.store_type.to_string(),
             val.label,
             val.properties,
+            val.retention,
         )
     }
 }
@@ -107,6 +112,7 @@ mod tests {
             type_name: "minio".to_owned(),
             label: "pretend S3".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let result = usecase.call(params);
         // assert
@@ -131,6 +137,7 @@ mod tests {
             type_name: "minio".to_owned(),
             label: "pretend S3".to_owned(),
             properties,
+            retention: PackRetention::ALL,
         };
         let result = usecase.call(params);
         // assert

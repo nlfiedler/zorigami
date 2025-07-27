@@ -41,11 +41,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }
-        dataset.retention = if let Some(count) = params.retention_count {
-            SnapshotRetention::COUNT(count)
-        } else {
-            SnapshotRetention::ALL
-        };
+        dataset.retention = params.retention;
         self.repo.put_dataset(&dataset)?;
         Ok(dataset)
     }
@@ -66,8 +62,8 @@ pub struct Params {
     stores: Vec<String>,
     /// List of file/directory exclusion patterns.
     excludes: Vec<String>,
-    /// Number of snapshots to retain, if set.
-    retention_count: Option<u16>,
+    /// Snapshot retention policy.
+    retention: SnapshotRetention,
 }
 
 impl Params {
@@ -79,7 +75,7 @@ impl Params {
         pack_size: u64,
         stores: Vec<String>,
         excludes: Vec<String>,
-        retention_count: Option<u16>,
+        retention: SnapshotRetention,
     ) -> Self {
         Self {
             id,
@@ -89,8 +85,23 @@ impl Params {
             pack_size,
             stores,
             excludes,
-            retention_count,
+            retention,
         }
+    }
+}
+
+impl From<Dataset> for Params {
+    fn from(val: Dataset) -> Self {
+        Params::new(
+            val.id,
+            val.basepath,
+            val.schedules,
+            Some(val.workspace),
+            val.pack_size,
+            val.stores,
+            val.excludes,
+            val.retention,
+        )
     }
 }
 
@@ -137,7 +148,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
-            retention_count: None,
+            retention: SnapshotRetention::ALL,
         };
         let result = usecase.call(params);
         // assert
@@ -177,7 +188,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
-            retention_count: None,
+            retention: SnapshotRetention::ALL,
         };
         let result = usecase.call(params);
         // assert
@@ -209,7 +220,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec!["".to_owned()],
-            retention_count: None,
+            retention: SnapshotRetention::ALL,
         };
         let result = usecase.call(params);
         // assert
@@ -250,7 +261,7 @@ mod tests {
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
-            retention_count: None,
+            retention: SnapshotRetention::ALL,
         };
         let result = usecase.call(params);
         // assert

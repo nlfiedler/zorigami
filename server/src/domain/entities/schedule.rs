@@ -3,6 +3,7 @@
 //
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// The day of the week, for weekly and monthly schedules.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -54,6 +55,20 @@ impl From<u32> for DayOfWeek {
     }
 }
 
+impl fmt::Display for DayOfWeek {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DayOfWeek::Sun => write!(f, "Sun"),
+            DayOfWeek::Mon => write!(f, "Mon"),
+            DayOfWeek::Tue => write!(f, "Tue"),
+            DayOfWeek::Wed => write!(f, "Wed"),
+            DayOfWeek::Thu => write!(f, "Thu"),
+            DayOfWeek::Fri => write!(f, "Fri"),
+            DayOfWeek::Sat => write!(f, "Sat"),
+        }
+    }
+}
+
 ///
 /// Represents the range in time during the day in which to run the backup. The
 /// time is represented in 24-hour format, without a timezone (i.e. "naive"),
@@ -88,6 +103,25 @@ impl TimeRange {
         Self { start, stop }
     }
 
+    /// Parse the "HH:MM:SS" strings into start and stop values.
+    pub fn parse_from_str(start: &str, stop: &str) -> Self {
+        let start_time = TimeRange::parse_str(start);
+        let stop_time = TimeRange::parse_str(stop);
+        Self {
+            start: start_time.num_seconds_from_midnight(),
+            stop: stop_time.num_seconds_from_midnight(),
+        }
+    }
+
+    fn parse_str(value: &str) -> NaiveTime {
+        let fmt = if value.chars().filter(|c| *c == ':').count() == 2 {
+            "%H:%M:%S"
+        } else {
+            "%H:%M"
+        };
+        NaiveTime::parse_from_str(value, fmt).unwrap_or(NaiveTime::MIN)
+    }
+
     /// Return true if the given time falls within the defined range.
     pub fn is_within(&self, datetime: DateTime<Utc>) -> bool {
         let the_time = datetime.num_seconds_from_midnight();
@@ -109,6 +143,24 @@ impl TimeRange {
             datetime + chrono::Duration::seconds(delta as i64)
         }
     }
+
+    /// Format the start time as HH:MM:SS.
+    pub fn format_start(&self) -> String {
+        Self::format_time(self.start)
+    }
+
+    /// Format the stop time as HH:MM:SS.
+    pub fn format_stop(&self) -> String {
+        Self::format_time(self.stop)
+    }
+
+    fn format_time(value: u32) -> String {
+        let tv = match NaiveTime::from_num_seconds_from_midnight_opt(value, 0) {
+            Some(v) => v,
+            None => NaiveTime::MIN,
+        };
+        tv.format("%H:%M").to_string()
+    }
 }
 
 /// The day of the month, for monthly schedules.
@@ -120,6 +172,19 @@ pub enum DayOfMonth {
     Fourth(DayOfWeek),
     Fifth(DayOfWeek),
     Day(u8),
+}
+
+impl fmt::Display for DayOfMonth {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DayOfMonth::First(dow) => write!(f, "1st {}", dow),
+            DayOfMonth::Second(dow) => write!(f, "2nd {}", dow),
+            DayOfMonth::Third(dow) => write!(f, "3rd {}", dow),
+            DayOfMonth::Fourth(dow) => write!(f, "4th {}", dow),
+            DayOfMonth::Fifth(dow) => write!(f, "5th {}", dow),
+            DayOfMonth::Day(d) => write!(f, "day {}", d),
+        }
+    }
 }
 
 impl DayOfMonth {
@@ -256,6 +321,41 @@ impl Schedule {
     }
 }
 
+impl fmt::Display for Schedule {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Schedule::Hourly => write!(f, "hourly"),
+            Schedule::Daily(None) => write!(f, "daily"),
+            Schedule::Daily(Some(tr)) => {
+                write!(
+                    f,
+                    "daily, {}-{}",
+                    tr.format_start(),
+                    tr.format_stop()
+                )
+            }
+            Schedule::Weekly(None) => write!(f, "weekly"),
+            Schedule::Weekly(Some((dow, None))) => write!(f, "weekly on {}", dow),
+            Schedule::Weekly(Some((dow, Some(tr)))) => write!(
+                f,
+                "weekly on {}, {}-{}",
+                dow,
+                tr.format_start(),
+                tr.format_stop()
+            ),
+            Schedule::Monthly(None) => write!(f, "monthly"),
+            Schedule::Monthly(Some((dom, None))) => write!(f, "monthly on {}", dom),
+            Schedule::Monthly(Some((dom, Some(tr)))) => write!(
+                f,
+                "monthly on {}, {}-{}",
+                dom,
+                tr.format_start(),
+                tr.format_stop()
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,6 +434,32 @@ mod tests {
                 .unwrap();
             assert_eq!(range.is_within(then), values.6, "index: {}", idx);
         }
+    }
+
+    #[test]
+    fn test_time_range_format() {
+        let sut = TimeRange::new_secs(45015, 86400);
+        assert_eq!(sut.format_start(), "12:30");
+        assert_eq!(sut.format_stop(), "00:00");
+
+        let sut = TimeRange::new_secs(0, 54033);
+        assert_eq!(sut.format_start(), "00:00");
+        assert_eq!(sut.format_stop(), "15:00");
+    }
+
+    #[test]
+    fn test_time_range_parse() {
+        let sut = TimeRange::parse_from_str("12:30:15", "00:00:00");
+        assert_eq!(sut.start, 45015);
+        assert_eq!(sut.stop, 0);
+
+        let sut = TimeRange::parse_from_str("08:15:59", "15:00:33");
+        assert_eq!(sut.start, 29759);
+        assert_eq!(sut.stop, 54033);
+
+        let sut = TimeRange::parse_from_str("08:15", "15:00");
+        assert_eq!(sut.start, 29700);
+        assert_eq!(sut.stop, 54000);
     }
 
     #[test]
