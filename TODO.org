@@ -32,8 +32,6 @@
 *** TODO copy =doc/LEPTOS.md= from tanuki
 *** TODO update =doc/HISTORY.md=
 *** TODO write ADR for why Leptos (can copy from tanuki)
-** TODO rename all of the =mod.rs= files
-*** can now have =foobar.rs= and =foobar/other.rs= without the =foobar/mod.rs=
 ** Leptos improvements
 *** pack stores page
 **** deleting the current store needs to refresh the parent route
