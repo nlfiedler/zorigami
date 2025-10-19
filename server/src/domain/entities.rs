@@ -76,8 +76,8 @@ impl Checksum {
     /// indicate which of the two algorithms was in use.
     pub fn to_hex(&self) -> Result<Vec<u8>, Error> {
         match self {
-            Checksum::SHA1(hash) => Ok(decode_hex(&hash)?),
-            Checksum::BLAKE3(hash) => Ok(decode_hex(&hash)?),
+            Checksum::SHA1(hash) => Ok(decode_hex(hash)?),
+            Checksum::BLAKE3(hash) => Ok(decode_hex(hash)?),
         }
     }
 
@@ -206,15 +206,15 @@ pub enum StoreType {
     SFTP,
 }
 
-impl ToString for StoreType {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for StoreType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            StoreType::AMAZON => String::from("amazon"),
-            StoreType::AZURE => String::from("azure"),
-            StoreType::GOOGLE => String::from("google"),
-            StoreType::LOCAL => String::from("local"),
-            StoreType::MINIO => String::from("minio"),
-            StoreType::SFTP => String::from("sftp"),
+            StoreType::AMAZON => write!(f, "amazon"),
+            StoreType::AZURE => write!(f, "azure"),
+            StoreType::GOOGLE => write!(f, "google"),
+            StoreType::LOCAL => write!(f, "local"),
+            StoreType::MINIO => write!(f, "minio"),
+            StoreType::SFTP => write!(f, "sftp"),
         }
     }
 }
@@ -238,18 +238,13 @@ impl FromStr for StoreType {
 ///
 /// Policy dictating the retention policy for pack files and database backups.
 ///
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PackRetention {
     /// All pack files will be retained indefinitely.
+    #[default]
     ALL,
     /// Retain pack files for this many days.
     DAYS(u16),
-}
-
-impl Default for PackRetention {
-    fn default() -> Self {
-        PackRetention::ALL
-    }
 }
 
 /// Store defines a location where packs will be saved.
@@ -276,20 +271,15 @@ impl std::hash::Hash for Store {
 ///
 /// Policy dictating how many snapshots to retain.
 ///
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum SnapshotRetention {
     /// All snapshots will be retained indefinitely.
+    #[default]
     ALL,
     /// Retain this many snapshots.
     COUNT(u16),
     /// Retain snapshots for this many days.
     DAYS(u16),
-}
-
-impl Default for SnapshotRetention {
-    fn default() -> Self {
-        SnapshotRetention::ALL
-    }
 }
 
 /// Represents a directory tree that will be backed up according to a schedule,
@@ -744,7 +734,7 @@ impl File {
 ///
 /// Holds statistics regarding a specific snapshot.
 ///
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct FileCounts {
     pub directories: u32,
     pub symlinks: u32,
@@ -773,6 +763,7 @@ impl FileCounts {
             // efficiency (2^255 is already much larger than very_large_files).
             // Use 64 as the maximum value for the preso layer to convert the
             // value back to a number-string.
+            #[allow(clippy::useless_conversion)]
             let bits: u8 = power.try_into().map_or(64_u8, |v: u32| v as u8);
             if let Some(value) = self.file_sizes.get_mut(&bits) {
                 *value += 1;
@@ -798,7 +789,7 @@ impl FileCounts {
 /// It references a possible parent snapshot, and a tree representing the files
 /// contained in the snapshot.
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Snapshot {
     /// Unique identifier of this snapshot.
     pub digest: Checksum,
@@ -866,6 +857,19 @@ impl fmt::Display for Snapshot {
             self.tree, parent, file_count, start_time
         )
     }
+}
+
+///
+/// Information about the snapshots for a single dataset.
+///
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct SnapshotCount {
+    /// Number of existing snapshots.
+    pub count: usize,
+    /// Most recent snapshot date/time.
+    pub newest: Option<DateTime<Utc>>,
+    /// Earliest available snapshot date/time.
+    pub oldest: Option<DateTime<Utc>>,
 }
 
 ///
@@ -1176,7 +1180,7 @@ mod tests {
     fn test_checksum_file() -> Result<(), io::Error> {
         // use a file larger than the buffer size used for hashing
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let digest = Checksum::blake3_from_file(&infile)?;
+        let digest = Checksum::blake3_from_file(infile)?;
         assert_eq!(
             digest.to_string(),
             "blake3-dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f"
@@ -1241,9 +1245,9 @@ mod tests {
     fn test_tree_entry() {
         let path = Path::new("../test/fixtures/lorem-ipsum.txt");
         let tref = TreeReference::TREE(Checksum::SHA1("cafebabe".to_owned()));
-        let mut entry = TreeEntry::new(&path, tref);
-        entry = entry.mode(&path);
-        entry = entry.owners(&path);
+        let mut entry = TreeEntry::new(path, tref);
+        entry = entry.mode(path);
+        entry = entry.owners(path);
         assert_eq!(entry.reference.to_string(), "tree-sha1-cafebabe");
         assert_eq!(entry.name, "lorem-ipsum.txt");
         #[cfg(target_family = "unix")]
@@ -1275,11 +1279,11 @@ mod tests {
         let path = Path::new("../test/fixtures/lorem-ipsum.txt");
         let sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
         let tref = TreeReference::FILE(sha1);
-        let entry1 = TreeEntry::new(&path, tref);
+        let entry1 = TreeEntry::new(path, tref);
         let path = Path::new("../test/fixtures/SekienAkashita.jpg");
         let sha1 = Checksum::SHA1("4c009e44fe5794df0b1f828f2a8c868e66644964".to_owned());
         let tref = TreeReference::FILE(sha1);
-        let entry2 = TreeEntry::new(&path, tref);
+        let entry2 = TreeEntry::new(path, tref);
         let tree = Tree::new(vec![entry1, entry2], 2);
         // with file timestamps, the digest always changes
         assert!(tree.digest.is_sha1());

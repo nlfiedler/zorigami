@@ -52,7 +52,7 @@ memmap2 = { version = "0.9.4", optional = true }
 os_str_bytes = { version = "7.0.0", features = [
     "conversions",
 ], optional = true }
-reducer = { version = "3.0", optional = true }
+reducer = "3.0"
 send_wrapper = "0.6.0"
 serde = { version = "1.0.182", features = ["derive"] }
 serde_json = "1.0.79"
@@ -109,7 +109,6 @@ ssr = [
     "dep:libc",
     "dep:memmap2",
     "dep:os_str_bytes",
-    "dep:reducer",
     "dep:store_amazon",
     "dep:store_azure",
     "dep:store_core",

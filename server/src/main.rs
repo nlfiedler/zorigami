@@ -20,30 +20,18 @@ use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
 use server::domain::managers::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
-use server::domain::managers::state::{self, StateStore, StateStoreImpl};
+use server::domain::managers::state;
 use server::domain::repositories::RecordRepository;
 use server::domain::sources::EntityDataSource;
 use server::preso::graphql;
-use std::env;
+use server::{DB_PATH, STATE_STORE};
 use std::io;
-use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
-
-// When running in test mode, the cwd is the server directory.
-#[cfg(test)]
-static DEFAULT_DB_PATH: &str = "../tmp/test/database";
-
-// Running in debug/release mode we assume cwd is root directory.
-#[cfg(not(test))]
-static DEFAULT_DB_PATH: &str = "./tmp/database";
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))
 }
 
-// Application state store.
-static STATE_STORE: LazyLock<Arc<dyn StateStore>> =
-    LazyLock::new(|| Arc::new(StateStoreImpl::new()));
 // File restore implementation.
 static FILE_RESTORER: LazyLock<Arc<dyn Restorer>> = LazyLock::new(|| {
     Arc::new(RestorerImpl::new(
@@ -60,11 +48,6 @@ static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
         STATE_STORE.clone(),
         BACKUP_PERFORMER.clone(),
     ))
-});
-// Path to the database files.
-static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-    let path = env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
-    PathBuf::from(path)
 });
 
 #[cfg(feature = "ssr")]
@@ -212,8 +195,8 @@ async fn main() -> io::Result<()> {
             .service(favicon)
             .service(
                 web::resource("/liveness")
-                    .route(web::get().to(|| HttpResponse::Ok()))
-                    .route(web::head().to(|| HttpResponse::Ok())),
+                    .route(web::get().to(HttpResponse::Ok))
+                    .route(web::head().to(HttpResponse::Ok)),
             )
             .leptos_routes(routes, {
                 let leptos_options = leptos_options.clone();

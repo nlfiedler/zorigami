@@ -279,7 +279,7 @@ fn create_archive(basepath: &Path, outfile: &Path, password: &str) -> Result<(),
 fn extract_archive(infile: &Path, outdir: &Path, password: &str) -> Result<(), Error> {
     let mut reader = exaf_rs::reader::from_file(infile)?;
     reader.enable_encryption(password)?;
-    reader.extract_all(&outdir)?;
+    reader.extract_all(outdir)?;
     Ok(())
 }
 
@@ -310,6 +310,7 @@ impl PackRepositoryImpl {
     }
 
     // Try to store the pack file up to three times before giving up.
+    #[allow(clippy::borrowed_box)]
     fn store_pack_retry(
         &self,
         source: &Box<dyn PackDataSource>,
@@ -585,6 +586,7 @@ fn is_bucket_referenced(store: &str, bucket: &str, packs: &[Pack]) -> bool {
 // Remove all unreferenced objects from the bucket.
 //
 // If the bucket becomes empty, remove it.
+#[allow(clippy::borrowed_box)]
 fn remove_objects(
     store: &str,
     bucket: &str,
@@ -621,6 +623,7 @@ fn remove_objects(
 // Remove all objects from the bucket, and the bucket itself.
 //
 // Return the number of objects in the bucket that were removed.
+#[allow(clippy::borrowed_box)]
 fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, Error> {
     let objects = source.list_objects(bucket)?;
     for object in objects.iter() {
@@ -633,6 +636,7 @@ fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, 
 }
 
 // Try to store the database archive up to three times before giving up.
+#[allow(clippy::borrowed_box)]
 fn store_database_retry(
     source: &Box<dyn PackDataSource>,
     packfile: &Path,

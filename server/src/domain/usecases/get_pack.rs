@@ -188,7 +188,7 @@ mod tests {
     fn test_get_pack_multiple_entries() -> Result<(), Error> {
         // build average pack file
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let chunks = helpers::find_file_chunks(&infile, 32768)?;
+        let chunks = helpers::find_file_chunks(infile, 32768)?;
         assert_eq!(chunks.len(), 2);
         let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;

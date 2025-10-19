@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn test_md5sum_file() {
         let infile = Path::new("../../test/fixtures/lorem-ipsum.txt");
-        let md5sum = md5sum_file(&infile).unwrap();
+        let md5sum = md5sum_file(infile).unwrap();
         #[cfg(target_family = "unix")]
         assert_eq!(md5sum, "40756e6058736e2485119410c2014380");
         #[cfg(target_family = "windows")]

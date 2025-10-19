@@ -513,7 +513,7 @@ fn find_changed_files(
     basepath: PathBuf,
     snapshot1: entities::Checksum,
     snapshot2: entities::Checksum,
-) -> Result<ChangedFilesIter, Error> {
+) -> Result<ChangedFilesIter<'_>, Error> {
     let snap1doc = dbase
         .get_snapshot(&snapshot1)?
         .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snapshot1)))?;
@@ -877,11 +877,11 @@ mod tests {
         mock.expect_insert_xattr().returning(|_, _| Ok(()));
         // act
         let path = Path::new("../test/fixtures/washington-journal.txt");
-        let digest = entities::Checksum::blake3_from_file(&path).unwrap();
+        let digest = entities::Checksum::blake3_from_file(path).unwrap();
         let tref = entities::TreeReference::FILE(digest);
-        let dbase: Arc<(dyn crate::domain::repositories::RecordRepository + 'static)> =
+        let dbase: Arc<dyn crate::domain::repositories::RecordRepository + 'static> =
             Arc::new(mock);
-        let entry = process_path(&path, tref, &dbase);
+        let entry = process_path(path, tref, &dbase);
         // assert
         assert_eq!(entry.name, "washington-journal.txt");
         #[cfg(target_family = "unix")]
@@ -905,7 +905,7 @@ mod tests {
             PathBuf::from("../test/fixtures/washington-journal.txt"),
             PathBuf::from("../test/fixtures/zero-length.txt"),
         ];
-        let dbase: Arc<(dyn crate::domain::repositories::RecordRepository + 'static)> =
+        let dbase: Arc<dyn crate::domain::repositories::RecordRepository + 'static> =
             Arc::new(mock);
         let pool = ThreadPool::new(1);
         let entries = process_files(paths, &dbase, &pool);
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn test_build_exclusions() {
-        let excludes = vec![
+        let excludes = [
             PathBuf::from("Library"),
             PathBuf::from("**/Downloads"),
             PathBuf::from("node_modules/**"),
@@ -954,7 +954,7 @@ mod tests {
     fn test_build_exclusions_nearly_empty() {
         // somehow the excludes list for a dataset contained a single empty
         // string and that caused the backup process to find nothing at all
-        let excludes = vec![
+        let excludes = [
             PathBuf::from("/storage/database"),
             PathBuf::from("/basedir/.tmp"),
             PathBuf::from(""),
@@ -997,7 +997,7 @@ mod tests {
         // cfg! macro doesn't work for this case it seems so we have this
         // redundant use of the cfg directive instead
         #[cfg(target_family = "unix")]
-        std::os::unix::fs::symlink(&target, &link)?;
+        std::os::unix::fs::symlink(target, &link)?;
         #[cfg(target_family = "windows")]
         std::os::windows::fs::symlink_file(&target, &link)?;
         let actual = read_link(&link)?;
@@ -1121,15 +1121,16 @@ mod tests {
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
-        let mut excludes: Vec<PathBuf> = Vec::new();
-        // individual files
-        excludes.push(PathBuf::from("*.exe"));
-        // entire directory structure by name (while technically different than the
-        // pattern that ends with /**, it has the same effect for our purposes since
-        // we ignore directories)
-        excludes.push(PathBuf::from("**/node_modules"));
-        // entire directory structure by name based at the root only
-        excludes.push(PathBuf::from("workspace"));
+        let excludes: Vec<PathBuf> = vec![
+            // individual files
+            PathBuf::from("*.exe"),
+            // entire directory structure by name (while technically different
+            // than the pattern that ends with /**, it has the same effect for
+            // our purposes since we ignore directories)
+            PathBuf::from("**/node_modules"),
+            // entire directory structure by name based at the root only
+            PathBuf::from("workspace"),
+        ];
         let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
         // take a snapshot of the test data
         let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
@@ -1216,7 +1217,7 @@ mod tests {
             #[cfg(target_family = "windows")]
             use std::os::windows::fs;
             #[cfg(target_family = "unix")]
-            fs::symlink(&target, &dest)?;
+            fs::symlink(target, &dest)?;
             #[cfg(target_family = "windows")]
             fs::symlink_file(&target, &dest)?;
         }

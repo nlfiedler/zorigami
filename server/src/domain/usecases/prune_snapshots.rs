@@ -130,6 +130,7 @@ impl PruneSnapshots {
         let mut visit_tree = |tree_sum: Checksum| -> Result<(), Error> {
             // Rust does not know how to compile recursive closures, so use a
             // function within the closure to get around the types issue.
+            #[allow(clippy::borrowed_box)]
             fn rec(
                 repo: &Box<dyn RecordRepository>,
                 tree_sum: Checksum,
@@ -646,15 +647,15 @@ mod tests {
         let file_a_str = file_a_sum.to_string();
         mock.expect_delete_file()
             .once()
-            .withf(move |id| id == &file_a_str)
+            .withf(move |id| id == file_a_str)
             .returning(move |_| Ok(()));
         mock.expect_delete_chunk()
             .once()
-            .withf(move |id| id == &chunk_c1_str)
+            .withf(move |id| id == chunk_c1_str)
             .returning(move |_| Ok(()));
         mock.expect_delete_chunk()
             .once()
-            .withf(move |id| id == &chunk_c2_str)
+            .withf(move |id| id == chunk_c2_str)
             .returning(move |_| Ok(()));
 
         let file_a_ref = TreeReference::FILE(file_a_sum2);
@@ -671,11 +672,11 @@ mod tests {
         let snap_e_tree_str2 = snap_e_tree_str.clone();
         mock.expect_delete_tree()
             .once()
-            .withf(move |d| d == &snap_e_tree_str)
+            .withf(move |d| d == snap_e_tree_str)
             .returning(move |_| Ok(()));
         mock.expect_delete_xattr()
             .once()
-            .withf(move |id| id == &xattr_x1_str)
+            .withf(move |id| id == xattr_x1_str)
             .returning(move |_| Ok(()));
 
         let snapshot_e = Snapshot::new(None, snap_e_tree_sum2, Default::default());
@@ -688,7 +689,7 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot_e.clone())));
         mock.expect_delete_snapshot()
             .once()
-            .withf(move |id| id == &snapshot_e_str)
+            .withf(move |id| id == snapshot_e_str)
             .returning(move |_| Ok(()));
 
         // snapshot D:
@@ -712,11 +713,11 @@ mod tests {
         let tree_a_tree_str2 = tree_a_tree_str.clone();
         mock.expect_delete_tree()
             .once()
-            .withf(move |d| d == &tree_a_tree_str)
+            .withf(move |d| d == tree_a_tree_str)
             .returning(move |_| Ok(()));
         mock.expect_delete_file()
             .once()
-            .withf(move |id| id == &file_c_str)
+            .withf(move |id| id == file_c_str)
             .returning(move |_| Ok(()));
 
         let pack_p1_sum = Checksum::BLAKE3("8a6a0e6".to_owned());
@@ -739,7 +740,7 @@ mod tests {
         let snap_d_tree_str2 = snap_d_tree_str.clone();
         mock.expect_delete_tree()
             .once()
-            .withf(move |d| d == &snap_d_tree_str)
+            .withf(move |d| d == snap_d_tree_str)
             .returning(move |_| Ok(()));
 
         let snapshot_d = Snapshot::new(Some(snapshot_e2), snap_d_tree_sum2, Default::default());
@@ -752,7 +753,7 @@ mod tests {
             .returning(move |_| Ok(Some(snapshot_d.clone())));
         mock.expect_delete_snapshot()
             .once()
-            .withf(move |id| id == &snapshot_d_str)
+            .withf(move |id| id == snapshot_d_str)
             .returning(move |_| Ok(()));
 
         // snapshot C:
@@ -893,7 +894,7 @@ mod tests {
             .returning(move || Ok(vec![dataset1.clone()]));
         mock.expect_get_dataset()
             .once()
-            .withf(move |id| id == &dataset1_id)
+            .withf(move |id| id == dataset1_id)
             .returning(move |_| Ok(Some(dataset1_1.clone())));
 
         mock.expect_get_all_tree_digests()

@@ -474,9 +474,11 @@ fn test_backup_restore() -> Result<(), Error> {
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
     let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
-    let mut config: entities::Configuration = Default::default();
-    config.hostname = "localhost".into();
-    config.username = "charlie".into();
+    let mut config = entities::Configuration {
+        hostname: "localhost".into(),
+        username: "charlie".into(),
+        ..Default::default()
+    };
     datasource.put_configuration(&config)?;
 
     // backup the database

@@ -32,7 +32,7 @@ mod tests {
     fn test_restore_files_ok() {
         // arrange
         let mut mock = MockRestorer::new();
-        mock.expect_requests().returning(|| Vec::new());
+        mock.expect_requests().returning(Vec::new);
         // act
         let usecase = QueryRestores::new(Arc::new(mock));
         let params = NoParams {};

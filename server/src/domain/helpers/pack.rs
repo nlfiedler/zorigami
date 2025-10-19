@@ -164,7 +164,7 @@ pub fn extract_pack(
     if let Some(passwd) = password {
         reader.enable_encryption(passwd)?;
     }
-    reader.extract_all(&outdir)?;
+    reader.extract_all(outdir)?;
     Ok(results)
 }
 
@@ -233,16 +233,16 @@ mod tests {
     fn test_pack_builder_multi() -> Result<(), Error> {
         // build a pack file that becomes too full for more chunks
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let chunks = super::super::find_file_chunks(&infile, 16384)?;
+        let chunks = super::super::find_file_chunks(infile, 16384)?;
         assert_eq!(chunks.len(), 5);
         let mut builder = PackBuilder::new(65536);
         let outdir = tempdir()?;
         let packfile = outdir.path().join("archive.pack");
-        assert_eq!(builder.is_ready(), false);
-        assert_eq!(builder.is_empty(), true);
+        assert!(!builder.is_ready());
+        assert!(builder.is_empty());
         builder.initialize(&packfile)?;
-        assert_eq!(builder.is_ready(), true);
-        assert_eq!(builder.is_empty(), true);
+        assert!(builder.is_ready());
+        assert!(builder.is_empty());
         let mut chunks_written = 0;
         for chunk in chunks.iter() {
             chunks_written += 1;
@@ -251,11 +251,11 @@ mod tests {
             }
         }
         assert_eq!(chunks_written, 3);
-        assert_eq!(builder.is_empty(), false);
+        assert!(!builder.is_empty());
         let result = builder.finalize()?;
         assert_eq!(result, packfile);
-        assert_eq!(builder.is_ready(), false);
-        assert_eq!(builder.is_empty(), true);
+        assert!(!builder.is_ready());
+        assert!(builder.is_empty());
         // validate by extracting and checksumming all of the chunks
         let entries: Vec<String> = extract_pack(&packfile, outdir.path(), None)?;
         assert_eq!(entries.len(), 3);

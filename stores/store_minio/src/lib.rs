@@ -141,6 +141,7 @@ impl MinioStore {
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(outfile)
             .await?;
         let mut body = stream.into_async_read();

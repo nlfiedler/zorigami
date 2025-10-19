@@ -96,6 +96,6 @@ mod tests {
         // assert
         assert!(result.is_ok());
         let value = result.unwrap();
-        assert_eq!(value, true);
+        assert!(value);
     }
 }

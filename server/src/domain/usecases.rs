@@ -6,6 +6,7 @@ use std::cmp;
 use std::fmt;
 
 pub mod cancel_restore;
+pub mod count_snapshots;
 pub mod delete_dataset;
 pub mod delete_store;
 pub mod find_missing;

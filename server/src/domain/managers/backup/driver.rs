@@ -261,7 +261,7 @@ impl<'a> BackupDriver<'a> {
             // sufficiently unique for our purposes
             let locations = self
                 .stores
-                .store_pack(&pack_path, &bucket_name, &object_name)?;
+                .store_pack(pack_path, &bucket_name, &object_name)?;
             self.record
                 .record_completed_pack(self.dbase, &pack_digest, locations)?;
             self.state
@@ -327,6 +327,7 @@ fn calc_chunk_size(pack_size: u64) -> u32 {
     } else {
         DEFAULT_CHUNK_SIZE
     };
+    #[allow(clippy::useless_conversion)]
     chunk_size
         .try_into()
         .map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
@@ -483,7 +484,7 @@ mod tests {
     fn test_pack_record_verify_pack() -> Result<(), Error> {
         let mut record: PackRecord = Default::default();
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let chunks = super::helpers::find_file_chunks(&infile, 16384)?;
+        let chunks = super::helpers::find_file_chunks(infile, 16384)?;
         let mut builder = pack::PackBuilder::new(1048576).password("secret123");
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi-pack.pack");
@@ -508,7 +509,7 @@ mod tests {
         );
         record.chunks.push(chunk);
         let result = record.verify_pack(&packfile, "secret123")?;
-        assert_eq!(result, false);
+        assert!(!result);
 
         // remove one of the chunks from record, should raise an error
         record.chunks.pop();
@@ -593,7 +594,7 @@ mod tests {
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
-        dataset.pack_size = 131072 as u64;
+        dataset.pack_size = 131072;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
         fs::create_dir_all(&workspace)?;
@@ -752,7 +753,7 @@ mod tests {
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
-        dataset.pack_size = 582540 as u64;
+        dataset.pack_size = 582540;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
         fs::create_dir_all(&workspace)?;
@@ -785,7 +786,7 @@ mod tests {
         let mut pack_digests: Vec<Checksum> = vec![];
         for (_, checksum) in file_rec.chunks.iter() {
             let chunk_rec = dbase
-                .get_chunk(&checksum)?
+                .get_chunk(checksum)?
                 .ok_or_else(|| anyhow!("missing chunk {}", checksum))?;
             assert!(chunk_rec.packfile.is_some());
             let pack_digest = chunk_rec.packfile.clone().unwrap();
@@ -797,7 +798,7 @@ mod tests {
         // verify that there are two packs and their records exist
         assert_eq!(pack_digests.len(), 2);
         for pack_digest in pack_digests.iter() {
-            let maybe_pack = dbase.get_pack(&pack_digest)?;
+            let maybe_pack = dbase.get_pack(pack_digest)?;
             assert!(maybe_pack.is_some());
         }
 

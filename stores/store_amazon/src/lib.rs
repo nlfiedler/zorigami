@@ -1,6 +1,10 @@
 //
 // Copyright (c) 2025 Nathan Fiedler
 //
+
+// seemingly impossible to use this on a single line
+#![allow(clippy::await_holding_lock)]
+
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
@@ -204,6 +208,7 @@ impl AmazonStore {
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(outfile)
             .await?;
         let mut body = stream.into_async_read();
@@ -304,20 +309,22 @@ impl AmazonStore {
     async fn save_bucket_name(&self, original: &str, renamed: &str) -> Result<(), Error> {
         let client = self.connect_dynamo();
         // ensure the renames table exists
-        let mut create_input = CreateTableInput::default();
-        create_input.table_name = RENAMES_TABLE.into();
-        create_input.attribute_definitions = vec![AttributeDefinition {
-            attribute_name: "original".into(),
-            attribute_type: "S".into(),
-        }];
-        create_input.key_schema = vec![KeySchemaElement {
-            attribute_name: "original".into(),
-            key_type: "HASH".into(),
-        }];
-        create_input.provisioned_throughput = Some(ProvisionedThroughput {
-            read_capacity_units: 5,
-            write_capacity_units: 5,
-        });
+        let create_input = CreateTableInput {
+            table_name: RENAMES_TABLE.into(),
+            attribute_definitions: vec![AttributeDefinition {
+                attribute_name: "original".into(),
+                attribute_type: "S".into(),
+            }],
+            key_schema: vec![KeySchemaElement {
+                attribute_name: "original".into(),
+                key_type: "HASH".into(),
+            }],
+            provisioned_throughput: Some(ProvisionedThroughput {
+                read_capacity_units: 5,
+                write_capacity_units: 5,
+            }),
+            ..Default::default()
+        };
         let result = client.create_table(create_input).await;
         let created_result: Result<bool, Error> = if let Err(err) = result {
             match err {
@@ -335,8 +342,9 @@ impl AmazonStore {
             let mut retries = 10;
             let delay = std::time::Duration::from_millis(1000);
             loop {
-                let mut describe_input = DescribeTableInput::default();
-                describe_input.table_name = RENAMES_TABLE.into();
+                let describe_input = DescribeTableInput {
+                    table_name: RENAMES_TABLE.into(),
+                };
                 match client.describe_table(describe_input).await {
                     Ok(output) => {
                         if let Some(table) = output.table {
@@ -359,14 +367,20 @@ impl AmazonStore {
         }
 
         // insert table entry that maps `original` to `renamed`
-        let mut put_input = PutItemInput::default();
-        put_input.table_name = RENAMES_TABLE.into();
+        let mut put_input = PutItemInput {
+            table_name: RENAMES_TABLE.into(),
+            ..Default::default()
+        };
         let mut item: HashMap<String, AttributeValue> = HashMap::new();
-        let mut value = AttributeValue::default();
-        value.s = Some(original.into());
+        let value = AttributeValue {
+            s: Some(original.into()),
+            ..Default::default()
+        };
         item.insert("original".into(), value);
-        let mut value = AttributeValue::default();
-        value.s = Some(renamed.into());
+        let value = AttributeValue {
+            s: Some(renamed.into()),
+            ..Default::default()
+        };
         item.insert("renamed".into(), value);
         put_input.item = item;
         client.put_item(put_input).await?;
@@ -376,11 +390,15 @@ impl AmazonStore {
     /// Retrieve the renamed value for the original bucket.
     async fn get_bucket_name(&self, original: &str) -> Result<Option<String>, Error> {
         let client = self.connect_dynamo();
-        let mut get_input = GetItemInput::default();
-        get_input.table_name = RENAMES_TABLE.into();
+        let mut get_input = GetItemInput {
+            table_name: RENAMES_TABLE.into(),
+            ..Default::default()
+        };
         let mut key: HashMap<String, AttributeValue> = HashMap::new();
-        let mut value = AttributeValue::default();
-        value.s = Some(original.into());
+        let value = AttributeValue {
+            s: Some(original.into()),
+            ..Default::default()
+        };
         key.insert("original".into(), value);
         get_input.key = key;
         match client.get_item(get_input).await {
@@ -404,11 +422,15 @@ impl AmazonStore {
     fn delete_bucket_name(&self, original: &str) -> Result<(), Error> {
         block_on(async {
             let client = self.connect_dynamo();
-            let mut delete_input = DeleteItemInput::default();
-            delete_input.table_name = RENAMES_TABLE.into();
+            let mut delete_input = DeleteItemInput {
+                table_name: RENAMES_TABLE.into(),
+                ..Default::default()
+            };
             let mut key: HashMap<String, AttributeValue> = HashMap::new();
-            let mut value = AttributeValue::default();
-            value.s = Some(original.into());
+            let value = AttributeValue {
+                s: Some(original.into()),
+                ..Default::default()
+            };
             key.insert("original".into(), value);
             delete_input.key = key;
             client.delete_item(delete_input).await?;

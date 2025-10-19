@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn test_file_chunking_16k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(&infile, 16384)?;
+        let results = find_file_chunks(infile, 16384)?;
         assert_eq!(results.len(), 5);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 21325);
@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn test_file_chunking_32k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(&infile, 32768)?;
+        let results = find_file_chunks(infile, 32768)?;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 66549);
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn test_file_chunking_64k() -> io::Result<()> {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
-        let results = find_file_chunks(&infile, 65536)?;
+        let results = find_file_chunks(infile, 65536)?;
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].offset, 0);
         assert_eq!(results[0].length, 109466);

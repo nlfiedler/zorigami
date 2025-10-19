@@ -52,7 +52,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 131072 as u64;
+    dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
@@ -114,7 +114,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     // perform the fourth backup with shifted larger file
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = fixture_path.path().join("SekienShifted.jpg");
-    copy_with_prefix("mary had a little lamb", &infile, &outfile)?;
+    copy_with_prefix("mary had a little lamb", infile, &outfile)?;
     let request = backup::Request::new(
         dataset.clone(),
         dbase.clone(),
@@ -309,7 +309,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
+    dataset.pack_size = 65536;
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
@@ -546,7 +546,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 131072 as u64;
+    dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
@@ -600,7 +600,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         #[cfg(target_family = "windows")]
         use std::os::windows::fs;
         #[cfg(target_family = "unix")]
-        fs::symlink(&target, &dest)?;
+        fs::symlink(target, &dest)?;
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &dest)?;
     }
@@ -621,7 +621,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
 
     // restore the normal symlink from the first snapshot
     let snapshot = dbase
-        .get_snapshot(&first_backup.as_ref().unwrap())?
+        .get_snapshot(first_backup.as_ref().unwrap())?
         .unwrap();
     let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
     let result = sut.start(dbase.clone());
@@ -650,7 +650,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     // the symlink from the dataset to ensure restore functions correctly
     fs::remove_file(&fake_dest).unwrap();
     let snapshot = dbase
-        .get_snapshot(&first_backup.as_ref().unwrap())?
+        .get_snapshot(first_backup.as_ref().unwrap())?
         .unwrap();
     let sut = RestorerImpl::new(state, file_restorer_factory);
     let result = sut.start(dbase);
@@ -716,7 +716,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 131072 as u64;
+    dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup

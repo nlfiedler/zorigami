@@ -67,6 +67,7 @@ pub struct Params {
 }
 
 impl Params {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         basepath: PathBuf,
@@ -255,7 +256,7 @@ mod tests {
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
-            basepath: basepath,
+            basepath,
             schedules: vec![],
             workspace: None,
             pack_size: 33_554_432,

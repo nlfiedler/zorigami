@@ -3,7 +3,9 @@
 //
 use std::time::{Duration, SystemTimeError};
 
+#[cfg(feature = "ssr")]
 pub mod backup;
+#[cfg(feature = "ssr")]
 pub mod restore;
 pub mod state;
 

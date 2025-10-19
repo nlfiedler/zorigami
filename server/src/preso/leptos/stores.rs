@@ -51,26 +51,26 @@ fn create_dummy_store(store_type: StoreType) -> Store {
                 "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
             );
             props.insert("storage".into(), "STANDARD_IA".into());
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
         StoreType::AZURE => {
             props.insert("account".into(), "my-storage".into());
             props.insert("access_key".into(), "AKIAIOSFODNN7EXAMPLE".into());
             props.insert("access_tier".into(), "Cool".into());
             props.insert("custom_uri".into(), String::new());
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
         StoreType::GOOGLE => {
             props.insert(
@@ -80,23 +80,23 @@ fn create_dummy_store(store_type: StoreType) -> Store {
             props.insert("project".into(), "white-sunspot-12345".into());
             props.insert("region".into(), "us-west1".into());
             props.insert("storage".into(), "NEARLINE".into());
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
         StoreType::LOCAL => {
             props.insert("basepath".into(), ".".into());
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
         StoreType::MINIO => {
             props.insert("region".into(), "us-west-1".into());
@@ -106,26 +106,26 @@ fn create_dummy_store(store_type: StoreType) -> Store {
                 "secret_key".into(),
                 "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
             );
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
         StoreType::SFTP => {
             props.insert("remote_addr".into(), "127.0.0.1:22".into());
             props.insert("username".into(), "charlie".into());
             props.insert("password".into(), "secret123".into());
             props.insert("basepath".into(), ".".into());
-            return Store {
+            Store {
                 id: "auto-generated".into(),
                 store_type,
                 label: store_type.to_string(),
                 properties: props,
                 retention: PackRetention::ALL,
-            };
+            }
         }
     }
 }
@@ -296,7 +296,7 @@ pub fn StoresPage() -> impl IntoView {
                 </div>
             </nav>
             <div class="my-4 columns">
-                <div class="column is-one-fifth">
+                <div class="column is-one-quarter">
                     <div class="box">
                         <Transition fallback=move || {
                             view! { "Loading..." }
@@ -537,7 +537,7 @@ where
         // cannot read test_store() result inside action and set the signal at
         // the same time (Fn captures environment)
         if let Some(Err(err)) = test_action.value().get() {
-            log::error!("error: {}", err.to_string());
+            log::error!("error: {}", err);
             set_test_error_msg.set(err.to_string());
         } else {
             set_test_error_msg.set(String::new());
@@ -611,7 +611,7 @@ where
         // cannot read update_dataset() result inside action and set the signal
         // at the same time (Fn captures environment)
         if let Some(Err(err)) = save_action.value().get() {
-            log::error!("error: {}", err.to_string());
+            log::error!("error: {}", err);
             set_save_error_msg.set(err.to_string());
         } else {
             set_save_error_msg.set(String::new());
@@ -695,14 +695,14 @@ where
             class:is-hidden=move || test_error_msg.get().is_empty()
         >
             <button class="delete" on:click=move |_| set_test_error_msg.set(String::new())></button>
-            {move || format!("{}", test_error_msg.get())}
+            {move || test_error_msg.get().to_string()}
         </div>
         <div
             class="notification is-warning"
             class:is-hidden=move || save_error_msg.get().is_empty()
         >
             <button class="delete" on:click=move |_| set_save_error_msg.set(String::new())></button>
-            {move || format!("{}", save_error_msg.get())}
+            {move || save_error_msg.get().to_string()}
         </div>
     }
 }
@@ -740,7 +740,7 @@ fn StoreLabel(value: RwSignal<String>) -> impl IntoView {
                         </span>
                     </p>
                     <Show when=move || !error_msg.read().is_empty()>
-                        <p class="help is-danger">{format!("{}", error_msg.get())}</p>
+                        <p class="help is-danger">{error_msg.get().to_string()}</p>
                     </Show>
                 </div>
             </div>
@@ -763,7 +763,7 @@ fn PackRetention(retention: RwSignal<PackRetention>) -> impl IntoView {
     let update_value = move || {
         if retention_kind.get() == "days" {
             let days_str = days_input_ref.get().unwrap().value();
-            let days = u16::from_str_radix(&days_str, 10).unwrap_or(1);
+            let days = days_str.parse::<u16>().unwrap_or(1);
             retention.set(PackRetention::DAYS(days))
         } else {
             retention.set(PackRetention::ALL)
@@ -914,7 +914,7 @@ fn RequiredTextInput(
                         </span>
                     </p>
                     <Show when=move || !error_msg.read().is_empty()>
-                        <p class="help is-danger">{format!("{}", error_msg.get())}</p>
+                        <p class="help is-danger">{error_msg.get().to_string()}</p>
                     </Show>
                 </div>
             </div>
@@ -981,7 +981,7 @@ fn RequiredHiddenInput(
                         </p>
                     </div>
                     <Show when=move || !error_msg.read().is_empty()>
-                        <p class="help is-danger">{format!("{}", error_msg.get())}</p>
+                        <p class="help is-danger">{error_msg.get().to_string()}</p>
                     </Show>
                 </div>
             </div>
@@ -1015,8 +1015,8 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        let label_invalid = label_value.with(|v| if v.is_empty() { true } else { false });
-        let path_invalid = basepath_value.with(|v| if v.is_empty() { true } else { false });
+        let label_invalid = label_value.with(|v| v.is_empty());
+        let path_invalid = basepath_value.with(|v| v.is_empty());
         label_invalid || path_invalid
     });
 
@@ -1085,10 +1085,10 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        label_value.with(|v| if v.is_empty() { true } else { false })
-            || region_value.with(|v| if v.is_empty() { true } else { false })
-            || access_key_value.with(|v| if v.is_empty() { true } else { false })
-            || secret_key_value.with(|v| if v.is_empty() { true } else { false })
+        label_value.with(|v| v.is_empty())
+            || region_value.with(|v| v.is_empty())
+            || access_key_value.with(|v| v.is_empty())
+            || secret_key_value.with(|v| v.is_empty())
     });
 
     view! {
@@ -1191,7 +1191,7 @@ where
         props.insert("account".into(), new_account);
         props.insert("access_key".into(), new_access);
         props.insert("access_tier".into(), new_tier);
-        if new_uri.len() > 0 {
+        if !new_uri.is_empty() {
             // only set the custom_uri if the value is non-empty
             props.insert("custom_uri".into(), new_uri);
         }
@@ -1204,9 +1204,9 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        label_value.with(|v| if v.is_empty() { true } else { false })
-            || account_value.with(|v| if v.is_empty() { true } else { false })
-            || access_key_value.with(|v| if v.is_empty() { true } else { false })
+        label_value.with(|v| v.is_empty())
+            || account_value.with(|v| v.is_empty())
+            || access_key_value.with(|v| v.is_empty())
     });
 
     view! {
@@ -1316,10 +1316,10 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        label_value.with(|v| if v.is_empty() { true } else { false })
-            || credentials_value.with(|v| if v.is_empty() { true } else { false })
-            || project_id_value.with(|v| if v.is_empty() { true } else { false })
-            || region_value.with(|v| if v.is_empty() { true } else { false })
+        label_value.with(|v| v.is_empty())
+            || credentials_value.with(|v| v.is_empty())
+            || project_id_value.with(|v| v.is_empty())
+            || region_value.with(|v| v.is_empty())
     });
 
     view! {
@@ -1430,11 +1430,11 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        label_value.with(|v| if v.is_empty() { true } else { false })
-            || region_value.with(|v| if v.is_empty() { true } else { false })
-            || endpoint_value.with(|v| if v.is_empty() { true } else { false })
-            || access_key_value.with(|v| if v.is_empty() { true } else { false })
-            || secret_key_value.with(|v| if v.is_empty() { true } else { false })
+        label_value.with(|v| v.is_empty())
+            || region_value.with(|v| v.is_empty())
+            || endpoint_value.with(|v| v.is_empty())
+            || access_key_value.with(|v| v.is_empty())
+            || secret_key_value.with(|v| v.is_empty())
     });
 
     view! {
@@ -1521,11 +1521,11 @@ where
         }
     };
     let is_not_valid = Memo::new(move |_| {
-        label_value.with(|v| if v.is_empty() { true } else { false })
-            || address_value.with(|v| if v.is_empty() { true } else { false })
-            || username_value.with(|v| if v.is_empty() { true } else { false })
-            || password_value.with(|v| if v.is_empty() { true } else { false })
-            || basepath_value.with(|v| if v.is_empty() { true } else { false })
+        label_value.with(|v| v.is_empty())
+            || address_value.with(|v| v.is_empty())
+            || username_value.with(|v| v.is_empty())
+            || password_value.with(|v| v.is_empty())
+            || basepath_value.with(|v| v.is_empty())
     });
 
     view! {

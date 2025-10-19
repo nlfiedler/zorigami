@@ -63,6 +63,7 @@ impl BigInt {
         BigInt(value)
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn to_output<S: ScalarValue>(&self) -> Value<S> {
         Value::scalar(format!("{}", self.0))
     }
@@ -110,9 +111,8 @@ impl ChecksumGQL {
 
     fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
         v.as_string_value()
-            .map(|s| Checksum::from_str(s).ok())
-            .flatten()
-            .map(|c| ChecksumGQL(c))
+            .and_then(|s| Checksum::from_str(s).ok())
+            .map(ChecksumGQL)
             .ok_or_else(|| format!("Expected `Checksum`, found: {v}"))
     }
 
@@ -133,9 +133,8 @@ impl TreeReferenceGQL {
 
     fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
         v.as_string_value()
-            .map(|s| TreeReference::from_str(s).ok())
-            .flatten()
-            .map(|t| TreeReferenceGQL(t))
+            .and_then(|s| TreeReference::from_str(s).ok())
+            .map(TreeReferenceGQL)
             .ok_or_else(|| format!("Expected `TreeReference`, found: {v}"))
     }
 
@@ -218,7 +217,7 @@ impl entities::Snapshot {
 
     /// The snapshot before this one, if any.
     fn parent(&self) -> Option<ChecksumGQL> {
-        self.parent.clone().map(|c| ChecksumGQL(c))
+        self.parent.clone().map(ChecksumGQL)
     }
 
     /// Time when the snapshot was first created in UTC.
@@ -857,7 +856,7 @@ impl QueryRoot {
         let passphrase = helpers::crypto::get_passphrase();
         let params: Params = Params::new(dataset, digest.0, passphrase);
         let result: Option<Checksum> = usecase.call(params)?;
-        Ok(result.map(|c| ChecksumGQL(c)))
+        Ok(result.map(ChecksumGQL))
     }
 
     /// Return the number of each type of database record.
@@ -1012,6 +1011,7 @@ impl MutationRoot {
         let params: Params = Params::new(source_id, target_id);
         let result: u64 = usecase.call(params)?;
         // let's hope we never update more than 2 billion pack records
+        #[allow(clippy::useless_conversion)]
         let result_i32: i32 = result
             .try_into()
             .map_or(2_147_483_647_i32, |v: u64| v as i32);
@@ -1295,9 +1295,7 @@ mod tests {
             .returning(move || Ok(datasets.clone()));
         let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
         let mut stater = MockStateStore::new();
-        stater
-            .expect_get_state()
-            .returning(|| state::State::default());
+        stater.expect_get_state().returning(state::State::default);
         let appstate: Arc<dyn StateStore> = Arc::new(stater);
         let processor = Arc::new(MockScheduler::new());
         let restorer = Arc::new(MockRestorer::new());
@@ -1537,11 +1535,13 @@ mod tests {
     fn test_query_snapshot_some() {
         // arrange
         let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let mut file_counts: entities::FileCounts = Default::default();
-        file_counts.directories = 4;
-        file_counts.symlinks = 6;
-        file_counts.very_small_files = 100;
-        file_counts.very_large_files = 10;
+        let file_counts = entities::FileCounts {
+            directories: 4,
+            symlinks: 6,
+            very_small_files: 100,
+            very_large_files: 10,
+            ..Default::default()
+        };
         let snapshot = entities::Snapshot::new(None, tree_sha, file_counts);
         let snapshot_sha1 = snapshot.digest.clone();
         let snapshot_sha2 = snapshot.digest.clone();

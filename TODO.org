@@ -1,19 +1,37 @@
 * Tasks
 ** TODO [#A] Replace Flutter with Leptos
+*** TODO home page
+**** DONE name it ~Home~ and show summary of datasets
+**** DONE for each dataset, card header arrow icon navigates to =/datasets= page
+**** DONE for each dataset, show schedule frequency
+**** DONE for each dataset, show retention policy
+**** DONE for each dataset, show status (running, paused, finished, etc)
+**** DONE format dates using local time if possible
+**** DONE for each dataset, show how many snapshots exist
+**** DONE for each dataset, show date/time of oldest snapshot
+**** DONE for each dataset, show date/time of most recent snapshot
+**** TODO for each dataset, provide button to prune according to policy
+**** TODO for each dataset, provide button to start/stop backup
+**** TODO snopshot prune button needs to show status of pruning (like upload button)
+**** TODO consider how start/stop button could use an =Action= to wait on a running backup
+***** if no backup running, show ~Start~
+***** if backup running, wait for finish, action is ~pending~, button shows ~Stop~
+***** when action is completed, button shows ~Start~ again
+**** DONE when there are no stores, suggest visiting stores page to start setup
+**** DONE when there are no data sets, suggest visiting datasets page to start setup
 *** TODO snapshots page
 **** consider showing list of snapshots with pagination
+**** maybe use =bulma-list= to show snapshot date/time, with more info on right
+**** tree browser
+***** add =/tree= route to show tree by its digest
+***** show breadcrumbs of the path leading up to this tree
+***** breadcrumbs would be built up via clicking
+***** jumping directly to a tree route would not show breadcrumbs
 *** TODO restore database page
 *** TODO settings page
 **** fields to set the hostname and username
 **** show computer UUID based on inputs
 **** explain how these are used to generate bucket names
-*** TODO browse page
-**** maybe name it ~Home~ and show summary of datasets
-**** for each dataset, show date/time of latest snapshot
-**** for each dataset, show how many snapshots exist
-**** for each dataset, show retention policy, provide button to prune according to policy
-**** when there are no stores, suggest visiting stores page to start setup
-**** when there are no data sets, suggest visiting datasets page to start setup
 *** TODO maybe replace the navbar icon with a fontawesome icon
 *** TODO look for ~issues~ in browser tools on every page
 *** TODO test building and running on Windows, update instructions
@@ -22,6 +40,9 @@
 **** when there are no datasets, say so, prominently show ~add~ button
 **** when there are no snapshots, indicate that something will happen eventually
 **** when there are no stores, ~Restore~ page should suggest going to stores page to define some stores
+*** TODO test restoring the database from a backup
+**** delete the =database= directory but not the =packs=
+**** home page should guide toward defining a pack store and link to restore page
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
 *** TODO update =Dockerfile=
@@ -50,6 +71,12 @@
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Replace minio with SeaweedFS
 *** https://github.com/seaweedfs/seaweedfs
+** Use =tzarrays::simple::OptimalArray= instead of =Vec= in ~get_all~ functions in =EntityDataSourceImpl=
+*** functions in =EntityDataSourceImpl= to be changed [/]
+- [ ] get_all_tree_digests()
+- [ ] get_all_file_digests()
+- [ ] get_all_chunk_digests()
+- [ ] get_all_xattr_digests()
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -121,6 +148,8 @@
 ** Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
+** Store extended attributes (xattrs) in packs
+*** xattrs can be megabytes in size, they should be in the packs, not the database
 ** File changes during backup
 *** what if a file changes between the snapshot and the backup? is there a better approach
 *** if a file changes between snapshot and packing, it will get backed up again the next time
@@ -211,7 +240,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** [#B] Pack file and database backup pruning
+** TODO [#B] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
 **** either retain ~all~ or ~delete after N days~
@@ -321,6 +350,10 @@ Deleted local snapshot '2021-04-05-162416'
 *** Show number of packs stored in a pack store
 ** Architecture Review
 *** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
+*** Learn more about Pragmatic Clean Architecture
+**** c.f. https://www.milanjovanovic.tech/pragmatic-clean-architecture
+**** c.f. https://arg-software.medium.com/taming-the-chaos-a-developers-guide-to-pragmatic-clean-architecture-in-net-%EF%B8%8F-c0b05de359a7
+**** c.f. https://www.ssw.com.au/rules/rules-to-better-clean-architecture/
 *** Alternative databases
 **** some records are not suitable for relational DB, such as trees, chunks, and packs
 **** DuckDB

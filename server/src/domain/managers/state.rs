@@ -219,6 +219,12 @@ impl StateStore for StateStoreImpl {
     }
 }
 
+impl Default for StateStoreImpl {
+    fn default() -> Self {
+        StateStoreImpl::new()
+    }
+}
+
 // Internal actions for managing the subscriber list.
 #[derive(Clone)]
 enum SubscriberAction {
@@ -566,7 +572,7 @@ impl Reducer<RestorerAction> for State {
 
 impl State {
     /// Return all of the datasets currently in the backups collection.
-    pub fn active_datasets(&self) -> hash_map::Iter<String, BackupState> {
+    pub fn active_datasets(&self) -> hash_map::Iter<'_, String, BackupState> {
         self.backups.iter()
     }
 
@@ -634,9 +640,9 @@ mod tests {
         sut.backup_event(BackupAction::Error(key.to_owned(), String::from("oh no")));
         let state = sut.get_state();
         let backup = state.backups(key).unwrap();
-        assert_eq!(backup.had_error(), true);
+        assert!(backup.had_error());
         assert_eq!(backup.error_message(), Some(String::from("oh no")));
-        assert_eq!(backup.is_paused(), false);
+        assert!(!backup.is_paused());
     }
 
     #[test]
@@ -647,8 +653,8 @@ mod tests {
         sut.backup_event(BackupAction::Pause(key.to_owned()));
         let state = sut.get_state();
         let backup = state.backups(key).unwrap();
-        assert_eq!(backup.had_error(), false);
-        assert_eq!(backup.is_paused(), true);
+        assert!(!backup.had_error());
+        assert!(backup.is_paused());
     }
 
     #[test]
@@ -672,14 +678,14 @@ mod tests {
         sut.backup_event(BackupAction::Finish(key.to_owned()));
         let state = sut.get_state();
         let backup = state.backups(key).unwrap();
-        assert_eq!(backup.had_error(), true);
-        assert_eq!(backup.is_paused(), true);
+        assert!(backup.had_error());
+        assert!(backup.is_paused());
         assert!(backup.end_time().is_some());
         sut.backup_event(BackupAction::Restart(key.to_owned()));
         let state = sut.get_state();
         let backup = state.backups(key).unwrap();
-        assert_eq!(backup.had_error(), false);
-        assert_eq!(backup.is_paused(), false);
+        assert!(!backup.had_error());
+        assert!(!backup.is_paused());
         assert!(backup.end_time().is_none());
     }
 
@@ -761,8 +767,8 @@ mod tests {
         sut.wait_for_backup(BackupAction::Finish("dataset".into()));
         let state = sut.get_state();
         let backup = state.backups("dataset").unwrap();
-        assert_eq!(backup.had_error(), false);
-        assert_eq!(backup.is_paused(), false);
+        assert!(!backup.had_error());
+        assert!(!backup.is_paused());
         assert!(backup.end_time().is_some());
     }
 

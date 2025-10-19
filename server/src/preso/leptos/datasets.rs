@@ -120,7 +120,7 @@ pub fn DatasetsPage() -> impl IntoView {
     );
     let create_dataset = Action::new(move |_input: &()| async move {
         let basepath = Path::new("/");
-        let dummy = Dataset::new(&basepath);
+        let dummy = Dataset::new(basepath);
         match create_dataset(dummy).await {
             Ok(id) => {
                 datasets_resource.refetch();
@@ -157,7 +157,7 @@ pub fn DatasetsPage() -> impl IntoView {
             </nav>
 
             <div class="my-4 columns">
-                <div class="column is-one-fifth">
+                <div class="column is-one-quarter">
                     <div class="box">
                         <Transition fallback=move || {
                             view! { "Loading..." }
@@ -194,7 +194,7 @@ pub fn DatasetsPage() -> impl IntoView {
                                                                     {format!("{}", dataset.get_value().basepath.display())}
                                                                 </div>
                                                                 <div class="list-item-description">
-                                                                    {format_schedule(dataset.get_value().schedules.get(0))}
+                                                                    {format_schedule(dataset.get_value().schedules.first())}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -328,18 +328,18 @@ where
     let packsize = dataset.pack_size / 1048576;
 
     // scheduling
-    let (frequency, set_frequency) = signal(match dataset.schedules.get(0) {
+    let (frequency, set_frequency) = signal(match dataset.schedules.first() {
         None => "manual",
         Some(Schedule::Hourly) => "hourly",
         Some(Schedule::Daily(_)) => "daily",
         Some(Schedule::Weekly(_)) => "manual",
         Some(Schedule::Monthly(_)) => "manual",
     });
-    let start_time = RwSignal::new(match dataset.schedules.get(0) {
+    let start_time = RwSignal::new(match dataset.schedules.first() {
         Some(Schedule::Daily(Some(ref range))) => range.format_start(),
         _ => String::from("00:00"),
     });
-    let stop_time = RwSignal::new(match dataset.schedules.get(0) {
+    let stop_time = RwSignal::new(match dataset.schedules.first() {
         Some(Schedule::Daily(Some(ref range))) => range.format_stop(),
         _ => String::from("00:00"),
     });
@@ -368,7 +368,7 @@ where
     let build_dataset = move || {
         let new_basepath = basepath_input_ref.get().unwrap().value();
         let basepath = Path::new(&new_basepath);
-        let mut new_dataset = Dataset::new(&basepath);
+        let mut new_dataset = Dataset::new(basepath);
         new_dataset.id = dataset_id.get_value();
         // set the schedule(s)
         if frequency.get() == "hourly" {
@@ -397,11 +397,11 @@ where
         // set the retention policy
         if retention.get() == "count" {
             let count_str = retain_count.get();
-            let count = u16::from_str_radix(&count_str, 10).unwrap_or(1);
+            let count = count_str.parse::<u16>().unwrap_or(1);
             new_dataset.retention = SnapshotRetention::COUNT(count);
         } else if retention.get() == "days" {
             let days_str = retain_days.get();
-            let days = u16::from_str_radix(&days_str, 10).unwrap_or(1);
+            let days = days_str.parse::<u16>().unwrap_or(1);
             new_dataset.retention = SnapshotRetention::DAYS(days);
         }
         new_dataset
@@ -423,7 +423,7 @@ where
         }
         let new_pack_size = packsize_input_ref.get().unwrap().value();
         if let Ok(pack_size) = new_pack_size.parse::<u64>() {
-            if pack_size < 16 || pack_size > 256 {
+            if !(16..=256).contains(&pack_size) {
                 set_packsize_error_msg.set("Pack size must be between 16 and 256.");
                 set_is_not_valid.set(true);
             }
@@ -431,7 +431,7 @@ where
             set_packsize_error_msg.set("Pack size must be a natural number.");
             set_is_not_valid.set(true);
         }
-        if selected_stores.read().len() == 0 {
+        if selected_stores.read().is_empty() {
             set_stores_error_msg.set("At least one store must be selected.");
             set_is_not_valid.set(true);
         }
@@ -457,7 +457,7 @@ where
             class:is-hidden=move || save_error_msg.get().is_empty()
         >
             <button class="delete" on:click=move |_| set_save_error_msg.set(String::new())></button>
-            {move || format!("{}", save_error_msg.get())}
+            {move || save_error_msg.get().to_string()}
         </div>
         <div class="m-4">
             <div class="mb-2 field is-horizontal">
@@ -809,7 +809,7 @@ where
                         />
                         {format!(
                             "[{}] {}",
-                            store.get_value().store_type.to_string(),
+                            store.get_value().store_type,
                             store.get_value().label,
                         )}
                     </label>
@@ -863,7 +863,7 @@ where
         // cannot read update_dataset() result inside action and set the signal
         // at the same time (Fn captures environment)
         if let Some(Err(err)) = save_action.value().get() {
-            log::error!("error: {}", err.to_string());
+            log::error!("error: {}", err);
             set_save_error_msg.set(err.to_string());
         } else {
             set_save_error_msg.set(String::new());

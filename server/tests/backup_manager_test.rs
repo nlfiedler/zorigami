@@ -46,7 +46,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 131072 as u64;
+    dataset.pack_size = 131072;
     let dataset_id = dataset.id.clone();
 
     // perform the first backup
@@ -120,7 +120,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
+    dataset.pack_size = 65536;
 
     // start the backup manager after the stop time has already passed; should
     // return an "out of time" error
@@ -176,7 +176,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
-    dataset.pack_size = 65536 as u64;
+    dataset.pack_size = 65536;
 
     // perform a backup where there is only an empty file
     let performer = PerformerImpl::default();

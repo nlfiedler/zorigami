@@ -101,25 +101,20 @@ impl Model for Configuration {
 
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         use ciborium::Value;
-        let mut fields: Vec<(Value, Value)> = vec![];
-
-        // hostname
-        fields.push((
-            Value::Text("hostname".into()),
-            Value::Text(self.hostname.clone()),
-        ));
-
-        // username
-        fields.push((
-            Value::Text("username".into()),
-            Value::Text(self.username.clone()),
-        ));
-
-        // computer_id
-        fields.push((
-            Value::Text("computer_id".into()),
-            Value::Text(self.computer_id.clone()),
-        ));
+        let fields: Vec<(Value, Value)> = vec![
+            (
+                Value::Text("hostname".into()),
+                Value::Text(self.hostname.clone()),
+            ),
+            (
+                Value::Text("username".into()),
+                Value::Text(self.username.clone()),
+            ),
+            (
+                Value::Text("computer_id".into()),
+                Value::Text(self.computer_id.clone()),
+            ),
+        ];
 
         let doc = Value::Map(fields);
         let mut encoded: Vec<u8> = Vec::new();
@@ -319,7 +314,7 @@ impl Model for Store {
         use ciborium::Value;
         use std::str::FromStr;
 
-        let store_id = str::from_utf8(&key)?.to_owned();
+        let store_id = str::from_utf8(key)?.to_owned();
         let mut store_type = StoreType::LOCAL;
         let mut store_label = String::from("default");
         let mut store_props: HashMap<String, String> = HashMap::new();
@@ -427,8 +422,10 @@ impl Model for Dataset {
     fn from_bytes(key: &[u8], value: &[u8]) -> Result<Self, Error> {
         use ciborium::Value;
 
-        let mut dataset: Dataset = Default::default();
-        dataset.id = str::from_utf8(&key)?.to_owned();
+        let mut dataset: Dataset = Dataset {
+            id: str::from_utf8(key)?.to_owned(),
+            ..Default::default()
+        };
 
         let raw_value: Value =
             ciborium::de::from_reader(value).map_err(|err| anyhow!("cbor read error: {}", err))?;
@@ -611,7 +608,7 @@ impl Model for Tree {
         use ciborium::Value;
         use std::str::FromStr;
 
-        let digest_str = str::from_utf8(&key)?.to_owned();
+        let digest_str = str::from_utf8(key)?.to_owned();
         let digest = Checksum::from_str(&digest_str)?;
         let mut entries: Vec<TreeEntry> = vec![];
 
@@ -930,7 +927,7 @@ impl Model for File {
         use ciborium::Value;
         use std::str::FromStr;
 
-        let digest_str = str::from_utf8(&key)?.to_owned();
+        let digest_str = str::from_utf8(key)?.to_owned();
         let digest = Checksum::from_str(&digest_str)?;
 
         let raw_value: Value =
@@ -1012,7 +1009,7 @@ impl Model for Snapshot {
         use ciborium::Value;
         use std::str::FromStr;
 
-        let digest_str = str::from_utf8(&key)?.to_owned();
+        let digest_str = str::from_utf8(key)?.to_owned();
         let digest = Checksum::from_str(&digest_str)?;
 
         let raw_value: Value =
@@ -1187,7 +1184,7 @@ impl Model for Snapshot {
         for (key, value) in self.file_counts.file_sizes.iter() {
             file_sizes.push((
                 Value::Integer((*key as u32).into()),
-                Value::Integer((*value as u32).into()),
+                Value::Integer((*value).into()),
             ));
         }
         fields.push((Value::Text("fcs".into()), Value::Map(file_sizes)));
@@ -1209,7 +1206,7 @@ impl Model for Chunk {
         use ciborium::Value;
         use std::str::FromStr;
 
-        let digest_str = str::from_utf8(&key)?.to_owned();
+        let digest_str = str::from_utf8(key)?.to_owned();
         let digest = Checksum::from_str(&digest_str)?;
         let mut chunk: Chunk = Chunk::new(digest, 0, 0);
 
@@ -1273,7 +1270,7 @@ impl Model for Pack {
         use std::str::FromStr;
 
         let digest_str = str::from_utf8(key)?;
-        let digest: Checksum = Checksum::from_str(&digest_str)?;
+        let digest: Checksum = Checksum::from_str(digest_str)?;
         let mut pack = Pack::new(digest, vec![]);
 
         let raw_value: Value =
@@ -1337,10 +1334,11 @@ impl Model for Pack {
         // locations
         let mut locations: Vec<Value> = vec![];
         for loc in self.locations.iter() {
-            let mut fields: Vec<(Value, Value)> = vec![];
-            fields.push((Value::Text("s".into()), Value::Text(loc.store.clone())));
-            fields.push((Value::Text("b".into()), Value::Text(loc.bucket.clone())));
-            fields.push((Value::Text("o".into()), Value::Text(loc.object.clone())));
+            let fields: Vec<(Value, Value)> = vec![
+                (Value::Text("s".into()), Value::Text(loc.store.clone())),
+                (Value::Text("b".into()), Value::Text(loc.bucket.clone())),
+                (Value::Text("o".into()), Value::Text(loc.object.clone())),
+            ];
             locations.push(Value::Map(fields));
         }
         fields.push((Value::Text("l".into()), Value::Array(locations)));
@@ -1559,7 +1557,7 @@ mod tests {
         let encoded = snapshot.to_bytes()?;
         assert_eq!(encoded.len(), 70);
         let key = snapshot.digest.to_string();
-        let actual = Snapshot::from_bytes(&key.as_bytes(), &encoded)?;
+        let actual = Snapshot::from_bytes(key.as_bytes(), &encoded)?;
         // assert
         assert_eq!(actual.digest.to_string(), key);
         assert!(actual.parent.is_none());
@@ -1582,9 +1580,11 @@ mod tests {
         // arrange
         let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
         let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
-        let mut file_counts: FileCounts = Default::default();
-        file_counts.directories = 5;
-        file_counts.symlinks = 2;
+        let mut file_counts: FileCounts = FileCounts {
+            directories: 5,
+            symlinks: 2,
+            ..Default::default()
+        };
         file_counts.register_file(64);
         file_counts.register_file(128);
         file_counts.register_file(1024);
@@ -1598,7 +1598,7 @@ mod tests {
         let encoded = snapshot.to_bytes()?;
         assert_eq!(encoded.len(), 109);
         let key = snapshot.digest.to_string();
-        let actual = Snapshot::from_bytes(&key.as_bytes(), &encoded)?;
+        let actual = Snapshot::from_bytes(key.as_bytes(), &encoded)?;
         // assert
         assert_eq!(actual.digest.to_string(), key);
         assert_eq!(actual.parent, snapshot.parent);
@@ -1707,7 +1707,7 @@ mod tests {
         let encoded = tree.to_bytes()?;
         assert_eq!(encoded.len(), 390);
         let key = tree.digest.to_string();
-        let actual = Tree::from_bytes(&key.as_bytes(), &encoded)?;
+        let actual = Tree::from_bytes(key.as_bytes(), &encoded)?;
         // assert
         assert_eq!(actual.entries.len(), 4);
         // entries will be sorted by name on the way into the tree
@@ -1755,7 +1755,7 @@ mod tests {
         let encoded = file.to_bytes()?;
         assert_eq!(encoded.len(), 39);
         let key = "sha1-c648ebac0ed42e3ce4bd5e042b6cbd33a924baa8";
-        let actual = File::from_bytes(&key.as_bytes(), &encoded)?;
+        let actual = File::from_bytes(key.as_bytes(), &encoded)?;
         // assert
         assert_eq!(actual.digest, file_digest);
         assert_eq!(actual.length, file.length);
@@ -1782,7 +1782,7 @@ mod tests {
         let encoded = file.to_bytes()?;
         assert_eq!(encoded.len(), 99);
         let key = "sha1-c648ebac0ed42e3ce4bd5e042b6cbd33a924baa8";
-        let actual = File::from_bytes(&key.as_bytes(), &encoded)?;
+        let actual = File::from_bytes(key.as_bytes(), &encoded)?;
         // assert
         assert_eq!(actual.digest, file_digest);
         assert_eq!(actual.length, file.length);

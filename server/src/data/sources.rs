@@ -83,7 +83,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         match encoded {
             Some(value) => {
                 // converting from str to bytes and back is unavoidable
-                let result = Chunk::from_bytes(&key[6..].as_bytes(), &value)?;
+                let result = Chunk::from_bytes(&key.as_bytes()[6..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -126,7 +126,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = Pack::from_bytes(&key[5..].as_bytes(), &value)?;
+                let result = Pack::from_bytes(&key.as_bytes()[5..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -138,7 +138,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("pack/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
+            let result = Pack::from_bytes(key.as_bytes(), &value)?;
             // pack must have at least one pack location whose store identifier
             // matches the one given
             if result.locations.iter().any(|l| l.store == store_id) {
@@ -153,7 +153,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("pack/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
+            let result = Pack::from_bytes(key.as_bytes(), &value)?;
             results.push(result);
         }
         Ok(results)
@@ -172,7 +172,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = Pack::from_bytes(&key[6..].as_bytes(), &value)?;
+                let result = Pack::from_bytes(&key.as_bytes()[6..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -184,7 +184,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let packs = db.fetch_prefix("dbase/")?;
         let mut results: Vec<Pack> = Vec::new();
         for (key, value) in packs {
-            let result = Pack::from_bytes(&key.as_bytes(), &value)?;
+            let result = Pack::from_bytes(key.as_bytes(), &value)?;
             results.push(result);
         }
         Ok(results)
@@ -232,7 +232,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = File::from_bytes(&key[5..].as_bytes(), &value)?;
+                let result = File::from_bytes(&key.as_bytes()[5..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -268,7 +268,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = Tree::from_bytes(&key[5..].as_bytes(), &value)?;
+                let result = Tree::from_bytes(&key.as_bytes()[5..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -303,7 +303,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let stores = db.fetch_prefix("store/")?;
         let mut results: Vec<Store> = Vec::new();
         for (key, value) in stores {
-            let result = Store::from_bytes(&key.as_bytes(), &value)?;
+            let result = Store::from_bytes(key.as_bytes(), &value)?;
             results.push(result);
         }
         Ok(results)
@@ -315,7 +315,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = Store::from_bytes(&key[6..].as_bytes(), &value)?;
+                let result = Store::from_bytes(&key.as_bytes()[6..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),
@@ -386,7 +386,7 @@ impl EntityDataSource for EntityDataSourceImpl {
         let encoded = db.get_document(key.as_bytes())?;
         match encoded {
             Some(value) => {
-                let result = Snapshot::from_bytes(&key[9..].as_bytes(), &value)?;
+                let result = Snapshot::from_bytes(&key.as_bytes()[9..], &value)?;
                 Ok(Some(result))
             }
             None => Ok(None),

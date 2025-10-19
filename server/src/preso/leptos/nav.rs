@@ -44,7 +44,7 @@ pub fn NavBar() -> impl IntoView {
             <div id="navbarBasicExample" class="navbar-menu">
                 <div class="navbar-start">
                     <a class="navbar-item" href="/">
-                        Browse
+                        Home
                     </a>
 
                     <a class="navbar-item" href="/snapshots">

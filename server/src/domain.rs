@@ -5,7 +5,6 @@
 pub mod entities;
 #[cfg(feature = "ssr")]
 pub mod helpers;
-#[cfg(feature = "ssr")]
 pub mod managers;
 #[cfg(feature = "ssr")]
 pub mod repositories;
