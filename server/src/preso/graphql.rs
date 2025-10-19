@@ -14,8 +14,8 @@ use crate::domain::repositories::RecordRepository;
 use crate::domain::sources::EntityDataSource;
 use chrono::prelude::*;
 use juniper::{
-    EmptySubscription, FieldResult, GraphQLEnum, GraphQLObject, GraphQLScalar, InputValue,
-    ParseScalarResult, ParseScalarValue, RootNode, ScalarToken, ScalarValue, Value,
+    EmptySubscription, FieldResult, GraphQLEnum, GraphQLObject, GraphQLScalar, ParseScalarResult,
+    ParseScalarValue, RootNode, ScalarToken, ScalarValue,
 };
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -64,16 +64,15 @@ impl BigInt {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn to_output<S: ScalarValue>(&self) -> Value<S> {
-        Value::scalar(format!("{}", self.0))
+    fn to_output(&self) -> impl std::fmt::Display {
+        format!("{}", self.0)
     }
 
-    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
-        v.as_scalar_value()
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<i64>().ok())
+    fn from_input(s: &str) -> Result<Self, String> {
+        s.parse::<i64>()
+            .ok()
             .map(BigInt)
-            .ok_or_else(|| format!("Expected `BigInt`, found: {v}"))
+            .ok_or_else(|| format!("Expected `BigInt`, found: {s}"))
     }
 
     fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
@@ -105,15 +104,15 @@ impl From<u32> for BigInt {
 struct ChecksumGQL(Checksum);
 
 impl ChecksumGQL {
-    fn to_output<S: ScalarValue>(&self) -> Value<S> {
-        Value::scalar(format!("{}", self.0))
+    fn to_output(&self) -> impl std::fmt::Display {
+        format!("{}", self.0)
     }
 
-    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
-        v.as_string_value()
-            .and_then(|s| Checksum::from_str(s).ok())
+    fn from_input(s: &str) -> Result<Self, String> {
+        Checksum::from_str(s)
+            .ok()
             .map(ChecksumGQL)
-            .ok_or_else(|| format!("Expected `Checksum`, found: {v}"))
+            .ok_or_else(|| format!("Expected `Checksum`, found: {s}"))
     }
 
     fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
@@ -127,15 +126,15 @@ impl ChecksumGQL {
 struct TreeReferenceGQL(TreeReference);
 
 impl TreeReferenceGQL {
-    fn to_output<S: ScalarValue>(&self) -> Value<S> {
-        Value::scalar(format!("{}", self.0))
+    fn to_output(&self) -> impl std::fmt::Display {
+        format!("{}", self.0)
     }
 
-    fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<Self, String> {
-        v.as_string_value()
-            .and_then(|s| TreeReference::from_str(s).ok())
+    fn from_input(s: &str) -> Result<Self, String> {
+        TreeReference::from_str(s)
+            .ok()
             .map(TreeReferenceGQL)
-            .ok_or_else(|| format!("Expected `TreeReference`, found: {v}"))
+            .ok_or_else(|| format!("Expected `TreeReference`, found: {s}"))
     }
 
     fn parse_token<S: ScalarValue>(value: ScalarToken<'_>) -> ParseScalarResult<S> {
@@ -1080,7 +1079,7 @@ impl MutationRoot {
     }
 }
 
-pub type Schema = RootNode<'static, QueryRoot, MutationRoot, EmptySubscription<GraphContext>>;
+pub type Schema = RootNode<QueryRoot, MutationRoot, EmptySubscription<GraphContext>>;
 
 /// Create the GraphQL schema.
 pub fn create_schema() -> Schema {
@@ -1185,11 +1184,11 @@ mod tests {
         let res = res.get_field_value("configuration").unwrap();
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("computerId").unwrap();
-        let actual = res.as_scalar_value::<String>().unwrap();
+        let actual = res.as_scalar().unwrap().try_as_str().unwrap();
         let username = whoami::username();
         let hostname = whoami::fallible::hostname().unwrap_or("none".into());
         let expected = entities::Configuration::generate_unique_id(&username, &hostname);
-        assert_eq!(actual, &expected);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -1227,10 +1226,10 @@ mod tests {
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
         let field = object.get_field_value("storeType").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "local");
         let field = object.get_field_value("label").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "mylocalstore");
     }
 
@@ -1320,10 +1319,10 @@ mod tests {
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
         let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "/home/planet");
         let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "NONE");
     }
 
@@ -1362,10 +1361,10 @@ mod tests {
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
         let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "/home/planet");
         let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "RUNNING");
     }
 
@@ -1406,13 +1405,13 @@ mod tests {
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
         let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "/home/planet");
         let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "FAILED");
         let field = object.get_field_value("errorMessage").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "oh no");
     }
 
@@ -1502,8 +1501,8 @@ mod tests {
         let res = res.get_field_value("recordCounts").unwrap();
         let object = res.as_object_value().unwrap();
         let field = object.get_field_value("chunks").unwrap();
-        let value = field.as_scalar_value::<i32>().unwrap();
-        assert_eq!(*value, 5);
+        let value = field.as_scalar().unwrap().try_to_int().unwrap();
+        assert_eq!(value, 5);
     }
 
     #[test]
@@ -1574,7 +1573,7 @@ mod tests {
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("fileCount").unwrap();
         // fileCounts are bigints that comes over the wire as strings
-        let value = res.as_scalar_value::<String>().unwrap();
+        let value = res.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "110");
     }
 
@@ -1689,7 +1688,7 @@ mod tests {
         assert_eq!(list.len(), 1);
         let object = list[0].as_object_value().unwrap();
         let field = object.get_field_value("name").unwrap();
-        let value = field.as_scalar_value::<String>().unwrap();
+        let value = field.as_scalar().unwrap().try_as_str().unwrap();
         assert_eq!(value, "lorem-ipsum.txt");
     }
 
