@@ -1,3 +1,4 @@
+name: zorigami-dev
 services:
   app:
     build:

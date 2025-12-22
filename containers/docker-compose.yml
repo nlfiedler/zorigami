@@ -1,16 +1,15 @@
 #
 # Define containers used in automated testing.
 #
-version: '3.7'
-
+name: zorigami-test
 services:
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite
-    container_name: zorigami_azure
-    ports:
-      - "10000:10000"
-    command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000"
-    restart: always
+  # azurite:
+  #   image: mcr.microsoft.com/azure-storage/azurite
+  #   container_name: zorigami_azure
+  #   ports:
+  #     - "10000:10000"
+  #   command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000"
+  #   restart: always
   sftp:
     image: atmoz/sftp
     container_name: zorigami_sftp
