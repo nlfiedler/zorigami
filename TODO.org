@@ -1,37 +1,72 @@
 * Tasks
-** TODO [#A] Replace Flutter with Leptos
-*** TODO home page
-**** DONE name it ~Home~ and show summary of datasets
-**** DONE for each dataset, card header arrow icon navigates to =/datasets= page
-**** DONE for each dataset, show schedule frequency
-**** DONE for each dataset, show retention policy
-**** DONE for each dataset, show status (running, paused, finished, etc)
-**** DONE format dates using local time if possible
-**** DONE for each dataset, show how many snapshots exist
-**** DONE for each dataset, show date/time of oldest snapshot
-**** DONE for each dataset, show date/time of most recent snapshot
-**** TODO for each dataset, provide button to prune according to policy
-**** TODO for each dataset, provide button to start/stop backup
-**** TODO snopshot prune button needs to show status of pruning (like upload button)
-**** TODO consider how start/stop button could use an =Action= to wait on a running backup
-***** if no backup running, show ~Start~
-***** if backup running, wait for finish, action is ~pending~, button shows ~Stop~
-***** when action is completed, button shows ~Start~ again
-**** DONE when there are no stores, suggest visiting stores page to start setup
-**** DONE when there are no data sets, suggest visiting datasets page to start setup
-*** TODO snapshots page
-**** consider showing list of snapshots with pagination
-**** maybe use =bulma-list= to show snapshot date/time, with more info on right
-**** tree browser
-***** add =/tree= route to show tree by its digest
-***** show breadcrumbs of the path leading up to this tree
-***** breadcrumbs would be built up via clicking
-***** jumping directly to a tree route would not show breadcrumbs
+** TODO [#A] update Rust edition to 2024
+** TODO [#A] Replace minio with SeaweedFS
+*** MinIO is in maintenance mode (and licensing problems)
+*** https://github.com/seaweedfs/seaweedfs
+*** convert the =store_minio= to SeaweedFS as well, rename envars, update docs
+** TODO [#A] Use =HashedArrayTree= instead of =Vec= in ~get_all~ functions in =EntityDataSourceImpl=
+*** functions in =EntityDataSourceImpl= to be changed [0/4]
+- [ ] get_all_tree_digests()
+- [ ] get_all_file_digests()
+- [ ] get_all_chunk_digests()
+- [ ] get_all_xattr_digests()
+** TODO [#A] Move domain/managers, helpers into =tasks=, at same level as =data=, =domain=, =preso=
+*** these long-running ~workers~ get stuff done asynchronously, not because of use cases
+*** document this in =doc/DESIGN.md=
+*** save this link: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
+** TODO [#B] Switch from =juniper= to =async-graphql=
+*** https://crates.io/crates/async-graphql
+*** structure the code into smaller files
+** TODO [#B] Replace Flutter/Leptos with SolidJS/TypeScript
+*** TODO preliminary setup [0/9]
+- [ ] set up Vite to build the client
+- [ ] set up SolidJS/TS client in =client= directory
+- [ ] create =tsconfig.json=
+- [ ] create basic =package.json=
+- [ ] create =vite.config.ts=
+- [ ] create =eslint.config.js=
+- [ ] revert changes to Cargo.toml for leptos
+- [ ] remove all of the Leptos related crates
+- [ ] change =main.rs= to serve the compiled JS
+*** TODO pack stores page
+*** TODO data sets page
+*** TODO home page [0/15]
+- [ ] name it ~Home~ and show summary of datasets
+- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
+- [ ] for each dataset, show schedule frequency
+- [ ] for each dataset, show retention policy
+- [ ] for each dataset, show status (running, paused, finished, etc)
+- [ ] format dates using local time if possible
+- [ ] for each dataset, show how many snapshots exist
+- [ ] for each dataset, show date/time of oldest snapshot
+- [ ] for each dataset, show date/time of most recent snapshot
+- [ ] for each dataset, provide button to prune according to policy
+- [ ] for each dataset, provide button to start/stop backup
+- [ ] snopshot prune button needs to show status of pruning (like upload button)
+- [ ] consider how start/stop button could use an =Action= to wait on a running backup
+- [ ] when there are no stores, suggest visiting stores page to start setup
+- [ ] when there are no data sets, suggest visiting datasets page to start setup
+*** TODO snapshots page [0/6]
+- [ ] consider showing list of snapshots with pagination
+- [ ] maybe use =bulma-list= to show snapshot date/time, with more info on right
+- [ ] add =/tree= route to show tree by its digest
+- [ ] show breadcrumbs of the path leading up to this tree
+- [ ] breadcrumbs would be built up via clicking
+- [ ] jumping directly to a tree route would not show breadcrumbs
 *** TODO restore database page
-*** TODO settings page
-**** fields to set the hostname and username
-**** show computer UUID based on inputs
-**** explain how these are used to generate bucket names
+*** TODO settings page [0/3]
+- [ ] fields to set the hostname and username
+- [ ] show computer UUID based on inputs
+- [ ] explain how these are used to generate bucket names
+*** TODO deployment
+- [ ] update Dockerfile
+*** TODO documentation [1/5]
+- [ ] README.md
+- [ ] doc/DEPLOY.txt
+- [ ] doc/HISTORY.txt
+- [ ] doc/DESIGN.txt
+- [ ] write ADR for why SolidJS, TypeScript
+- [X] remove doc/LEPTOS.md
 *** TODO maybe replace the navbar icon with a fontawesome icon
 *** TODO look for ~issues~ in browser tools on every page
 *** TODO test building and running on Windows, update instructions
@@ -45,20 +80,22 @@
 **** home page should guide toward defining a pack store and link to restore page
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
-*** TODO update =Dockerfile=
-**** built binary is now called =server= instead of =zorigami=
-*** TODO update =README.MD=
-*** TODO update =doc/DEPLOY.md=
-*** TODO update =doc/DESIGN.md=
-*** TODO copy =doc/LEPTOS.md= from tanuki
-*** TODO update =doc/HISTORY.md=
-*** TODO write ADR for why Leptos (can copy from tanuki)
-** Leptos improvements
-*** pack stores page
-**** deleting the current store needs to refresh the parent route
-**** updating store label needs to refresh parent route
-*** nav bar items should highlight for matching route (e.g. ~Stores~ highlights for =/stores*=)
-*** find all =log:error= that could be handled better
+** TODO [#C] Pack file and database backup pruning
+*** use =upload_time= field of =Pack= record to determine age
+*** use =retention= field of =Store= to prune appropriately
+**** either retain ~all~ or ~delete after N days~
+**** provide default value for ~N days~ for each cloud provider
+**** default value would also likely depend on the chosen storage class
+**** e.g. typically anything older than 90 days costs nothing to delete
+**** Google has different minimum storage durations for each storage class
+***** https://cloud.google.com/storage/docs/storage-classes
+*** find unreferenced pack files and remove
+**** procedure
+1) collect all pack record digests
+2) scan all file and chunk records
+3) remove reachable pack digests from hash set
+4) for each remaining pack, get locations, delete objects, delete pack record
+*** database backups to be removed according to pack store retention policy
 ** Log rotation (for macOS)
 *** alternative to logging to stdout/stderr, write to log files
 *** macOS/launchd does not have a good way of managing log file sizes
@@ -69,14 +106,6 @@
 *** sometimes =test_process_manager_async_store()= fails
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
-** Replace minio with SeaweedFS
-*** https://github.com/seaweedfs/seaweedfs
-** Use =tzarrays::simple::OptimalArray= instead of =Vec= in ~get_all~ functions in =EntityDataSourceImpl=
-*** functions in =EntityDataSourceImpl= to be changed [/]
-- [ ] get_all_tree_digests()
-- [ ] get_all_file_digests()
-- [ ] get_all_chunk_digests()
-- [ ] get_all_xattr_digests()
 ** Restore improvements
 *** request being processed needs to be returned by =requests()= somehow
 **** it is neither ~pending~ nor ~completed~ so it is not returned in queries
@@ -129,7 +158,7 @@
 *** using latest snapshot, examine current data set and restore all missing/modified data
 *** provide lots of logging and frequent webui status updates
 ** Snapshot browsing
-*** The whole display of snapshots needs to be improved
+*** moving forward/backward in time should stay in selected directory (currently resets to the top)
 *** page to show all snapshots over time in a list
 *** improve snapshot tree browser
 **** should sort entries by filename case-insensitively
@@ -183,10 +212,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** maybe consider a means of countering this error at runtime
 ** Loose WebUI tasks
 *** test with a smaller browser window to surface sizing issues
-*** local store basepath and google credentials should use file picker
+*** local store basepath should use file picker
 *** improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
-*** consider how to hide the minio secret key using a show/hide button
+*** hide the minio secret key using a show/hide button
 *** should sort the datasets so they are always in the same order
 *** tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
@@ -240,22 +269,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** TODO [#B] Pack file and database backup pruning
-*** use =upload_time= field of =Pack= record to determine age
-*** use =retention= field of =Store= to prune appropriately
-**** either retain ~all~ or ~delete after N days~
-**** provide default value for ~N days~ for each cloud provider
-**** default value would also likely depend on the chosen storage class
-**** e.g. typically anything older than 90 days costs nothing to delete
-**** Google has different minimum storage durations for each storage class
-***** https://cloud.google.com/storage/docs/storage-classes
-*** find unreferenced pack files and remove
-**** procedure
-1) collect all pack record digests
-2) scan all file and chunk records
-3) remove reachable pack digests from hash set
-4) for each remaining pack, get locations, delete objects, delete pack record
-*** database backups to be removed according to pack store retention policy
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours
@@ -302,6 +315,7 @@ Deleted local snapshot '2021-04-05-162416'
 *** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
+**** e.g. search for all =.avi= files
 *** store restore requests in database to tolerate application restart
 **** currently restore requests are queued in memory only, so a crash means everything is forgotten
 *** Perform a full backup on demand, discard all previous backups
@@ -349,23 +363,11 @@ Deleted local snapshot '2021-04-05-162416'
 ***** count number of files with N chunks for all values of N
 *** Show number of packs stored in a pack store
 ** Architecture Review
-*** document this somewhere: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
-*** Learn more about Pragmatic Clean Architecture
-**** c.f. https://www.milanjovanovic.tech/pragmatic-clean-architecture
-**** c.f. https://arg-software.medium.com/taming-the-chaos-a-developers-guide-to-pragmatic-clean-architecture-in-net-%EF%B8%8F-c0b05de359a7
-**** c.f. https://www.ssw.com.au/rules/rules-to-better-clean-architecture/
-*** Alternative databases
-**** some records are not suitable for relational DB, such as trees, chunks, and packs
-**** DuckDB
-**** SQLite
 *** Rust dependency injection, is it helpful?
+**** https://github.com/mineichen/minfac
 **** https://github.com/AzureMarker/shaku
 **** https://github.com/p0lunin/teloc
-**** https://github.com/hampusmat/syrette
-**** https://github.com/mineichen/minfac
-**** https://github.com/austinjones/lifeline-rs (whole runtime message bus system)
 **** https://github.com/dmitryb-dev/waiter
-**** https://github.com/tobni/inject-rs
 *** Actor framework review, is actix still good?
 **** https://github.com/slawlor/ractor aims to be like Erlang
 **** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
@@ -373,7 +375,7 @@ Deleted local snapshot '2021-04-05-162416'
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
 ***** overridden by environment variable
-***** JSON or XML formatted plain text file
+***** JSON or XML format
 ***** Holds paths to the various data sets
 ***** Holds pack store configuration
 **** Each data set directory has a database directory (and backup)
