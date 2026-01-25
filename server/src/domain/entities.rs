@@ -1020,8 +1020,8 @@ impl Configuration {
 
 impl Default for Configuration {
     fn default() -> Self {
-        let username = whoami::username();
-        let hostname = whoami::fallible::hostname().unwrap_or("none".into());
+        let username = whoami::username().unwrap_or("charlie".into());
+        let hostname = whoami::hostname().unwrap_or("localhost".into());
         let computer_id = Configuration::generate_unique_id(&username, &hostname);
         Self {
             hostname,

@@ -1185,8 +1185,8 @@ mod tests {
         let res = res.as_object_value().unwrap();
         let res = res.get_field_value("computerId").unwrap();
         let actual = res.as_scalar().unwrap().try_as_str().unwrap();
-        let username = whoami::username();
-        let hostname = whoami::fallible::hostname().unwrap_or("none".into());
+        let username = whoami::username().unwrap_or("charlie".into());
+        let hostname = whoami::hostname().unwrap_or("localhost".into());
         let expected = entities::Configuration::generate_unique_id(&username, &hostname);
         assert_eq!(actual, expected);
     }

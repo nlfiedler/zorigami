@@ -7,6 +7,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.55"
+# The azure crates need to stay in sync, must wait for all of them to update.
 azure_core = "0.21.0"
 azure_storage = "0.21.0"
 azure_storage_blobs = "0.21.0"
