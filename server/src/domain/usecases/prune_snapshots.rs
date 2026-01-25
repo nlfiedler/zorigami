@@ -330,6 +330,7 @@ mod tests {
     use crate::domain::entities::{Dataset, File, Snapshot, Tree, TreeEntry};
     use crate::domain::repositories::MockRecordRepository;
     use crate::domain::usecases::UseCase;
+    use hashed_array_tree::{HashedArrayTree, hat};
 
     #[test]
     fn test_visit_count_snapshots_less() {
@@ -900,7 +901,7 @@ mod tests {
         mock.expect_get_all_tree_digests()
             .once()
             .returning(move || {
-                Ok(vec![
+                Ok(hat![
                     snap_e_tree_str2.clone(),
                     tree_a_tree_str2.clone(),
                     snap_d_tree_str2.clone(),
@@ -910,16 +911,16 @@ mod tests {
                 ])
             });
         mock.expect_get_all_chunk_digests().once().returning(|| {
-            Ok(vec![
+            Ok(hat![
                 "blake3-7431ee5".to_owned(),
                 "blake3-4597073".to_owned(),
             ])
         });
         mock.expect_get_all_xattr_digests()
             .once()
-            .returning(|| Ok(vec!["sha1-d0711b0".to_owned()]));
+            .returning(|| Ok(hat!["sha1-d0711b0".to_owned()]));
         mock.expect_get_all_file_digests().once().returning(|| {
-            Ok(vec![
+            Ok(hat![
                 "blake3-5c96f6d".to_owned(),
                 "blake3-2fd30c9".to_owned(),
                 "blake3-f413392".to_owned(),

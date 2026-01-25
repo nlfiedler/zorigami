@@ -6,6 +6,7 @@ use crate::domain::entities::{
     Store, Tree,
 };
 use anyhow::Error;
+use hashed_array_tree::HashedArrayTree;
 #[cfg(test)]
 use mockall::automock;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ pub trait EntityDataSource: Send + Sync {
     fn get_chunk(&self, digest: &Checksum) -> Result<Option<Chunk>, Error>;
 
     /// Retrieve the digests of all chunk records.
-    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error>;
+    fn get_all_chunk_digests(&self) -> Result<HashedArrayTree<String>, Error>;
 
     /// Remove the chunk record by the given identifier.
     fn delete_chunk(&self, id: &str) -> Result<(), Error>;
@@ -71,7 +72,7 @@ pub trait EntityDataSource: Send + Sync {
     fn get_xattr(&self, digest: &Checksum) -> Result<Option<Vec<u8>>, Error>;
 
     /// Retrieve the digests of all xattr records.
-    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error>;
+    fn get_all_xattr_digests(&self) -> Result<HashedArrayTree<String>, Error>;
 
     /// Remove the xattr record by the given identifier.
     fn delete_xattr(&self, id: &str) -> Result<(), Error>;
@@ -85,7 +86,7 @@ pub trait EntityDataSource: Send + Sync {
     fn get_file(&self, digest: &Checksum) -> Result<Option<File>, Error>;
 
     /// Retrieve the digests of all file records.
-    fn get_all_file_digests(&self) -> Result<Vec<String>, Error>;
+    fn get_all_file_digests(&self) -> Result<HashedArrayTree<String>, Error>;
 
     /// Remove the file record by the given identifier.
     fn delete_file(&self, id: &str) -> Result<(), Error>;
@@ -99,7 +100,7 @@ pub trait EntityDataSource: Send + Sync {
     fn get_tree(&self, digest: &Checksum) -> Result<Option<Tree>, Error>;
 
     /// Retrieve the digests of all tree records.
-    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error>;
+    fn get_all_tree_digests(&self) -> Result<HashedArrayTree<String>, Error>;
 
     /// Remove the tree record by the given identifier.
     fn delete_tree(&self, id: &str) -> Result<(), Error>;

@@ -31,6 +31,7 @@ env_logger = "0.11.0"
 exaf-rs = "1.1.1"
 fastcdc = "3.0.0"
 globset = "0.4.13"
+hashed-array-tree = "1.2.0"
 juniper = { version = "0.17.0", features = ["chrono"] }
 libc = "0.2.119"
 log = "0.4.7"

@@ -5,12 +5,6 @@
 *** https://ceph.io/en/ offers S3 compatible interface
 *** https://hub.docker.com/r/rustfs/rustfs (S3 compatible)
 *** https://garagehq.deuxfleurs.fr
-** TODO [#A] Use =HashedArrayTree= instead of =Vec= in ~get_all~ functions in =EntityDataSourceImpl=
-*** functions in =EntityDataSourceImpl= to be changed [0/4]
-- [ ] get_all_tree_digests()
-- [ ] get_all_file_digests()
-- [ ] get_all_chunk_digests()
-- [ ] get_all_xattr_digests()
 ** TODO [#A] Move domain/managers, helpers into =tasks=, at same level as =data=, =domain=, =preso=
 *** these long-running ~workers~ get stuff done asynchronously, not because of use cases
 *** document this in =doc/DESIGN.md=

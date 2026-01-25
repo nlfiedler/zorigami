@@ -9,6 +9,7 @@ use crate::domain::entities::{
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use crate::domain::sources::{EntityDataSource, PackDataSource};
 use anyhow::{Context, Error, Result, anyhow};
+use hashed_array_tree::HashedArrayTree;
 use log::{error, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -58,7 +59,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_chunk(digest)
     }
 
-    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_chunk_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         self.datasource.get_all_chunk_digests()
     }
 
@@ -106,7 +107,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_xattr(digest)
     }
 
-    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_xattr_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         self.datasource.get_all_xattr_digests()
     }
 
@@ -122,7 +123,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_file(digest)
     }
 
-    fn get_all_file_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_file_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         self.datasource.get_all_file_digests()
     }
 
@@ -138,7 +139,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_tree(digest)
     }
 
-    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_tree_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         self.datasource.get_all_tree_digests()
     }
 

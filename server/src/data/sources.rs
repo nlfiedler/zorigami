@@ -13,6 +13,7 @@ use crate::domain::sources::{EntityDataSource, PackDataSource};
 use anyhow::Error;
 use database_core::Database;
 use database_rocks;
+use hashed_array_tree::HashedArrayTree;
 use log::debug;
 #[cfg(test)]
 use mockall::automock;
@@ -90,10 +91,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
-    fn get_all_chunk_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_chunk_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         let db = self.database.lock().unwrap();
         let trees = db.find_prefix("chunk/")?;
-        let mut digests: Vec<String> = Vec::new();
+        let mut digests: HashedArrayTree<String> = HashedArrayTree::new();
         for key in trees {
             digests.push(key);
         }
@@ -203,10 +204,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         Ok(result.map(|v| v.to_vec()))
     }
 
-    fn get_all_xattr_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_xattr_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         let db = self.database.lock().unwrap();
         let trees = db.find_prefix("xattr/")?;
-        let mut digests: Vec<String> = Vec::new();
+        let mut digests: HashedArrayTree<String> = HashedArrayTree::new();
         for key in trees {
             digests.push(key);
         }
@@ -239,10 +240,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
-    fn get_all_file_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_file_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         let db = self.database.lock().unwrap();
         let trees = db.find_prefix("file/")?;
-        let mut digests: Vec<String> = Vec::new();
+        let mut digests: HashedArrayTree<String> = HashedArrayTree::new();
         for key in trees {
             digests.push(key);
         }
@@ -275,10 +276,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
-    fn get_all_tree_digests(&self) -> Result<Vec<String>, Error> {
+    fn get_all_tree_digests(&self) -> Result<HashedArrayTree<String>, Error> {
         let db = self.database.lock().unwrap();
         let trees = db.find_prefix("tree/")?;
-        let mut digests: Vec<String> = Vec::new();
+        let mut digests: HashedArrayTree<String> = HashedArrayTree::new();
         for key in trees {
             digests.push(key);
         }
