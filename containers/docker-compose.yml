@@ -3,13 +3,15 @@
 #
 name: zorigami-test
 services:
-  # azurite:
-  #   image: mcr.microsoft.com/azure-storage/azurite
-  #   container_name: zorigami_azure
-  #   ports:
-  #     - "10000:10000"
-  #   command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000"
-  #   restart: always
+  azurite:
+    # docker image is still buggy, fails authentication; may be caused by the
+    # old Rust crates which all need to be updated at the same time
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: zorigami_azure
+    ports:
+      - "10000:10000"
+    command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000"
+    restart: always
   sftp:
     image: atmoz/sftp
     container_name: zorigami_sftp
@@ -18,18 +20,19 @@ services:
     command: foo:pass:::upload
     restart: always
   minio:
-    image: minio/minio
+    #
+    # The docker hub readme is seemingly out-of-date, see the docs
+    #
+    # https://docs.rustfs.com/installation/docker/
+    #
+    image: rustfs/rustfs:latest
     container_name: zorigami_minio
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: root
-      MINIO_ROOT_PASSWORD: Passw0rd!
-    command: "server --console-address :9001 /data"
+      RUSTFS_ACCESS_KEY: root
+      RUSTFS_SECRET_KEY: Passw0rd!
+      RUSTFS_CONSOLE_ENABLE: true
+    command: "/data"
     restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3

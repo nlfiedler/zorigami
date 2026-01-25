@@ -358,7 +358,10 @@ mod tests {
         // assert
         assert!(result.is_err());
         let err_string = result.err().unwrap().to_string();
-        assert!(err_string.contains("InvalidAccessKeyId"));
+        // MinIO and RustFS give slightly different error messages
+        assert!(
+            err_string.contains("InvalidAccessKeyId") || err_string.contains("UnauthorizedAccess")
+        );
         Ok(())
     }
 

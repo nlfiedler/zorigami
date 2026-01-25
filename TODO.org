@@ -1,11 +1,5 @@
 * Tasks
-** TODO [#A] Replace minio container with something else
-*** MinIO is in maintenance mode, admin ui removed (and licensing problems)
-*** https://github.com/opens3/console
-*** https://ceph.io/en/ offers S3 compatible interface
-*** https://hub.docker.com/r/rustfs/rustfs (S3 compatible)
-*** https://garagehq.deuxfleurs.fr
-** TODO [#B] Switch from =juniper= to =async-graphql=
+** TODO [#A] Switch from =juniper= to =async-graphql=
 *** https://crates.io/crates/async-graphql
 *** TODO can =async-graphql= generate a schema thing for clients to use?
 *** TODO can Apollo GraphQL generate a schema thing for TypeScript to use from the =/graphql= endpoint alone?
