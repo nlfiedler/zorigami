@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use ssh2::{FileStat, Session};
 use std::collections::HashMap;
 use std::fs::File;
@@ -108,6 +108,7 @@ impl SftpStore {
         let listing: Vec<(PathBuf, FileStat)> = sftp.readdir(dirname)?;
         let mut results = Vec::new();
         for (path, stat) in listing {
+            #[allow(clippy::collapsible_if)]
             if stat.is_dir() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     results.push(name);
@@ -127,6 +128,7 @@ impl SftpStore {
         let listing: Vec<(PathBuf, FileStat)> = sftp.readdir(&bucket_path)?;
         let mut results = Vec::new();
         for (path, stat) in listing {
+            #[allow(clippy::collapsible_if)]
             if stat.is_file() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     results.push(name);

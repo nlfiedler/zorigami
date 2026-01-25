@@ -1,22 +1,27 @@
-use reqwest::{Client, Url};
+use http_body_util::Empty;
+use hyper::Request;
+use hyper::body::Bytes;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use std::env;
 use std::process::exit;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let port = env::var("PORT").unwrap_or("8080".into());
     let path = env::var("HEALTHCHECK_PATH").unwrap_or("/".into());
-    let url_str = format!("http://localhost:{}{}", port, path);
-    let url = Url::parse(&url_str).expect("URL parse");
-    let client = Client::new();
-    let res = client.head(url.clone()).send().await;
-    res.map(|res| {
-        let status_code = res.status();
-        if status_code.is_client_error() || status_code.is_server_error() {
-            exit(1)
-        }
-        exit(0)
-    })
-    .map_err(|_| exit(1))
-    .ok();
+    let url = format!("http://localhost:{port}{path}").parse::<hyper::Uri>()?;
+    let authority = url.authority().unwrap().clone();
+    let req = Request::builder()
+        .uri(url)
+        .method("HEAD")
+        .header(hyper::header::HOST, authority.as_str())
+        .body(Empty::<Bytes>::new())?;
+    let client = Client::builder(TokioExecutor::new()).build_http();
+    let response = client.request(req).await?;
+    let status_code = response.status();
+    if status_code.is_client_error() || status_code.is_server_error() {
+        exit(1)
+    }
+    exit(0)
 }

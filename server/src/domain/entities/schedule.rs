@@ -327,12 +327,7 @@ impl fmt::Display for Schedule {
             Schedule::Hourly => write!(f, "hourly"),
             Schedule::Daily(None) => write!(f, "daily"),
             Schedule::Daily(Some(tr)) => {
-                write!(
-                    f,
-                    "daily, {}-{}",
-                    tr.format_start(),
-                    tr.format_stop()
-                )
+                write!(f, "daily, {}-{}", tr.format_start(), tr.format_stop())
             }
             Schedule::Weekly(None) => write!(f, "weekly"),
             Schedule::Weekly(Some((dow, None))) => write!(f, "weekly on {}", dow),

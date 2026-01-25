@@ -1,11 +1,11 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
 use crate::domain::entities::SnapshotRetention;
+use crate::domain::entities::schedule::Schedule;
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;

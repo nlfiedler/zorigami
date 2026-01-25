@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::SnapshotCount;
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::{DateTime, Utc};
 use std::cmp;
 use std::fmt;

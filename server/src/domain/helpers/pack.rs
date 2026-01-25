@@ -2,7 +2,7 @@
 // Copyright (c) 2022 Nathan Fiedler
 //
 use crate::domain::entities::Chunk;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use exaf_rs::writer::{Options, Writer};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};

@@ -6,7 +6,7 @@ use crate::domain::helpers::pack;
 use crate::domain::managers::state::{RestorerAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use actix::prelude::*;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use log::{debug, error, info, warn};
 #[cfg(test)]
@@ -238,10 +238,9 @@ impl Restorer for RestorerImpl {
             anyhow!(format!("RestorerImpl::stop(): {:?}", err))
         }
         let mut su_addr = self.super_addr.lock().unwrap();
-        if let Some(addr) = su_addr.take() {
-            addr.try_send(Stop()).map_err(err_convert)
-        } else {
-            Ok(())
+        match su_addr.take() {
+            Some(addr) => addr.try_send(Stop()).map_err(err_convert),
+            _ => Ok(()),
         }
     }
 }
@@ -285,12 +284,17 @@ impl RestoreSupervisor {
         while let Some(request) = self.pop_incoming() {
             info!("processing request {}/{}", request.tree, request.entry);
             let mut req = request.clone();
-            if let Err(error) = fetcher.load_dataset(&request.dataset) {
-                error!("process_queue: error loading dataset: {}", error);
-                self.set_error(error, &mut req);
-            } else if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
-                error!("process_queue: error processing entry: {}", error);
-                self.set_error(error, &mut req);
+            match fetcher.load_dataset(&request.dataset) {
+                Err(error) => {
+                    error!("process_queue: error loading dataset: {}", error);
+                    self.set_error(error, &mut req);
+                }
+                _ => {
+                    if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
+                        error!("process_queue: error processing entry: {}", error);
+                        self.set_error(error, &mut req);
+                    }
+                }
             }
             info!("completed request {}/{}", request.tree, request.entry);
             self.push_completed(req);
@@ -584,10 +588,10 @@ impl FileRestorerImpl {
 impl FileRestorer for FileRestorerImpl {
     fn load_dataset(&mut self, dataset_id: &str) -> Result<(), Error> {
         use anyhow::Context;
-        if let Some(id) = self.dataset.as_ref() {
-            if id == dataset_id {
-                return Ok(());
-            }
+        if let Some(id) = self.dataset.as_ref()
+            && id == dataset_id
+        {
+            return Ok(());
         }
         let dataset = self
             .dbase

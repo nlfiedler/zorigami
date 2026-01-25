@@ -2,12 +2,12 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::sources::EntityDataSource;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::entities::{self, Checksum, PackRetention};
+use zorigami::domain::sources::EntityDataSource;
 
 #[test]
 fn test_insert_get_chunk() -> Result<(), Error> {
@@ -253,12 +253,16 @@ fn test_put_get_delete_datasets() -> Result<(), Error> {
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);
     assert!(!datasets[0].id.starts_with("dataset/"));
-    assert!(datasets
-        .iter()
-        .any(|s| s.basepath.to_string_lossy() == "/home/planet"));
-    assert!(datasets
-        .iter()
-        .any(|s| s.basepath.to_string_lossy() == "/home/town"));
+    assert!(
+        datasets
+            .iter()
+            .any(|s| s.basepath.to_string_lossy() == "/home/planet")
+    );
+    assert!(
+        datasets
+            .iter()
+            .any(|s| s.basepath.to_string_lossy() == "/home/town")
+    );
 
     let actual = datasource.get_dataset(&datasets[0].id).unwrap();
     assert!(actual.is_some());

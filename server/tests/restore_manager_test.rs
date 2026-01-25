@@ -2,6 +2,10 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
@@ -9,10 +13,6 @@ use zorigami::domain::managers::backup::{self, Performer, PerformerImpl};
 use zorigami::domain::managers::restore::*;
 use zorigami::domain::managers::state::{StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))
@@ -620,9 +620,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     assert_eq!(counts.tree, 2);
 
     // restore the normal symlink from the first snapshot
-    let snapshot = dbase
-        .get_snapshot(first_backup.as_ref().unwrap())?
-        .unwrap();
+    let snapshot = dbase.get_snapshot(first_backup.as_ref().unwrap())?.unwrap();
     let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
     let result = sut.start(dbase.clone());
     assert!(result.is_ok());
@@ -649,9 +647,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     // restore the weird symlink from the first snapshot but also remove
     // the symlink from the dataset to ensure restore functions correctly
     fs::remove_file(&fake_dest).unwrap();
-    let snapshot = dbase
-        .get_snapshot(first_backup.as_ref().unwrap())?
-        .unwrap();
+    let snapshot = dbase.get_snapshot(first_backup.as_ref().unwrap())?.unwrap();
     let sut = RestorerImpl::new(state, file_restorer_factory);
     let result = sut.start(dbase);
     assert!(result.is_ok());

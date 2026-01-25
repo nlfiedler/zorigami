@@ -56,11 +56,7 @@ impl Params {
 
 impl From<Store> for Params {
     fn from(val: Store) -> Self {
-        Params::new(
-            val.store_type.to_string(),
-            val.label,
-            val.properties,
-        )
+        Params::new(val.store_type.to_string(), val.label, val.properties)
     }
 }
 

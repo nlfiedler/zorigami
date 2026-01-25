@@ -3,16 +3,16 @@
 //
 extern crate google_firestore1 as firestore1;
 extern crate google_storage1 as storage1;
-use anyhow::{anyhow, Error};
-use base64::{engine::general_purpose, Engine as _};
+use anyhow::{Error, anyhow};
+use base64::{Engine as _, engine::general_purpose};
 use firestore1::hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use firestore1::hyper_util::client::legacy::connect::HttpConnector;
 use firestore1::hyper_util::client::legacy::Client;
-use firestore1::{hyper_util, Firestore};
+use firestore1::hyper_util::client::legacy::connect::HttpConnector;
+use firestore1::{Firestore, hyper_util};
 use std::collections::HashMap;
 use std::default::Default;
 use std::path::Path;
-use storage1::{yup_oauth2, Storage};
+use storage1::{Storage, yup_oauth2};
 use store_core::{CollisionError, Coordinates};
 
 #[derive(Clone, Debug)]
@@ -126,16 +126,13 @@ impl GoogleStore {
                 // another project, in which case we are forbidden to write to
                 // that bucket
                 storage1::Error::BadRequest(value) => {
-                    if let Some(object) = value.as_object() {
-                        if let Some(errobj) = object.get("error") {
-                            if let Some(code) = errobj.get("code") {
-                                if let Some(num) = code.as_u64() {
-                                    if num == 403 {
-                                        return Err(Error::from(CollisionError {}));
-                                    }
-                                }
-                            }
-                        }
+                    if let Some(object) = value.as_object()
+                        && let Some(errobj) = object.get("error")
+                        && let Some(code) = errobj.get("code")
+                        && let Some(num) = code.as_u64()
+                        && num == 403
+                    {
+                        return Err(Error::from(CollisionError {}));
                     }
                     Err(anyhow!(format!("{:?}", error)))
                 }
@@ -304,6 +301,7 @@ impl GoogleStore {
         );
         // If the document is missing a 404 error is returned, and if the
         // document is returned and has missing values, still return none.
+        #[allow(clippy::collapsible_if)]
         if let Ok((_response, document)) =
             hub.projects().databases_documents_get(&name).doit().await
         {
@@ -451,16 +449,13 @@ async fn create_bucket(
     if let Err(error) = hub.buckets().insert(req, project_id).doit().await {
         match &error {
             storage1::Error::BadRequest(value) => {
-                if let Some(object) = value.as_object() {
-                    if let Some(errobj) = object.get("error") {
-                        if let Some(code) = errobj.get("code") {
-                            if let Some(num) = code.as_u64() {
-                                if num == 409 {
-                                    return Ok(());
-                                }
-                            }
-                        }
-                    }
+                if let Some(object) = value.as_object()
+                    && let Some(errobj) = object.get("error")
+                    && let Some(code) = errobj.get("code")
+                    && let Some(num) = code.as_u64()
+                    && num == 409
+                {
+                    return Ok(());
                 }
                 return Err(anyhow!(format!("{:?}", error)));
             }
@@ -483,17 +478,18 @@ fn md5sum_file(infile: &Path) -> Result<Vec<u8>, Error> {
 /// Run the given future on a newly created single-threaded runtime if possible,
 /// otherwise raise an error if this thread already has a runtime.
 fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
-    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-        Err(anyhow!("cannot call block_on inside a runtime"))
-    } else {
-        // Build the simplest and lightest runtime we can, while still enabling
-        // us to wait for this future (and everything it spawns) to complete
-        // synchronously. Must enable the io and time features otherwise the
-        // runtime does not really start.
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        Ok(runtime.block_on(future))
+    match tokio::runtime::Handle::try_current() {
+        Ok(_handle) => Err(anyhow!("cannot call block_on inside a runtime")),
+        _ => {
+            // Build the simplest and lightest runtime we can, while still enabling
+            // us to wait for this future (and everything it spawns) to complete
+            // synchronously. Must enable the io and time features otherwise the
+            // runtime does not really start.
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            Ok(runtime.block_on(future))
+        }
     }
 }
 

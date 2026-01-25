@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
+use crate::domain::entities::schedule::Schedule;
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;

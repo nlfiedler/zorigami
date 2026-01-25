@@ -6,7 +6,7 @@
 //! will remain active until the pool is dropped.
 
 use log::{debug, error, trace, warn};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
 ///
@@ -65,6 +65,7 @@ impl Drop for ThreadPool {
         drop(self.sender.take());
         for worker in &mut self.workers {
             debug!("thread_pool: shutting down worker {}", worker.id);
+            #[allow(clippy::collapsible_if)]
             if let Some(thread) = worker.thread.take() {
                 if let Err(err) = thread.join() {
                     error!("failed to join thread: {err:?}")
@@ -81,23 +82,25 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || loop {
-            let message = match receiver.lock() {
-                Ok(guard) => guard.recv(),
-                Err(poisoned) => {
-                    // hard to imagine how this would matter
-                    warn!("using poisoned receiver");
-                    poisoned.into_inner().recv()
-                }
-            };
-            match message {
-                Ok(job) => {
-                    trace!("worker {id} got a job; executing...");
-                    job();
-                }
-                Err(_) => {
-                    trace!("worker {id} disconnected; shutting down...");
-                    break;
+        let thread = thread::spawn(move || {
+            loop {
+                let message = match receiver.lock() {
+                    Ok(guard) => guard.recv(),
+                    Err(poisoned) => {
+                        // hard to imagine how this would matter
+                        warn!("using poisoned receiver");
+                        poisoned.into_inner().recv()
+                    }
+                };
+                match message {
+                    Ok(job) => {
+                        trace!("worker {id} got a job; executing...");
+                        job();
+                    }
+                    Err(_) => {
+                        trace!("worker {id} disconnected; shutting down...");
+                        break;
+                    }
                 }
             }
         });

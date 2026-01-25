@@ -35,7 +35,7 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, PackRetention,
     Snapshot, SnapshotRetention, Store, StoreType, Tree, TreeEntry, TreeReference,
 };
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -133,6 +133,7 @@ impl Model for Schedule {
         let mut as_tuple_vec: Vec<(Value, Value)> = raw_value
             .into_map()
             .map_err(|_| anyhow!("value: cbor into_map() error"))?;
+        #[allow(clippy::collapsible_if)]
         if let Some((code, params)) = as_tuple_vec.pop() {
             if let Some(code_str) = code.as_text() {
                 match code_str {
@@ -1118,6 +1119,7 @@ impl Model for Snapshot {
             .ok_or_else(|| anyhow!("'st' from_timestamp() failed"))?;
 
         // end_time
+        #[allow(clippy::collapsible_if)]
         if let Some(end_val) = field_map.remove("et") {
             if let Ok(end_vec) = end_val.into_bytes() {
                 let end_arr: [u8; 8] = end_vec[0..8].try_into()?;
@@ -1217,6 +1219,7 @@ impl Model for Chunk {
             .map_err(|_| anyhow!("value: cbor into_map() error"))?;
 
         for (key, value) in as_tuple_vec.into_iter() {
+            #[allow(clippy::collapsible_if)]
             if let Some(name) = key.as_text() {
                 if name == "pf" {
                     // packfile
@@ -1715,7 +1718,9 @@ mod tests {
         assert!(actual.entries[0].reference.is_link());
         assert_eq!(
             actual.entries[0].reference.symlink().unwrap(),
-            vec![0x65, 0x6d, 0x56, 0x79, 0x62, 0x79, 0x31, 0x73, 0x5a, 0x57, 0x35,]
+            vec![
+                0x65, 0x6d, 0x56, 0x79, 0x62, 0x79, 0x31, 0x73, 0x5a, 0x57, 0x35,
+            ]
         );
         assert_eq!(actual.entries[1].name, "fixtures");
         assert!(actual.entries[1].reference.is_tree());

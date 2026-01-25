@@ -19,7 +19,7 @@ use crate::domain::entities;
 use crate::domain::helpers::{self, pack};
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::{DateTime, Utc};
 use log::{error, info, trace, warn};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -132,6 +132,7 @@ impl<'a> BackupDriver<'a> {
         // find chunks that have already been recorded in the database
         chunks.iter().for_each(|chunk| {
             let result = self.dbase.get_chunk(&chunk.digest);
+            #[allow(clippy::collapsible_if)]
             if let Ok(value) = result {
                 if value.is_some() {
                     self.done_chunks.insert(chunk.digest.clone());
@@ -169,6 +170,7 @@ impl<'a> BackupDriver<'a> {
                 }
             }
             // check if the user requested that the backup stop
+            #[allow(clippy::collapsible_if)]
             if let Some(backup) = self.state.get_state().backups(&self.dataset.id) {
                 if backup.should_stop() {
                     return Err(Error::from(super::OutOfTimeFailure {}));

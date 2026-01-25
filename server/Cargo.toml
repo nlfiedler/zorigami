@@ -2,7 +2,7 @@
 name = "zorigami"
 version = "0.1.0"
 authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
-edition = "2021"
+edition = "2024"
 description = "Backup and restore application."
 repository = "https://github.com/nlfiedler/zorigami"
 readme = "README.md"

@@ -97,9 +97,7 @@ mod tests {
         repo.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
         let mut state = MockStateStore::new();
-        state
-            .expect_get_state()
-            .returning(state::State::default);
+        state.expect_get_state().returning(state::State::default);
         let mut processor = MockScheduler::new();
         processor.expect_start().returning(|_| Ok(()));
         processor.expect_start_backup().returning(|_| Ok(()));

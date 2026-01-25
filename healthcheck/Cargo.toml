@@ -2,14 +2,16 @@
 name = "healthcheck"
 version = "1.0.0"
 authors = ["Lena Fuhrimann"]
-edition = "2021"
+edition = "2024"
 description = "Make an HTTP request and exit non-zero if an error occurs."
 homepage = "https://github.com/cloudlena/healthcheck"
 license = "Apache-2.0"
 
 [dependencies]
-reqwest = "0.12.4"
-tokio = { version = "1.37.0", features = ["full"] }
+http-body-util = "0.1"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [profile.release]
 opt-level = "z"

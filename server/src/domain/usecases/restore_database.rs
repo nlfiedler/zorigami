@@ -3,8 +3,8 @@
 //
 use crate::domain::managers::state::{RestorerAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Error};
-use log::{debug, error, info, log_enabled, Level};
+use anyhow::{Error, anyhow};
+use log::{Level, debug, error, info, log_enabled};
 use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
@@ -22,6 +22,7 @@ impl RestoreDatabase {
 
 impl<'a> super::UseCase<String, Params<'a>> for RestoreDatabase {
     fn call(&self, params: Params) -> Result<String, Error> {
+        #[allow(clippy::collapsible_if)]
         if log_enabled!(Level::Debug) {
             if let Ok(datasets) = self.repo.get_datasets() {
                 debug!("datasets before: {:?}", datasets);
@@ -63,6 +64,7 @@ impl<'a> super::UseCase<String, Params<'a>> for RestoreDatabase {
             info!("starting restore supervisor again...");
             params.state.restorer_event(RestorerAction::Start);
             info!("database restore complete");
+            #[allow(clippy::collapsible_if)]
             if log_enabled!(Level::Debug) {
                 if let Ok(datasets) = self.repo.get_datasets() {
                     debug!("datasets after: {:?}", datasets);

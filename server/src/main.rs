@@ -8,10 +8,10 @@
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{
-    error::InternalError, http, middleware, web, App, HttpResponse, HttpServer, Result,
+    App, HttpResponse, HttpServer, Result, error::InternalError, http, middleware, web,
 };
-use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
+use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
 use std::env;
 use std::io;

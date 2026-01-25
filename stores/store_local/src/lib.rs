@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -65,6 +65,7 @@ impl LocalStore {
         for entry in fs::read_dir(&self.basepath)? {
             let entry = entry?;
             let path = entry.path();
+            #[allow(clippy::collapsible_if)]
             if path.is_dir() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     // ignore folders that are definitely not our buckets
@@ -83,6 +84,7 @@ impl LocalStore {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
+            #[allow(clippy::collapsible_if)]
             if path.is_file() {
                 if let Some(name) = store_core::get_file_name(&path) {
                     // ignore files that are definitely not our buckets

@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use azure_core::{RetryOptions, StatusCode};
 use azure_storage::{CloudLocation, ErrorKind, StorageCredentials};
 use azure_storage_blobs::prelude::{
@@ -132,10 +132,10 @@ impl AzureStore {
                 .put_block(block_id.clone(), data)
                 .hash(hash)
                 .await?;
-            if let Some(content_md5) = response.content_md5 {
-                if content_md5.as_slice() != &md5 {
-                    return Err(anyhow!("returned MD5 does not match"));
-                }
+            if let Some(content_md5) = response.content_md5
+                && content_md5.as_slice() != &md5
+            {
+                return Err(anyhow!("returned MD5 does not match"));
             }
             block_list.push(BlobBlockType::Uncommitted(BlockId::new(block_id)));
         }
@@ -290,17 +290,18 @@ async fn create_container(builder: ClientBuilder, container: &str) -> Result<(),
 /// Run the given future on a newly created single-threaded runtime if possible,
 /// otherwise raise an error if this thread already has a runtime.
 fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
-    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-        Err(anyhow!("cannot call block_on inside a runtime"))
-    } else {
-        // Build the simplest and lightest runtime we can, while still enabling
-        // us to wait for this future (and everything it spawns) to complete
-        // synchronously. Must enable the io and time features otherwise the
-        // runtime does not really start.
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        Ok(runtime.block_on(future))
+    match tokio::runtime::Handle::try_current() {
+        Ok(_handle) => Err(anyhow!("cannot call block_on inside a runtime")),
+        _ => {
+            // Build the simplest and lightest runtime we can, while still enabling
+            // us to wait for this future (and everything it spawns) to complete
+            // synchronously. Must enable the io and time features otherwise the
+            // runtime does not really start.
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            Ok(runtime.block_on(future))
+        }
     }
 }
 

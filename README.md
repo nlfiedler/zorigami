@@ -31,7 +31,7 @@ This project has been a work-in-progress since 2014, originally started as [akas
 
 ### Prerequisites
 
-* [Rust](https://www.rust-lang.org) stable (2021 edition)
+* [Rust](https://www.rust-lang.org) stable, 2024 edition
 * [Flutter](https://flutter.dev) **stable** channel
 
 ### Initial Setup

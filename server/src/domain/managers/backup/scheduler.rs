@@ -5,15 +5,15 @@
 //! The `scheduler` module spawns threads to perform backups, ensuring backups
 //! are performed for each dataset according to a schedule.
 
-use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::Dataset;
+use crate::domain::entities::schedule::Schedule;
 use crate::domain::helpers::crypto;
 use crate::domain::managers::backup::{OutOfTimeFailure, Performer, Request};
 use crate::domain::managers::pretty_print_duration;
 use crate::domain::managers::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use actix::prelude::*;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use log::{debug, error, info, trace, warn};
 #[cfg(test)]
@@ -117,11 +117,12 @@ impl Scheduler for SchedulerImpl {
             anyhow!(format!("SchedulerImpl.stop(): {:?}", err))
         }
         let mut su_addr = self.super_addr.lock().unwrap();
-        if let Some(addr) = su_addr.take() {
-            addr.try_send(Stop()).map_err(err_convert)
-        } else {
-            warn!("supervisor not running, cannot stop backup");
-            Ok(())
+        match su_addr.take() {
+            Some(addr) => addr.try_send(Stop()).map_err(err_convert),
+            _ => {
+                warn!("supervisor not running, cannot stop backup");
+                Ok(())
+            }
         }
     }
 }

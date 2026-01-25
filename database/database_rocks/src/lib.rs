@@ -4,9 +4,9 @@
 
 //! Manages instances of RocksDB associated with file paths.
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
-use rocksdb::{Options, DB};
+use rocksdb::{DB, Options};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, Weak};
@@ -35,10 +35,10 @@ impl Database {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, Error> {
         // should be able to recover from a poisoned mutex without any problem
         let mut db_refs = DBASE_REFS.lock().unwrap();
-        if let Some(weak) = db_refs.get(db_path.as_ref()) {
-            if let Some(arc) = weak.upgrade() {
-                return Ok(Self { db: arc });
-            }
+        if let Some(weak) = db_refs.get(db_path.as_ref())
+            && let Some(arc) = weak.upgrade()
+        {
+            return Ok(Self { db: arc });
         }
         let buf = db_path.as_ref().to_path_buf();
         // prevent the proliferation of old log files

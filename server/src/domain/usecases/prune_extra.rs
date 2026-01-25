@@ -2,7 +2,7 @@
 // Copyright (c) 2021 Nathan Fiedler
 //
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use log::info;
 use std::cmp;
 use std::fmt;

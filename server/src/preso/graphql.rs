@@ -64,7 +64,7 @@ impl BigInt {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn to_output(&self) -> impl std::fmt::Display {
+    fn to_output(&self) -> impl std::fmt::Display + use<> {
         format!("{}", self.0)
     }
 
@@ -104,7 +104,7 @@ impl From<u32> for BigInt {
 struct ChecksumGQL(Checksum);
 
 impl ChecksumGQL {
-    fn to_output(&self) -> impl std::fmt::Display {
+    fn to_output(&self) -> impl std::fmt::Display + use<> {
         format!("{}", self.0)
     }
 
@@ -126,7 +126,7 @@ impl ChecksumGQL {
 struct TreeReferenceGQL(TreeReference);
 
 impl TreeReferenceGQL {
-    fn to_output(&self) -> impl std::fmt::Display {
+    fn to_output(&self) -> impl std::fmt::Display + use<> {
         format!("{}", self.0)
     }
 
@@ -361,6 +361,7 @@ impl entities::Dataset {
     /// Most recent snapshot for this dataset, if any.
     fn latest_snapshot(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<entities::Snapshot> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        #[allow(clippy::collapsible_if)]
         if let Some(ref digest) = self.snapshot {
             if let Ok(result) = repo.get_snapshot(digest) {
                 return result;
@@ -814,8 +815,8 @@ impl QueryRoot {
         #[graphql(ctx)] ctx: &GraphContext,
         store_id: String,
     ) -> FieldResult<Vec<entities::Pack>> {
-        use crate::domain::usecases::find_missing::{FindMissingPacks, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::find_missing::{FindMissingPacks, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = FindMissingPacks::new(Box::new(repo));
         let params: Params = Params::new(store_id);
@@ -829,8 +830,8 @@ impl QueryRoot {
         dataset: String,
         digest: ChecksumGQL,
     ) -> FieldResult<entities::PackFile> {
-        use crate::domain::usecases::get_pack::{GetPack, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::get_pack::{GetPack, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
@@ -848,8 +849,8 @@ impl QueryRoot {
         dataset: String,
         digest: ChecksumGQL,
     ) -> FieldResult<Option<ChecksumGQL>> {
-        use crate::domain::usecases::scan_packs::{Params, ScanPacks};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::scan_packs::{Params, ScanPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ScanPacks::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
@@ -884,8 +885,8 @@ impl QueryRoot {
         #[graphql(ctx)] ctx: &GraphContext,
         digest: ChecksumGQL,
     ) -> FieldResult<Option<entities::Snapshot>> {
-        use crate::domain::usecases::get_snapshot::{GetSnapshot, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::get_snapshot::{GetSnapshot, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetSnapshot::new(Box::new(repo));
         let params: Params = Params::new(digest.0);
@@ -910,8 +911,8 @@ impl QueryRoot {
         #[graphql(ctx)] ctx: &GraphContext,
         digest: ChecksumGQL,
     ) -> FieldResult<Option<entities::Tree>> {
-        use crate::domain::usecases::get_tree::{GetTree, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::get_tree::{GetTree, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetTree::new(Box::new(repo));
         let params: Params = Params::new(digest.0);
@@ -926,8 +927,8 @@ pub struct MutationRoot;
 impl MutationRoot {
     /// Begin the backup procedure for the dataset with the given identifier.
     fn start_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
-        use crate::domain::usecases::start_backup::{Params, StartBackup};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::start_backup::{Params, StartBackup};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = StartBackup::new(Arc::new(repo), ctx.appstate.clone(), ctx.processor.clone());
         let params: Params = Params::new(id);
@@ -937,8 +938,8 @@ impl MutationRoot {
 
     /// Signal the running backup for the given dataset to stop prematurely.
     fn stop_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
-        use crate::domain::usecases::stop_backup::{Params, StopBackup};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::stop_backup::{Params, StopBackup};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = StopBackup::new(Box::new(repo), ctx.appstate.clone());
         let params: Params = Params::new(id);
@@ -951,8 +952,8 @@ impl MutationRoot {
         #[graphql(ctx)] ctx: &GraphContext,
         store_id: String,
     ) -> FieldResult<String> {
-        use crate::domain::usecases::restore_database::{Params, RestoreDatabase};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::restore_database::{Params, RestoreDatabase};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let passphrase = helpers::crypto::get_passphrase();
         let usecase = RestoreDatabase::new(Box::new(repo));
@@ -969,8 +970,8 @@ impl MutationRoot {
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
-        use crate::domain::usecases::restore_files::{Params, RestoreFiles};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::restore_files::{Params, RestoreFiles};
         let usecase = RestoreFiles::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
         let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
@@ -986,8 +987,8 @@ impl MutationRoot {
         filepath: String,
         dataset: String,
     ) -> FieldResult<bool> {
-        use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
         let usecase = CancelRestore::new(ctx.restorer.clone());
         let fpath = PathBuf::from(filepath);
         let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
@@ -1003,8 +1004,8 @@ impl MutationRoot {
         source_id: String,
         target_id: String,
     ) -> FieldResult<i32> {
-        use crate::domain::usecases::reassign_packs::{Params, ReassignPacks};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::reassign_packs::{Params, ReassignPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ReassignPacks::new(Box::new(repo));
         let params: Params = Params::new(source_id, target_id);
@@ -1023,8 +1024,8 @@ impl MutationRoot {
         source_id: String,
         target_id: String,
     ) -> FieldResult<Vec<entities::Pack>> {
-        use crate::domain::usecases::restore_missing::{Params, RestoreMissingPacks};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::restore_missing::{Params, RestoreMissingPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = RestoreMissingPacks::new(Box::new(repo));
         let params: Params = Params::new(source_id, target_id);
@@ -1034,8 +1035,8 @@ impl MutationRoot {
 
     /// Remove extraneous packs from the given pack store.
     fn prune_extra(#[graphql(ctx)] ctx: &GraphContext, store_id: String) -> FieldResult<i32> {
-        use crate::domain::usecases::prune_extra::{Params, PruneExtraPacks};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::prune_extra::{Params, PruneExtraPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = PruneExtraPacks::new(Box::new(repo));
         let params: Params = Params::new(store_id);
@@ -1048,8 +1049,8 @@ impl MutationRoot {
     ///
     /// Returns the number of snapshots removed from the dataset.
     fn prune_snapshots(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<i32> {
-        use crate::domain::usecases::prune_snapshots::{Params, PruneSnapshots};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::prune_snapshots::{Params, PruneSnapshots};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = PruneSnapshots::new(Box::new(repo));
         let params: Params = Params::new(id.clone());
@@ -1068,8 +1069,8 @@ impl MutationRoot {
         chunk_digest: ChecksumGQL,
         pack_digest: ChecksumGQL,
     ) -> FieldResult<bool> {
-        use crate::domain::usecases::insert_file::{InsertFile, Params};
         use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::insert_file::{InsertFile, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let passphrase = helpers::crypto::get_passphrase();
         let usecase = InsertFile::new(Box::new(repo));

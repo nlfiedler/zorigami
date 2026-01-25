@@ -3,6 +3,11 @@
 //
 use anyhow::Error;
 use dotenvy::dotenv;
+use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::schedule::Schedule;
@@ -11,11 +16,6 @@ use zorigami::domain::managers::backup::{Performer, PerformerImpl, Scheduler, Sc
 use zorigami::domain::managers::restore::*;
 use zorigami::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))

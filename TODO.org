@@ -1,7 +1,4 @@
 * Tasks
-** TODO [#A] update Rust dependencies
-** TODO [#A] update Rust edition to 2024
-** TODO [#A] update =healthcheck= code using =namazu= as a reference
 ** TODO [#A] Replace minio container with something else
 *** MinIO is in maintenance mode, admin ui removed (and licensing problems)
 *** https://github.com/opens3/console

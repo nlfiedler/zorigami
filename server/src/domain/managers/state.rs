@@ -8,7 +8,7 @@ use chrono::prelude::*;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use reducer::{Dispatcher, Reactor, Reducer, Store};
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 use std::sync::{Arc, Condvar, Mutex};
 
 ///

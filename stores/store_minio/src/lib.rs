@@ -1,13 +1,13 @@
 //
 // Copyright (c) 2023 Nathan Fiedler
 //
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use bytes::Bytes;
 use futures::{FutureExt, TryStreamExt};
 use rusoto_core::{Region, RusotoError};
 use rusoto_s3::{
     CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
-    GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3Client, StreamingBody, S3,
+    GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3, S3Client, StreamingBody,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -293,17 +293,18 @@ async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
 /// Run the given future on a newly created single-threaded runtime if possible,
 /// otherwise raise an error if this thread already has a runtime.
 fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
-    if let Ok(_handle) = tokio::runtime::Handle::try_current() {
-        Err(anyhow!("cannot call block_on inside a runtime"))
-    } else {
-        // Build the simplest and lightest runtime we can, while still enabling
-        // us to wait for this future (and everything it spawns) to complete
-        // synchronously. Must enable the io and time features otherwise the
-        // runtime does not really start.
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?;
-        Ok(runtime.block_on(future))
+    match tokio::runtime::Handle::try_current() {
+        Ok(_handle) => Err(anyhow!("cannot call block_on inside a runtime")),
+        _ => {
+            // Build the simplest and lightest runtime we can, while still enabling
+            // us to wait for this future (and everything it spawns) to complete
+            // synchronously. Must enable the io and time features otherwise the
+            // runtime does not really start.
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            Ok(runtime.block_on(future))
+        }
     }
 }
 

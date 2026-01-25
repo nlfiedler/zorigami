@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, PackEntry, PackFile};
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use log::debug;
 use std::borrow::Cow;
 use std::cmp;

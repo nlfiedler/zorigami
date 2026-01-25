@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, File};
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use log::info;
 use std::borrow::Cow;
 use std::cmp;

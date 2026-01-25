@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use anyhow::{anyhow, Error};
-use base64::{engine::general_purpose, Engine as _};
+use anyhow::{Error, anyhow};
+use base64::{Engine as _, engine::general_purpose};
 use chrono::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -1057,7 +1057,14 @@ impl fmt::Display for RecordCounts {
         write!(
             f,
             "counts(chunks: {}, datasets: {}, files: {}, packs: {}, snapshots: {}, stores: {}, trees: {}, xattrs: {})",
-            self.chunk, self.dataset, self.file, self.pack, self.snapshot, self.store, self.tree, self.xattr
+            self.chunk,
+            self.dataset,
+            self.file,
+            self.pack,
+            self.snapshot,
+            self.store,
+            self.tree,
+            self.xattr
         )
     }
 }

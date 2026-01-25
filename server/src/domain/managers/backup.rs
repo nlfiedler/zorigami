@@ -11,7 +11,7 @@ use crate::domain::entities;
 use crate::domain::helpers::thread_pool::ThreadPool;
 use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::RecordRepository;
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use chrono::{DateTime, Utc};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, info, trace, warn};
@@ -98,6 +98,7 @@ impl Performer for PerformerImpl {
         // Check if latest snapshot exists and lacks an end time, which indicates
         // that the previous backup did not complete successfully.
         let latest_snapshot = request.dataset.snapshot.clone();
+        #[allow(clippy::collapsible_if)]
         if let Some(latest) = latest_snapshot.as_ref() {
             if let Some(snapshot) = request.repo.get_snapshot(latest)? {
                 if snapshot.end_time.is_none() {
@@ -371,9 +372,9 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                 self.walker.take();
             }
             // is there a left and right tree? iterate on that
-            if self.left_tree.is_some() && self.right_tree.is_some() {
-                let left_tree = self.left_tree.as_ref().unwrap();
-                let right_tree = self.right_tree.as_ref().unwrap();
+            if let Some(ref left_tree) = self.left_tree
+                && let Some(ref right_tree) = self.right_tree
+            {
                 while self.left_idx < left_tree.entries.len()
                     && self.right_idx < right_tree.entries.len()
                 {
@@ -653,10 +654,9 @@ fn build_exclusions(basepath: &Path, excludes: &[PathBuf]) -> GlobSet {
             }
         }
     }
-    if let Ok(set) = builder.build() {
-        set
-    } else {
-        GlobSet::empty()
+    match builder.build() {
+        Ok(set) => set,
+        _ => GlobSet::empty(),
     }
 }
 
