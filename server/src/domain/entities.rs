@@ -318,10 +318,7 @@ impl Dataset {
 
     /// Construct a `Dataset` with the given path and pack size.
     pub fn with_pack_size(basepath: &Path, pack_size: u64) -> Self {
-        #[cfg(feature = "ssr")]
         let id = xid::new().to_string();
-        #[cfg(not(feature = "ssr"))]
-        let id = "undefined".to_owned();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
         Self {
@@ -582,7 +579,6 @@ impl TreeEntry {
     /// Set the user and group ownership of the given path. At present, only
     /// Unix systems have this information.
     ///
-    #[cfg(feature = "ssr")]
     #[cfg(target_family = "unix")]
     pub fn owners(mut self, path: &Path) -> Self {
         use std::ffi::CStr;
@@ -621,11 +617,6 @@ impl TreeEntry {
             };
             self.group = Some(groupname);
         }
-        self
-    }
-
-    #[cfg(not(feature = "ssr"))]
-    pub fn owners(self, _path: &Path) -> Self {
         self
     }
 
@@ -897,7 +888,6 @@ impl PackLocation {
     }
 }
 
-#[cfg(feature = "ssr")]
 impl From<store_core::Coordinates> for PackLocation {
     fn from(coords: store_core::Coordinates) -> Self {
         PackLocation {
@@ -908,7 +898,6 @@ impl From<store_core::Coordinates> for PackLocation {
     }
 }
 
-#[cfg(feature = "ssr")]
 impl From<PackLocation> for store_core::Coordinates {
     fn from(val: PackLocation) -> Self {
         store_core::Coordinates {
@@ -1020,39 +1009,19 @@ pub struct Configuration {
 impl Configuration {
     /// Generate a type 5 UUID based on the given values.
     pub fn generate_unique_id(username: &str, hostname: &str) -> String {
-        #[cfg(feature = "ssr")]
-        {
-            use uuid::Uuid;
-            let mut name = String::from(username);
-            name.push(':');
-            name.push_str(hostname);
-            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes());
-            uuid.to_string()
-        }
-        #[cfg(not(feature = "ssr"))]
-        {
-            format!("{}@{}", username, hostname)
-        }
+        use uuid::Uuid;
+        let mut name = String::from(username);
+        name.push(':');
+        name.push_str(hostname);
+        let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes());
+        uuid.to_string()
     }
 }
 
 impl Default for Configuration {
-    #[cfg(feature = "ssr")]
     fn default() -> Self {
         let username = whoami::username();
         let hostname = whoami::fallible::hostname().unwrap_or("none".into());
-        let computer_id = Configuration::generate_unique_id(&username, &hostname);
-        Self {
-            hostname,
-            username,
-            computer_id,
-        }
-    }
-
-    #[cfg(not(feature = "ssr"))]
-    fn default() -> Self {
-        let username = String::from("charlie");
-        let hostname = String::from("computer");
         let computer_id = Configuration::generate_unique_id(&username, &hostname);
         Self {
             hostname,
@@ -1191,10 +1160,7 @@ mod tests {
     #[test]
     fn test_generate_unique_id() {
         let uuid = Configuration::generate_unique_id("charlie", "localhost");
-        #[cfg(feature = "ssr")]
         assert_eq!(uuid, "747267d5-6e70-5711-8a9a-a40c24c1730f");
-        #[cfg(not(feature = "ssr"))]
-        assert_eq!(uuid, "charlie@localhost");
     }
 
     #[test]
@@ -1240,7 +1206,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "ssr")]
     #[test]
     fn test_tree_entry() {
         let path = Path::new("../test/fixtures/lorem-ipsum.txt");

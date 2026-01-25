@@ -3,14 +3,14 @@
 //
 use anyhow::Error;
 use dotenvy::dotenv;
-use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::schedule::Schedule;
-use server::domain::entities::{self, Checksum, PackRetention};
-use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use server::domain::managers::restore::*;
-use server::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
-use server::domain::repositories::RecordRepository;
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::entities::schedule::Schedule;
+use zorigami::domain::entities::{self, Checksum, PackRetention};
+use zorigami::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
+use zorigami::domain::managers::restore::*;
+use zorigami::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
+use zorigami::domain::repositories::RecordRepository;
 use std::collections::HashMap;
 use std::env;
 use std::fs;

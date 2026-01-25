@@ -2,13 +2,13 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
-use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::{self, Checksum, PackRetention};
-use server::domain::managers::backup::{self, Performer, PerformerImpl};
-use server::domain::managers::restore::*;
-use server::domain::managers::state::{StateStore, StateStoreImpl};
-use server::domain::repositories::RecordRepository;
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::entities::{self, Checksum, PackRetention};
+use zorigami::domain::managers::backup::{self, Performer, PerformerImpl};
+use zorigami::domain::managers::restore::*;
+use zorigami::domain::managers::state::{StateStore, StateStoreImpl};
+use zorigami::domain::repositories::RecordRepository;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

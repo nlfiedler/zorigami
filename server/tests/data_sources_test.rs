@@ -2,9 +2,9 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::{self, Checksum, PackRetention};
-use server::domain::sources::EntityDataSource;
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::entities::{self, Checksum, PackRetention};
+use zorigami::domain::sources::EntityDataSource;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -1,9 +1,13 @@
 * Tasks
+** TODO [#A] update Rust dependencies
 ** TODO [#A] update Rust edition to 2024
-** TODO [#A] Replace minio with SeaweedFS
-*** MinIO is in maintenance mode (and licensing problems)
-*** https://github.com/seaweedfs/seaweedfs
-*** convert the =store_minio= to SeaweedFS as well, rename envars, update docs
+** TODO [#A] update =healthcheck= code using =namazu= as a reference
+** TODO [#A] Replace minio container with something else
+*** MinIO is in maintenance mode, admin ui removed (and licensing problems)
+*** https://github.com/opens3/console
+*** https://ceph.io/en/ offers S3 compatible interface
+*** https://hub.docker.com/r/rustfs/rustfs (S3 compatible)
+*** https://garagehq.deuxfleurs.fr
 ** TODO [#A] Use =HashedArrayTree= instead of =Vec= in ~get_all~ functions in =EntityDataSourceImpl=
 *** functions in =EntityDataSourceImpl= to be changed [0/4]
 - [ ] get_all_tree_digests()
@@ -16,7 +20,9 @@
 *** save this link: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 ** TODO [#B] Switch from =juniper= to =async-graphql=
 *** https://crates.io/crates/async-graphql
-*** structure the code into smaller files
+*** TODO can =async-graphql= generate a schema thing for clients to use?
+*** TODO can Apollo GraphQL generate a schema thing for TypeScript to use from the =/graphql= endpoint alone?
+*** TODO structure the code into smaller files
 ** TODO [#B] Replace Flutter/Leptos with SolidJS/TypeScript
 *** TODO preliminary setup [0/9]
 - [ ] set up Vite to build the client
@@ -58,7 +64,7 @@
 - [ ] fields to set the hostname and username
 - [ ] show computer UUID based on inputs
 - [ ] explain how these are used to generate bucket names
-*** TODO deployment
+*** TODO deployment [0/1]
 - [ ] update Dockerfile
 *** TODO documentation [1/5]
 - [ ] README.md
@@ -311,6 +317,8 @@ open /tmp/snapshot
 $ tmutil deletelocalsnapshots 2021-04-05-162416
 Deleted local snapshot '2021-04-05-162416'
 #+end_src
+** Support SeaweedFS pack store
+*** https://github.com/seaweedfs/seaweedfs
 ** More Functionality
 *** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it

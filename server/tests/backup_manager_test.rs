@@ -2,16 +2,16 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
-use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
-use server::domain::entities::{self, PackRetention};
-use server::domain::managers::backup::{OutOfTimeFailure, Performer, PerformerImpl, Request};
-use server::domain::managers::state::{StateStore, StateStoreImpl};
-use server::domain::repositories::RecordRepository;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::entities::{self, PackRetention};
+use zorigami::domain::managers::backup::{OutOfTimeFailure, Performer, PerformerImpl, Request};
+use zorigami::domain::managers::state::{StateStore, StateStoreImpl};
+use zorigami::domain::repositories::RecordRepository;
 
 #[test]
 fn test_continue_backup() -> Result<(), Error> {

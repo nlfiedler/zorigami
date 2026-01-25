@@ -1,32 +1,30 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-#![recursion_limit = "256"] // helps leptos watch?
 
 //! The main application binary that starts the web server and spawns the
 //! supervisor threads to manage the backups.
 
 use actix_cors::Cors;
-#[cfg(feature = "ssr")]
 use actix_files::Files;
-#[cfg(feature = "ssr")]
 use actix_web::{
     error::InternalError, http, middleware, web, App, HttpResponse, HttpServer, Result,
 };
 use juniper::http::graphiql::graphiql_source;
 use juniper::http::GraphQLRequest;
 use log::{error, info};
-use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
-use server::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use server::domain::managers::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
-use server::domain::managers::state;
-use server::domain::repositories::RecordRepository;
-use server::domain::sources::EntityDataSource;
-use server::preso::graphql;
-use server::{DB_PATH, STATE_STORE};
+use std::env;
 use std::io;
 use std::sync::{Arc, LazyLock};
+use zorigami::data::repositories::RecordRepositoryImpl;
+use zorigami::data::sources::EntityDataSourceImpl;
+use zorigami::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
+use zorigami::domain::managers::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
+use zorigami::domain::managers::state;
+use zorigami::domain::repositories::RecordRepository;
+use zorigami::domain::sources::EntityDataSource;
+use zorigami::preso::graphql;
+use zorigami::{DB_PATH, STATE_STORE};
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))
@@ -50,7 +48,6 @@ static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
     ))
 });
 
-#[cfg(feature = "ssr")]
 async fn graphiql() -> Result<HttpResponse> {
     let html = graphiql_source("/graphql", None);
     Ok(HttpResponse::Ok()
@@ -58,9 +55,8 @@ async fn graphiql() -> Result<HttpResponse> {
         .body(html))
 }
 
-#[cfg(feature = "ssr")]
 async fn graphql(
-    st: web::Data<(Arc<graphql::Schema>, leptos::config::LeptosOptions)>,
+    st: web::Data<Arc<graphql::Schema>>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
     let source = EntityDataSourceImpl::new(DB_PATH.as_path())
@@ -72,11 +68,15 @@ async fn graphql(
     let ctx = Arc::new(graphql::GraphContext::new(
         datasource, state, processor, restorer,
     ));
-    let res = data.execute(&st.0, &ctx).await;
+    let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
         .content_type("application/json")
         .body(body))
+}
+
+async fn index(_req: actix_web::HttpRequest) -> &'static str {
+    "See the README.md file for more information."
 }
 
 // Start and stop the supervisor(s) based on application state changes.
@@ -144,29 +144,24 @@ fn log_state_changes(state: &state::State, _previous: Option<&state::State>) {
     }
 }
 
-#[cfg(feature = "ssr")]
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
-    use leptos::config::get_configuration;
-    use leptos_actix::{generate_route_list, LeptosRoutes};
-    use server::preso::leptos::{shell, App};
-
-    let conf = get_configuration(None).unwrap();
-    let addr = conf.leptos_options.site_addr;
-
     dotenvy::dotenv().ok();
     env_logger::init();
     STATE_STORE.subscribe("super-manager", manage_supervisors);
     STATE_STORE.subscribe("backup-logger", log_state_changes);
     STATE_STORE.supervisor_event(state::SupervisorAction::Start);
     STATE_STORE.restorer_event(state::RestorerAction::Start);
+
+    let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_owned());
+    let addr = format!("{}:{}", host, port);
+    info!("listening on {}", addr);
+
     HttpServer::new(move || {
-        let routes = generate_route_list(App);
-        let leptos_options = &conf.leptos_options;
-        let site_root = leptos_options.site_root.to_string();
         let schema = std::sync::Arc::new(graphql::create_schema());
         App::new()
-            .app_data(web::Data::new((schema, leptos_options.to_owned())))
+            .app_data(web::Data::new(schema))
             .wrap(middleware::Logger::default())
             .wrap(
                 // Respond to OPTIONS requests for CORS support, which is common
@@ -178,15 +173,8 @@ async fn main() -> io::Result<()> {
                     .allowed_header(http::header::CONTENT_TYPE)
                     .max_age(3600),
             )
-            // serve up the compiled static assets
             .service(
-                Files::new("/pkg", format!("{site_root}/pkg"))
-                    .use_etag(true)
-                    .use_last_modified(true),
-            )
-            // serve up the raw static assets
-            .service(
-                Files::new("/assets", site_root)
+                Files::new("/assets", "./public")
                     .use_etag(true)
                     .use_last_modified(true),
             )
@@ -198,41 +186,14 @@ async fn main() -> io::Result<()> {
                     .route(web::get().to(HttpResponse::Ok))
                     .route(web::head().to(HttpResponse::Ok)),
             )
-            .leptos_routes(routes, {
-                let leptos_options = leptos_options.clone();
-                move || shell(leptos_options.clone())
-            })
+            .route("/", web::get().to(index))
     })
     .bind(addr)?
     .run()
     .await
 }
 
-#[cfg(not(any(feature = "ssr", feature = "csr")))]
-pub fn main() {
-    // no client-side main function
-    // unless we want this to work with e.g., Trunk for pure client-side testing
-    // see lib.rs for hydration function instead
-    // see optional feature `csr` instead
-}
-
-#[cfg(all(not(feature = "ssr"), feature = "csr"))]
-pub fn main() {
-    // a client-side main function is required for using `trunk serve`
-    // prefer using `cargo leptos serve` instead
-    // to run: `trunk serve --open --features csr`
-    use crate::preso::leptos::*;
-    console_error_panic_hook::set_once();
-    leptos::mount_to_body(App);
-}
-
-#[cfg(feature = "ssr")]
 #[actix_web::get("favicon.ico")]
-async fn favicon(
-    st: web::Data<(Arc<graphql::Schema>, leptos::config::LeptosOptions)>,
-) -> actix_web::Result<actix_files::NamedFile> {
-    let site_root = &st.1.site_root;
-    Ok(actix_files::NamedFile::open(format!(
-        "{site_root}/favicon.ico"
-    ))?)
+async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
+    Ok(actix_files::NamedFile::open("./public/favicon.ico")?)
 }
