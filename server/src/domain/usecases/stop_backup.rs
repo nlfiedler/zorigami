@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-use crate::domain::managers::state::{BackupAction, StateStore};
+use crate::tasks::state::{BackupAction, StateStore};
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use std::cmp;
@@ -60,7 +60,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::Dataset;
-    use crate::domain::managers::state::MockStateStore;
+    use crate::tasks::state::MockStateStore;
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
     use std::path::Path;

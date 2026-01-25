@@ -2,13 +2,14 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 extern crate thiserror;
-use crate::domain::managers::state::{StateStore, StateStoreImpl};
+use crate::tasks::state::{StateStore, StateStoreImpl};
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
 pub mod data;
 pub mod domain;
 pub mod preso;
+pub mod tasks;
 
 // When running in test mode, the cwd is the server directory.
 #[cfg(test)]

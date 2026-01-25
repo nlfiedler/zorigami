@@ -11,7 +11,7 @@
 
 ### Clean Architecture
 
-Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The domain layer defines the "policy" or business logic of the application, consisting of entities, use cases, and repositories. The data layer is the interface to the underlying system, defining the data models that are ultimately stored in a database. The presentation layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface.
+Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The **domain** layer defines the policy or business logic of the application, consisting of entities, use cases, and repositories. The **data** layer is the interface to the underlying system, defining the data models that are ultimately stored in a database. The presentation (or **preso**) layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface. An additional **tasks** component defines various long running background tasks that are not necessarily invoked by the domain or presentation layers. See [What is this architecture called?](https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80) for additional background.
 
 ### Workspace and Packages
 

@@ -5,10 +5,6 @@
 *** https://ceph.io/en/ offers S3 compatible interface
 *** https://hub.docker.com/r/rustfs/rustfs (S3 compatible)
 *** https://garagehq.deuxfleurs.fr
-** TODO [#A] Move domain/managers, helpers into =tasks=, at same level as =data=, =domain=, =preso=
-*** these long-running ~workers~ get stuff done asynchronously, not because of use cases
-*** document this in =doc/DESIGN.md=
-*** save this link: https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80
 ** TODO [#B] Switch from =juniper= to =async-graphql=
 *** https://crates.io/crates/async-graphql
 *** TODO can =async-graphql= generate a schema thing for clients to use?

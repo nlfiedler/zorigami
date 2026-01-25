@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::managers::restore::{Request, Restorer};
+use crate::tasks::restore::{Request, Restorer};
 use crate::domain::usecases::NoParams;
 use anyhow::Error;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ impl super::UseCase<Vec<Request>, NoParams> for QueryRestores {
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::managers::restore::MockRestorer;
+    use crate::tasks::restore::MockRestorer;
 
     #[test]
     fn test_restore_files_ok() {

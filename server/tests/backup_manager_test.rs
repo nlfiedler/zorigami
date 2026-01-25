@@ -9,8 +9,8 @@ use std::sync::Arc;
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, PackRetention};
-use zorigami::domain::managers::backup::{OutOfTimeFailure, Performer, PerformerImpl, Request};
-use zorigami::domain::managers::state::{StateStore, StateStoreImpl};
+use zorigami::tasks::backup::{OutOfTimeFailure, Performer, PerformerImpl, Request};
+use zorigami::tasks::state::{StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
 
 #[test]

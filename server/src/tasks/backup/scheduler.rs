@@ -7,11 +7,11 @@
 
 use crate::domain::entities::Dataset;
 use crate::domain::entities::schedule::Schedule;
-use crate::domain::helpers::crypto;
-use crate::domain::managers::backup::{OutOfTimeFailure, Performer, Request};
-use crate::domain::managers::pretty_print_duration;
-use crate::domain::managers::state::{BackupAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
+use crate::tasks::backup::{OutOfTimeFailure, Performer, Request};
+use crate::tasks::helpers::crypto;
+use crate::tasks::pretty_print_duration;
+use crate::tasks::state::{BackupAction, StateStore, SupervisorAction};
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
@@ -440,9 +440,9 @@ mod tests {
     use super::*;
     use crate::domain::entities::schedule::{Schedule, TimeRange};
     use crate::domain::entities::{Checksum, Snapshot};
-    use crate::domain::managers::backup::MockPerformer;
-    use crate::domain::managers::state::{StateStore, StateStoreImpl};
     use crate::domain::repositories::MockRecordRepository;
+    use crate::tasks::backup::MockPerformer;
+    use crate::tasks::state::{StateStore, StateStoreImpl};
     use std::io;
     use std::path::Path;
 

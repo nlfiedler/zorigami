@@ -6,12 +6,12 @@
 
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::domain::entities::{self, Checksum, SnapshotRetention, TreeReference};
-use crate::domain::helpers;
-use crate::domain::managers::backup::Scheduler;
-use crate::domain::managers::restore::{self, Restorer};
-use crate::domain::managers::state::{self, StateStore};
 use crate::domain::repositories::RecordRepository;
 use crate::domain::sources::EntityDataSource;
+use crate::tasks::backup::Scheduler;
+use crate::tasks::helpers;
+use crate::tasks::restore::{self, Restorer};
+use crate::tasks::state::{self, StateStore};
 use chrono::prelude::*;
 use juniper::{
     EmptySubscription, FieldResult, GraphQLEnum, GraphQLObject, GraphQLScalar, ParseScalarResult,
@@ -1090,10 +1090,11 @@ pub fn create_schema() -> Schema {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::managers::restore::MockRestorer;
-    use crate::domain::managers::state::MockStateStore;
+    use crate::domain::entities::PackRetention;
     use crate::domain::sources::MockEntityDataSource;
-    use crate::domain::{entities::PackRetention, managers::backup::scheduler::MockScheduler};
+    use crate::tasks::backup::scheduler::MockScheduler;
+    use crate::tasks::restore::MockRestorer;
+    use crate::tasks::state::MockStateStore;
     use anyhow::anyhow;
     use juniper::{FieldError, FromInputValue, InputValue, ToInputValue, Variables};
     use std::collections::HashMap;
@@ -1287,7 +1288,7 @@ mod tests {
 
     #[test]
     fn test_query_datasets_ok() {
-        use crate::domain::managers::state;
+        use crate::tasks::state;
         // arrange
         let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
         let mut mock = MockEntityDataSource::new();
@@ -1329,7 +1330,7 @@ mod tests {
 
     #[test]
     fn test_query_dataset_status_running() {
-        use crate::domain::managers::state;
+        use crate::tasks::state;
         // arrange
         let stater = state::StateStoreImpl::new();
         let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
@@ -1371,7 +1372,7 @@ mod tests {
 
     #[test]
     fn test_query_dataset_status_error() {
-        use crate::domain::managers::state;
+        use crate::tasks::state;
         // arrange
         let stater = state::StateStoreImpl::new();
         let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];

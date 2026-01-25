@@ -8,9 +8,9 @@
 //! them to the store.
 
 use crate::domain::entities;
-use crate::domain::helpers::thread_pool::ThreadPool;
-use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::RecordRepository;
+use crate::tasks::helpers::thread_pool::ThreadPool;
+use crate::tasks::state::{BackupAction, StateStore};
 use anyhow::{Context, Error, anyhow};
 use chrono::{DateTime, Utc};
 use globset::{Glob, GlobSet, GlobSetBuilder};

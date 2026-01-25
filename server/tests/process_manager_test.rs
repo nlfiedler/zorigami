@@ -12,9 +12,9 @@ use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::schedule::Schedule;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::managers::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use zorigami::domain::managers::restore::*;
-use zorigami::domain::managers::state::{BackupAction, StateStore, StateStoreImpl};
+use zorigami::tasks::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
+use zorigami::tasks::restore::*;
+use zorigami::tasks::state::{BackupAction, StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {

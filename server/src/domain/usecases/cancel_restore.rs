@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::Checksum;
-use crate::domain::managers::restore::{Request, Restorer};
+use crate::tasks::restore::{Request, Restorer};
 use anyhow::Error;
 use std::cmp;
 use std::fmt;
@@ -78,7 +78,7 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::managers::restore::MockRestorer;
+    use crate::tasks::restore::MockRestorer;
 
     #[test]
     fn test_restore_files_ok() {

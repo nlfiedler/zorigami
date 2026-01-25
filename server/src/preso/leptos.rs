@@ -109,7 +109,7 @@ fn NotFound() -> impl IntoView {
 pub mod ssr {
     use crate::data::repositories::RecordRepositoryImpl;
     use crate::data::sources::EntityDataSourceImpl;
-    use crate::domain::managers::state::StateStore;
+    use crate::tasks::state::StateStore;
     use crate::domain::sources::EntityDataSource;
     use server_fn::error::ServerFnErrorErr;
     use server_fn::ServerFnError;

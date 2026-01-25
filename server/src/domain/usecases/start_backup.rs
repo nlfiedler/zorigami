@@ -1,8 +1,8 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::domain::managers::backup::Scheduler;
-use crate::domain::managers::state::{RestorerState, StateStore};
+use crate::tasks::backup::Scheduler;
+use crate::tasks::state::{RestorerState, StateStore};
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
 use log::{error, info};
@@ -82,8 +82,8 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::Dataset;
-    use crate::domain::managers::backup::scheduler::MockScheduler;
-    use crate::domain::managers::state::{self, MockStateStore};
+    use crate::tasks::backup::scheduler::MockScheduler;
+    use crate::tasks::state::{self, MockStateStore};
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
     use std::path::Path;

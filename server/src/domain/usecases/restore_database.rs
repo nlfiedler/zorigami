@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::domain::managers::state::{RestorerAction, StateStore, SupervisorAction};
+use crate::tasks::state::{RestorerAction, StateStore, SupervisorAction};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
 use log::{Level, debug, error, info, log_enabled};
@@ -113,7 +113,7 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::{Configuration, PackRetention, Store, StoreType};
-    use crate::domain::managers::state::MockStateStore;
+    use crate::tasks::state::MockStateStore;
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use mockall::predicate::*;
     use std::collections::HashMap;

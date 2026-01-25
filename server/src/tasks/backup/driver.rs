@@ -16,9 +16,9 @@
 //! where those chunks are located.
 
 use crate::domain::entities;
-use crate::domain::helpers::{self, pack};
-use crate::domain::managers::state::{BackupAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::tasks::helpers::{self, pack};
+use crate::tasks::state::{BackupAction, StateStore};
 use anyhow::{Error, anyhow};
 use chrono::{DateTime, Utc};
 use log::{error, info, trace, warn};
@@ -467,8 +467,8 @@ mod tests {
     use crate::data::repositories::RecordRepositoryImpl;
     use crate::data::sources::EntityDataSourceImpl;
     use crate::domain::entities::{Checksum, PackRetention};
-    use crate::domain::managers::backup::ChangedFile;
-    use crate::domain::managers::state::{StateStore, StateStoreImpl};
+    use crate::tasks::backup::ChangedFile;
+    use crate::tasks::state::{StateStore, StateStoreImpl};
     use std::path::PathBuf;
     use tempfile::tempdir;
 

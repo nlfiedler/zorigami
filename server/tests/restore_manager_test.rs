@@ -9,9 +9,9 @@ use std::sync::Arc;
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::managers::backup::{self, Performer, PerformerImpl};
-use zorigami::domain::managers::restore::*;
-use zorigami::domain::managers::state::{StateStore, StateStoreImpl};
+use zorigami::tasks::backup::{self, Performer, PerformerImpl};
+use zorigami::tasks::restore::*;
+use zorigami::tasks::state::{StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {

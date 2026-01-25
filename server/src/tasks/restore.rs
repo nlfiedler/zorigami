@@ -2,9 +2,9 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
-use crate::domain::helpers::pack;
-use crate::domain::managers::state::{RestorerAction, StateStore};
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::tasks::helpers::pack;
+use crate::tasks::state::{RestorerAction, StateStore};
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
@@ -776,10 +776,10 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
     use crate::domain::entities::{Dataset, Tree, TreeEntry};
-    use crate::domain::helpers::crypto;
-    use crate::domain::managers;
-    use crate::domain::managers::state::StateStoreImpl;
     use crate::domain::repositories::MockRecordRepository;
+    use crate::tasks;
+    use crate::tasks::helpers::crypto;
+    use crate::tasks::state::StateStoreImpl;
     use std::io;
     use std::str::FromStr;
 
@@ -815,7 +815,7 @@ mod tests {
         // act
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let result = sut.enqueue(managers::restore::Request::new(
+        let result = sut.enqueue(tasks::restore::Request::new(
             Checksum::SHA1("cafebabe".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
@@ -876,7 +876,7 @@ mod tests {
         let mut sut = RestorerImpl::new(state, factory_fail);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let result = sut.enqueue(managers::restore::Request::new(
+        let result = sut.enqueue(tasks::restore::Request::new(
             Checksum::SHA1("deadbeef".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
@@ -902,7 +902,7 @@ mod tests {
         sut.reset_completed();
         let result = sut.factory(factory_pass);
         assert!(result.is_ok());
-        let result = sut.enqueue(managers::restore::Request::new(
+        let result = sut.enqueue(tasks::restore::Request::new(
             Checksum::SHA1("cafebabe".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
@@ -992,7 +992,7 @@ mod tests {
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
         let passphrase = crypto::get_passphrase();
-        let result = sut.enqueue(managers::restore::Request::new(
+        let result = sut.enqueue(tasks::restore::Request::new(
             roottree_sha1,
             String::from("fixtures"),
             PathBuf::from("/home/town"),

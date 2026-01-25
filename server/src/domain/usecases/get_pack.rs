@@ -92,8 +92,8 @@ mod tests {
     use super::super::UseCase;
     use super::*;
     use crate::domain::entities::{Dataset, Pack, PackLocation};
-    use crate::domain::helpers::{self, pack};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
+    use crate::tasks::helpers::{self, pack};
     use std::path::Path;
     use tempfile::tempdir;
 
