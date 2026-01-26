@@ -158,10 +158,12 @@ async fn main() -> io::Result<()> {
     let addr = format!("{}:{}", host, port);
     info!("listening on {}", addr);
 
+    let schema = std::sync::Arc::new(graphql::create_schema());
     HttpServer::new(move || {
-        let schema = std::sync::Arc::new(graphql::create_schema());
+        // This block is called for every thread that is started, so anything
+        // that should be run once is moved outside and cloned in.
         App::new()
-            .app_data(web::Data::new(schema))
+            .app_data(web::Data::new(schema.clone()))
             .wrap(middleware::Logger::default())
             .wrap(
                 // Respond to OPTIONS requests for CORS support, which is common

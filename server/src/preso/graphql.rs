@@ -17,6 +17,7 @@ use juniper::{
     EmptySubscription, FieldResult, GraphQLEnum, GraphQLObject, GraphQLScalar, ParseScalarResult,
     ParseScalarValue, RootNode, ScalarToken, ScalarValue,
 };
+use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -1084,7 +1085,16 @@ pub type Schema = RootNode<QueryRoot, MutationRoot, EmptySubscription<GraphConte
 
 /// Create the GraphQL schema.
 pub fn create_schema() -> Schema {
-    Schema::new(QueryRoot {}, MutationRoot {}, EmptySubscription::new())
+    let schema = Schema::new(QueryRoot {}, MutationRoot {}, EmptySubscription::new());
+    if let Ok(path) = std::env::var("GENERATE_SDL") {
+        let mut file = std::fs::File::create(&path).expect("create file");
+        file.write_all(b"#\n# GENERATED FILE, DO NOT EDIT\n#\n\n")
+            .expect("write_all header");
+        file.write_all(schema.as_sdl().as_bytes())
+            .expect("write_all schema");
+        println!("GraphQL schema written to {path}");
+    }
+    schema
 }
 
 #[cfg(test)]

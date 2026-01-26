@@ -1,0 +1,379 @@
+#
+# GENERATED FILE, DO NOT EDIT
+#
+
+schema {
+  query: QueryRoot
+  mutation: MutationRoot
+}
+
+enum DayOfWeek {
+  SUN
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+}
+
+"How often should the backup run for the dataset."
+enum Frequency {
+  "Run every hour." HOURLY
+  "Run every day, with optional time range." DAILY
+  "Run every week, with optional day-of-week and time range." WEEKLY
+  "Run every month, with optional day-of-month and time range." MONTHLY
+}
+
+"Status of the most recent snapshot for a dataset."
+enum Status {
+  "Backup has not run yet." NONE
+  "Backup is still running." RUNNING
+  "Backup has finished." FINISHED
+  "Backup paused due to schedule." PAUSED
+  "Backup failed, see `errorMessage` property." FAILED
+}
+
+"In combination with DayOfWeek, selects the particular week."
+enum WeekOfMonth {
+  "First such weekday of the month." FIRST
+  "Second such weekday of the month." SECOND
+  "Third such weekday of the month." THIRD
+  "Fourth such weekday of the month." FOURTH
+  "Fifth such weekday of the month." FIFTH
+}
+
+"An integer type larger than the standard signed 32-bit."
+scalar BigInt
+
+"A SHA1 or BLAKE3 checksum, with algorithm prefix."
+scalar Checksum
+
+"""
+  Combined date and time (with time zone) in [RFC 3339][0] format.
+
+  Represents a description of an exact instant on the time-line (such as the
+  instant that a user account was created).
+
+  [`DateTime` scalar][1] compliant.
+
+  See also [`chrono::DateTime`][2] for details.
+
+  [0]: https://datatracker.ietf.org/doc/html/rfc3339#section-5
+  [1]: https://graphql-scalars.dev/docs/scalars/date-time
+  [2]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
+"""
+scalar DateTime
+
+"Reference for a tree entry, such as a file or tree."
+scalar TreeReference
+
+"Detailed information of the state of the backup."
+type BackupState {
+  "True if the running backup has been paused."
+  paused: Boolean!
+  "True if the running backup received a request to stop prematurely."
+  stopRequested: Boolean!
+  "Number of files that changed in this snapshot."
+  changedFiles: BigInt!
+  "Number of pack files uploaded so far."
+  packsUploaded: BigInt!
+  "Number of files uploaded so far."
+  filesUploaded: BigInt!
+  "Number of bytes uploaded so far, which may change more often than the"
+  bytesUploaded: BigInt!
+}
+
+"Configuration of the application."
+type Configuration {
+  "Name of the computer on which this application is running."
+  hostname: String!
+  "Name of the user running this application."
+  username: String!
+  "Computer UUID for generating bucket names."
+  computerId: String!
+  "Name of the bucket used for storing the database snapshots."
+  computerBucket: String!
+}
+
+"Location, schedule, and pack store for a backup data set."
+type Dataset {
+  "Identifier for this dataset."
+  id: String!
+  "Path that is being backed up."
+  basepath: String!
+  "Path for temporary pack building."
+  workspace: String!
+  "Set of schedules that apply to this dataset."
+  schedules: [Schedule!]!
+  "Status of the most recent snapshot for this dataset."
+  status: Status!
+  "Detailed state of the backup for this dataset."
+  backupState: BackupState
+  "Error message for the most recent snapshot, if any."
+  errorMessage: String
+  "Most recent snapshot for this dataset, if any."
+  latestSnapshot: Snapshot
+  "Preferred byte length of pack files."
+  packSize: BigInt!
+  "Identifiers of stores used for saving packs."
+  stores: [String!]!
+  "List of paths to be excluded from backups."
+  excludes: [String!]!
+  """
+    If non-null, the number of snapshots to be retained after invoking the
+    `pruneSnapshots` mutation.
+  """
+  retentionCount: Int
+}
+
+"Number of files and directories in a snapshot."
+type FileCounts {
+  directories: BigInt!
+  symlinks: BigInt!
+  verySmallFiles: BigInt!
+  fileSizes: [FileSize!]!
+  veryLargeFiles: BigInt!
+}
+
+"Number of files whose size is close to the given power of 2."
+type FileSize {
+  "File size category as a power of 2 (such as \"1024\", \"1048576\")."
+  power: String!
+  "Number of files in this size category."
+  count: BigInt!
+}
+
+type MutationRoot {
+  "Begin the backup procedure for the dataset with the given identifier."
+  startBackup(id: String!): Boolean!
+  "Signal the running backup for the given dataset to stop prematurely."
+  stopBackup(id: String!): Boolean!
+  "Restore the database from the most recent snapshot."
+  restoreDatabase(storeId: String!): String!
+  "Enqueue a request to restore the given file or directory tree."
+  restoreFiles(tree: Checksum!, entry: String!, filepath: String!, dataset: String!): Boolean!
+  "Cancel the pending restore request that matches the given values."
+  cancelRestore(tree: Checksum!, entry: String!, filepath: String!, dataset: String!): Boolean!
+  """
+    Change the store from old to new for all matching pack records.
+
+    This is a dangerous action and should be used very carefully.
+  """
+  reassignPacks(sourceId: String!, targetId: String!): Int!
+  "Restore any missing packs, copying from the other pack store."
+  restorePacks(sourceId: String!, targetId: String!): [Pack!]!
+  "Remove extraneous packs from the given pack store."
+  pruneExtra(storeId: String!): Int!
+  """
+    Apply the retention policy to the named dataset, pruning snapshots and
+    everything that is no longer reachable (except for packs).
+
+    Returns the number of snapshots removed from the dataset.
+  """
+  pruneSnapshots(id: String!): Int!
+  """
+    Create a missing file record from the given information.
+
+    This will fetch the given pack file to verify the chunk is contained
+    therein, as well as to get the file size. This only works for files
+    containing a single chunk.
+  """
+  insertFile(dataset: String!, chunkDigest: Checksum!, packDigest: Checksum!): Boolean!
+}
+
+"An archive containing saved files."
+type Pack {
+  "Unique checksum of the pack contents."
+  checksum: Checksum!
+  "List of store-specific coordinates where the pack is saved."
+  locations: [PackLocation!]!
+}
+
+"Entry within a saved pack file."
+type PackEntry {
+  "File name of the entry in the pack file."
+  name: String!
+  "Length of the content of the entry."
+  size: BigInt!
+}
+
+"Details about a pack file."
+type PackFile {
+  "Number of entries in the pack file."
+  count: Int!
+  "All entries in the pack file."
+  entries: [PackEntry!]!
+  "Length of the pack file in bytes."
+  length: BigInt!
+  "Total size of all pack entries."
+  contentLength: BigInt!
+  "Size of the smallest entry in the pack file."
+  smallest: BigInt!
+  "Size of the largest entry in the pack file."
+  largest: BigInt!
+  "Average size of all entries in the pack file."
+  average: BigInt!
+}
+
+"Location within a store of a saved pack."
+type PackLocation {
+  "ULID of the pack store."
+  store: String!
+  "Remote bucket name."
+  bucket: String!
+  "Remote object name."
+  object: String!
+}
+
+"Property defines a name/value pair."
+type Property {
+  name: String!
+  value: String!
+}
+
+type QueryRoot {
+  "Retrieve the configuration record."
+  configuration: Configuration!
+  "Find all dataset configurations."
+  datasets: [Dataset!]!
+  "Find any packs that are missing from the given store."
+  missingPacks(storeId: String!): [Pack!]!
+  "Retrieve entry listing a specific pack."
+  pack(dataset: String!, digest: Checksum!): PackFile!
+  """
+    Exhaustively search all pack file entries to the given chunk.
+
+    This is an expensive operation as it scans many records in the database
+    and downloads every single pack file to find the missing chunk.
+  """
+  scanPacks(dataset: String!, digest: Checksum!): Checksum
+  "Return the number of each type of database record."
+  recordCounts: RecordCounts!
+  "Query for any pending and recently completed file restore operations."
+  restores: [Request!]!
+  "Retrieve a specific snapshot."
+  snapshot(digest: Checksum!): Snapshot
+  "Find all named store configurations."
+  stores: [Store!]!
+  "Retrieve a specific tree."
+  tree(digest: Checksum!): Tree
+}
+
+"Number of database records for each entity type."
+type RecordCounts {
+  "Number of chunks stored in the repository."
+  chunks: Int!
+  "Number of datasets stored in the repository."
+  datasets: Int!
+  "Number of files stored in the repository."
+  files: Int!
+  "Number of packs stored in the repository."
+  packs: Int!
+  "Number of snapshots stored in the repository."
+  snapshots: Int!
+  "Number of stores stored in the repository."
+  stores: Int!
+  "Number of trees stored in the repository."
+  trees: Int!
+  "Number of extended attributes stored in the repository."
+  xattrs: Int!
+}
+
+"A request to restore a file or directory."
+type Request {
+  "Digest of the tree containing the entry to restore."
+  tree: Checksum!
+  "Name of the entry within the tree to be restored."
+  entry: String!
+  "Relative path where file/tree will be restored."
+  filepath: String!
+  "Identifier of the dataset containing the data."
+  dataset: String!
+  "The datetime when the request was completed in UTC."
+  finished: DateTime
+  "Number of files restored so far during the restoration."
+  filesRestored: Int!
+  "Error message if request processing failed."
+  errorMessage: String
+}
+
+"A schedule for when to run the backup."
+type Schedule {
+  """
+    How often the backup will be run. Combines with other elements to
+    control exactly when the backup is performed.
+  """
+  frequency: Frequency!
+  """
+    Time within the day when the backup will be run. The start time will
+    come before the stop time if the range spans midnight.
+  """
+  timeRange: TimeRange
+  "Which week, in combination with the day of the week, to run the backup."
+  weekOfMonth: WeekOfMonth
+  """
+    Day of the week on which to run the backup, for schedules with a weekly
+    or monthly frequency.
+  """
+  dayOfWeek: DayOfWeek
+  """
+    Day of the month, instead of a week and weekday, to run the backup, for
+    schedules with a monthly frequency.
+  """
+  dayOfMonth: Int
+}
+
+"A single backup, either in progress or completed."
+type Snapshot {
+  "Original computed checksum of the snapshot."
+  checksum: Checksum!
+  "The snapshot before this one, if any."
+  parent: Checksum
+  "Time when the snapshot was first created in UTC."
+  startTime: DateTime!
+  "Time when the snapshot completely finished in UTC."
+  endTime: DateTime
+  "Total number of files contained in this snapshot."
+  fileCount: BigInt!
+  "Number of files and directories contained in this snapshot."
+  fileCounts: FileCounts!
+  "Reference to the tree containing all of the files."
+  tree: Checksum!
+}
+
+"Store defines a location where packs will be saved."
+type Store {
+  "Unique identifier for this store."
+  id: String!
+  "Name of the type of this store (e.g. \"local\")."
+  storeType: String!
+  "User-defined label for this store."
+  label: String!
+  "Name/value pairs that make up this store configuration."
+  properties: [Property!]!
+}
+
+"Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour."
+type TimeRange {
+  "Seconds from midnight at which to start in UTC."
+  startTime: Int!
+  "Seconds from midnight at which to stop in UTC."
+  stopTime: Int!
+}
+
+"A set of file system entries in a directory."
+type Tree {
+  "Set of entries making up this tree."
+  entries: [TreeEntry!]!
+}
+
+"A file, directory, or symbolic link within a tree."
+type TreeEntry {
+  "Name of the file, directory, or symbolic link."
+  name: String!
+  "Modification time of the entry in UTC."
+  modTime: DateTime!
+  "Reference to the entry itself."
+  reference: TreeReference!
+}

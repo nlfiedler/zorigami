@@ -1,19 +1,17 @@
 * Tasks
-** TODO [#A] Switch from =juniper= to =async-graphql=
-*** https://crates.io/crates/async-graphql
-*** TODO can =async-graphql= generate a schema thing for clients to use?
-*** TODO can Apollo GraphQL generate a schema thing for TypeScript to use from the =/graphql= endpoint alone?
-*** TODO structure the code into smaller files
-** TODO [#B] Replace Flutter/Leptos with SolidJS/TypeScript
-*** TODO preliminary setup [0/9]
+** TODO [#A] Replace Flutter/Leptos with SolidJS/TypeScript
+*** DONE generate GraphQL schema definition file
+*** TODO preliminary setup [2/11]
 - [ ] set up Vite to build the client
 - [ ] set up SolidJS/TS client in =client= directory
+- [ ] create =prettier.config.ts=
+- [ ] create =index.html=
 - [ ] create =tsconfig.json=
 - [ ] create basic =package.json=
 - [ ] create =vite.config.ts=
 - [ ] create =eslint.config.js=
-- [ ] revert changes to Cargo.toml for leptos
-- [ ] remove all of the Leptos related crates
+- [X] revert changes to Cargo.toml for leptos
+- [X] remove all of the Leptos related crates
 - [ ] change =main.rs= to serve the compiled JS
 *** TODO pack stores page
 *** TODO data sets page
@@ -47,8 +45,9 @@
 - [ ] explain how these are used to generate bucket names
 *** TODO deployment [0/1]
 - [ ] update Dockerfile
-*** TODO documentation [1/5]
-- [ ] README.md
+*** TODO documentation [1/7]
+- [ ] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
+- [ ] README.md (need to install =bun= globally)
 - [ ] doc/DEPLOY.txt
 - [ ] doc/HISTORY.txt
 - [ ] doc/DESIGN.txt
@@ -67,7 +66,7 @@
 **** home page should guide toward defining a pack store and link to restore page
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
-** TODO [#C] Pack file and database backup pruning
+** TODO [#B] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
 **** either retain ~all~ or ~delete after N days~
@@ -270,6 +269,20 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** Support time-range in schedule
 ** Filters for excluding files by size
 *** allow adding rules on a dataset to ignore files that are too small/large
+** Evaluate =async-graphql= vs =juniper= some day
+*** so far juniper is working
+*** https://crates.io/crates/async-graphql
+*** TODO structure the code into smaller files
+*** TODO action items [0/6]
+- [ ] detach from juniper
+- [ ] cargo add async-graphql
+- [ ] add =chrono= feature
+- [ ] add https://crates.io/crates/async-graphql-actix-web
+- [ ] try using Apollo GraphQL to generate schema from =/graphql=
+- [ ] try =graphiql= feature
+- [ ] try =playground= feature
+- [ ] set up the context to provide things to resolvers
+- [ ] try =string_number= feature to use =StringNumber= instead of =BigInt=
 ** Support ~archive~ storage classes
 *** Azure, Amazon, and Google all support very slow response time storage
 *** requires subscribing to notifications (?) to facilitate file retrieval
