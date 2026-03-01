@@ -37,7 +37,14 @@ impl AzureStore {
             .get("access_key")
             .ok_or_else(|| anyhow!("missing access_key property"))?;
         // an empty URI must be nullified to avoid errors from Azure
-        let custom_uri = props.get("custom_uri").take_if(|c| c.is_empty());
+        let mut custom_uri = props.get("custom_uri");
+        if let Some(uri) = custom_uri
+            && uri.is_empty()
+        {
+            // tried using take_if() but that is either very confusing or
+            // is not working as would be expected
+            custom_uri = None;
+        }
         let access_tier = props.get("access_tier").and_then(|tier| {
             if tier.to_lowercase() == "hot" {
                 Some(AccessTier::Hot)
@@ -428,6 +435,35 @@ mod tests {
             }
             source.delete_bucket_sync(&bucket)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_azure_store_custom_uri() -> Result<(), Error> {
+        // test using the connection when custom_uri property is an empty string
+        // which seems to cause Azure a lot of needless grief
+        dotenv().ok();
+        let acct_var = env::var("AZURE_STORAGE_ACCOUNT");
+        if acct_var.is_err() {
+            // bail out silently if azure is not available
+            return Ok(());
+        }
+        let account = acct_var?;
+        let access_key = env::var("AZURE_STORAGE_ACCESS_KEY")?;
+        let access_tier = env::var("AZURE_STORAGE_ACCESS_TIER");
+
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("account".to_owned(), account);
+        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("custom_uri".to_owned(), String::new());
+        if let Ok(tier) = access_tier {
+            properties.insert("access_tier".to_owned(), tier);
+        }
+        let source = AzureStore::new("azure1", &properties)?;
+
+        // act/assert
+        let _ = source.list_buckets_sync()?;
         Ok(())
     }
 }
