@@ -1,12 +1,38 @@
-.DS_Store
-.vscode
-
 # Rust build artifacts
 Cargo.lock
 target
 
+# temporary data
+tmp
+.tmp
+
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+bun.lock
+node_modules
+dist
+dist-ssr
+*.local
+out
+
+# build output
+generated
+
 # environment configuration
 .env
+.env.*
 
 # temporary data
 tmp

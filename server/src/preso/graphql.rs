@@ -14,9 +14,10 @@ use crate::tasks::restore::{self, Restorer};
 use crate::tasks::state::{self, StateStore};
 use chrono::prelude::*;
 use juniper::{
-    EmptySubscription, FieldResult, GraphQLEnum, GraphQLObject, GraphQLScalar, ParseScalarResult,
-    ParseScalarValue, RootNode, ScalarToken, ScalarValue,
+    EmptySubscription, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject, GraphQLScalar,
+    ParseScalarResult, ParseScalarValue, RootNode, ScalarToken, ScalarValue,
 };
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -573,17 +574,60 @@ struct Property {
     value: String,
 }
 
+/// Specifies how many pack files the pack store will retain.
+#[derive(Copy, Clone, GraphQLEnum)]
+pub enum PackRetentionPolicy {
+    /// Retain all pack files.
+    All,
+    /// Keep only pack files uploaded in the last N days.
+    Days,
+}
+
+#[derive(GraphQLObject)]
+struct PackRetention {
+    /// Policy for retaining pack files.
+    policy: PackRetentionPolicy,
+    /// Value associated with the policy (the N value for "days" policy).
+    value: i32,
+}
+
+impl From<entities::PackRetention> for PackRetention {
+    fn from(retention: entities::PackRetention) -> Self {
+        match retention {
+            entities::PackRetention::ALL => PackRetention {
+                policy: PackRetentionPolicy::All,
+                value: 0,
+            },
+            entities::PackRetention::DAYS(n) => PackRetention {
+                policy: PackRetentionPolicy::Days,
+                value: n as i32,
+            },
+        }
+    }
+}
+
+impl From<PackRetention> for entities::PackRetention {
+    fn from(retention: PackRetention) -> entities::PackRetention {
+        match retention.policy {
+            PackRetentionPolicy::All => entities::PackRetention::ALL,
+            PackRetentionPolicy::Days => entities::PackRetention::DAYS(retention.value as u16),
+        }
+    }
+}
+
 /// Store defines a location where packs will be saved.
 #[derive(GraphQLObject)]
 struct Store {
     /// Unique identifier for this store.
     id: String,
-    /// Name of the type of this store (e.g. "local").
+    /// The kind of the pack store (such as "local" or "sftp").
     store_type: String,
     /// User-defined label for this store.
     label: String,
     /// Name/value pairs that make up this store configuration.
     properties: Vec<Property>,
+    /// Pack retention policy.
+    retention: PackRetention,
 }
 
 impl From<entities::Store> for Store {
@@ -595,11 +639,13 @@ impl From<entities::Store> for Store {
                 value: val.to_owned(),
             });
         }
+        let retention: PackRetention = store.retention.into();
         Self {
             id: store.id,
             store_type: store.store_type.to_string(),
             label: store.label,
             properties,
+            retention,
         }
     }
 }
@@ -790,17 +836,17 @@ impl entities::RecordCounts {
     }
 }
 
-pub struct QueryRoot;
+pub struct Query;
 
 #[juniper::graphql_object(Context = GraphContext)]
-impl QueryRoot {
+impl Query {
     /// Retrieve the configuration record.
     fn configuration(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<entities::Configuration> {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         Ok(repo.get_configuration()?)
     }
 
-    /// Find all dataset configurations.
+    /// Retrieve all dataset definitions.
     fn datasets(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<entities::Dataset>> {
         use crate::domain::usecases::get_datasets::GetDatasets;
         use crate::domain::usecases::{NoParams, UseCase};
@@ -895,7 +941,7 @@ impl QueryRoot {
         Ok(result)
     }
 
-    /// Find all named store configurations.
+    /// Retrieve all pack store definitions.
     fn stores(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<Store>> {
         use crate::domain::usecases::get_stores::GetStores;
         use crate::domain::usecases::{NoParams, UseCase};
@@ -905,6 +951,19 @@ impl QueryRoot {
         let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
         let stores: Vec<Store> = result.into_iter().map(|s| s.into()).collect();
         Ok(stores)
+    }
+
+    /// Retrieve a specific pack store definition.
+    fn store(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<Option<Store>> {
+        use crate::domain::usecases::get_stores::GetStores;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetStores::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
+        Ok(result
+            .into_iter()
+            .find_map(|s| if s.id == id { Some(s.into()) } else { None }))
     }
 
     /// Retrieve a specific tree.
@@ -922,10 +981,126 @@ impl QueryRoot {
     }
 }
 
-pub struct MutationRoot;
+/// Property defines a name/value pair.
+#[derive(GraphQLInputObject)]
+struct PropertyInput {
+    name: String,
+    value: String,
+}
+
+#[derive(GraphQLInputObject)]
+struct PackRetentionInput {
+    /// Policy for retaining pack files.
+    policy: PackRetentionPolicy,
+    /// Value associated with the policy (the N value for "days" policy).
+    value: i32,
+}
+
+impl From<PackRetentionInput> for entities::PackRetention {
+    fn from(retention: PackRetentionInput) -> entities::PackRetention {
+        match retention.policy {
+            PackRetentionPolicy::All => entities::PackRetention::ALL,
+            PackRetentionPolicy::Days => entities::PackRetention::DAYS(retention.value as u16),
+        }
+    }
+}
+
+/// Store defines a location where packs will be saved.
+#[derive(GraphQLInputObject)]
+struct StoreInput {
+    /// Unique identifier for this store.
+    id: String,
+    /// The kind of the pack store (such as "local" or "sftp").
+    store_type: String,
+    /// User-defined label for this store.
+    label: String,
+    /// Name/value pairs that make up this store configuration.
+    properties: Vec<PropertyInput>,
+    /// Pack retention policy.
+    retention: PackRetentionInput,
+}
+
+impl From<StoreInput> for entities::Store {
+    fn from(store: StoreInput) -> entities::Store {
+        let mut properties: HashMap<String, String> = HashMap::new();
+        for prop in store.properties.into_iter() {
+            properties.insert(prop.name, prop.value);
+        }
+        let retention: entities::PackRetention = store.retention.into();
+        Self {
+            id: store.id,
+            store_type: entities::StoreType::from_str(&store.store_type)
+                .expect("unknown store type"),
+            label: store.label,
+            properties,
+            retention,
+        }
+    }
+}
+
+pub struct Mutation;
 
 #[juniper::graphql_object(Context = GraphContext)]
-impl MutationRoot {
+impl Mutation {
+    /// Create a new pack store of the given kind (e.g. "local").
+    fn new_store(
+        #[graphql(ctx)] ctx: &GraphContext,
+        kind: String,
+        label: String,
+        properties: Vec<PropertyInput>,
+    ) -> FieldResult<Store> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::new_store::{NewStore, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = NewStore::new(Box::new(repo));
+        let mut props: HashMap<String, String> = HashMap::new();
+        for prop in properties.into_iter() {
+            props.insert(prop.name, prop.value);
+        }
+        let params: Params = Params::new(kind, label, props);
+        let result: crate::domain::entities::Store = usecase.call(params)?;
+        Ok(result.into())
+    }
+
+    /// Update the pack store label and properties (its kind cannot be changed).
+    fn update_store(#[graphql(ctx)] ctx: &GraphContext, store: StoreInput) -> FieldResult<Store> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::update_store::{Params, UpdateStore};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = UpdateStore::new(Box::new(repo));
+        let estore: entities::Store = store.into();
+        let params: Params = estore.into();
+        let result: crate::domain::entities::Store = usecase.call(params)?;
+        Ok(result.into())
+    }
+
+    /// Perform a basic test of the given store definition.
+    ///
+    /// Returns "OK" if no error, otherwise the error message.
+    fn test_store(#[graphql(ctx)] ctx: &GraphContext, store: StoreInput) -> FieldResult<String> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::test_store::{Params, TestStore};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = TestStore::new(Box::new(repo));
+        let estore: entities::Store = store.into();
+        let params: Params = estore.into();
+        match usecase.call(params) {
+            Ok(()) => Ok(String::from("OK")),
+            Err(err) => Ok(err.to_string()),
+        }
+    }
+
+    /// Delete the pack store with the given unique identifier.
+    fn delete_store(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::delete_store::{DeleteStore, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = DeleteStore::new(Box::new(repo));
+        let params: Params = Params::new(id);
+        usecase.call(params)?;
+        Ok(true)
+    }
+
     /// Begin the backup procedure for the dataset with the given identifier.
     fn start_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
@@ -1081,11 +1256,11 @@ impl MutationRoot {
     }
 }
 
-pub type Schema = RootNode<QueryRoot, MutationRoot, EmptySubscription<GraphContext>>;
+pub type Schema = RootNode<Query, Mutation, EmptySubscription<GraphContext>>;
 
 /// Create the GraphQL schema.
 pub fn create_schema() -> Schema {
-    let schema = Schema::new(QueryRoot {}, MutationRoot {}, EmptySubscription::new());
+    let schema = Schema::new(Query {}, Mutation {}, EmptySubscription::new());
     if let Ok(path) = std::env::var("GENERATE_SDL") {
         let mut file = std::fs::File::create(&path).expect("create file");
         file.write_all(b"#\n# GENERATED FILE, DO NOT EDIT\n#\n\n")

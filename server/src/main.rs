@@ -6,7 +6,7 @@
 //! supervisor threads to manage the backups.
 
 use actix_cors::Cors;
-use actix_files::Files;
+use actix_files::{Files, NamedFile};
 use actix_web::{
     App, HttpResponse, HttpServer, Result, error::InternalError, http, middleware, web,
 };
@@ -18,12 +18,12 @@ use std::io;
 use std::sync::{Arc, LazyLock};
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::tasks::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use zorigami::tasks::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
-use zorigami::tasks::state;
 use zorigami::domain::repositories::RecordRepository;
 use zorigami::domain::sources::EntityDataSource;
 use zorigami::preso::graphql;
+use zorigami::tasks::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
+use zorigami::tasks::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
+use zorigami::tasks::state;
 use zorigami::{DB_PATH, STATE_STORE};
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
@@ -75,8 +75,8 @@ async fn graphql(
         .body(body))
 }
 
-async fn index(_req: actix_web::HttpRequest) -> &'static str {
-    "See the README.md file for more information."
+async fn index() -> actix_web::Result<NamedFile> {
+    Ok(NamedFile::open("./dist/index.html")?)
 }
 
 // Start and stop the supervisor(s) based on application state changes.
@@ -176,7 +176,12 @@ async fn main() -> io::Result<()> {
                     .max_age(3600),
             )
             .service(
-                Files::new("/assets", "./public")
+                Files::new("/assets", "./dist/assets")
+                    .use_etag(true)
+                    .use_last_modified(true),
+            )
+            .service(
+                Files::new("/fontawesome", "./dist/fontawesome")
                     .use_etag(true)
                     .use_last_modified(true),
             )
@@ -188,7 +193,7 @@ async fn main() -> io::Result<()> {
                     .route(web::get().to(HttpResponse::Ok))
                     .route(web::head().to(HttpResponse::Ok)),
             )
-            .route("/", web::get().to(index))
+            .default_service(web::get().to(index))
     })
     .bind(addr)?
     .run()
@@ -197,5 +202,5 @@ async fn main() -> io::Result<()> {
 
 #[actix_web::get("favicon.ico")]
 async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
-    Ok(actix_files::NamedFile::open("./public/favicon.ico")?)
+    Ok(actix_files::NamedFile::open("./dist/favicon.ico")?)
 }

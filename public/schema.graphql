@@ -3,8 +3,8 @@
 #
 
 schema {
-  query: QueryRoot
-  mutation: MutationRoot
+  query: Query
+  mutation: Mutation
 }
 
 enum DayOfWeek {
@@ -25,6 +25,12 @@ enum Frequency {
   "Run every month, with optional day-of-month and time range." MONTHLY
 }
 
+"Specifies how many pack files the pack store will retain."
+enum PackRetentionPolicy {
+  "Retain all pack files." ALL
+  "Keep only pack files uploaded in the last N days." DAYS
+}
+
 "Status of the most recent snapshot for a dataset."
 enum Status {
   "Backup has not run yet." NONE
@@ -41,6 +47,26 @@ enum WeekOfMonth {
   "Third such weekday of the month." THIRD
   "Fourth such weekday of the month." FOURTH
   "Fifth such weekday of the month." FIFTH
+}
+
+input PackRetentionInput {
+  "Policy for retaining pack files." policy: PackRetentionPolicy!
+  "Value associated with the policy (the N value for \"days\" policy)." value: Int!
+}
+
+"Property defines a name/value pair."
+input PropertyInput {
+  name: String!
+  value: String!
+}
+
+"Store defines a location where packs will be saved."
+input StoreInput {
+  "Unique identifier for this store." id: String!
+  "The kind of the pack store (such as \"local\" or \"sftp\")." storeType: String!
+  "User-defined label for this store." label: String!
+  "Name/value pairs that make up this store configuration." properties: [PropertyInput!]!
+  "Pack retention policy." retention: PackRetentionInput!
 }
 
 "An integer type larger than the standard signed 32-bit."
@@ -144,7 +170,19 @@ type FileSize {
   count: BigInt!
 }
 
-type MutationRoot {
+type Mutation {
+  "Create a new pack store of the given kind (e.g. \"local\")."
+  newStore(kind: String!, label: String!, properties: [PropertyInput!]!): Store!
+  "Update the pack store label and properties (its kind cannot be changed)."
+  updateStore(store: StoreInput!): Store!
+  """
+    Perform a basic test of the given store definition.
+
+    Returns "OK" if no error, otherwise the error message.
+  """
+  testStore(store: StoreInput!): String!
+  "Delete the pack store with the given unique identifier."
+  deleteStore(id: String!): Boolean!
   "Begin the backup procedure for the dataset with the given identifier."
   startBackup(id: String!): Boolean!
   "Signal the running backup for the given dataset to stop prematurely."
@@ -226,16 +264,23 @@ type PackLocation {
   object: String!
 }
 
+type PackRetention {
+  "Policy for retaining pack files."
+  policy: PackRetentionPolicy!
+  "Value associated with the policy (the N value for \"days\" policy)."
+  value: Int!
+}
+
 "Property defines a name/value pair."
 type Property {
   name: String!
   value: String!
 }
 
-type QueryRoot {
+type Query {
   "Retrieve the configuration record."
   configuration: Configuration!
-  "Find all dataset configurations."
+  "Retrieve all dataset definitions."
   datasets: [Dataset!]!
   "Find any packs that are missing from the given store."
   missingPacks(storeId: String!): [Pack!]!
@@ -254,8 +299,10 @@ type QueryRoot {
   restores: [Request!]!
   "Retrieve a specific snapshot."
   snapshot(digest: Checksum!): Snapshot
-  "Find all named store configurations."
+  "Retrieve all pack store definitions."
   stores: [Store!]!
+  "Retrieve a specific pack store definition."
+  store(id: String!): Store
   "Retrieve a specific tree."
   tree(digest: Checksum!): Tree
 }
@@ -346,12 +393,14 @@ type Snapshot {
 type Store {
   "Unique identifier for this store."
   id: String!
-  "Name of the type of this store (e.g. \"local\")."
+  "The kind of the pack store (such as \"local\" or \"sftp\")."
   storeType: String!
   "User-defined label for this store."
   label: String!
   "Name/value pairs that make up this store configuration."
   properties: [Property!]!
+  "Pack retention policy."
+  retention: PackRetention!
 }
 
 "Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour."

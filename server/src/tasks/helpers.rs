@@ -13,9 +13,14 @@ pub mod pack;
 pub mod thread_pool;
 
 ///
-/// Find the chunk boundaries within the given file, using the FastCDC
-/// algorithm. The `avg_size` is the desired average size in bytes for the
-/// chunks, however the min/max sizes will be 0.25/4 times that size.
+/// Find the content-defined chunk boundaries within the given file, using the
+/// FastCDC algorithm. The `avg_size` is the desired average size in bytes for
+/// the chunks, however the minimum and maximum sizes will be 0.25x and 4x times
+/// that size, respectively. Allowing for a wider range of chunk sizes will
+/// improve deduplication since the chunks are more likely to be determined by
+/// content rather than hard limits, and follows what has been done in the C
+/// implementation of FastCDC by the original author
+/// (https://github.com/wxiacode/FastCDC-c).
 ///
 pub fn find_file_chunks(infile: &Path, avg_size: u32) -> io::Result<Vec<Chunk>> {
     let file = fs::File::open(infile)?;

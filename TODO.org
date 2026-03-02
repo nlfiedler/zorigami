@@ -1,20 +1,53 @@
 * Tasks
-** TODO [#A] Replace Flutter/Leptos with SolidJS/TypeScript
+** TODO [#A] Rewrite client with SolidJS in TypeScript
 *** DONE generate GraphQL schema definition file
-*** TODO preliminary setup [2/11]
-- [ ] set up Vite to build the client
-- [ ] set up SolidJS/TS client in =client= directory
-- [ ] create =prettier.config.ts=
-- [ ] create =index.html=
-- [ ] create =tsconfig.json=
-- [ ] create basic =package.json=
-- [ ] create =vite.config.ts=
-- [ ] create =eslint.config.js=
+*** DONE preliminary setup [11/11]
+- [X] set up Vite to build the client
+- [X] set up SolidJS/TS client in =client= directory
+- [X] create =prettier.config.ts=
+- [X] create =index.html=
+- [X] create =tsconfig.json=
+- [X] create basic =package.json=
+- [X] create =vite.config.ts=
+- [X] create =eslint.config.js=
 - [X] revert changes to Cargo.toml for leptos
 - [X] remove all of the Leptos related crates
-- [ ] change =main.rs= to serve the compiled JS
-*** TODO pack stores page
-*** TODO data sets page
+- [X] change =main.rs= to serve =dist/index.html=
+*** DONE basic page setup [7/7]
+- [X] routes
+- [X] navbar
+- [X] styling
+- [X] font awesome
+- [X] color theme
+- [X] graphql client
+- [X] show configuration via GraphQL query
+*** DONE pack stores page [21/21]
+- [X] GraphQL mutation to invoke =NewStore= usecase
+- [X] GraphQL mutation to invoke =UpdateStore= usecase
+- [X] add =PackRetention= to GraphQL
+- [X] dropdown to create new pack store
+- [X] show list of pack stores on left, selected store on right
+- [X] route =/stores= should work and not show 404
+- [X] clicking pack store on left shows details on right
+- [X] GraphQL mutation to test a pack store
+- [X] GraphQL mutation to delete a pack store
+- [X] need to refresh the list when ~New Store~ is invoked
+- [X] need to refresh the page when ~Delete~ is invoked
+- [X] test error message should show with a delete button
+- [X] show help text when there are no pack stores
+- [X] form for local pack store
+- [X] pack retention form elements
+- [X] form for SFTP pack store
+- [X] form for MinIO pack store
+- [X] form for Azure pack store
+- [X] form for Amazon pack store
+- [X] form for Google pack store
+- [X] show/hide toggle is not working
+*** TODO data sets page [1/4]
+- [ ] add =SnapshotRetention= to GraphQL
+- [X] route =/datasets= should not show a 404
+- [ ] GraphQL mutation to create a blank data set
+- [ ] GraphQL mutation to update a data set
 *** TODO home page [0/15]
 - [ ] name it ~Home~ and show summary of datasets
 - [ ] for each dataset, card header arrow icon navigates to =/datasets= page
@@ -45,15 +78,15 @@
 - [ ] explain how these are used to generate bucket names
 *** TODO deployment [0/1]
 - [ ] update Dockerfile
-*** TODO documentation [1/7]
+*** TODO documentation [2/8]
 - [ ] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
-- [ ] README.md (need to install =bun= globally)
+- [ ] how to generate GraphQL TypeScript code (=bun run codegen=)
+- [X] README.md (need to install =bun= globally)
 - [ ] doc/DEPLOY.txt
 - [ ] doc/HISTORY.txt
 - [ ] doc/DESIGN.txt
 - [ ] write ADR for why SolidJS, TypeScript
 - [X] remove doc/LEPTOS.md
-*** TODO maybe replace the navbar icon with a fontawesome icon
 *** TODO look for ~issues~ in browser tools on every page
 *** TODO test building and running on Windows, update instructions
 *** TODO delete temp database and refine initial setup experience
@@ -66,7 +99,12 @@
 **** home page should guide toward defining a pack store and link to restore page
 *** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
-** TODO [#B] Pack file and database backup pruning
+** TODO [#B] Change default chunk size to 1,048,576
+** TODO Prevent deleting a pack store that is still being used by a data set
+*** return an error to the GraphQL client so it can report to the user
+*** update store form to show error message if delete fails
+** TODO rename SFTP property =remote_addr= to simply =address=
+** TODO [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
 **** either retain ~all~ or ~delete after N days~
@@ -373,6 +411,7 @@ Deleted local snapshot '2021-04-05-162416'
 *** Actor framework review, is actix still good?
 **** https://github.com/slawlor/ractor aims to be like Erlang
 **** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
+**** c.f. https://leapcell.io/blog/building-robust-background-task-processing-in-rust-web-services
 *** Database per dataset directory
 **** Centralized configuration in a known location
 ***** would default to something sensible in user home directory
@@ -477,72 +516,10 @@ Deleted local snapshot '2021-04-05-162416'
 *** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
 *** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/
 * Technical Information
-** Backup metrics
-*** 2023-08-11, 8 cores, 32gb RAM, 4-disk RAID-Z to minio on LAN, 346gb of data
-**** backup complete after 9 hours 48 minutes 11 seconds
-**** record counts after 1 snapshot
-| type   |  count |
-|--------+--------|
-| chunks |  47751 |
-| files  | 134745 |
-| packs  |   4133 |
-| trees  |  37143 |
-| xattrs |      0 |
-**** =fileCounts= sans =fileSizes= (which are shown below)
-| description |  count |
-|-------------+--------|
-| total files | 152181 |
-| directories |  37356 |
-| symlinks    |      0 |
-| very small  |   1576 |
-| very large  |      3 |
-**** =fileSizes=
-|      power | count |
-|------------+-------|
-|         64 |   402 |
-|        128 |  2189 |
-|        256 |  3431 |
-|        512 |  4201 |
-|       1024 |  8947 |
-|       2048 | 25343 |
-|       4096 |  4747 |
-|       8192 |  1804 |
-|      16384 |  5731 |
-|      32768 | 12277 |
-|      65536 | 23297 |
-|     131072 |  4169 |
-|     262144 | 10009 |
-|     524288 |  6064 |
-|    1048576 |  9046 |
-|    2097152 | 23288 |
-|    4194304 |  3383 |
-|    8388608 |   497 |
-|   16777216 |   288 |
-|   33554432 |   402 |
-|   67108864 |   444 |
-|  134217728 |   311 |
-|  268435456 |   217 |
-|  536870912 |    99 |
-| 1073741824 |    17 |
-| 2147483648 |     7 |
-| 4294967296 |     1 |
-** Restore statistics
-*** 4 hours to restore 63GB (11k files) of ~tanuki~ data from Google over fiber
-** Performance improvements
-*** Parallelism
-**** more threads means more disk thrashing; SSD is well-suited to this approach
-**** shortening snapshot time
-***** mini parallelism is 8
-***** server parallelism is 4
-***** mini before: 555706 files after 3 minutes 2 seconds (original)
-***** mini after: 556625 files after 1 minutes 27 seconds (initial)
-***** mini after: 571056 files after 1 minutes 23 seconds (subsequent)
-***** server before: 147769 files after 1 hours 20 minutes (original)
-***** server after: 147769 files after 52 minutes (initial)
-***** server after: 148142 files after 52 minutes (subsequent)
-*** SHA256 vs BLAKE3
-**** server before: 148142 files after 52 minutes (months ago)
-**** server after: 152166 files after 42 minutes
+** Most files are under 1mb in size, a good default chunk size
+*** 98% of files in typical Mac home directory
+*** 60% of files on server with mostly images and videos
+*** sum of files over 1mb divided by 1mb results in a few thousand chunks
 ** Error Handling
 *** what happens to file errors during scanning?
 **** any errors during scan result in the entry being completely ignored
@@ -553,134 +530,6 @@ Deleted local snapshot '2021-04-05-162416'
 *** what happens when file contents change between scanning and packing?
 **** changed file is stored using the original checksum
 **** file will subsequently be (needlessly) backed up again next time
-** Data Growth
-*** main server
-**** better pack file generation
-***** average pack size ~before~ change: 68,647,434
-***** average pack size ~after~ change: 67,688,886
-**** original database schema
-***** compressed database seems to grow 8mb in 6 months
-***** compressed database size: 61,920,768
-**** record counts over time
-***** as of 2022-03-17
-| entity    |  count |
-|-----------+--------|
-| snapshots |    576 |
-| files     | 137081 |
-| trees     |  97598 |
-| chunks    | 190758 |
-| packs     |   4282 |
-| xattrs    |  19263 |
-***** as of 2023-01-14
-| entity    |  count |
-|-----------+--------|
-| snapshots |    272 |
-| files     | 134950 |
-| trees     |  65312 |
-| chunks    |  56813 |
-| packs     |   4107 |
-| xattrs    |  18035 |
-*** mac mini statistics
-**** original database schema
-***** 2022-03-15
-****** compressed database size: 2,379,181,138
-****** database record counts
-| entity    |   count |
-|-----------+---------|
-| snapshots |     190 |
-| files     | 1806620 |
-| trees     |  302860 |
-| chunks    | 1830167 |
-| packs     |    3380 |
-| xattrs    |  185473 |
-**** with file/chunk record optimization
-***** 2022-03-18
-****** compressed database size: 454,232,580
-****** database record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |      1 |
-| files     | 412555 |
-| trees     |  48927 |
-| chunks    |   4025 |
-| packs     |    369 |
-| xattrs    |  14388 |
-****** only 1% of files are larger than a chunk
-**** with new packing algorithm
-***** 2022-03-22
-****** compressed database size: 462,090,768
-****** database record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |      1 |
-| files     | 457980 |
-| trees     |  52844 |
-| chunks    |   4061 |
-| packs     |    176 |
-| xattrs    |  13624 |
-**** better pack file generation
-***** average pack size ~before~ change: 46,960,186
-***** average pack size ~after~ change: 70,496,178
-**** very small files in database
-***** 2022-03-26
-****** compressed database size: 463,418,613
-****** database record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |      1 |
-| files     | 437775 |
-| trees     |  53499 |
-| chunks    |   4185 |
-| packs     |    188 |
-| xattrs    |  12808 |
-****** file counts
-| type           |  count |
-|----------------+--------|
-| directories    |  73536 |
-| symlinks       |  14543 |
-| filesBelow80   |  56407 |
-| filesBelow1k   | 293740 |
-| filesBelow10k  | 351019 |
-| filesBelow100k |  88622 |
-| filesBelow1m   |  11461 |
-| filesBelow10m  |   2322 |
-| filesBelow100m |    222 |
-| veryLargeFiles |     16 |
-**** working file excludes
-***** 2022-03-27
-****** compressed database size: 70,466,060
-****** database record counts
-| entity    |  count |
-|-----------+--------|
-| snapshots |      1 |
-| files     | 321419 |
-| trees     |  40786 |
-| chunks    |   1533 |
-| packs     |     67 |
-| xattrs    |    350 |
-****** file counts
-| type           |  count |
-|----------------+--------|
-| directories    |  45074 |
-| symlinks       |    672 |
-| filesBelow80   |  52633 |
-| filesBelow1k   | 135193 |
-| filesBelow10k  | 311948 |
-| filesBelow100k |  65487 |
-| filesBelow1m   |   5531 |
-| filesBelow10m  |    789 |
-| filesBelow100m |    164 |
-| veryLargeFiles |      7 |
-** Pack files
-*** analysis of overly large pack files before accounting for tar entry overhead
-**** packing would only account for compressed size of chunks
-**** with many small files, tar file overhead increased file size by half (99mb vs 64mb)
-| pack digest | count |  file sz | content len | smallest | largest | average |
-|-------------+-------+----------+-------------+----------+---------+---------|
-| 3fa54d0     | 19193 | 82480128 |    67114835 |       22 | 4755936 |    3496 |
-| b93402d     | 39932 | 99137536 |    67109129 |       39 |  446087 |    1680 |
-| c57960e     | 38894 | 98344448 |    67111246 |       40 |  452424 |    1725 |
-| ef6ff7a     | 40001 | 99184640 |    67111284 |       40 |  492592 |    1677 |
 ** Possible corner cases
 *** Database backup, then restore, then pack prune
 Because the database snapshot is recorded in the database after the snapshot

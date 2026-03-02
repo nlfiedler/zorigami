@@ -1,6 +1,6 @@
 # zorigami
 
-A backup and restore application written in [Rust](https://www.rust-lang.org) and [Flutter](https://flutter.dev) with a [GraphQL](https://graphql.org) wire protocol. Metadata is stored in [RocksDB](https://rocksdb.org) and file content is stored in encrypted packs using [EXAF](https://github.com/nlfiedler/exaf-rs).
+A backup and restore application written in [Rust](https://www.rust-lang.org) and [SolidJS](https://www.solidjs.com) with a [GraphQL](https://graphql.org) wire protocol. Metadata is stored in [RocksDB](https://rocksdb.org) and file content is stored in encrypted packs using the [EXAF](https://github.com/nlfiedler/exaf-rs) archive file format.
 
 ## Features
 
@@ -31,55 +31,18 @@ This project has been a work-in-progress since 2014, originally started as [akas
 
 ### Prerequisites
 
-* [Rust](https://www.rust-lang.org) stable, 2024 edition
-* [Flutter](https://flutter.dev) **stable** channel
+- [Rust](https://www.rust-lang.org) stable, 2024 edition
+- [Bun](https://bun.com)
 
 ### Initial Setup
 
-#### macOS
-
-Use [fvm](https://pub.dev/packages/fvm) to select a specific version of Flutter
-to be installed and used by the application. This is the most reliable method
-and produces consistent results when building the application.
-
-```shell
-brew install dart
-dart pub global activate fvm
-fvm install stable
-fvm flutter config --enable-web
-```
-
-#### Windows
-
-The application has not been tested on Windows, but building and running the automated tests does work, for the most part (symbolic link tests still fail). As expected, this process is very complex because Windows was not made for this sort of thing.
-
-1. [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-    * Select the following **Individual components**
-        - `MSVC ... build tools`, latest version with appropriate architecture
-        - `Windows 11 SDK`, or 10 if using Windows 10
-1. [vcpkg](https://github.com/Microsoft/vcpkg) (to install `openssl`)
-    * Move the cloned `vcpkg` directory somewhere permanent (e.g. `C:\bin`)
-1. `vcpkg install openssl`
-1. `$Env:OPENSSL_DIR = 'C:\bin\vcpkg\installed\x64-windows'`
-1. [LLVM/Clang](https://github.com/llvm/llvm-project/releases)
-    * The _windows_ file with the `.tar.xz` extension seems to work.
-    * The LLVM/Clang available from the Visual Studio Installer will install multiple architectures and that seems to cause problems.
-    * `$Env:LIBCLANG_PATH = 'C:\bin\clang+llvm-18.1.7-x86_64-pc-windows-msvc\bin'`
-
-The `openssl` Rust crate should **not** be _vendored_ otherwise it will attempt to build OpenSSL from source, which requires Perl in addition to the tools listed above.
-
-### Building, Testing, Starting the Backend
-
-Note that on **Windows** it may be necessary to to run PowerShell as an _administrator_ since, for the time being, calling `symlink_file()` requires special privileges. Alternatively, running Windows in _developer mode_ should also work.
+### Building and Testing the Backend
 
 ```shell
 cargo update
 cargo build
 cargo test
-RUST_LOG=info cargo run
 ```
-
-For more verbose debugging output, use `RUST_LOG=debug` in the command above. For extremely verbose logging, use `RUST_LOG=trace` which will dump large volumes of output.
 
 To build or run tests for a single package, use the `-p` option, like so:
 
@@ -88,22 +51,16 @@ cargo build -p store_minio
 cargo test -p store_minio
 ```
 
-### Building, Testing, Starting the Frontend
+### Building the Frontend, Starting Everything
 
 ```shell
-fvm flutter pub get
-fvm flutter pub run environment_config:generate
-fvm flutter test
-fvm flutter run -d chrome
+bunx vite build
+RUST_LOG=info cargo run
 ```
 
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the application, such as the various remote pack stores. A Docker Compose file is located in the `containers` directory, which describes the services used for testing. With the services running, and an appropriately configured `.env` file in the base directory, the tests will leverage the services.
-
-## Deploying
-
-See the [DEPLOY.md](./doc/DEPLOY.md) document for details and examples of building the application for deployment into different environments.
 
 ## Tools
 
