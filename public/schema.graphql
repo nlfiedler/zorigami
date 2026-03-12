@@ -31,6 +31,13 @@ enum PackRetentionPolicy {
   "Keep only pack files uploaded in the last N days." DAYS
 }
 
+"Specifies the policy for retaining snapshots."
+enum SnapshotRetentionPolicy {
+  "Retain all snapshots." ALL
+  "Keep only the N most recent snapshots." COUNT
+  "Keep only snapshots completed in the last N days." DAYS
+}
+
 "Status of the most recent snapshot for a dataset."
 enum Status {
   "Backup has not run yet." NONE
@@ -49,6 +56,17 @@ enum WeekOfMonth {
   "Fifth such weekday of the month." FIFTH
 }
 
+input DatasetInput {
+  "Identifier of dataset to update, null if creating." id: String
+  "Path that is being backed up." basepath: String!
+  "List of schedules to apply to this dataset." schedules: [ScheduleInput!]!
+  "Path to temporary workspace for backup process." workspace: String
+  "Desired byte length of pack files." packSize: BigInt!
+  "Identifiers of stores used for saving packs." stores: [String!]!
+  "List of paths to be excluded from backups. Can include * and ** wildcards." excludes: [String!]!
+  "Number of snapshots to retain, or retain all if `null`." retention: SnapshotRetentionInput!
+}
+
 input PackRetentionInput {
   "Policy for retaining pack files." policy: PackRetentionPolicy!
   "Value associated with the policy (the N value for \"days\" policy)." value: Int!
@@ -60,6 +78,23 @@ input PropertyInput {
   value: String!
 }
 
+"""
+  New schedule for the dataset. Combine elements to get backups to run on a
+  certain day of the week, month, and/or within a given time range.
+"""
+input ScheduleInput {
+  "How often to run the backup." frequency: Frequency!
+  "Range of time during the day in which to run backup." timeRange: TimeRangeInput
+  "Which week within the month to run the backup." weekOfMonth: WeekOfMonth
+  "Which day of the week to run the backup." dayOfWeek: DayOfWeek
+  "The day of the month to run the backup." dayOfMonth: Int
+}
+
+input SnapshotRetentionInput {
+  "Policy for retaining snapshots." policy: SnapshotRetentionPolicy!
+  "Value associated with the policy (the N value for \"days\" policy)." value: Int!
+}
+
 "Store defines a location where packs will be saved."
 input StoreInput {
   "Unique identifier for this store." id: String!
@@ -67,6 +102,11 @@ input StoreInput {
   "User-defined label for this store." label: String!
   "Name/value pairs that make up this store configuration." properties: [PropertyInput!]!
   "Pack retention policy." retention: PackRetentionInput!
+}
+
+input TimeRangeInput {
+  "Seconds from midnight at which to start in UTC." startTime: Int!
+  "Seconds from midnight at which to stop in UTC." stopTime: Int!
 }
 
 "An integer type larger than the standard signed 32-bit."
@@ -146,11 +186,8 @@ type Dataset {
   stores: [String!]!
   "List of paths to be excluded from backups."
   excludes: [String!]!
-  """
-    If non-null, the number of snapshots to be retained after invoking the
-    `pruneSnapshots` mutation.
-  """
-  retentionCount: Int
+  "Retention policy for snapshots in this data set."
+  retention: SnapshotRetention!
 }
 
 "Number of files and directories in a snapshot."
@@ -183,6 +220,12 @@ type Mutation {
   testStore(store: StoreInput!): String!
   "Delete the pack store with the given unique identifier."
   deleteStore(id: String!): Boolean!
+  "Create a new data set with all default properties."
+  newDataset: Dataset!
+  "Update an existing dataset with the given configuration."
+  updateDataset(dataset: DatasetInput!): Dataset!
+  "Delete the dataset with the given identifier, returning the identifier."
+  deleteDataset(id: String!): String!
   "Begin the backup procedure for the dataset with the given identifier."
   startBackup(id: String!): Boolean!
   "Signal the running backup for the given dataset to stop prematurely."
@@ -282,17 +325,19 @@ type Query {
   configuration: Configuration!
   "Retrieve all dataset definitions."
   datasets: [Dataset!]!
+  "Retrieve a specific dataset definition."
+  dataset(id: String!): Dataset
   "Find any packs that are missing from the given store."
   missingPacks(storeId: String!): [Pack!]!
   "Retrieve entry listing a specific pack."
-  pack(dataset: String!, digest: Checksum!): PackFile!
+  pack(datasetId: String!, digest: Checksum!): PackFile!
   """
     Exhaustively search all pack file entries to the given chunk.
 
     This is an expensive operation as it scans many records in the database
     and downloads every single pack file to find the missing chunk.
   """
-  scanPacks(dataset: String!, digest: Checksum!): Checksum
+  scanPacks(datasetId: String!, digest: Checksum!): Checksum
   "Return the number of each type of database record."
   recordCounts: RecordCounts!
   "Query for any pending and recently completed file restore operations."
@@ -387,6 +432,13 @@ type Snapshot {
   fileCounts: FileCounts!
   "Reference to the tree containing all of the files."
   tree: Checksum!
+}
+
+type SnapshotRetention {
+  "Policy for retaining snapshots."
+  policy: SnapshotRetentionPolicy!
+  "Value associated with the policy (the N value for \"days\" policy)."
+  value: Int!
 }
 
 "Store defines a location where packs will be saved."

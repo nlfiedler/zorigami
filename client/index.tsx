@@ -9,7 +9,7 @@ import { ApolloProvider } from './apollo-provider.tsx';
 import Navbar from './components/navbar.tsx';
 import Home from './pages/home.tsx';
 import Snapshots from './pages/snapshots.tsx';
-import Datasets from './pages/datasets.tsx';
+import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
 import Restore from './pages/restore.tsx';
 
@@ -28,7 +28,10 @@ render(
       <Router root={App}>
         <Route path="" component={Home} />
         <Route path="/snapshots" component={Snapshots} />
-        <Route path="/datasets" component={Datasets} />
+        <Route path="/datasets" component={DatasetsPage}>
+          <Route path="/" component={Datasets} />
+          <Route path="/:id" component={DatasetDetails} />
+        </Route>
         <Route path="/stores" component={StoresPage}>
           <Route path="/" component={Stores} />
           <Route path="/:id" component={StoreDetails} />

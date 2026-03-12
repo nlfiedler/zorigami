@@ -36,6 +36,7 @@ import {
   type MutationNewStoreArgs,
   type MutationDeleteStoreArgs,
   type MutationTestStoreArgs,
+  type MutationUpdateStoreArgs,
   type Property,
   type Query,
   type QueryStoreArgs,
@@ -44,16 +45,6 @@ import {
   type StoreInput,
   PackRetentionPolicy
 } from 'zorigami/generated/graphql.ts';
-
-const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
-  query {
-    stores {
-      id
-      storeType
-      label
-    }
-  }
-`;
 
 // see server/src/domain/entities.rs::StoreType for the available types
 type StoreType = {
@@ -165,14 +156,14 @@ function DeleteStoreButton(props: DeleteStoreButtonProps) {
       }
     }
   );
-  const startDeleteStore = useAction(deleteAction);
+  const startDelete = useAction(deleteAction);
   const deleteSubmission = useSubmission(deleteAction);
 
   return (
     <button
       class="button is-danger"
       disabled={deleteSubmission.pending}
-      on:click={() => startDeleteStore()}
+      on:click={() => startDelete()}
     >
       <span class="icon">
         <i class="fa-solid fa-trash-can"></i>
@@ -225,7 +216,7 @@ function TestStoreButton(props: TestStoreButtonProps) {
       }
     }
   );
-  const startTestStore = useAction(testAction);
+  const startTest = useAction(testAction);
   const testSubmission = useSubmission(testAction);
 
   return (
@@ -234,7 +225,7 @@ function TestStoreButton(props: TestStoreButtonProps) {
       class:is-loading={testSubmission.pending}
       class:is-success={success()}
       disabled={testSubmission.pending}
-      on:click={() => startTestStore()}
+      on:click={() => startTest()}
     >
       <span class="icon">
         <i class="fa-solid fa-satellite-dish"></i>
@@ -244,7 +235,7 @@ function TestStoreButton(props: TestStoreButtonProps) {
   );
 }
 
-const UPDATE_STORE: TypedDocumentNode<Mutation, MutationTestStoreArgs> = gql`
+const UPDATE_STORE: TypedDocumentNode<Mutation, MutationUpdateStoreArgs> = gql`
   mutation UpdateStore($store: StoreInput!) {
     updateStore(store: $store) {
       id
@@ -288,7 +279,7 @@ function SaveStoreButton(props: SaveStoreButtonProps) {
       }
     }
   );
-  const startUpdateStore = useAction(updateAction);
+  const startUpdate = useAction(updateAction);
   const updateSubmission = useSubmission(updateAction);
 
   return (
@@ -297,7 +288,7 @@ function SaveStoreButton(props: SaveStoreButtonProps) {
       class:is-loading={updateSubmission.pending}
       class:is-success={success()}
       disabled={props.disabled()}
-      on:click={() => startUpdateStore()}
+      on:click={() => startUpdate()}
     >
       <span class="icon">
         <i class={success() ? 'fas fa-check' : 'fa-solid fa-floppy-disk'}></i>
@@ -362,6 +353,16 @@ function StoreActions(props: StoreActionsProps) {
   );
 }
 
+const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
+  query {
+    stores {
+      id
+      storeType
+      label
+    }
+  }
+`;
+
 export function StoresPage(props: any) {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = createSignal(false);
@@ -376,7 +377,7 @@ export function StoresPage(props: any) {
     return data;
   });
   const sortedStores = () => {
-    // the tags returned from the server are in no particular order
+    // the stores returned from the server are in no particular order
     const sorted = [];
     for (const store of storesQuery()?.stores ?? []) {
       sorted.push(store);
@@ -387,6 +388,7 @@ export function StoresPage(props: any) {
   // listen for path changes and cause the store list to refresh in case a store
   // was deleted, which does not directly impact this component
   const location = useLocation();
+  // the pathname is not actually used, just listening for route changes
   createEffect(() => refetch(location.pathname));
   const newStoreAction = action(
     async (type: StoreType): Promise<Store> => {
@@ -412,7 +414,7 @@ export function StoresPage(props: any) {
       }
     }
   );
-  const startNewStore = useAction(newStoreAction);
+  const startCreate = useAction(newStoreAction);
 
   return (
     <div class="mt-4 container">
@@ -444,7 +446,7 @@ export function StoresPage(props: any) {
                       <a
                         class="dropdown-item"
                         on:click={() => {
-                          startNewStore(item);
+                          startCreate(item);
                           setDropdownOpen(false);
                         }}
                       >
@@ -538,6 +540,7 @@ export function StoreDetails() {
     }
   );
   const location = useLocation();
+  // the pathname is not actually used, just listening for route changes
   createEffect(() => refetch(location.pathname));
   const deletedAction = action(async () => {
     // the current store was deleted, navigate away
@@ -551,8 +554,11 @@ export function StoreDetails() {
   });
   const startChanged = useAction(changedAction);
 
+  // use Show vs Suspense since our form needs the data in order to build out
+  // the various elements that depend on whatever data is available; the keyed
+  // attribute is necessary for Show to rebuild when the URI changes
   return (
-    <Suspense fallback={'...'}>
+    <Show when={storeQuery()} fallback="..." keyed>
       <Switch
         fallback={
           <div>
@@ -604,7 +610,7 @@ export function StoreDetails() {
           />
         </Match>
       </Switch>
-    </Suspense>
+    </Show>
   );
 }
 
@@ -728,7 +734,7 @@ function LocalStoreForm(props: LocalStoreFormProps) {
   // use form tag to keep Chrome happy about any password fields
   return (
     <form>
-      <h2 class="m-4 title">Attached disk</h2>
+      <h2 class="m-4 title">Attached Disk</h2>
       <div class="m-4">
         <StoreActions
           storeId={props.store.id}

@@ -5,7 +5,7 @@
 //! The `schema` module defines the GraphQL schema and resolvers.
 
 use crate::data::repositories::RecordRepositoryImpl;
-use crate::domain::entities::{self, Checksum, SnapshotRetention, TreeReference};
+use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::repositories::RecordRepository;
 use crate::domain::sources::EntityDataSource;
 use crate::tasks::backup::Scheduler;
@@ -14,8 +14,8 @@ use crate::tasks::restore::{self, Restorer};
 use crate::tasks::state::{self, StateStore};
 use chrono::prelude::*;
 use juniper::{
-    EmptySubscription, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject, GraphQLScalar,
-    ParseScalarResult, ParseScalarValue, RootNode, ScalarToken, ScalarValue,
+    EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
+    GraphQLScalar, ParseScalarResult, ParseScalarValue, RootNode, ScalarToken, ScalarValue, Value,
 };
 use std::collections::HashMap;
 use std::io::Write;
@@ -57,14 +57,9 @@ impl juniper::Context for GraphContext {}
 /// An integer type larger than the standard signed 32-bit.
 #[derive(Copy, Clone, Debug, Eq, GraphQLScalar, PartialEq)]
 #[graphql(with = Self)]
-pub struct BigInt(i64);
+struct BigInt(i64);
 
 impl BigInt {
-    /// Construct a BigInt for the given value.
-    pub fn new(value: i64) -> Self {
-        BigInt(value)
-    }
-
     #[allow(clippy::wrong_self_convention)]
     fn to_output(&self) -> impl std::fmt::Display + use<> {
         format!("{}", self.0)
@@ -249,17 +244,17 @@ impl entities::Snapshot {
 
 /// Status of the most recent snapshot for a dataset.
 #[derive(Copy, Clone, GraphQLEnum)]
-pub enum Status {
+enum Status {
     /// Backup has not run yet.
-    NONE,
+    None,
     /// Backup is still running.
-    RUNNING,
+    Running,
     /// Backup has finished.
-    FINISHED,
+    Finished,
     /// Backup paused due to schedule.
-    PAUSED,
+    Paused,
     /// Backup failed, see `errorMessage` property.
-    FAILED,
+    Failed,
 }
 
 #[juniper::graphql_object(description = "Detailed information of the state of the backup.")]
@@ -299,6 +294,44 @@ impl state::BackupState {
     }
 }
 
+/// Specifies the policy for retaining snapshots.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum SnapshotRetentionPolicy {
+    /// Retain all snapshots.
+    All,
+    /// Keep only the N most recent snapshots.
+    Count,
+    /// Keep only snapshots completed in the last N days.
+    Days,
+}
+
+#[derive(GraphQLObject)]
+struct SnapshotRetention {
+    /// Policy for retaining snapshots.
+    policy: SnapshotRetentionPolicy,
+    /// Value associated with the policy (the N value for "days" policy).
+    value: i32,
+}
+
+impl From<entities::SnapshotRetention> for SnapshotRetention {
+    fn from(retention: entities::SnapshotRetention) -> Self {
+        match retention {
+            entities::SnapshotRetention::ALL => SnapshotRetention {
+                policy: SnapshotRetentionPolicy::All,
+                value: 0,
+            },
+            entities::SnapshotRetention::COUNT(n) => SnapshotRetention {
+                policy: SnapshotRetentionPolicy::Count,
+                value: n as i32,
+            },
+            entities::SnapshotRetention::DAYS(n) => SnapshotRetention {
+                policy: SnapshotRetentionPolicy::Days,
+                value: n as i32,
+            },
+        }
+    }
+}
+
 #[juniper::graphql_object(
     Context = GraphContext,
     description = "Location, schedule, and pack store for a backup data set.")
@@ -335,16 +368,16 @@ impl entities::Dataset {
         let redux = ctx.appstate.get_state();
         if let Some(backup) = redux.backups(&self.id) {
             if backup.is_paused() {
-                Status::PAUSED
+                Status::Paused
             } else if backup.had_error() {
-                Status::FAILED
+                Status::Failed
             } else if backup.end_time().is_none() {
-                Status::RUNNING
+                Status::Running
             } else {
-                Status::FINISHED
+                Status::Finished
             }
         } else {
-            Status::NONE
+            Status::None
         }
     }
 
@@ -387,14 +420,9 @@ impl entities::Dataset {
         self.excludes.clone()
     }
 
-    /// If non-null, the number of snapshots to be retained after invoking the
-    /// `pruneSnapshots` mutation.
-    fn retention_count(&self) -> Option<i32> {
-        match self.retention {
-            SnapshotRetention::ALL => None,
-            SnapshotRetention::DAYS(_) => None,
-            SnapshotRetention::COUNT(c) => Some(c as i32),
-        }
+    /// Retention policy for snapshots in this data set.
+    fn retention(&self) -> SnapshotRetention {
+        self.retention.clone().into()
     }
 }
 
@@ -414,7 +442,7 @@ impl entities::schedule::TimeRange {
 }
 
 #[derive(Copy, Clone, GraphQLEnum)]
-pub enum DayOfWeek {
+enum DayOfWeek {
     Sun,
     Mon,
     Tue,
@@ -454,7 +482,7 @@ impl From<DayOfWeek> for entities::schedule::DayOfWeek {
 
 /// In combination with DayOfWeek, selects the particular week.
 #[derive(Copy, Clone, GraphQLEnum)]
-pub enum WeekOfMonth {
+enum WeekOfMonth {
     /// First such weekday of the month.
     First,
     /// Second such weekday of the month.
@@ -467,9 +495,21 @@ pub enum WeekOfMonth {
     Fifth,
 }
 
+impl WeekOfMonth {
+    fn into_dom(self, dow: DayOfWeek) -> entities::schedule::DayOfMonth {
+        match self {
+            WeekOfMonth::First => entities::schedule::DayOfMonth::First(dow.into()),
+            WeekOfMonth::Second => entities::schedule::DayOfMonth::Second(dow.into()),
+            WeekOfMonth::Third => entities::schedule::DayOfMonth::Third(dow.into()),
+            WeekOfMonth::Fourth => entities::schedule::DayOfMonth::Fourth(dow.into()),
+            WeekOfMonth::Fifth => entities::schedule::DayOfMonth::Fifth(dow.into()),
+        }
+    }
+}
+
 /// How often should the backup run for the dataset.
 #[derive(Copy, Clone, GraphQLEnum)]
-pub enum Frequency {
+enum Frequency {
     /// Run every hour.
     Hourly,
     /// Run every day, with optional time range.
@@ -576,7 +616,7 @@ struct Property {
 
 /// Specifies how many pack files the pack store will retain.
 #[derive(Copy, Clone, GraphQLEnum)]
-pub enum PackRetentionPolicy {
+enum PackRetentionPolicy {
     /// Retain all pack files.
     All,
     /// Keep only pack files uploaded in the last N days.
@@ -857,6 +897,22 @@ impl Query {
         Ok(datasets)
     }
 
+    /// Retrieve a specific dataset definition.
+    fn dataset(
+        #[graphql(ctx)] ctx: &GraphContext,
+        id: String,
+    ) -> FieldResult<Option<entities::Dataset>> {
+        use crate::domain::usecases::get_datasets::GetDatasets;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetDatasets::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let result: Vec<entities::Dataset> = usecase.call(params)?;
+        Ok(result
+            .into_iter()
+            .find_map(|s| if s.id == id { Some(s) } else { None }))
+    }
+
     /// Find any packs that are missing from the given store.
     fn missing_packs(
         #[graphql(ctx)] ctx: &GraphContext,
@@ -874,7 +930,7 @@ impl Query {
     /// Retrieve entry listing a specific pack.
     fn pack(
         #[graphql(ctx)] ctx: &GraphContext,
-        dataset: String,
+        dataset_id: String,
         digest: ChecksumGQL,
     ) -> FieldResult<entities::PackFile> {
         use crate::domain::usecases::UseCase;
@@ -882,7 +938,7 @@ impl Query {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
-        let params: Params = Params::new(dataset, digest.0, passphrase);
+        let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: entities::PackFile = usecase.call(params)?;
         Ok(result)
     }
@@ -893,7 +949,7 @@ impl Query {
     /// and downloads every single pack file to find the missing chunk.
     fn scan_packs(
         #[graphql(ctx)] ctx: &GraphContext,
-        dataset: String,
+        dataset_id: String,
         digest: ChecksumGQL,
     ) -> FieldResult<Option<ChecksumGQL>> {
         use crate::domain::usecases::UseCase;
@@ -901,7 +957,7 @@ impl Query {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ScanPacks::new(Box::new(repo));
         let passphrase = helpers::crypto::get_passphrase();
-        let params: Params = Params::new(dataset, digest.0, passphrase);
+        let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: Option<Checksum> = usecase.call(params)?;
         Ok(result.map(ChecksumGQL))
     }
@@ -948,7 +1004,7 @@ impl Query {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetStores::new(Box::new(repo));
         let params: NoParams = NoParams {};
-        let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
+        let result: Vec<entities::Store> = usecase.call(params)?;
         let stores: Vec<Store> = result.into_iter().map(|s| s.into()).collect();
         Ok(stores)
     }
@@ -960,7 +1016,7 @@ impl Query {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetStores::new(Box::new(repo));
         let params: NoParams = NoParams {};
-        let result: Vec<crate::domain::entities::Store> = usecase.call(params)?;
+        let result: Vec<entities::Store> = usecase.call(params)?;
         Ok(result
             .into_iter()
             .find_map(|s| if s.id == id { Some(s.into()) } else { None }))
@@ -1038,6 +1094,142 @@ impl From<StoreInput> for entities::Store {
     }
 }
 
+#[derive(GraphQLInputObject)]
+struct TimeRangeInput {
+    /// Seconds from midnight at which to start in UTC.
+    start_time: i32,
+    /// Seconds from midnight at which to stop in UTC.
+    stop_time: i32,
+}
+
+impl From<TimeRangeInput> for entities::schedule::TimeRange {
+    fn from(val: TimeRangeInput) -> Self {
+        // only need to convert negative values to non-negative, the new_secs()
+        // constructor will handle out-of-bound values
+        let start = if val.start_time < 0 {
+            0
+        } else {
+            val.start_time
+        };
+        let stop = if val.stop_time < 0 { 0 } else { val.stop_time };
+        entities::schedule::TimeRange::new_secs(start as u32, stop as u32)
+    }
+}
+
+/// New schedule for the dataset. Combine elements to get backups to run on a
+/// certain day of the week, month, and/or within a given time range.
+#[derive(GraphQLInputObject)]
+struct ScheduleInput {
+    /// How often to run the backup.
+    frequency: Frequency,
+    /// Range of time during the day in which to run backup.
+    time_range: Option<TimeRangeInput>,
+    /// Which week within the month to run the backup.
+    week_of_month: Option<WeekOfMonth>,
+    /// Which day of the week to run the backup.
+    day_of_week: Option<DayOfWeek>,
+    /// The day of the month to run the backup.
+    day_of_month: Option<i32>,
+}
+
+impl From<ScheduleInput> for entities::schedule::Schedule {
+    fn from(val: ScheduleInput) -> Self {
+        match &val.frequency {
+            Frequency::Hourly => entities::schedule::Schedule::Hourly,
+            Frequency::Daily => {
+                entities::schedule::Schedule::Daily(val.time_range.map(|s| s.into()))
+            }
+            Frequency::Weekly => {
+                let dow = if let Some(dow) = val.day_of_week {
+                    Some((dow.into(), val.time_range.map(|s| s.into())))
+                } else {
+                    None
+                };
+                entities::schedule::Schedule::Weekly(dow)
+            }
+            Frequency::Monthly => {
+                let dom: Option<(
+                    entities::schedule::DayOfMonth,
+                    Option<entities::schedule::TimeRange>,
+                )> = if let Some(day) = val.day_of_month {
+                    Some((
+                        entities::schedule::DayOfMonth::from(day as u32),
+                        val.time_range.map(|s| s.into()),
+                    ))
+                } else if let Some(wn) = val.week_of_month {
+                    let dow = val.day_of_week.unwrap();
+                    let dom = wn.into_dom(dow);
+                    Some((dom, val.time_range.map(|s| s.into())))
+                } else {
+                    None
+                };
+                entities::schedule::Schedule::Monthly(dom)
+            }
+        }
+    }
+}
+
+#[derive(GraphQLInputObject)]
+struct SnapshotRetentionInput {
+    /// Policy for retaining snapshots.
+    policy: SnapshotRetentionPolicy,
+    /// Value associated with the policy (the N value for "days" policy).
+    value: i32,
+}
+
+impl From<SnapshotRetentionInput> for entities::SnapshotRetention {
+    fn from(retention: SnapshotRetentionInput) -> entities::SnapshotRetention {
+        let value = if retention.value < 0 {
+            0
+        } else {
+            retention.value
+        };
+        match retention.policy {
+            SnapshotRetentionPolicy::All => entities::SnapshotRetention::ALL,
+            SnapshotRetentionPolicy::Count => entities::SnapshotRetention::COUNT(value as u16),
+            SnapshotRetentionPolicy::Days => entities::SnapshotRetention::DAYS(value as u16),
+        }
+    }
+}
+
+#[derive(GraphQLInputObject)]
+struct DatasetInput {
+    /// Identifier of dataset to update, null if creating.
+    id: Option<String>,
+    /// Path that is being backed up.
+    basepath: String,
+    /// List of schedules to apply to this dataset.
+    schedules: Vec<ScheduleInput>,
+    /// Path to temporary workspace for backup process.
+    workspace: Option<String>,
+    /// Desired byte length of pack files.
+    pack_size: BigInt,
+    /// Identifiers of stores used for saving packs.
+    stores: Vec<String>,
+    /// List of paths to be excluded from backups. Can include * and ** wildcards.
+    excludes: Vec<String>,
+    /// Number of snapshots to retain, or retain all if `null`.
+    retention: SnapshotRetentionInput,
+}
+
+impl From<DatasetInput> for entities::Dataset {
+    fn from(val: DatasetInput) -> Self {
+        let basepath = std::path::Path::new(&val.basepath);
+        let mut ds = entities::Dataset::with_pack_size(basepath, val.pack_size.into());
+        ds.id = val.id.unwrap_or(String::from("default"));
+        for sched in val.schedules.into_iter() {
+            ds.add_schedule(sched.into());
+        }
+        ds.stores = val.stores;
+        ds.excludes = val.excludes;
+        if let Some(ws) = val.workspace {
+            ds.workspace = std::path::PathBuf::from(ws);
+        }
+        ds.retention = val.retention.into();
+        ds
+    }
+}
+
 pub struct Mutation;
 
 #[juniper::graphql_object(Context = GraphContext)]
@@ -1058,7 +1250,7 @@ impl Mutation {
             props.insert(prop.name, prop.value);
         }
         let params: Params = Params::new(kind, label, props);
-        let result: crate::domain::entities::Store = usecase.call(params)?;
+        let result: entities::Store = usecase.call(params)?;
         Ok(result.into())
     }
 
@@ -1070,7 +1262,7 @@ impl Mutation {
         let usecase = UpdateStore::new(Box::new(repo));
         let estore: entities::Store = store.into();
         let params: Params = estore.into();
-        let result: crate::domain::entities::Store = usecase.call(params)?;
+        let result: entities::Store = usecase.call(params)?;
         Ok(result.into())
     }
 
@@ -1099,6 +1291,55 @@ impl Mutation {
         let params: Params = Params::new(id);
         usecase.call(params)?;
         Ok(true)
+    }
+
+    /// Create a new data set with all default properties.
+    fn new_dataset(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<entities::Dataset> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::new_dataset::{NewDataset, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = NewDataset::new(Box::new(repo));
+        let basepath = std::path::PathBuf::from(".");
+        let schedules: Vec<entities::schedule::Schedule> = vec![];
+        let pack_size: u64 = 64 * 1048756;
+        let stores: Vec<String> = vec![];
+        let excludes: Vec<String> = vec![];
+        let params: Params = Params::new(basepath, schedules, pack_size, stores, excludes);
+        let result: entities::Dataset = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Update an existing dataset with the given configuration.
+    fn update_dataset(
+        #[graphql(ctx)] ctx: &GraphContext,
+        dataset: DatasetInput,
+    ) -> FieldResult<entities::Dataset> {
+        if dataset.id.is_none() {
+            return Err(FieldError::new(
+                "Cannot update dataset without id field",
+                Value::null(),
+            ));
+        }
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
+        let datasource = ctx.datasource.clone();
+        let edataset: entities::Dataset = dataset.into();
+        let repo = RecordRepositoryImpl::new(datasource);
+        let usecase = UpdateDataset::new(Box::new(repo));
+        let params: Params = edataset.into();
+        let result = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Delete the dataset with the given identifier, returning the identifier.
+    fn delete_dataset(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<String> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::delete_dataset::{DeleteDataset, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = DeleteDataset::new(Box::new(repo));
+        let params: Params = Params::new(id.clone());
+        usecase.call(params)?;
+        Ok(id)
     }
 
     /// Begin the backup procedure for the dataset with the given identifier.
