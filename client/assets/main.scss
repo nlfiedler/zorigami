@@ -2,10 +2,21 @@
 @use 'bulma-list';
 
 body {
-	font-family: sans-serif;
-	text-align: center;
+  font-family: sans-serif;
+  text-align: center;
 }
 
 .selected {
-	border: medium solid hsl(217, 71%, 53%);
+  border: medium solid hsl(217, 71%, 53%);
+}
+
+.ellipsize-left {
+  /* Standard CSS ellipsis requirements (for single line) */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The trick for the leading ellipsis */
+  direction: rtl;
+  /* Aligns the visible end of the text to the left */
+  text-align: left;
 }

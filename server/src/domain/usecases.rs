@@ -14,6 +14,7 @@ pub mod get_counts;
 pub mod get_datasets;
 pub mod get_pack;
 pub mod get_snapshot;
+pub mod get_snapshots;
 pub mod get_stores;
 pub mod get_tree;
 pub mod insert_file;

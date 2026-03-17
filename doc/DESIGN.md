@@ -163,7 +163,7 @@ Files larger than the desired chunk size are broken up using a content-defined c
 
 ### Database Snapshots
 
-Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed archive and uploaded to the pack store in the special bucket.
+Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed archive and uploaded to the pack store in the special bucket. The compressed archive is the same EXAF as the pack files, so manual restoration is possible using the `exaf` binary as the appropriate pass phrase.
 
 ### Bucket Collision
 

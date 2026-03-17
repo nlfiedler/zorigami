@@ -495,7 +495,9 @@ impl Handler<Restore> for RestoreSupervisor {
 
     fn handle(&mut self, _msg: Restore, _ctx: &mut Context<RestoreSupervisor>) {
         debug!("supervisor received Restore message");
-        if let Err(err) = self.process_queue() {
+        if std::env::var("RESTORE_NOOP").is_ok() {
+            info!("RESTORE_NOOP is set, not processing the queue");
+        } else if let Err(err) = self.process_queue() {
             error!("supervisor error processing queue: {}", err);
         }
     }

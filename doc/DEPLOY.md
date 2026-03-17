@@ -54,10 +54,10 @@ ps -ef | grep -i zorigami
 
 May need to run the `enable` and `kickstart` commands twice due to code signing error.
 
-Recommended set of excludes that ignores a bunch of Mac stuff, directories that tend to have huge binary files no one cares about, Dart/Flutter, and Rust files:
+Recommended set of excludes that ignores a bunch of Mac stuff and directories that tend to have large binary files:
 
 ```
-.Trash, .android, .rustup, .cargo, Library, **/Downloads, **/node_modules, **/target, fvm
+.Trash, .bun, .cache, .cargo, .npm, .rustup, .tmp, Library, **/Downloads, **/node_modules, **/target, fvm
 ```
 
 ### plist file

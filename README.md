@@ -54,13 +54,34 @@ cargo test -p store_minio
 ### Building the Frontend, Starting Everything
 
 ```shell
+bun run codegen
 bunx vite build
 RUST_LOG=info cargo run
 ```
 
+By default the server will be running on port `3000` on localhost.
+
 ### Docker
 
 [Docker](https://www.docker.com) is used for testing some features of the application, such as the various remote pack stores. A Docker Compose file is located in the `containers` directory, which describes the services used for testing. With the services running, and an appropriately configured `.env` file in the base directory, the tests will leverage the services.
+
+### Changing the GraphQL schema
+
+After making changes to the `graphql.rs` source, the generated schema definition language (SDL) file and generated TypeScript file need to be updated.
+
+```shell
+env GENERATE_SDL=public/schema.graphql cargo run
+# use ctrl-c to terminate the server
+bun run codegen
+```
+
+### Testing Restore
+
+To test the restore functionality without actually processing the queue, set the `RESTORE_NOOP` environment variable to a non-null value. This will allow for enqueuing restore requests and then developing and testing the interface and GraphQL queries related to restore requests, lest they be processed too quickly.
+
+```shell
+env RESTORE_NOOP=1 RUST_LOG=info cargo run
+```
 
 ## Tools
 

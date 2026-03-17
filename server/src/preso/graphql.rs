@@ -983,6 +983,20 @@ impl Query {
         Ok(requests)
     }
 
+    /// Retrieve all snapshots for a given data set in chronological order.
+    fn snapshots(
+        #[graphql(ctx)] ctx: &GraphContext,
+        id: String,
+    ) -> FieldResult<Vec<entities::Snapshot>> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::get_snapshots::{GetSnapshots, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetSnapshots::new(Box::new(repo));
+        let params: Params = Params::new(id);
+        let result: Vec<entities::Snapshot> = usecase.call(params)?;
+        Ok(result)
+    }
+
     /// Retrieve a specific snapshot.
     fn snapshot(
         #[graphql(ctx)] ctx: &GraphContext,

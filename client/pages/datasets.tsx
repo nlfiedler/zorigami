@@ -99,7 +99,7 @@ export function DatasetsPage(props: any) {
   const startNewDataset = useAction(newDatasetAction);
 
   return (
-    <div class="mt-4 container">
+    <div class="m-4">
       <nav class="level">
         <div class="level-left">
           <div class="level-item">

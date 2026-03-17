@@ -8,7 +8,12 @@ import './assets/main.scss';
 import { ApolloProvider } from './apollo-provider.tsx';
 import Navbar from './components/navbar.tsx';
 import Home from './pages/home.tsx';
-import Snapshots from './pages/snapshots.tsx';
+import {
+  SnapshotsPage,
+  SnapshotHelp,
+  Snapshots,
+  SnapshotBrowse
+} from './pages/snapshots.tsx';
 import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
 import Restore from './pages/restore.tsx';
@@ -27,14 +32,18 @@ render(
     <ApolloProvider>
       <Router root={App}>
         <Route path="" component={Home} />
-        <Route path="/snapshots" component={Snapshots} />
+        <Route path="/stores" component={StoresPage}>
+          <Route path="/" component={Stores} />
+          <Route path="/:id" component={StoreDetails} />
+        </Route>
         <Route path="/datasets" component={DatasetsPage}>
           <Route path="/" component={Datasets} />
           <Route path="/:id" component={DatasetDetails} />
         </Route>
-        <Route path="/stores" component={StoresPage}>
-          <Route path="/" component={Stores} />
-          <Route path="/:id" component={StoreDetails} />
+        <Route path="/snapshots" component={SnapshotsPage}>
+          <Route path="/" component={SnapshotHelp} />
+          <Route path="/:id" component={Snapshots} />
+          <Route path="/:id/browse/:sid" component={SnapshotBrowse} />
         </Route>
         <Route path="/restore" component={Restore} />
         <Route path="*paramName" component={NotFound} />

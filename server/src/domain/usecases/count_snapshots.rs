@@ -61,7 +61,7 @@ impl super::UseCase<SnapshotCount, Params> for CountSnapshots {
 }
 
 pub struct Params {
-    /// Identifier of the dataset containing the snapshot.
+    /// Identifier of the dataset for which to count snapshots.
     dataset: String,
 }
 

@@ -1,68 +1,63 @@
 * Tasks
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
-*** TODO home page [0/14]
-- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
-- [ ] for each dataset, show schedule frequency
-- [ ] for each dataset, show retention policy
-- [ ] for each dataset, show status (running, paused, finished, etc)
-- [ ] format dates using local time if possible
-- [ ] for each dataset, show how many snapshots exist
-- [ ] for each dataset, show date/time of oldest snapshot
-- [ ] for each dataset, show date/time of most recent snapshot
-- [ ] for each dataset, provide button to prune according to policy
-- [ ] for each dataset, provide button to start/stop backup
-- [ ] snopshot prune button needs to show status of pruning (like upload button)
-- [ ] consider how start/stop button could use an =Action= to wait on a running backup
-- [ ] when there are no stores, suggest visiting stores page to start setup
-- [ ] when there are no data sets, suggest visiting datasets page to start setup
-*** TODO snapshots page [0/8]
-- [ ] show dataset base path somewhere
-- [ ] show list of snapshots with pagination
-- [ ] maybe use =bulma-list= to show snapshot date/time, with more info on right
-- [ ] add =/tree= route to show tree by its digest
-- [ ] show breadcrumbs of the path leading up to this tree
-- [ ] breadcrumbs would be built up via clicking
-- [ ] jumping directly to a tree route would not show breadcrumbs
-- [ ] empty files should show something rather than nothing
-*** TODO restore database page
-*** TODO settings page [0/3]
-- [ ] fields to set the hostname and username
-- [ ] show computer UUID based on inputs
-- [ ] explain how these are used to generate bucket names
+*** TODO restores page [0/3]
+- [ ] show list of restore requests
+- [ ] add button to cancel a request
+- [ ] provide method for restoring a database
 *** TODO deployment [0/1]
 - [ ] update Dockerfile
-*** TODO documentation [2/9]
-- [ ] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
-- [ ] how to generate GraphQL TypeScript code (=bun run codegen=)
+*** TODO documentation [5/9]
+- [X] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
+- [X] how to generate GraphQL TypeScript code (=bun run codegen=)
 - [X] README.md (need to install =bun= globally)
 - [ ] doc/DEPLOY.txt
 - [ ] doc/HISTORY.txt
-- [ ] doc/DESIGN.txt
+- [X] doc/DESIGN.txt
 - [ ] copy SOLIDJS.md from tanuki
 - [ ] write ADR for why SolidJS, TypeScript
 - [X] remove doc/LEPTOS.md
 *** TODO look for ~issues~ in browser tools on every page
-*** TODO test building and running on Windows, update instructions
-*** TODO delete temp database and refine initial setup experience
-**** when there are no stores, say so, prominently show ~add~ button
-**** when there are no datasets, say so, prominently show ~add~ button
-**** when there are no snapshots, indicate that something will happen eventually
-**** when there are no stores, ~Restore~ page should suggest going to stores page to define some stores
+*** TODO delete temp database and refine initial setup experience [0/4]
+- [ ] when there are no stores, say so, prominently show ~add~ button
+- [ ] when there are no datasets, say so, prominently show ~add~ button
+- [ ] when there are no snapshots, indicate that something will happen eventually
+- [ ] when there are no stores, ~Restore~ page should suggest going to stores page to define some stores
 *** TODO test restoring the database from a backup
 **** delete the =database= directory but not the =packs=
 **** home page should guide toward defining a pack store and link to restore page
-*** TODO create a =CHANGELOG.md= to record when database schema changes incompatibly
+*** TODO create a =docs/CHANGES.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
-** TODO Prevent deleting a pack store that is still being used by a data set
-*** return an error to the GraphQL client so it can report to the user
-*** update store form to show error message if delete fails
-** TODO rename SFTP property =remote_addr= to simply =address=
+** TODO [#B] rename SFTP property =remote_addr= to simply =address=
 ** TODO [#B] Variable chunk size, defined in data set
 *** need to allow for setting the desired chunk size per data set
 *** 96% of server files are 4 mb or less
 *** 98% of mini files are 1 mb or less
+*** document that the tradeoff is the overhead of tracking chunks in the database
 *** comment that the min/max will be 0.25x and 4x to improve deduplication
 *** min/max that are 0.5x and 2x result in many more blocks cut off at the maximum (1 vs 7 in one example)
+** TODO [#C] Automatic scheduling a la Time Machine
+*** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
+*** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
+*** there will be 24 + 30 + 52 + N snapshots for any given dataset
+*** add ~Automatic~ to =Schedule= entity
+*** add ~Automatic~ option to dataset schedule form in webui
+*** scheduler treats ~Automatic~ schedule as ~Hourly~ in terms of running backups
+*** add support for automatic pruning to =PruneSnapshots= usecase
+*** if scheule is ~Automatic~ then invoke =PruneSnapshots= after every backup
+*** web ui: either ~schedule~ or ~retention~ is used to enable this behavior
+a) ~schedule~ is set to automatic and ~retention~ form is disabled
+b) ~schedule~ can be anything and ~retention~ is set to automatic
+*** how to automatically prune old snapshots
+**** https://github.com/bastibe/timeup/blob/master/timeup.py
+**** basic outline (each ~keep~ step starts by filtering the full list, not the output of the previous step)
+1. retrieve list of all snapshots
+2. create an empty ~retain~ list
+3. keep all within the last 24 hours
+4. keep the oldest from each day within the last 30 days
+5. keep the oldest from each week (same ISO 8601 week number) within the last year
+6. keep the oldest for each year
+7. sort ~retain~ list by date-time, dedupe, update parent linkage, save each record
+8. all remaining snapshots will be unreachable and can be pruned as usual
 ** TODO [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
@@ -79,6 +74,47 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
+** Migrate to Vite 8.0
+*** https://vite.dev/blog/announcing-vite8
+** Preventing mistakes
+*** deleting a pack store that is still being used by a data set
+**** return an error to the GraphQL client so it can report to the user
+**** update store form to show error message if delete fails
+*** changing the base path of the dataset after snapshots have been made
+*** adding a pack store to a dataset once snapshots have been made
+** Improve web interface
+*** TODO test building and running on Windows, update instructions
+*** TODO home page [0/14]
+- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
+- [ ] for each dataset, show schedule frequency
+- [ ] for each dataset, show retention policy
+- [ ] for each dataset, show status (running, paused, finished, etc)
+- [ ] format dates using local time if possible
+- [ ] for each dataset, show how many snapshots exist
+- [ ] for each dataset, show date/time of oldest snapshot
+- [ ] for each dataset, show date/time of most recent snapshot
+- [ ] for each dataset, provide button to prune according to policy
+- [ ] for each dataset, provide button to start/stop backup
+- [ ] snopshot prune button needs to show status of pruning (like upload button)
+- [ ] consider how start/stop button could use an =Action= to wait on a running backup
+- [ ] when there are no stores, suggest visiting stores page to start setup
+- [ ] when there are no data sets, suggest visiting datasets page to start setup
+*** TODO snapshots page [4/6]
+- [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
+- [X] show list of snapshots
+- [X] add =/tree= route to show tree by its digest
+- [X] show breadcrumbs of the path leading up to this tree
+- [ ] empty files should show something rather than nothing
+- [ ] show status of running snapshot (no end time)
+*** TODO settings page [0/3]
+- [ ] fields to set the hostname and username
+- [ ] show computer UUID based on inputs
+- [ ] explain how these are used to generate bucket names
+** Clean up
+*** TODO remove =FindMissingPacks= usecase and GraphQL query
+*** TODO remove =ScanPacks= usecase and GraphQL query
+*** TODO remove =ReassignPacks= usecase and GraphQL mutation
+*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files
@@ -253,29 +289,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
-** TODO [#C] Automatic scheduling a la Time Machine
-*** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
-*** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
-*** there will be 24 + 30 + 52 + N snapshots for any given dataset
-*** add ~Automatic~ to =Schedule= entity
-*** add ~Automatic~ option to dataset schedule form in webui
-*** scheduler treats ~Automatic~ schedule as ~Hourly~ in terms of running backups
-*** add support for automatic pruning to =PruneSnapshots= usecase
-*** if scheule is ~Automatic~ then invoke =PruneSnapshots= after every backup
-*** web ui: either ~schedule~ or ~retention~ is used to enable this behavior
-a) ~schedule~ is set to automatic and ~retention~ form is disabled
-b) ~schedule~ can be anything and ~retention~ is set to automatic
-*** how to automatically prune old snapshots
-**** https://github.com/bastibe/timeup/blob/master/timeup.py
-**** basic outline (each ~keep~ step starts by filtering the full list, not the output of the previous step)
-1. retrieve list of all snapshots
-2. create an empty ~retain~ list
-3. keep all within the last 24 hours
-4. keep the oldest from each day within the last 30 days
-5. keep the oldest from each week (same ISO 8601 week number) within the last year
-6. keep the oldest for each year
-7. sort ~retain~ list by date-time, dedupe, update parent linkage, save each record
-8. all remaining snapshots will be unreachable and can be pruned as usual
 ** Advanced Scheduling
 *** backend
 **** Permit ~hourly~ backups every N hours

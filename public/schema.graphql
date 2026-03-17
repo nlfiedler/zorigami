@@ -342,6 +342,8 @@ type Query {
   recordCounts: RecordCounts!
   "Query for any pending and recently completed file restore operations."
   restores: [Request!]!
+  "Retrieve all snapshots for a given data set in chronological order."
+  snapshots(id: String!): [Snapshot!]!
   "Retrieve a specific snapshot."
   snapshot(digest: Checksum!): Snapshot
   "Retrieve all pack store definitions."

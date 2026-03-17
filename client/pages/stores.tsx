@@ -417,7 +417,7 @@ export function StoresPage(props: any) {
   const startCreate = useAction(newStoreAction);
 
   return (
-    <div class="mt-4 container">
+    <div class="m-4">
       <nav class="level">
         <div class="level-left">
           <div class="level-item">
