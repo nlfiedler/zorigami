@@ -244,7 +244,7 @@ impl entities::Snapshot {
 
 /// Status of the most recent snapshot for a dataset.
 #[derive(Copy, Clone, GraphQLEnum)]
-enum Status {
+enum BackupStatus {
     /// Backup has not run yet.
     None,
     /// Backup is still running.
@@ -364,20 +364,20 @@ impl entities::Dataset {
     }
 
     /// Status of the most recent snapshot for this dataset.
-    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> Status {
+    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> BackupStatus {
         let redux = ctx.appstate.get_state();
         if let Some(backup) = redux.backups(&self.id) {
             if backup.is_paused() {
-                Status::Paused
+                BackupStatus::Paused
             } else if backup.had_error() {
-                Status::Failed
+                BackupStatus::Failed
             } else if backup.end_time().is_none() {
-                Status::Running
+                BackupStatus::Running
             } else {
-                Status::Finished
+                BackupStatus::Finished
             }
         } else {
-            Status::None
+            BackupStatus::None
         }
     }
 
@@ -795,8 +795,45 @@ impl entities::Pack {
     }
 }
 
-#[juniper::graphql_object(description = "A request to restore a file or directory.")]
+/// Status of a restore request.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum RestoreStatus {
+    /// Request is waiting to be processed.
+    Pending,
+    /// Request was cancelled before processing began.
+    Cancelled,
+    /// Request is being processed.
+    Running,
+    /// Request processing has completed (successfully or otherwise).
+    Completed,
+}
+
+impl From<restore::Status> for RestoreStatus {
+    fn from(status: restore::Status) -> Self {
+        match status {
+            restore::Status::PENDING => RestoreStatus::Pending,
+            restore::Status::CANCELLED => RestoreStatus::Cancelled,
+            restore::Status::RUNNING => RestoreStatus::Running,
+            restore::Status::COMPLETED => RestoreStatus::Completed,
+        }
+    }
+}
+
+#[juniper::graphql_object(
+    name = "RestoreRequest",
+    description = "A request to restore a file or directory."
+)]
 impl restore::Request {
+    /// Unique identifier for this request.
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    /// Status of the request (pending, cancelled, running, completed).
+    fn status(&self) -> RestoreStatus {
+        self.status.clone().into()
+    }
+
     /// Digest of the tree containing the entry to restore.
     fn tree(&self) -> ChecksumGQL {
         ChecksumGQL(self.tree.clone())
@@ -827,9 +864,9 @@ impl restore::Request {
         self.files_restored as i32
     }
 
-    /// Error message if request processing failed.
-    fn error_message(&self) -> Option<String> {
-        self.error_msg.clone()
+    /// Error messages if anything went wrong during processing.
+    fn errors(&self) -> Vec<String> {
+        self.errors.clone()
     }
 }
 
@@ -1410,19 +1447,12 @@ impl Mutation {
         Ok(true)
     }
 
-    /// Cancel the pending restore request that matches the given values.
-    fn cancel_restore(
-        #[graphql(ctx)] ctx: &GraphContext,
-        tree: ChecksumGQL,
-        entry: String,
-        filepath: String,
-        dataset: String,
-    ) -> FieldResult<bool> {
+    /// Cancel the pending restore request with the given identifier.
+    fn cancel_restore(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
         let usecase = CancelRestore::new(ctx.restorer.clone());
-        let fpath = PathBuf::from(filepath);
-        let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
+        let params: Params = Params::new(id);
         let result = usecase.call(params)?;
         Ok(result)
     }

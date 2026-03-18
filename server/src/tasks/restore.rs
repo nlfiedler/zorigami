@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2024 Nathan Fiedler
+// Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
@@ -18,9 +18,26 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 
+/// Status of a request.
+#[derive(Clone, Debug)]
+pub enum Status {
+    /// Request is waiting to be processed.
+    PENDING,
+    /// Request was cancelled before processing began.
+    CANCELLED,
+    /// Request is being processed.
+    RUNNING,
+    /// Request processing has completed (successfully or otherwise).
+    COMPLETED,
+}
+
 /// Request to restore a single file or a tree of files.
 #[derive(Clone, Debug)]
 pub struct Request {
+    /// Unique identifier for this request.
+    pub id: String,
+    /// Status of this request.
+    pub status: Status,
     /// Digest of the tree containing the entry to restore.
     pub tree: Checksum,
     /// Name of the entry within the tree to be restored.
@@ -35,8 +52,8 @@ pub struct Request {
     pub finished: Option<DateTime<Utc>>,
     /// Number of files restored so far during the restoration.
     pub files_restored: u64,
-    /// Error message if request processing failed.
-    pub error_msg: Option<String>,
+    /// Error messages if anything went wrong during processing.
+    pub errors: Vec<String>,
 }
 
 impl Request {
@@ -47,7 +64,10 @@ impl Request {
         dataset: String,
         passphrase: String,
     ) -> Self {
+        let id = xid::new().to_string();
         Self {
+            id,
+            status: Status::PENDING,
             tree,
             entry,
             filepath,
@@ -55,7 +75,7 @@ impl Request {
             passphrase,
             finished: None,
             files_restored: 0,
-            error_msg: None,
+            errors: vec![],
         }
     }
 }
@@ -93,7 +113,7 @@ pub trait Restorer: Send + Sync {
     ///
     /// Does not cancel the request if it has already begun the restoration
     /// process. Returns true if successfully cancelled.
-    fn cancel(&self, request: Request) -> bool;
+    fn cancel(&self, request_id: String) -> bool;
 
     /// Signal the supervisor to stop and release the database reference.
     fn stop(&self) -> Result<(), Error>;
@@ -115,8 +135,10 @@ pub struct RestorerImpl {
     state: Arc<dyn StateStore>,
     // Address of the supervisor actor, if it has been started.
     super_addr: Mutex<Option<Addr<RestoreSupervisor>>>,
-    // Queue of incoming requests to be processed.
+    // Queue of incoming requests waiting to be processed.
     pending: Arc<Mutex<VecDeque<Request>>>,
+    // Request actively being processed.
+    processing: Arc<Mutex<Option<Request>>>,
     // Limited number of recently completed requests.
     completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
     // Factory method for the FileRestorer implementation.
@@ -132,6 +154,7 @@ impl RestorerImpl {
             state: state.clone(),
             super_addr: Mutex::new(None),
             pending: Arc::new(Mutex::new(VecDeque::new())),
+            processing: Arc::new(Mutex::new(None)),
             completed: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
             fetcher,
         }
@@ -148,6 +171,18 @@ impl RestorerImpl {
             addr.try_send(SetFactory { fetcher }).map_err(err_convert)?;
         }
         Ok(())
+    }
+
+    /// Put the request into the completed set, trim the set to size.
+    fn push_completed(&self, request: Request) {
+        let pair = self.completed.clone();
+        let (lock, cvar) = &*pair;
+        let mut completed = lock.lock().unwrap();
+        // Push the completed request to the front of the list and truncate the
+        // older items to keep the list from growing indefinitely.
+        completed.push_front(request);
+        completed.truncate(32);
+        cvar.notify_all();
     }
 
     /// Clear the completed requests list, for testing.
@@ -177,10 +212,11 @@ impl Restorer for RestorerImpl {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
             let pending = self.pending.clone();
+            let processing = self.processing.clone();
             let completed = self.completed.clone();
             let fetcher = self.fetcher;
             let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                RestoreSupervisor::new(repo, state, pending, completed, fetcher)
+                RestoreSupervisor::new(repo, state, pending, processing, completed, fetcher)
             });
             *su_addr = Some(addr);
         }
@@ -213,6 +249,9 @@ impl Restorer for RestorerImpl {
         let slices = queue.as_slices();
         requests.extend_from_slice(slices.0);
         requests.extend_from_slice(slices.1);
+        if let Some(ref req) = *self.processing.lock().unwrap() {
+            requests.push(req.clone());
+        }
         let pair = self.completed.clone();
         let (lock, _cvar) = &*pair;
         let completed = lock.lock().unwrap();
@@ -222,13 +261,18 @@ impl Restorer for RestorerImpl {
         requests
     }
 
-    fn cancel(&self, request: Request) -> bool {
-        info!("cancel request for {}/{}", request.tree, request.entry);
+    fn cancel(&self, request_id: String) -> bool {
         let mut queue = self.pending.lock().unwrap();
-        let position = queue.iter().position(|r| r == &request);
+        let position = queue.iter().position(|r| r.id == request_id);
         if let Some(idx) = position {
-            queue.remove(idx);
+            if let Some(mut req) = queue.remove(idx) {
+                info!("cancelled request for {}/{}", req.tree, req.entry);
+                req.status = Status::CANCELLED;
+                self.push_completed(req);
+            }
             return true;
+        } else {
+            warn!("cancel, request not found (in pending queue)");
         }
         false
     }
@@ -252,6 +296,8 @@ struct RestoreSupervisor {
     state: Arc<dyn StateStore>,
     // Queue of incoming requests to be processed.
     pending: Arc<Mutex<VecDeque<Request>>>,
+    // Request actively being processed.
+    processing: Arc<Mutex<Option<Request>>>,
     // List to which completed tasks are added (in the front).
     completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
     // Factory method for the FileRestorer implementation.
@@ -263,6 +309,7 @@ impl RestoreSupervisor {
         repo: Arc<dyn RecordRepository>,
         state: Arc<dyn StateStore>,
         pending: Arc<Mutex<VecDeque<Request>>>,
+        processing: Arc<Mutex<Option<Request>>>,
         completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
         fetcher: FileRestorerFactory,
     ) -> Self {
@@ -270,12 +317,20 @@ impl RestoreSupervisor {
             dbase: repo,
             state,
             pending,
+            processing,
             completed,
             fetcher,
         }
     }
 
     fn process_queue(&mut self) -> Result<(), Error> {
+        if std::env::var("RESTORE_ALWAYS_PROCESSING").is_ok() {
+            let proc = self.processing.lock().unwrap();
+            if proc.is_some() {
+                // a request is already processing, we cannot take any more
+                return Ok(());
+            }
+        }
         // Construct the pack fetcher that will keep track of which pack files
         // have been downloaded to avoid fetching the same one twice.
         let mut fetcher = (self.fetcher)(self.dbase.clone());
@@ -284,20 +339,31 @@ impl RestoreSupervisor {
         while let Some(request) = self.pop_incoming() {
             info!("processing request {}/{}", request.tree, request.entry);
             let mut req = request.clone();
-            match fetcher.load_dataset(&request.dataset) {
-                Err(error) => {
-                    error!("process_queue: error loading dataset: {}", error);
-                    self.set_error(error, &mut req);
-                }
-                _ => {
-                    if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
-                        error!("process_queue: error processing entry: {}", error);
-                        self.set_error(error, &mut req);
+            req.status = Status::RUNNING;
+            self.set_processing(req.clone());
+            if std::env::var("RESTORE_ALWAYS_PROCESSING").is_ok() {
+                // if in test mode, do not really process the request
+                req.files_restored = 42;
+                req.errors.push("oh no, something went wrong!".into());
+                req.errors.push("something else went wrong!".into());
+                req.errors.push("abandon ship, abandon ship!".into());
+                self.set_processing(req.clone());
+            } else {
+                match fetcher.load_dataset(&request.dataset) {
+                    Err(error) => {
+                        error!("process_queue: error loading dataset: {}", error);
+                        self.add_error(error, &mut req);
+                    }
+                    _ => {
+                        if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
+                            error!("process_queue: error processing entry: {}", error);
+                            self.add_error(error, &mut req);
+                        }
                     }
                 }
+                info!("completed request {}/{}", request.tree, request.entry);
+                self.push_completed();
             }
-            info!("completed request {}/{}", request.tree, request.entry);
-            self.push_completed(req);
         }
         Ok(())
     }
@@ -345,6 +411,7 @@ impl RestoreSupervisor {
         fetcher.fetch_file(&digest, filepath, &request.passphrase)?;
         // update the count of files restored so far
         request.files_restored += 1;
+        self.set_processing(request.clone());
         Ok(())
     }
 
@@ -359,6 +426,9 @@ impl RestoreSupervisor {
             .dbase
             .get_tree(&digest)?
             .ok_or_else(|| anyhow!(format!("missing tree: {:?}", digest)))?;
+        // Errors that occur within this loop will _not_ be passed up the stack
+        // but instead simply be logged and collected in the request; the hope
+        // is that while some entries may have errors, others will succeed.
         for entry in tree.entries.iter() {
             let mut filepath = path.to_path_buf();
             filepath.push(&entry.name);
@@ -370,6 +440,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
+                        self.add_error(error, request);
                     }
                 }
                 TreeReference::TREE(digest) => {
@@ -381,6 +452,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
+                        self.add_error(error, request);
                     }
                 }
                 TreeReference::FILE(digest) => {
@@ -392,6 +464,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
+                        self.add_error(error, request);
                     }
                 }
                 TreeReference::SMALL(contents) => {
@@ -401,6 +474,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
+                        self.add_error(error, request);
                     }
                 }
             }
@@ -413,9 +487,17 @@ impl RestoreSupervisor {
         queue.pop_front()
     }
 
-    fn push_completed(&self, request: Request) {
-        let mut req = request;
+    fn set_processing(&self, request: Request) {
+        let mut opt = self.processing.lock().unwrap();
+        *opt = Some(request);
+    }
+
+    fn push_completed(&self) {
+        let mut opt = self.processing.lock().unwrap();
+        let mut req = opt.take().unwrap();
+        drop(opt);
         req.finished = Some(Utc::now());
+        req.status = Status::COMPLETED;
         let pair = self.completed.clone();
         let (lock, cvar) = &*pair;
         let mut completed = lock.lock().unwrap();
@@ -426,9 +508,13 @@ impl RestoreSupervisor {
         cvar.notify_all();
     }
 
-    fn set_error(&self, error: Error, request: &mut Request) {
-        let err_string = error.to_string();
-        request.error_msg = Some(err_string);
+    fn add_error(&self, error: Error, request: &mut Request) {
+        // avoid collecting so many errors that we run out of memory
+        if request.errors.len() < 100 {
+            let err_string = error.to_string();
+            request.errors.push(err_string);
+            self.set_processing(request.clone());
+        }
     }
 }
 
@@ -495,8 +581,8 @@ impl Handler<Restore> for RestoreSupervisor {
 
     fn handle(&mut self, _msg: Restore, _ctx: &mut Context<RestoreSupervisor>) {
         debug!("supervisor received Restore message");
-        if std::env::var("RESTORE_NOOP").is_ok() {
-            info!("RESTORE_NOOP is set, not processing the queue");
+        if std::env::var("RESTORE_ALWAYS_PENDING").is_ok() {
+            info!("RESTORE_ALWAYS_PENDING is set, not processing the queue");
         } else if let Err(err) = self.process_queue() {
             error!("supervisor error processing queue: {}", err);
         }
@@ -830,8 +916,8 @@ mod tests {
         let requests = sut.requests();
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
-        assert!(request.error_msg.is_some());
-        assert!(request.error_msg.as_ref().unwrap().contains("oh no"));
+        assert_eq!(request.errors.len(), 1);
+        assert!(request.errors[0].contains("oh no"));
         Ok(())
     }
 
@@ -891,8 +977,8 @@ mod tests {
         let requests = sut.requests();
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
-        assert!(request.error_msg.is_some());
-        assert!(request.error_msg.as_ref().unwrap().contains("oh no"));
+        assert_eq!(request.errors.len(), 1);
+        assert!(request.errors[0].contains("oh no"));
 
         // act with successful request
         fn factory_pass(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
@@ -917,7 +1003,7 @@ mod tests {
         let requests = sut.requests();
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
-        assert!(request.error_msg.is_none());
+        assert_eq!(request.errors.len(), 0);
         Ok(())
     }
 
@@ -1008,7 +1094,7 @@ mod tests {
         let requests = sut.requests();
         assert_eq!(requests.len(), 1);
         let request = &requests[0];
-        assert!(request.error_msg.is_none());
+        assert_eq!(request.errors.len(), 0);
         Ok(())
     }
 

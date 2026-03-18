@@ -7,6 +7,15 @@ schema {
   mutation: Mutation
 }
 
+"Status of the most recent snapshot for a dataset."
+enum BackupStatus {
+  "Backup has not run yet." NONE
+  "Backup is still running." RUNNING
+  "Backup has finished." FINISHED
+  "Backup paused due to schedule." PAUSED
+  "Backup failed, see `errorMessage` property." FAILED
+}
+
 enum DayOfWeek {
   SUN
   MON
@@ -31,20 +40,19 @@ enum PackRetentionPolicy {
   "Keep only pack files uploaded in the last N days." DAYS
 }
 
+"Status of a restore request."
+enum RestoreStatus {
+  "Request is waiting to be processed." PENDING
+  "Request was cancelled before processing began." CANCELLED
+  "Request is being processed." RUNNING
+  "Request processing has completed (successfully or otherwise)." COMPLETED
+}
+
 "Specifies the policy for retaining snapshots."
 enum SnapshotRetentionPolicy {
   "Retain all snapshots." ALL
   "Keep only the N most recent snapshots." COUNT
   "Keep only snapshots completed in the last N days." DAYS
-}
-
-"Status of the most recent snapshot for a dataset."
-enum Status {
-  "Backup has not run yet." NONE
-  "Backup is still running." RUNNING
-  "Backup has finished." FINISHED
-  "Backup paused due to schedule." PAUSED
-  "Backup failed, see `errorMessage` property." FAILED
 }
 
 "In combination with DayOfWeek, selects the particular week."
@@ -173,7 +181,7 @@ type Dataset {
   "Set of schedules that apply to this dataset."
   schedules: [Schedule!]!
   "Status of the most recent snapshot for this dataset."
-  status: Status!
+  status: BackupStatus!
   "Detailed state of the backup for this dataset."
   backupState: BackupState
   "Error message for the most recent snapshot, if any."
@@ -234,8 +242,8 @@ type Mutation {
   restoreDatabase(storeId: String!): String!
   "Enqueue a request to restore the given file or directory tree."
   restoreFiles(tree: Checksum!, entry: String!, filepath: String!, dataset: String!): Boolean!
-  "Cancel the pending restore request that matches the given values."
-  cancelRestore(tree: Checksum!, entry: String!, filepath: String!, dataset: String!): Boolean!
+  "Cancel the pending restore request with the given identifier."
+  cancelRestore(id: String!): Boolean!
   """
     Change the store from old to new for all matching pack records.
 
@@ -341,7 +349,7 @@ type Query {
   "Return the number of each type of database record."
   recordCounts: RecordCounts!
   "Query for any pending and recently completed file restore operations."
-  restores: [Request!]!
+  restores: [RestoreRequest!]!
   "Retrieve all snapshots for a given data set in chronological order."
   snapshots(id: String!): [Snapshot!]!
   "Retrieve a specific snapshot."
@@ -375,7 +383,11 @@ type RecordCounts {
 }
 
 "A request to restore a file or directory."
-type Request {
+type RestoreRequest {
+  "Unique identifier for this request."
+  id: String!
+  "Status of the request (pending, cancelled, running, completed)."
+  status: RestoreStatus!
   "Digest of the tree containing the entry to restore."
   tree: Checksum!
   "Name of the entry within the tree to be restored."
@@ -388,8 +400,8 @@ type Request {
   finished: DateTime
   "Number of files restored so far during the restoration."
   filesRestored: Int!
-  "Error message if request processing failed."
-  errorMessage: String
+  "Error messages if anything went wrong during processing."
+  errors: [String!]!
 }
 
 "A schedule for when to run the backup."

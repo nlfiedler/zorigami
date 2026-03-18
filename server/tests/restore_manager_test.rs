@@ -9,10 +9,10 @@ use std::sync::Arc;
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
+use zorigami::domain::repositories::RecordRepository;
 use zorigami::tasks::backup::{self, Performer, PerformerImpl};
 use zorigami::tasks::restore::*;
 use zorigami::tasks::state::{StateStore, StateStoreImpl};
-use zorigami::domain::repositories::RecordRepository;
 
 fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
     Box::new(FileRestorerImpl::new(dbase))
@@ -154,7 +154,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
@@ -178,7 +178,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -205,7 +205,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -227,7 +227,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -249,7 +249,7 @@ async fn test_backup_restore() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -363,7 +363,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     assert_eq!(request.files_restored, 0);
 
     // fix the file permissions and perform the third backup
@@ -394,7 +394,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
     assert_eq!(request.files_restored, 1);
     Ok(())
 }
@@ -636,7 +636,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
 
     // ensure symlink contains expected contents
     let link_path: PathBuf = fixture_path.path().join("link-to-lorem.txt");
@@ -663,7 +663,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
 
     // ensure symlink contains expected contents
     let link_path: PathBuf = fixture_path.path().join("link-to-nothing");
@@ -778,7 +778,7 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     let requests = sut.requests();
     assert_eq!(requests.len(), 1);
     let request = &requests[0];
-    assert!(request.error_msg.is_none());
+    assert_eq!(request.errors.len(), 0);
 
     // ensure small file contains expected contents
     let small_path: PathBuf = fixture_path.path().join("very-small.txt");

@@ -377,7 +377,10 @@ function TreeViewer(props: TreeViewerProps) {
   const restoreAction = action(
     async (): Promise<{ ok: boolean }> => {
       const tree = store.paths.at(-1)![1];
-      const basepath = store.paths.length === 1 ? '' : store.paths.join('/');
+      const basepath = store.paths
+        .slice(1)
+        .map((e) => e[0])
+        .join('/');
       for (const entry of store.selections) {
         const filepath = basepath.length > 0 ? basepath + '/' + entry : entry;
         const result = await client.mutate({
@@ -407,7 +410,7 @@ function TreeViewer(props: TreeViewerProps) {
     }
   );
   const startRestore = useAction(restoreAction);
-  const restoreeSubmission = useSubmission(restoreAction);
+  const restoreSubmission = useSubmission(restoreAction);
 
   return (
     <Show when={treeQuery()} fallback="..." keyed>
@@ -417,7 +420,7 @@ function TreeViewer(props: TreeViewerProps) {
             <button
               class="button"
               disabled={
-                store.selections.length === 0 || restoreeSubmission.pending
+                store.selections.length === 0 || restoreSubmission.pending
               }
               on:click={() => startRestore()}
             >

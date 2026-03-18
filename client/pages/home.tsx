@@ -26,10 +26,19 @@ function Home() {
   return (
     <Suspense fallback={'...'}>
       <ul>
-        <li>{confQuery()?.configuration.hostname}</li>
-        <li>{confQuery()?.configuration.username}</li>
-        <li>{confQuery()?.configuration.computerId}</li>
-        <li>{confQuery()?.configuration.computerBucket}</li>
+        <li>
+          <strong>Hostname:</strong> {confQuery()?.configuration.hostname}
+        </li>
+        <li>
+          <strong>Username:</strong> {confQuery()?.configuration.username}
+        </li>
+        <li>
+          <strong>Computer ID:</strong> {confQuery()?.configuration.computerId}
+        </li>
+        <li>
+          <strong>Database Bucket:</strong>{' '}
+          {confQuery()?.configuration.computerBucket}
+        </li>
       </ul>
     </Suspense>
   );

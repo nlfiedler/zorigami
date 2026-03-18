@@ -1,12 +1,10 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::Checksum;
-use crate::tasks::restore::{Request, Restorer};
+use crate::tasks::restore::Restorer;
 use anyhow::Error;
 use std::cmp;
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct CancelRestore {
@@ -21,54 +19,30 @@ impl CancelRestore {
 
 impl super::UseCase<bool, Params> for CancelRestore {
     fn call(&self, params: Params) -> Result<bool, Error> {
-        let request: Request = params.into();
-        Ok(self.restorer.cancel(request))
+        Ok(self.restorer.cancel(params.id))
     }
 }
 
 pub struct Params {
-    /// Digest of the tree containing the entry to restore.
-    pub tree: Checksum,
-    /// Name of the entry within the tree to be restored.
-    pub entry: String,
-    /// Relative path of entry to be restored.
-    filepath: PathBuf,
-    /// Identifier of the dataset containing the snapshot.
-    dataset: String,
+    /// Unique identifier of the request to be cancelled.
+    id: String,
 }
 
 impl Params {
-    pub fn new(tree: Checksum, entry: String, filepath: PathBuf, dataset: String) -> Self {
-        Self {
-            tree,
-            entry,
-            filepath,
-            dataset,
-        }
+    pub fn new(id: String) -> Self {
+        Self { id }
     }
 }
 
 impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Params({}, {})", self.tree, self.entry)
-    }
-}
-
-impl From<Params> for Request {
-    fn from(val: Params) -> Self {
-        Request::new(
-            val.tree,
-            val.entry,
-            val.filepath,
-            val.dataset,
-            String::new(),
-        )
+        write!(f, "Params({})", self.id)
     }
 }
 
 impl cmp::PartialEq for Params {
     fn eq(&self, other: &Self) -> bool {
-        self.tree == other.tree && self.entry == other.entry
+        self.id == other.id
     }
 }
 
@@ -87,11 +61,7 @@ mod tests {
         mock.expect_cancel().returning(|_| true);
         // act
         let usecase = CancelRestore::new(Arc::new(mock));
-        let tree = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());
-        let entry = String::from("entry.txt");
-        let filepath = PathBuf::from("restored.txt");
-        let dataset = String::from("dataset1");
-        let params = Params::new(tree.clone(), entry.clone(), filepath.clone(), dataset);
+        let params = Params::new("abc123".into());
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());

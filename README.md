@@ -77,10 +77,16 @@ bun run codegen
 
 ### Testing Restore
 
-To test the restore functionality without actually processing the queue, set the `RESTORE_NOOP` environment variable to a non-null value. This will allow for enqueuing restore requests and then developing and testing the interface and GraphQL queries related to restore requests, lest they be processed too quickly.
+To test the restore functionality without actually processing the queue, set the `RESTORE_ALWAYS_PENDING` environment variable to a non-null value. This will allow for enqueuing restore requests and then developing and testing the interface and GraphQL queries related to restore requests, lest they be processed too quickly.
 
 ```shell
-env RESTORE_NOOP=1 RUST_LOG=info cargo run
+env RESTORE_ALWAYS_PENDING=1 RUST_LOG=info cargo run
+```
+
+Similarly, to have restore requests stuck in the _processing_ state indefinitely, set `RESTORE_ALWAYS_PROCESSING` -- a single restore request will move from _pending_ to _processing_ and stay there. This will block all other processing of requests, allowing for the testing of conditions in which there are both pending requests and a request that is being processed.
+
+```shell
+env RESTORE_ALWAYS_PROCESSING=1 RUST_LOG=info cargo run
 ```
 
 ## Tools

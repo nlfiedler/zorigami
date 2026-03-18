@@ -1,8 +1,6 @@
 * Tasks
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
-*** TODO restores page [0/3]
-- [ ] show list of restore requests
-- [ ] add button to cancel a request
+*** TODO restore database [0/1]
 - [ ] provide method for restoring a database
 *** TODO deployment [0/1]
 - [ ] update Dockerfile
@@ -127,15 +125,6 @@ b) ~schedule~ can be anything and ~retention~ is set to automatic
 *** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Restore improvements
-*** request being processed needs to be returned by =requests()= somehow
-**** it is neither ~pending~ nor ~completed~ so it is not returned in queries
-**** if the restore supervisor crashes, the in-progress request is lost
-**** add a new type that manages the ~pending~ and ~completed~ lists
-***** have =Restorer= create this type and pass a =Arc<Mutex>= to supervisor
-***** add function for moving the first ~pending~ request to ~processing~
-***** add function for updating status of ~processing~ request
-***** add function for moving ~processing~ request to the ~completed~ set
-***** add function like =requests()= that combines all 3 sets into one for queries
 *** restore can hang on pack retrieval for a long time
 **** log output
 #+begin_src
@@ -144,13 +133,6 @@ b) ~schedule~ can be anything and ~retention~ is set to automatic
 [2023-08-08T15:51:20Z WARN  server::data::repositories] pack retrieval failed, will try another source: Err(Token retrieval failed: error trying to connect: Connection timed out (os error 110))
 #+end_src
 **** should try to set a timeout to something reasonble (1-2 minutes)
-*** add a =status_msg= property to =Request= for showing detailed progress
-**** normally show the current path of the file being restored
-**** if very large file, show ~fetching very large file~
-**** if waiting for a long time for a pack file, indicate in status
-*** add the request status field to the graphql entity
-*** show the request status message in the web ui
-*** web ui should refresh restore requests page every few seconds
 ** Database Integrity
 *** deleting a dataset should delete all of its snapshots
 *** add operation to prune anything unreachable by any dataset
@@ -180,14 +162,7 @@ b) ~schedule~ can be anything and ~retention~ is set to automatic
 *** using latest snapshot, examine current data set and restore all missing/modified data
 *** provide lots of logging and frequent webui status updates
 ** Snapshot browsing
-*** moving forward/backward in time should stay in selected directory (currently resets to the top)
-*** page to show all snapshots over time in a list
-*** improve snapshot tree browser
-**** should sort entries by filename case-insensitively
-**** for larger number of entries, should use pagination
-**** nice to have: sticky table header
-**** nice to have: sort by file type
-*** Have fields for start time, stop time, current status, additional details, etc
+*** ability to move through snapshots will staying within the selected path
 *** would be helpful to see all snapshots in which a file or directory changed
 ** Restore to dissimilar hardware
 *** Allow setting the configuration to change the identity
@@ -240,7 +215,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** tree entries of =ERROR= type should be displayed as such
 **** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
 ***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-*** use breadcrumbs in the tree navigator to get back to parent directories
 ** Improved error handling
 *** webui: database restore fails to get archive, should display a sensible error
 **** cause 1: include mismatching instance identifier
