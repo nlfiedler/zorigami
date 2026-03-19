@@ -4,18 +4,28 @@
 import {
   For,
   Match,
+  type Setter,
   Show,
   Suspense,
   Switch,
   createResource,
+  createSignal,
   onCleanup
 } from 'solid-js';
-import { action, type Submission, useAction } from '@solidjs/router';
+import {
+  A,
+  action,
+  type Submission,
+  useAction,
+  useNavigate,
+  useSubmission
+} from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
 import {
   type Mutation,
   type MutationCancelRestoreArgs,
+  type MutationRestoreDatabaseArgs,
   type Query,
   type RestoreRequest,
   RestoreStatus
@@ -83,26 +93,36 @@ function Restore() {
   });
 
   return (
-    <div class="container">
-      <h1 class="title">Restore</h1>
-      <h2 class="subtitle">Requests</h2>
-      <Suspense fallback={'...'}>
-        <Switch>
-          <Match when={restoresQuery()?.restores.length == 0}>
-            <p>No restore requests</p>
-          </Match>
-          <Match when={restoresQuery()?.restores}>
-            <div class="list has-hoverable-list-items has-overflow-ellipsis has-visible-pointer-controls">
-              <For each={restoresQuery()?.restores}>
-                {(item) => (
-                  <RestoreRequest request={item} cancel={startCancel} />
-                )}
-              </For>
-            </div>
-          </Match>
-        </Switch>
-      </Suspense>
-    </div>
+    <>
+      <div class="section">
+        <h1 class="title">File and Directory Restore</h1>
+        <h2 class="subtitle">Pending, Active, and Completed Requests</h2>
+        <Suspense fallback={'...'}>
+          <Switch>
+            <Match when={restoresQuery()?.restores.length == 0}>
+              <article class="message">
+                <div class="message-body">No restore requests found.</div>
+              </article>
+            </Match>
+            <Match when={restoresQuery()?.restores}>
+              <div class="list has-hoverable-list-items has-overflow-ellipsis has-visible-pointer-controls">
+                <For each={restoresQuery()?.restores}>
+                  {(item) => (
+                    <RestoreRequest request={item} cancel={startCancel} />
+                  )}
+                </For>
+              </div>
+            </Match>
+          </Switch>
+        </Suspense>
+      </div>
+
+      <div class="section">
+        <h1 class="title">Full Database Restore</h1>
+        <h2 class="subtitle">Restore the database from a snapshot</h2>
+        <DatabaseRestore />
+      </div>
+    </>
   );
 }
 
@@ -183,6 +203,200 @@ function RestoreRequest(props: RestoreRequestProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
+  query {
+    stores {
+      id
+      storeType
+      label
+    }
+  }
+`;
+
+function DatabaseRestore() {
+  const client = useApolloClient();
+  const [storesQuery] = createResource(async () => {
+    const { data } = await client.query({ query: ALL_STORES });
+    return data;
+  });
+  const sortedStores = () => {
+    // the stores returned from the server are in no particular order
+    const sorted = [];
+    for (const store of storesQuery()?.stores ?? []) {
+      sorted.push(store);
+    }
+    sorted.sort((a, b) => a.id.localeCompare(b.id));
+    return sorted;
+  };
+  const [modalOpen, setModalOpen] = createSignal(false);
+
+  return (
+    <Suspense fallback={'...'}>
+      <Switch>
+        <Match when={sortedStores()?.length == 0}>
+          <article class="message">
+            <div class="message-header">
+              <p>No Pack Stores</p>
+            </div>
+            <div class="message-body">
+              There are no pack stores from which to restore the database. To
+              restore the database, first define a{' '}
+              <A href="/stores">pack store</A> that specifies a location that
+              has backups from which to retrieve a database archive.
+            </div>
+          </article>
+        </Match>
+        <Match when={sortedStores()}>
+          <article class="message">
+            <div class="message-body">
+              To restore the database from the most recent snapshot, select one
+              of the pack stores below. Note that the existing database will be
+              overwritten by the most recently saved snapshot.
+            </div>
+          </article>
+          <div class="list has-hoverable-list-items has-overflow-ellipsis has-visible-pointer-controls">
+            <For each={sortedStores()}>
+              {(store) => (
+                <>
+                  <div class="list-item">
+                    <div class="list-item-image">
+                      <span>
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                      </span>
+                    </div>
+                    <div class="list-item-content">
+                      <div class="list-item-title">{store.label}</div>
+                      <div class="list-item-description">{store.storeType}</div>
+                    </div>
+                    <div class="list-item-controls">
+                      <div class="buttons is-right">
+                        <button
+                          class="button"
+                          on:click={() => setModalOpen(true)}
+                        >
+                          <span class="icon is-small">
+                            <i class="fa-solid fa-download"></i>
+                          </span>
+                          <span>Restore</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    classList={{
+                      modal: true,
+                      'is-active': modalOpen()
+                    }}
+                  >
+                    <div class="modal-background"></div>
+                    <div class="modal-card">
+                      <ConfirmDialog
+                        setModalOpen={setModalOpen}
+                        storeId={store.id}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </For>
+          </div>
+        </Match>
+      </Switch>
+    </Suspense>
+  );
+}
+
+const RESTORE_DATABASE: TypedDocumentNode<
+  Mutation,
+  MutationRestoreDatabaseArgs
+> = gql`
+  mutation RestoreDatabase($storeId: String!) {
+    restoreDatabase(storeId: $storeId)
+  }
+`;
+
+interface ConfirmDialogProps {
+  storeId: string;
+  setModalOpen: Setter<boolean>;
+}
+
+function ConfirmDialog(props: ConfirmDialogProps) {
+  const navigate = useNavigate();
+  const [errorMsg, setErrorMsg] = createSignal('');
+  const client = useApolloClient();
+  const restoreAction = action(
+    async (): Promise<{ ok: boolean }> => {
+      await client.mutate({
+        mutation: RESTORE_DATABASE,
+        variables: {
+          storeId: props.storeId
+        }
+      });
+      return { ok: true };
+    },
+    {
+      name: 'restoreDatabase',
+      onComplete: (s: Submission<any, any>) => {
+        if (s.error) {
+          console.error('database restore failed:', s.error);
+          setErrorMsg(s.error.toString());
+        } else {
+          navigate('/');
+        }
+      }
+    }
+  );
+  const startRestore = useAction(restoreAction);
+  const restoreSubmission = useSubmission(restoreAction);
+
+  return (
+    <>
+      <header class="modal-card-head">
+        <p class="modal-card-title">Confirm changes to selected assets</p>
+        <button
+          class="delete"
+          aria-label="close"
+          on:click={(_) => {
+            props.setModalOpen(false);
+          }}
+        ></button>
+      </header>
+      <section class="modal-card-body">
+        <article class="message">
+          <div class="message-body">
+            Are you sure you want to restore the database?
+          </div>
+        </article>
+        <Show when={errorMsg().length > 0}>
+          <div class="notification is-warning">
+            <button class="delete" on:click={() => setErrorMsg('')}></button>
+            {errorMsg()}
+          </div>
+        </Show>
+      </section>
+      <footer class="modal-card-foot">
+        <div class="buttons">
+          <button
+            classList={{
+              button: true,
+              'is-success': true,
+              'is-loading': restoreSubmission.pending
+            }}
+            disabled={restoreSubmission.pending}
+            on:click={(_) => startRestore()}
+          >
+            Restore
+          </button>
+          <button class="button" on:click={(_) => props.setModalOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      </footer>
+    </>
   );
 }
 

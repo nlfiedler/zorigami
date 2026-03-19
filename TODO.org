@@ -1,7 +1,5 @@
 * Tasks
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
-*** TODO restore database [0/1]
-- [ ] provide method for restoring a database
 *** TODO deployment [0/1]
 - [ ] update Dockerfile
 *** TODO documentation [5/9]
@@ -37,14 +35,13 @@
 *** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
 *** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
 *** there will be 24 + 30 + 52 + N snapshots for any given dataset
-*** add ~Automatic~ to =Schedule= entity
-*** add ~Automatic~ option to dataset schedule form in webui
-*** scheduler treats ~Automatic~ schedule as ~Hourly~ in terms of running backups
+*** add ~Automatic~ member to snapshot retention policy enum
+*** add ~Automatic~ option to snapshot retention policy form in webui
 *** add support for automatic pruning to =PruneSnapshots= usecase
-*** if scheule is ~Automatic~ then invoke =PruneSnapshots= after every backup
-*** web ui: either ~schedule~ or ~retention~ is used to enable this behavior
-a) ~schedule~ is set to automatic and ~retention~ form is disabled
-b) ~schedule~ can be anything and ~retention~ is set to automatic
+*** =PruneSnapshots= usecase must now be invoked after every backup
+**** is it safe to prune while a backup or restore is in progress?
+**** all backups should be serialized
+**** pruning should be done as part of the backup
 *** how to automatically prune old snapshots
 **** https://github.com/bastibe/timeup/blob/master/timeup.py
 **** basic outline (each ~keep~ step starts by filtering the full list, not the output of the previous step)
