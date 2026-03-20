@@ -1,46 +1,35 @@
 //
 // Copyright (c) 2026 Nathan Fiedler
 //
-import { createResource, Suspense } from 'solid-js';
+import { createResource, Match, Suspense, Switch } from 'solid-js';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
 import { type Query } from 'zorigami/generated/graphql.ts';
 
-const CONFIGURATION: TypedDocumentNode<Query, Record<string, never>> = gql`
+const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
   query {
-    configuration {
-      hostname
-      username
-      computerId
-      computerBucket
+    datasets {
+      id
     }
   }
 `;
 
 function Home() {
   const client = useApolloClient();
-  const [confQuery] = createResource(async () => {
-    const { data } = await client.query({ query: CONFIGURATION });
+  const [datasetsQuery, { refetch }] = createResource(async () => {
+    const { data } = await client.query({ query: ALL_DATASETS });
     return data;
   });
   return (
-    <Suspense fallback={'...'}>
-      <ul>
-        <li>
-          <strong>Hostname:</strong> {confQuery()?.configuration.hostname}
-        </li>
-        <li>
-          <strong>Username:</strong> {confQuery()?.configuration.username}
-        </li>
-        <li>
-          <strong>Computer ID:</strong> {confQuery()?.configuration.computerId}
-        </li>
-        <li>
-          <strong>Database Bucket:</strong>{' '}
-          {confQuery()?.configuration.computerBucket}
-        </li>
-      </ul>
-    </Suspense>
+    <div class="container mt-4">
+      <Suspense fallback={'...'}>
+        <Switch>
+          <Match when={datasetsQuery()?.datasets.length === 0}>
+            <NoDatasetsHelp />
+          </Match>
+        </Switch>
+      </Suspense>
+    </div>
   );
 }
 
@@ -338,55 +327,59 @@ export default Home;
 //     }
 // }
 
-// #[component]
-// fn NoDatasetsHelp() -> impl IntoView {
-//     let stores_resource = Resource::new(|| (), |_| async move { super::stores().await });
+const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
+  query {
+    stores {
+      id
+    }
+  }
+`;
 
-//     view! {
-//         <Transition fallback=move || {
-//             view! { "Loading..." }
-//         }>
-//             {move || {
-//                 stores_resource
-//                     .get()
-//                     .map(|result| match result {
-//                         Err(err) => {
-//                             view! { <span>{move || format!("Error: {}", err)}</span> }.into_any()
-//                         }
-//                         Ok(stores) => {
-//                             if stores.is_empty() {
-//                                 view! {
-//                                     <p>
-//                                         Before defining a new dataset,
-//                                         visit the <a href="/stores">Pack Stores</a>
-//                                         page to configure a pack store, then visit
-//                                         the <a href="/datasets">Datasets</a>
-//                                         page to configure a dataset to be backed up.
-//                                     </p>
-//                                     <p>
-//                                         If you wish to restore from a previous backup,
-//                                         first visit the <a href="/stores">Pack Stores</a>
-//                                         page to configure a pack store, then visit
-//                                         the <a href="/restore">Restore</a>page to
-//                                         restore from the pack store.
-//                                     </p>
-//                                 }
-//                                     .into_any()
-//                             } else {
-//                                 view! {
-//                                     <p>
-//                                         Visit the <a href="/datasets">Datasets</a>
-//                                         page to configure a dataset to be backed up.
-//                                     </p>
-//                                 }
-//                                     .into_any()
-//                             }
-//                         }
-//                     })
-//             }}
-//         </Transition>
-//     }
-// }
+function NoDatasetsHelp() {
+  const client = useApolloClient();
+  const [storesQuery] = createResource(async () => {
+    const { data } = await client.query({ query: ALL_STORES });
+    return data;
+  });
+  return (
+    <Suspense fallback={'...'}>
+      <Switch>
+        <Match when={storesQuery()?.stores.length === 0}>
+          <article class="message">
+            <div class="message-header">
+              <p>No Pack Stores</p>
+            </div>
+            <div class="message-body">
+              <p>
+                Before defining a new dataset, visit the{' '}
+                <a href="/stores">Stores</a> page to configure a pack store,
+                then visit the <a href="/datasets">Datasets</a> page to
+                configure a dataset to be backed up.
+              </p>
+              <p>
+                If you wish to restore from a previous backup, first visit the{' '}
+                <a href="/stores">Stores</a> page to configure a pack store,
+                then visit the <a href="/restore">Restore</a> page to restore
+                from the pack store.
+              </p>
+            </div>
+          </article>
+        </Match>
+        <Match when={storesQuery()?.stores.length}>
+          <article class="message">
+            <div class="message-header">
+              <p>No Data Sets</p>
+            </div>
+            <div class="message-body">
+              Visit the <a href="/datasets">Datasets</a>{' '}
+              page to configure a dataset to be backed up.
+            </div>
+          </article>
+        </Match>
+      </Switch>
+    </Suspense>
+  );
+}
 
 // #[component]
 // fn StartBackupButton() -> impl IntoView {

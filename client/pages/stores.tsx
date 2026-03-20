@@ -463,25 +463,41 @@ export function StoresPage(props: any) {
       <div class="my-4 columns">
         <div class="column is-one-quarter">
           <div class="box">
-            <div class="list has-hoverable-list-items has-overflow-ellipsis">
+            <div class="list has-hoverable-list-items">
               <Suspense fallback={'...'}>
-                <For each={sortedStores()}>
-                  {(store) => (
-                    <div
-                      class="list-item"
-                      on:click={() => {
-                        navigate(`/stores/${store.id}`);
-                      }}
-                    >
+                <Switch>
+                  <Match when={storesQuery()?.stores.length === 0}>
+                    <div class="list-item">
                       <div class="list-item-content">
-                        <div class="list-item-title">{store.label}</div>
+                        <div class="list-item-title">No Pack Stores</div>
                         <div class="list-item-description">
-                          {store.storeType}
+                          Use the <strong>New Store</strong> button in the
+                          upper-left corner to create one of several types of
+                          pack stores.
                         </div>
                       </div>
                     </div>
-                  )}
-                </For>
+                  </Match>
+                  <Match when={storesQuery()?.stores.length}>
+                    <For each={sortedStores()}>
+                      {(store) => (
+                        <div
+                          class="list-item"
+                          on:click={() => {
+                            navigate(`/stores/${store.id}`);
+                          }}
+                        >
+                          <div class="list-item-content">
+                            <div class="list-item-title">{store.label}</div>
+                            <div class="list-item-description">
+                              {store.storeType}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </Match>
+                </Switch>
               </Suspense>
             </div>
           </div>

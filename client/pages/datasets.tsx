@@ -8,9 +8,11 @@ import {
   createSignal,
   type Accessor,
   For,
+  Match,
   type Setter,
   Show,
-  Suspense
+  Suspense,
+  Switch
 } from 'solid-js';
 import {
   action,
@@ -115,25 +117,34 @@ export function DatasetsPage(props: any) {
       <div class="my-4 columns">
         <div class="column is-one-quarter">
           <div class="box">
-            <div class="list has-hoverable-list-items has-overflow-ellipsis">
+            <div class="list has-hoverable-list-items">
               <Suspense fallback={'...'}>
-                <For each={sortedDatasets()}>
-                  {(dataset) => (
-                    <div
-                      class="list-item"
-                      on:click={() => {
-                        navigate(`/datasets/${dataset.id}`);
-                      }}
-                    >
-                      <div class="list-item-content">
-                        <div class="list-item-title">{dataset.basepath}</div>
-                        <div class="list-item-description">
-                          Status: {dataset.status}
+                <Switch>
+                  <Match when={sortedDatasets().length === 0}>
+                    <NoDatasetsHelp />
+                  </Match>
+                  <Match when={sortedDatasets().length}>
+                    <For each={sortedDatasets()}>
+                      {(dataset) => (
+                        <div
+                          class="list-item"
+                          on:click={() => {
+                            navigate(`/datasets/${dataset.id}`);
+                          }}
+                        >
+                          <div class="list-item-content">
+                            <div class="list-item-title">
+                              {dataset.basepath}
+                            </div>
+                            <div class="list-item-description">
+                              Status: {dataset.status}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                </For>
+                      )}
+                    </For>
+                  </Match>
+                </Switch>
               </Suspense>
             </div>
           </div>
@@ -152,6 +163,43 @@ export function Datasets() {
         data set.
       </p>
     </div>
+  );
+}
+
+function NoDatasetsHelp() {
+  const client = useApolloClient();
+  const [storesQuery] = createResource(async () => {
+    const { data } = await client.query({ query: ALL_STORES });
+    return data;
+  });
+
+  return (
+    <Suspense fallback={'...'}>
+      <Switch>
+        <Match when={storesQuery()?.stores.length === 0}>
+          <div class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">No Pack Stores</div>
+              <div class="list-item-description">
+                Visit the <a href="/stores">Stores</a> page to configure a pack
+                store, then return here to create a new data set.
+              </div>
+            </div>
+          </div>
+        </Match>
+        <Match when={storesQuery()?.stores.length}>
+          <div class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">No Data Sets</div>
+              <div class="list-item-description">
+                Use the <strong>New Dataset</strong> button in the upper-left
+                corner to create one of several types of pack stores.
+              </div>
+            </div>
+          </div>
+        </Match>
+      </Switch>
+    </Suspense>
   );
 }
 

@@ -2,12 +2,14 @@
 // Copyright (c) 2026 Nathan Fiedler
 //
 import {
-  For,
-  Show,
-  Suspense,
   createEffect,
   createResource,
-  createSignal
+  createSignal,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
@@ -67,27 +69,34 @@ export function SnapshotsPage(props: any) {
     <div class="m-4 columns">
       <div class="column is-one-quarter">
         <div class="box">
-          <div class="list has-hoverable-list-items has-overflow-ellipsis">
+          <div class="list has-hoverable-list-items">
             <Suspense fallback={'...'}>
-              <For each={sortedDatasets()}>
-                {(dataset) => (
-                  <div
-                    class="list-item"
-                    on:click={() => {
-                      navigate(`/snapshots/${dataset.id}`);
-                    }}
-                  >
-                    <div class="list-item-content">
-                      <div class="list-item-title ellipsize-left">
-                        {dataset.basepath}
+              <Switch>
+                <Match when={sortedDatasets().length === 0}>
+                  <NoDatasetsHelp />
+                </Match>
+                <Match when={sortedDatasets().length}>
+                  <For each={sortedDatasets()}>
+                    {(dataset) => (
+                      <div
+                        class="list-item"
+                        on:click={() => {
+                          navigate(`/snapshots/${dataset.id}`);
+                        }}
+                      >
+                        <div class="list-item-content">
+                          <div class="list-item-title ellipsize-left">
+                            {dataset.basepath}
+                          </div>
+                          <div class="list-item-description">
+                            Status: {dataset.status}
+                          </div>
+                        </div>
                       </div>
-                      <div class="list-item-description">
-                        Status: {dataset.status}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </For>
+                    )}
+                  </For>
+                </Match>
+              </Switch>
             </Suspense>
           </div>
         </div>
@@ -102,6 +111,54 @@ export function SnapshotHelp() {
     <div class="m-4">
       <p>Select a data set to view its snapshots.</p>
     </div>
+  );
+}
+
+const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
+  query {
+    stores {
+      id
+    }
+  }
+`;
+
+function NoDatasetsHelp() {
+  const client = useApolloClient();
+  const [storesQuery] = createResource(async () => {
+    const { data } = await client.query({ query: ALL_STORES });
+    return data;
+  });
+
+  return (
+    <Suspense fallback={'...'}>
+      <Switch>
+        <Match when={storesQuery()?.stores.length === 0}>
+          <div class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">No Pack Stores</div>
+              <div class="list-item-description">
+                Visit the <a href="/stores">Stores</a> page to configure a pack
+                store, then visit the <a href="/datasets">Datasets</a> page to
+                configure a new data set, then return here to see snapshots once
+                a backup has completed.
+              </div>
+            </div>
+          </div>
+        </Match>
+        <Match when={storesQuery()?.stores.length}>
+          <div class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">No Data Sets</div>
+              <div class="list-item-description">
+                Visit the <a href="/datasets">Datasets</a> page to configure a
+                new data set, then return here to see snapshots once a backup
+                has completed.
+              </div>
+            </div>
+          </div>
+        </Match>
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -141,37 +198,55 @@ export function Snapshots() {
   createEffect(() => refetch(location.pathname));
 
   return (
-    <Show when={snapshotsQuery()} fallback="..." keyed>
-      <table class="table is-striped is-hoverable is-fullwidth has-text-left">
-        <thead>
-          <tr>
-            <th>Start</th>
-            <th>End</th>
-            <th>Files</th>
-            <th>Identifier</th>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={snapshotsQuery()?.snapshots}>
-            {(item) => (
-              <tr
-                style="cursor: pointer;"
-                on:click={() => {
-                  navigate(`/snapshots/${params.id}/browse/${item.checksum}`);
-                }}
-              >
-                <td>{new Date(item.startTime).toLocaleString()}</td>
-                <td>{new Date(item.endTime).toLocaleString()}</td>
-                <td>{item.fileCount}</td>
-                <td>
-                  <code>{item.checksum}</code>
-                </td>
+    <Suspense fallback={'...'}>
+      <Switch>
+        <Match when={snapshotsQuery()?.snapshots.length === 0}>
+          <article class="message">
+            <div class="message-header">
+              <p>No Snapshots</p>
+            </div>
+            <div class="message-body">
+              If the dataset has a schedule, then a backup will be performed at
+              the appropriate time. Without a schedule, the backup must be run
+              manually.
+            </div>
+          </article>
+        </Match>
+        <Match when={snapshotsQuery()}>
+          <table class="table is-striped is-hoverable is-fullwidth has-text-left">
+            <thead>
+              <tr>
+                <th>Start</th>
+                <th>End</th>
+                <th>Files</th>
+                <th>Identifier</th>
               </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-    </Show>
+            </thead>
+            <tbody>
+              <For each={snapshotsQuery()?.snapshots}>
+                {(item) => (
+                  <tr
+                    style="cursor: pointer;"
+                    on:click={() => {
+                      navigate(
+                        `/snapshots/${params.id}/browse/${item.checksum}`
+                      );
+                    }}
+                  >
+                    <td>{new Date(item.startTime).toLocaleString()}</td>
+                    <td>{new Date(item.endTime).toLocaleString()}</td>
+                    <td>{item.fileCount}</td>
+                    <td>
+                      <code>{item.checksum}</code>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </Match>
+      </Switch>
+    </Suspense>
   );
 }
 

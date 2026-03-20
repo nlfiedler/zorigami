@@ -48,6 +48,10 @@ function Navbar() {
           <A class="navbar-item" href="/restore">
             Restore
           </A>
+
+          <A class="navbar-item" href="/settings">
+            Settings
+          </A>
         </div>
 
         <div class="navbar-end">

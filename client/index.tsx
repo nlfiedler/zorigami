@@ -17,6 +17,7 @@ import {
 import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
 import Restore from './pages/restore.tsx';
+import Settings from './pages/settings.tsx';
 
 function App(props: any) {
   return (
@@ -46,6 +47,7 @@ render(
           <Route path="/:id/browse/:sid" component={SnapshotBrowse} />
         </Route>
         <Route path="/restore" component={Restore} />
+        <Route path="/settings" component={Settings} />
         <Route path="*paramName" component={NotFound} />
       </Router>
     </ApolloProvider>

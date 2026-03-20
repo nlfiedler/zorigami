@@ -1,7 +1,28 @@
 * Tasks
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
+*** DONE delete temp database and refine initial setup experience [9/9]
+- [X] home page: if no stores, guide toward defining a pack store, mention database restore, link to restore page
+- [X] home page: if no data sets, guide toward defining a data set
+- [X] store page: when there are no stores, provide instruction
+- [X] dataset page: when there are no stores, provide instruction
+- [X] dataset page: when there are no datasets, provide instruction
+- [X] snapshots page: when there are no stores, link to stores page
+- [X] snapshots page: when there are no datasets, link to datasets page
+- [X] snapshots page: when there are no snapshots, indicate that something will happen eventually
+- [X] restore page: when there are no stores, suggest going to stores page to define some stores
+*** TODO home page [0/9]
+- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
+- [ ] for each dataset, show schedule frequency
+- [ ] for each dataset, show retention policy
+- [ ] for each dataset, show status (running, paused, finished, etc)
+- [ ] use interval to refresh every few seconds
+- [ ] for each dataset, show how many snapshots exist
+- [ ] for each dataset, show date/time of oldest snapshot
+- [ ] for each dataset, show date/time of most recent snapshot
+- [ ] for each dataset, provide button to start/stop backup
+*** TODO look for ~issues~ in browser tools on every page
 *** TODO deployment [0/1]
-- [ ] update Dockerfile
+- [ ] update Dockerfile; copy from tanuki
 *** TODO documentation [5/9]
 - [X] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
 - [X] how to generate GraphQL TypeScript code (=bun run codegen=)
@@ -12,17 +33,15 @@
 - [ ] copy SOLIDJS.md from tanuki
 - [ ] write ADR for why SolidJS, TypeScript
 - [X] remove doc/LEPTOS.md
-*** TODO look for ~issues~ in browser tools on every page
-*** TODO delete temp database and refine initial setup experience [0/4]
-- [ ] when there are no stores, say so, prominently show ~add~ button
-- [ ] when there are no datasets, say so, prominently show ~add~ button
-- [ ] when there are no snapshots, indicate that something will happen eventually
-- [ ] when there are no stores, ~Restore~ page should suggest going to stores page to define some stores
-*** TODO test restoring the database from a backup
-**** delete the =database= directory but not the =packs=
-**** home page should guide toward defining a pack store and link to restore page
 *** TODO create a =docs/CHANGES.md= to record when database schema changes incompatibly
 **** include when EXAF was added, changed database and pack files
+*** TODO snapshots page [4/6]
+- [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
+- [X] show list of snapshots
+- [X] add =/tree= route to show tree by its digest
+- [X] show breadcrumbs of the path leading up to this tree
+- [ ] empty files should show something rather than nothing
+- [ ] show status of running snapshot (no end time); add envar to keep backups running
 ** TODO [#B] rename SFTP property =remote_addr= to simply =address=
 ** TODO [#B] Variable chunk size, defined in data set
 *** need to allow for setting the desired chunk size per data set
@@ -77,34 +96,6 @@
 **** update store form to show error message if delete fails
 *** changing the base path of the dataset after snapshots have been made
 *** adding a pack store to a dataset once snapshots have been made
-** Improve web interface
-*** TODO test building and running on Windows, update instructions
-*** TODO home page [0/14]
-- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
-- [ ] for each dataset, show schedule frequency
-- [ ] for each dataset, show retention policy
-- [ ] for each dataset, show status (running, paused, finished, etc)
-- [ ] format dates using local time if possible
-- [ ] for each dataset, show how many snapshots exist
-- [ ] for each dataset, show date/time of oldest snapshot
-- [ ] for each dataset, show date/time of most recent snapshot
-- [ ] for each dataset, provide button to prune according to policy
-- [ ] for each dataset, provide button to start/stop backup
-- [ ] snopshot prune button needs to show status of pruning (like upload button)
-- [ ] consider how start/stop button could use an =Action= to wait on a running backup
-- [ ] when there are no stores, suggest visiting stores page to start setup
-- [ ] when there are no data sets, suggest visiting datasets page to start setup
-*** TODO snapshots page [4/6]
-- [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
-- [X] show list of snapshots
-- [X] add =/tree= route to show tree by its digest
-- [X] show breadcrumbs of the path leading up to this tree
-- [ ] empty files should show something rather than nothing
-- [ ] show status of running snapshot (no end time)
-*** TODO settings page [0/3]
-- [ ] fields to set the hostname and username
-- [ ] show computer UUID based on inputs
-- [ ] explain how these are used to generate bucket names
 ** Clean up
 *** TODO remove =FindMissingPacks= usecase and GraphQL query
 *** TODO remove =ScanPacks= usecase and GraphQL query
@@ -162,7 +153,7 @@
 *** ability to move through snapshots will staying within the selected path
 *** would be helpful to see all snapshots in which a file or directory changed
 ** Restore to dissimilar hardware
-*** Allow setting the configuration to change the identity
+*** Allow modifying the configuration to change the computer identifier
 *** Test by restoring a backup to a different system
 ** Dynamic bucket allocation
 *** hard-coded value of 128 is pretty low for local pack stores
