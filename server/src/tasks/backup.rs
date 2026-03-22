@@ -9,7 +9,7 @@
 
 use crate::domain::entities;
 use crate::domain::repositories::RecordRepository;
-use crate::tasks::helpers::thread_pool::ThreadPool;
+use crate::tasks::helpers;
 use crate::tasks::state::{BackupAction, StateStore};
 use anyhow::{Context, Error, anyhow};
 use chrono::{DateTime, Utc};
@@ -260,7 +260,7 @@ fn take_snapshot(
     let exclusions = build_exclusions(basepath, &excludes);
     let mut file_counts: entities::FileCounts = Default::default();
     let cpu_count = std::thread::available_parallelism()?.get();
-    let pool = ThreadPool::new(cpu_count);
+    let pool = helpers::ThreadPool::new(cpu_count);
     debug!("take_snapshot: creating pool of {cpu_count} threads");
     let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
     if let Some(ref parent_sha1) = parent {
@@ -274,7 +274,7 @@ fn take_snapshot(
     }
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
-    let pretty_time = super::pretty_print_duration(time_diff);
+    let pretty_time = helpers::pretty_print_duration(time_diff);
     let mut snap = entities::Snapshot::new(parent, tree.digest.clone(), file_counts);
     info!(
         "took snapshot {} with {} files after {}",
@@ -680,7 +680,7 @@ fn scan_tree(
     dbase: &Arc<dyn RecordRepository>,
     excludes: &GlobSet,
     file_counts: &mut entities::FileCounts,
-    pool: &ThreadPool,
+    pool: &helpers::ThreadPool,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
@@ -756,7 +756,7 @@ fn scan_tree(
 fn process_files(
     paths: Vec<PathBuf>,
     dbase: &Arc<dyn RecordRepository>,
-    pool: &ThreadPool,
+    pool: &helpers::ThreadPool,
 ) -> Vec<entities::TreeEntry> {
     // list of results that are either successful (Some(TreeEntry)) or resulted
     // in an error (None), paired with a condvar so the main thread can wait
@@ -907,7 +907,7 @@ mod tests {
         ];
         let dbase: Arc<dyn crate::domain::repositories::RecordRepository + 'static> =
             Arc::new(mock);
-        let pool = ThreadPool::new(1);
+        let pool = helpers::ThreadPool::new(1);
         let entries = process_files(paths, &dbase, &pool);
         // assert
         assert_eq!(entries.len(), 4);

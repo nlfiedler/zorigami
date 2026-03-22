@@ -999,7 +999,7 @@ impl Query {
         use crate::domain::usecases::get_pack::{GetPack, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
-        let passphrase = helpers::crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
         let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: entities::PackFile = usecase.call(params)?;
         Ok(result)
@@ -1018,7 +1018,7 @@ impl Query {
         use crate::domain::usecases::scan_packs::{Params, ScanPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ScanPacks::new(Box::new(repo));
-        let passphrase = helpers::crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
         let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: Option<Checksum> = usecase.call(params)?;
         Ok(result.map(ChecksumGQL))
@@ -1462,7 +1462,7 @@ impl Mutation {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::restore_database::{Params, RestoreDatabase};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let passphrase = helpers::crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
         let usecase = RestoreDatabase::new(Box::new(repo));
         let params: Params = Params::new(store_id, ctx.appstate.clone(), passphrase);
         let result = usecase.call(params)?;
@@ -1572,7 +1572,7 @@ impl Mutation {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::insert_file::{InsertFile, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let passphrase = helpers::crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
         let usecase = InsertFile::new(Box::new(repo));
         let params: Params = Params::new(dataset, chunk_digest.0, pack_digest.0, passphrase);
         usecase.call(params)?;

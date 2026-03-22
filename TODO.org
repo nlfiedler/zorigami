@@ -1,25 +1,48 @@
 * Tasks
-** TODO [#A] Centralize backup and restore into a single supervisor and priority queue
+** TODO [#A] Centralize backup and restore into a single supervisor and 3 queues
 *** design objectives
-**** app state becomes informative only, does not actually change anything
-**** use cases enqueue requests into a single priority queue (higher beats lower)
+**** all backups, prunings, and restorations are processed sequentially
+**** requests are added into separate queues for ~backup~, ~restore~, and ~prune~
+**** requests to ~cancel~ anything will use the app state to signal the process to stop
+**** database restore is a synchronous user request that cancels everything and waits
+**** maybe spawn a thread that waits for the supervisor-actor to stop, then updates app state
+***** eliminate the timing issue in =RestoreDatabase=
+***** procedure
+1) spawn thread in =manage_supervisors()=
+2) start supervisor (which starts actor)
+3) supervisor fires ~started~ event
+4) eventually actor exits (supervisor remains)
+6) spawned thread fires ~stopped~ event
+***** Q: how to restart the actor again?
 **** requests and priorities
-| Request      | Priority | Principle                                                    |
-|--------------+----------+--------------------------------------------------------------|
-| Stop backup  |       30 | must be able to stop a backup in order for restore to happen |
-| Restore      |       20 | must process restore operations before doing more backups    |
-| Prune        |       10 | backup cannot start until pruning is complete                |
-| Start backup |        1 | when there is nothing else to do, then backup can start      |
-*** TODO implementation [0/9]
+| Request | Priority | Principle                                                 |
+|---------+----------+-----------------------------------------------------------|
+| Restore | high     | restore is a user action that must be serviced ASAP       |
+| Backup  | medium   | backup happens on a schedule, more important than pruning |
+| Prune   | low      | when there is nothing else to do, then pruning can happen |
+*** TODO implementation [1/19]
+- [X] move all of the =helpers/*.rs= into =helpers.rs=
 - [ ] draw on paper the overall design for clarity
-- [ ] find a priority queue implementation
-- [ ] define request objects for start, stop, restore
-- [ ] implement a single actix supervisor for everything
+- [ ] sketch the new module layout for code organization
+- [ ] create 3 separate queues: backup, restore, prune
+- [ ] define request objects for backup, prune, restore
+- [ ] actor spawns thread to ~prune~, ~restore~, or ~backup~ and joins that thread to wait for it to finish
+- [ ] add ~pruning~ and ~restoring~ status to the =BackupState=
+- [ ] define use case and app state event to start/stop backup
+- [ ] define use case and app state event to start/stop restore
+- [ ] define use case and app state event to start/stop prune
+- [ ] implement a single actix supervisor for everything in =tasks/supervisor.rs=
+- [ ] implement a single actix actor that pulls requests from the queues in priority order (restore, backup, prune)
 - [ ] move restore functionality into the main supervisor
 - [ ] remove the restorer supervisor
+- [ ] backup processor must check app state for ~stop~ request
+- [ ] restore processor must check app state for ~stop~ request
+- [ ] prune processor must check app state for ~stop~ request
+- [ ] database restore must signal everythign to stop, wait for everything to stop
 - [ ] move pruning logic into the =tasks= module
 - [ ] incorporate snapshot pruning as a request to be processed
 - [ ] streamline the app state as appropriate
+*** TODO document the supervisor-actor model in the =doc/DESIGN.md= document
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
 *** TODO home page [8/11]
 - [X] for each dataset, card header arrow icon navigates to =/datasets= page
@@ -65,6 +88,14 @@
 *** document that the tradeoff is the overhead of tracking chunks in the database
 *** comment that the min/max will be 0.25x and 4x to improve deduplication
 *** min/max that are 0.5x and 2x result in many more blocks cut off at the maximum (1 vs 7 in one example)
+*** implementation [0/7]
+- [ ] add =chunk_size= number to =Dataset=
+- [ ] add serde for =chunk_size= to data model
+- [ ] remove =chunk_size= from =BackupDriver=
+- [ ] remove =calc_chunk_size()=
+- [ ] remove =DEFAULT_CHUNK_SIZE=
+- [ ] add =chunkSize= to =Dataset= in GraphQL query, mutation
+- [ ] add ~chunk size~ form field to dataset form
 ** TODO [#C] Automatic scheduling a la Time Machine
 *** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
 *** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever

@@ -93,7 +93,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::{Dataset, Pack, PackLocation};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
-    use crate::tasks::helpers::{self, pack};
+    use crate::tasks::helpers;
     use std::path::Path;
     use tempfile::tempdir;
 
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn test_get_pack_zero_entries() -> Result<(), Error> {
         // build empty pack file
-        let mut builder = pack::PackBuilder::new(65536).password("keyboard cat");
+        let mut builder = helpers::PackBuilder::new(65536).password("keyboard cat");
         let outdir = tempdir()?;
         let packfile = outdir.path().join("zero.pack");
         builder.initialize(&packfile)?;
@@ -190,7 +190,7 @@ mod tests {
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let chunks = helpers::find_file_chunks(infile, 32768)?;
         assert_eq!(chunks.len(), 2);
-        let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
+        let mut builder = helpers::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi.pack");
         builder.initialize(&packfile)?;

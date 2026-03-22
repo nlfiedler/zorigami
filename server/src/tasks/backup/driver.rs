@@ -17,7 +17,7 @@
 
 use crate::domain::entities;
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use crate::tasks::helpers::{self, pack};
+use crate::tasks::helpers;
 use crate::tasks::state::{BackupAction, StateStore};
 use anyhow::{Error, anyhow};
 use chrono::{DateTime, Utc};
@@ -41,7 +41,7 @@ pub struct BackupDriver<'a> {
     /// Preferred size of chunks in bytes.
     chunk_size: u32,
     /// Builds a pack file comprised of compressed chunks.
-    builder: pack::PackBuilder,
+    builder: helpers::PackBuilder,
     /// Tracks files and chunks in the current pack.
     record: PackRecord,
     /// Map of file checksum to the chunks it contains that have not yet been
@@ -77,7 +77,7 @@ impl<'a> BackupDriver<'a> {
             stores,
             stop_time,
             chunk_size,
-            builder: pack::PackBuilder::new(target_size).password(passphrase),
+            builder: helpers::PackBuilder::new(target_size).password(passphrase),
             record: Default::default(),
             file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),
@@ -485,7 +485,7 @@ mod tests {
         let mut record: PackRecord = Default::default();
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
         let chunks = super::helpers::find_file_chunks(infile, 16384)?;
-        let mut builder = pack::PackBuilder::new(1048576).password("secret123");
+        let mut builder = helpers::PackBuilder::new(1048576).password("secret123");
         let outdir = tempdir()?;
         let packfile = outdir.path().join("multi-pack.pack");
         builder.initialize(&packfile)?;

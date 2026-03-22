@@ -9,8 +9,7 @@ use crate::domain::entities::Dataset;
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::repositories::RecordRepository;
 use crate::tasks::backup::{OutOfTimeFailure, Performer, Request};
-use crate::tasks::helpers::crypto;
-use crate::tasks::pretty_print_duration;
+use crate::tasks::helpers;
 use crate::tasks::state::{BackupAction, StateStore, SupervisorAction};
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
@@ -399,7 +398,7 @@ fn run_dataset(
     schedule: Schedule,
     performer: Arc<dyn Performer>,
 ) {
-    let passphrase = crypto::get_passphrase();
+    let passphrase = helpers::get_passphrase();
     info!("dataset {} to be backed up", &dataset.id);
     let start_time = SystemTime::now();
     let stop_time = schedule.stop_time(Utc::now());
@@ -411,7 +410,7 @@ fn run_dataset(
         Ok(Some(checksum)) => {
             let end_time = SystemTime::now();
             let time_diff = end_time.duration_since(start_time);
-            let pretty_time = pretty_print_duration(time_diff);
+            let pretty_time = helpers::pretty_print_duration(time_diff);
             info!("created new snapshot {}", &checksum);
             info!(
                 "dataset {} backup complete after {}",

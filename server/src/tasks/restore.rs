@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use crate::tasks::helpers::pack;
+use crate::tasks::helpers;
 use crate::tasks::state::{RestorerAction, StateStore};
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
@@ -663,7 +663,7 @@ impl FileRestorerImpl {
             stores.retrieve_pack(&saved_pack.locations, &archive)?;
             // unpack the contents
             verify_pack_digest(pack_digest, &archive)?;
-            pack::extract_pack(&archive, workspace, Some(passphrase))?;
+            helpers::extract_pack(&archive, workspace, Some(passphrase))?;
             debug!("pack extracted");
             fs::remove_file(archive)?;
             // remember this pack as being downloaded
@@ -866,7 +866,7 @@ mod tests {
     use crate::domain::entities::{Dataset, Tree, TreeEntry};
     use crate::domain::repositories::MockRecordRepository;
     use crate::tasks;
-    use crate::tasks::helpers::crypto;
+    use crate::tasks::helpers;
     use crate::tasks::state::StateStoreImpl;
     use std::io;
     use std::str::FromStr;
@@ -941,7 +941,7 @@ mod tests {
             .withf(|digest| digest.to_string() == "sha1-cafebabe")
             .returning(move |_| Ok(Some(tree.clone())));
 
-        let passphrase = crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
 
         //
         // Debugging the mocks can be tricky with the restorer running on a
@@ -1079,7 +1079,7 @@ mod tests {
         let sut = RestorerImpl::new(state, factory);
         let result = sut.start(repo.clone());
         assert!(result.is_ok());
-        let passphrase = crypto::get_passphrase();
+        let passphrase = helpers::get_passphrase();
         let result = sut.enqueue(tasks::restore::Request::new(
             roottree_sha1,
             String::from("fixtures"),

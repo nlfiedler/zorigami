@@ -112,7 +112,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::{Checksum, Chunk, Dataset, File, Pack, PackLocation};
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
-    use crate::tasks::helpers::pack;
+    use crate::tasks::helpers;
     use std::path::Path;
     use tempfile::tempdir;
 
@@ -172,7 +172,7 @@ mod tests {
     fn test_scan_packs_single_chunk() -> Result<(), Error> {
         // build pack file containing a file with one chunk
         let infile = Path::new("../test/fixtures/lorem-ipsum.txt");
-        let mut builder = pack::PackBuilder::new(1048576).password("keyboard cat");
+        let mut builder = helpers::PackBuilder::new(1048576).password("keyboard cat");
         let outdir = tempdir()?;
         let packfile = outdir.path().join("single.pack");
         // chunk1 digest is also the file digest
