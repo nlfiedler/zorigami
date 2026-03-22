@@ -47,6 +47,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
     }
 }
 
+#[derive(Debug)]
 pub struct Params {
     /// Unique identifier of this dataset.
     id: String,

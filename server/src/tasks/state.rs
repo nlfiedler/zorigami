@@ -296,13 +296,15 @@ pub enum RestorerAction {
 ///
 /// The state of the backup process for a particular dataset.
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BackupState {
-    start_time: DateTime<Utc>,
+    /// Start time; will be none if the backup has not yet started.
+    start_time: Option<DateTime<Utc>>,
+    /// End time; will be none if the backup has not completed.
     end_time: Option<DateTime<Utc>>,
     /// Number of files that changed in this snapshot.
     changed_files: u64,
-    /// Number of pack files uploaded so far.
+    /// Number of packs uploaded so far.
     packs_uploaded: u64,
     /// Number of files uploaded so far.
     files_uploaded: u64,
@@ -314,25 +316,9 @@ pub struct BackupState {
     stop_requested: bool,
 }
 
-impl Default for BackupState {
-    fn default() -> Self {
-        Self {
-            start_time: Utc::now(),
-            end_time: None,
-            changed_files: 0,
-            packs_uploaded: 0,
-            files_uploaded: 0,
-            bytes_uploaded: 0,
-            error_msg: None,
-            paused: false,
-            stop_requested: false,
-        }
-    }
-}
-
 impl BackupState {
     /// Return the start time for the backup of this dataset.
-    pub fn start_time(&self) -> DateTime<Utc> {
+    pub fn start_time(&self) -> Option<DateTime<Utc>> {
         self.start_time
     }
 
@@ -475,7 +461,11 @@ impl Reducer<BackupAction> for State {
     fn reduce(&mut self, action: BackupAction) {
         match action {
             BackupAction::Start(key) => {
-                self.backups.insert(key, BackupState::default());
+                let bup = BackupState {
+                    start_time: Some(Utc::now()),
+                    ..Default::default()
+                };
+                self.backups.insert(key, bup);
             }
             BackupAction::Stop(key) => {
                 if let Some(record) = self.backups.get_mut(&key) {
@@ -577,11 +567,11 @@ impl State {
     }
 
     /// Retrieve the backup state for the named dataset.
-    pub fn backups(&self, dataset: &str) -> Option<&BackupState> {
+    pub fn backups(&self, dataset: &str) -> BackupState {
         if self.backups.contains_key(dataset) {
-            Some(&self.backups[dataset])
+            self.backups[dataset].clone()
         } else {
-            None
+            BackupState::default()
         }
     }
 }
@@ -626,10 +616,9 @@ mod tests {
         sut.backup_event(BackupAction::UploadFiles(key.to_owned(), 2));
         sut.backup_event(BackupAction::UploadFiles(key.to_owned(), 3));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert_eq!(backup.packs_uploaded(), 2);
         assert_eq!(backup.files_uploaded(), 5);
-        assert!(sut.get_state().backups("foobar").is_none());
     }
 
     #[test]
@@ -639,7 +628,7 @@ mod tests {
         sut.backup_event(BackupAction::Start(key.to_owned()));
         sut.backup_event(BackupAction::Error(key.to_owned(), String::from("oh no")));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert!(backup.had_error());
         assert_eq!(backup.error_message(), Some(String::from("oh no")));
         assert!(!backup.is_paused());
@@ -652,7 +641,7 @@ mod tests {
         sut.backup_event(BackupAction::Start(key.to_owned()));
         sut.backup_event(BackupAction::Pause(key.to_owned()));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert!(!backup.had_error());
         assert!(backup.is_paused());
     }
@@ -664,7 +653,7 @@ mod tests {
         sut.backup_event(BackupAction::Start(key.to_owned()));
         sut.backup_event(BackupAction::Finish(key.to_owned()));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert!(backup.end_time().is_some());
     }
 
@@ -677,13 +666,13 @@ mod tests {
         sut.backup_event(BackupAction::Pause(key.to_owned()));
         sut.backup_event(BackupAction::Finish(key.to_owned()));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert!(backup.had_error());
         assert!(backup.is_paused());
         assert!(backup.end_time().is_some());
         sut.backup_event(BackupAction::Restart(key.to_owned()));
         let state = sut.get_state();
-        let backup = state.backups(key).unwrap();
+        let backup = state.backups(key);
         assert!(!backup.had_error());
         assert!(!backup.is_paused());
         assert!(backup.end_time().is_none());
@@ -766,7 +755,7 @@ mod tests {
         sut.backup_event(BackupAction::Finish("dataset".into()));
         sut.wait_for_backup(BackupAction::Finish("dataset".into()));
         let state = sut.get_state();
-        let backup = state.backups("dataset").unwrap();
+        let backup = state.backups("dataset");
         assert!(!backup.had_error());
         assert!(!backup.is_paused());
         assert!(backup.end_time().is_some());

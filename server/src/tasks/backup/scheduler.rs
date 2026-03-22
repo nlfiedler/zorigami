@@ -317,8 +317,8 @@ impl Handler<StartBackup> for BackupRunner {
 ///
 fn can_run(state: &Arc<dyn StateStore>, set: &Dataset) -> Result<Option<Schedule>, Error> {
     let redux = state.get_state();
-    let backup_state = redux.backups(&set.id);
-    if let Some(backup) = backup_state {
+    let backup = redux.backups(&set.id);
+    if backup.start_time().is_some() {
         // not errored, not poused, and no end time means it is still running
         if !backup.had_error() && !backup.is_paused() && backup.end_time().is_none() {
             debug!("dataset {} still in progress", &set.id);
@@ -352,7 +352,7 @@ fn should_run(
             None
         };
         let redux = state.get_state();
-        let backup_state = redux.backups(&set.id);
+        let backup = redux.backups(&set.id);
         for schedule in set.schedules.iter() {
             // consider if backup is overdue based on snapshot
             let mut maybe_run = if let Some(et) = end_time {
@@ -361,7 +361,7 @@ fn should_run(
                 schedule.within_range(Utc::now())
             };
             // consider how the backup state may affect the decision
-            if let Some(backup) = backup_state {
+            if backup.start_time().is_some() {
                 // ignore the error state, it does not override the schedule
                 if !backup.had_error() {
                     if let Some(et) = backup.end_time() {
@@ -706,14 +706,14 @@ mod tests {
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // start with a clean state, as if the app has restarted
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        assert!(state.get_state().backups(&dataset_id).is_none());
+        assert!(state.get_state().backups(&dataset_id).start_time().is_none());
         // act
         let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
         // and now there is backup state showing that it restarted
-        assert!(state.get_state().backups(&dataset_id).is_some());
+        assert!(state.get_state().backups(&dataset_id).start_time().is_some());
     }
 
     #[test]
@@ -739,14 +739,14 @@ mod tests {
         let repo: Arc<dyn RecordRepository> = Arc::new(mock);
         // start with a clean state, as if the app has restarted
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        assert!(state.get_state().backups(&dataset_id).is_none());
+        assert!(state.get_state().backups(&dataset_id).start_time().is_none());
         // act
         let result = should_run(&repo, &state, &dataset_clone);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
         // the backup should not run and there is still no state
-        assert!(state.get_state().backups(&dataset_id).is_none());
+        assert!(state.get_state().backups(&dataset_id).start_time().is_none());
     }
 
     #[test]

@@ -1,25 +1,59 @@
 //
 // Copyright (c) 2026 Nathan Fiedler
 //
-import { createResource, Match, Suspense, Switch } from 'solid-js';
+import { createResource, For, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  A,
+  action,
+  useAction,
+  useSubmission,
+  type Submission
+} from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
-import { type Query } from 'zorigami/generated/graphql.ts';
+import {
+  type BackupState,
+  type Dataset,
+  type Query,
+  type QuerySnapshotCountArgs,
+  type Schedule,
+  type Mutation,
+  type MutationStartBackupArgs,
+  type MutationStopBackupArgs
+} from 'zorigami/generated/graphql.ts';
 
 const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
   query {
     datasets {
       id
+      basepath
+      status {
+        status
+      }
+      latestSnapshot {
+        fileCount
+      }
+      schedules {
+        frequency
+        timeRange {
+          startTime
+          stopTime
+        }
+        weekOfMonth
+        dayOfWeek
+        dayOfMonth
+      }
     }
   }
 `;
 
-function Home() {
+export function Home() {
   const client = useApolloClient();
   const [datasetsQuery, { refetch }] = createResource(async () => {
     const { data } = await client.query({ query: ALL_DATASETS });
     return data;
   });
+
   return (
     <div class="container mt-4">
       <Suspense fallback={'...'}>
@@ -27,305 +61,214 @@ function Home() {
           <Match when={datasetsQuery()?.datasets.length === 0}>
             <NoDatasetsHelp />
           </Match>
+          <Match when={datasetsQuery()?.datasets}>
+            <div class="container">
+              <div class="grid is-col-min-20">
+                <For each={datasetsQuery()?.datasets}>
+                  {(item) => (
+                    <div class="cell">
+                      <DatasetCard dataset={item} />
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Match>
         </Switch>
       </Suspense>
     </div>
   );
 }
 
-export default Home;
+interface DatasetCardProps {
+  dataset: Dataset;
+}
 
-// use crate::domain::entities::schedule::Schedule;
-// use crate::domain::entities::{Checksum, Dataset, Snapshot, SnapshotRetention};
-// use crate::preso::leptos::nav;
-// use chrono::{DateTime, Utc};
-// use leptos::prelude::*;
+function DatasetCard(props: DatasetCardProps) {
+  return (
+    <div class="card">
+      <header class="card-header">
+        <p class="card-header-title">Dataset</p>
+        <A href={`/datasets/${props.dataset.id}`}>
+          <button class="card-header-icon">
+            <span class="icon">
+              <i class="fas fa-angle-right"></i>
+            </span>
+          </button>
+        </A>
+      </header>
+      <div class="card-content">
+        <table class="table is-striped is-fullwidth" style="text-align: start">
+          <tbody>
+            <tr>
+              <td>Base Path</td>
+              <td>{props.dataset.basepath}</td>
+            </tr>
+            <tr>
+              <td>Status</td>
+              <td>{props.dataset.status.status}</td>
+            </tr>
+            <Schedules schedules={props.dataset.schedules} />
+            <Show when={props.dataset.status.startTime}>
+              <tr>
+                <td>Started</td>
+                <td>
+                  {new Date(props.dataset.status.startTime).toLocaleString()}
+                </td>
+              </tr>
+            </Show>
+            <Show
+              when={
+                props.dataset.status.status === 'RUNNING' &&
+                props.dataset.status.stopRequested
+              }
+            >
+              <tr>
+                <td>Stop Requested</td>
+                <td>backup will stop soon...</td>
+              </tr>
+            </Show>
+            <Show when={props.dataset.status.endTime}>
+              <tr>
+                <td>Finished</td>
+                <td>
+                  {new Date(props.dataset.status.endTime).toLocaleString()}
+                </td>
+              </tr>
+            </Show>
+            <Show when={props.dataset.latestSnapshot?.fileCount}>
+              <tr>
+                <td>Total Files</td>
+                <td>{props.dataset.latestSnapshot?.fileCount}</td>
+              </tr>
+            </Show>
+            <Show when={props.dataset.status.changedFiles}>
+              <tr>
+                <td>Files Changed</td>
+                <td>{props.dataset.status.changedFiles}</td>
+              </tr>
+            </Show>
+            <Show when={props.dataset.status.errorMessage}>
+              <tr>
+                <td>Error Message</td>
+                <td>{props.dataset.status.errorMessage}</td>
+              </tr>
+            </Show>
+            <SnapshotCount datasetId={props.dataset.id} />
+          </tbody>
+        </table>
+      </div>
+      <footer class="card-footer">
+        <StartButton
+          datasetId={props.dataset.id}
+          status={props.dataset.status}
+        />
+        <StopButton
+          datasetId={props.dataset.id}
+          status={props.dataset.status}
+        />
+      </footer>
+    </div>
+  );
+}
 
-// #[component]
-// pub fn HomePage() -> impl IntoView {
-//     let datasets_resource = Resource::new(
-//         || {},
-//         |_| async move {
-//             // sort the datasets by identifier for consistent ordering
-//             let mut results = super::datasets().await;
-//             if let Ok(data) = results.as_mut() {
-//                 data.sort_by(|a, b| a.id.cmp(&b.id));
-//             }
-//             results
-//         },
-//     );
+// Convert seconds-since-midnight into a time string for input field.
+function formatTime(value: number): string {
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
 
-//     view! {
-//         <nav::NavBar />
+function formatSchedule(schedule: Schedule) {
+  if (schedule.frequency === 'HOURLY') {
+    return 'hourly';
+  } else if (schedule.frequency === 'DAILY') {
+    if (schedule.timeRange) {
+      if (schedule.timeRange.startTime && schedule.timeRange.stopTime) {
+        const start = formatTime(schedule.timeRange.startTime);
+        const stop = formatTime(schedule.timeRange.stopTime);
+        return `daily from ${start} until ${stop}`;
+      } else if (schedule.timeRange.startTime) {
+        const start = formatTime(schedule.timeRange.startTime);
+        return `daily from ${start}`;
+      }
+    }
+    return 'daily';
+  }
+  // WEEKLY and MONTHLY are not yet supported in the web interface
+  return '(unsupported)';
+}
 
-//         <Transition fallback=move || {
-//             view! { "Loading..." }
-//         }>
-//             {move || {
-//                 datasets_resource
-//                     .get()
-//                     .map(|result| match result {
-//                         Err(err) => {
-//                             view! { <span>{move || format!("Error: {}", err)}</span> }.into_any()
-//                         }
-//                         Ok(datasets) => {
-//                             if datasets.is_empty() {
-//                                 view! { <NoDatasetsHelp /> }.into_any()
-//                             } else {
-//                                 let stored = StoredValue::new(datasets);
-//                                 view! {
-//                                     <div class="container">
-//                                         <div class="grid is-col-min-20">
-//                                             <For
-//                                                 each=move || {
-//                                                     stored.get_value().into_iter().map(|s| StoredValue::new(s))
-//                                                 }
-//                                                 key=|s| s.get_value().id
-//                                                 let:dataset
-//                                             >
-//                                                 <div class="cell">
-//                                                     <DatasetCard dataset />
-//                                                 </div>
-//                                             </For>
-//                                         </div>
-//                                     </div>
-//                                 }
-//                                     .into_any()
-//                             }
-//                         }
-//                     })
-//             }}
-//         </Transition>
-//     }
-// }
+interface SchedulesProps {
+  schedules: Schedule[];
+}
 
-// #[component]
-// fn DatasetCard(dataset: StoredValue<Dataset>) -> impl IntoView {
-//     let fmt_retention = |rt: SnapshotRetention| -> String {
-//         match rt {
-//             SnapshotRetention::ALL => String::from("All Snapshots"),
-//             SnapshotRetention::COUNT(c) => format!("Retain {} snapshots", c),
-//             SnapshotRetention::DAYS(d) => format!("Retain {} days", d),
-//         }
-//     };
-//     let fmt_schedule = |schedule: Option<&Schedule>| -> String {
-//         if let Some(value) = schedule {
-//             value.to_string()
-//         } else {
-//             String::from("not scheduled")
-//         }
-//     };
-//     let latest_snapshot = StoredValue::new(dataset.get_value().snapshot);
+function Schedules(props: SchedulesProps) {
+  return (
+    <For each={props.schedules}>
+      {(item, index) => (
+        <tr>
+          <td>Schedule {index() == 0 ? '' : index() + 1}</td>
+          <td>{formatSchedule(item)}</td>
+        </tr>
+      )}
+    </For>
+  );
+}
 
-//     view! {
-//         <div class="card">
-//             <header class="card-header">
-//                 <p class="card-header-title">Dataset</p>
-//                 <a href=move || format!("/datasets/{}", dataset.get_value().id)>
-//                     <button class="card-header-icon">
-//                         <span class="icon">
-//                             <i class="fas fa-angle-right"></i>
-//                         </span>
-//                     </button>
-//                 </a>
-//             </header>
-//             <div class="card-content">
-//                 <table class="table is-striped is-fullwidth" style="text-align: start">
-//                     <tbody>
-//                         <tr>
-//                             <td>Base Path</td>
-//                             <td>{dataset.get_value().basepath.display().to_string()}</td>
-//                         </tr>
-//                         <tr>
-//                             <td>Schedule</td>
-//                             <td>{fmt_schedule(dataset.get_value().schedules.first())}</td>
-//                         </tr>
-//                         <DatasetStatus dataset />
-//                         <SnapshotSummary digest=latest_snapshot />
-//                         <SnapshotCount dataset />
-//                         <tr>
-//                             <td>Retention Policy</td>
-//                             <td>{fmt_retention(dataset.get_value().retention)}</td>
-//                         </tr>
-//                     </tbody>
-//                 </table>
-//             </div>
-//             <footer class="card-footer">
-//                 <StartBackupButton />
-//                 <a href="#" class="card-footer-item">
-//                     <span class="icon">
-//                         <i class="fa-solid fa-scissors" aria-hidden="true"></i>
-//                     </span>
-//                     <span>Prune Snapshots</span>
-//                 </a>
-//             </footer>
-//         </div>
-//     }
-// }
+const SNAPSHOT_COUNTS: TypedDocumentNode<Query, QuerySnapshotCountArgs> = gql`
+  query CountSnapshots($id: String!) {
+    snapshotCount(id: $id) {
+      count
+      newest
+      oldest
+    }
+  }
+`;
 
-// #[component]
-// fn DatasetStatus(dataset: StoredValue<Dataset>) -> impl IntoView {
-//     let status_resource = Resource::new(
-//         move || dataset.get_value(),
-//         |ds| async move { super::dataset_status(ds.id).await },
-//     );
-//     view! {
-//         <Transition fallback=move || {
-//             view! {
-//                 <tr>
-//                     <td>Status</td>
-//                     <td>"Loading..."</td>
-//                 </tr>
-//             }
-//         }>
-//             {move || {
-//                 status_resource
-//                     .get()
-//                     .map(|result| match result {
-//                         Err(err) => {
-//                             view! {
-//                                 <tr>
-//                                     <td>Status</td>
-//                                     <td>{move || format!("Error: {}", err)}</td>
-//                                 </tr>
-//                             }
-//                                 .into_any()
-//                         }
-//                         Ok(status) => {
-//                             view! {
-//                                 <tr>
-//                                     <td>Status</td>
-//                                     <td>{status}</td>
-//                                 </tr>
-//                             }
-//                                 .into_any()
-//                         }
-//                     })
-//             }}
-//         </Transition>
-//     }
-// }
+interface SnapshotCountProps {
+  datasetId: string;
+}
 
-// #[component]
-// fn SnapshotSummary(digest: StoredValue<Option<Checksum>>) -> impl IntoView {
-//     let snapshot_resource = Resource::new(
-//         move || digest.get_value(),
-//         |d| async move { super::get_snapshot(d).await },
-//     );
-//     let count_files = move |snapshot: StoredValue<Snapshot>| -> String {
-//         format!("{} files", snapshot.get_value().file_counts.total_files())
-//     };
+function SnapshotCount(props: SnapshotCountProps) {
+  const client = useApolloClient();
+  const [countsQuery] = createResource(async () => {
+    const { data } = await client.query({
+      query: SNAPSHOT_COUNTS,
+      variables: {
+        id: props.datasetId
+      }
+    });
+    return data;
+  });
 
-//     view! {
-//         <Transition fallback=move || {
-//             view! {
-//                 <tr>
-//                     <td>File Count</td>
-//                     <td>"Loading..."</td>
-//                 </tr>
-//             }
-//         }>
-//             {move || {
-//                 snapshot_resource
-//                     .get()
-//                     .map(|result| match result {
-//                         Err(err) => {
-//                             view! {
-//                                 <tr>
-//                                     <td>File Count</td>
-//                                     <td>{move || format!("Error: {}", err)}</td>
-//                                 </tr>
-//                             }
-//                                 .into_any()
-//                         }
-//                         Ok(maybe_snapshot) => {
-//                             match maybe_snapshot {
-//                                 Some(snapshot) => {
-//                                     let snapshot = StoredValue::new(snapshot);
-//                                     view! {
-//                                         <tr>
-//                                             <td>File Count</td>
-//                                             <td>{count_files(snapshot)}</td>
-//                                         </tr>
-//                                     }
-//                                         .into_any()
-//                                 }
-//                                 None => {
-//                                     view! {
-//                                         <tr>
-//                                             <td>File Count</td>
-//                                             <td>0</td>
-//                                         </tr>
-//                                     }
-//                                         .into_any()
-//                                 }
-//                             }
-//                         }
-//                     })
-//             }}
-//         </Transition>
-//     }
-// }
-
-// #[component]
-// fn SnapshotCount(dataset: StoredValue<Dataset>) -> impl IntoView {
-//     let count_resource = Resource::new(
-//         move || dataset.get_value(),
-//         |ds| async move { super::count_snapshots(ds.id).await },
-//     );
-//     let fmt_datetime = |maybe_dt: Option<DateTime<Utc>>| {
-//         if let Some(dt) = maybe_dt {
-//             let local = super::convert_utc_to_local(dt);
-//             local.format("%Y-%m-%d %H:%M").to_string()
-//         } else {
-//             String::from("none")
-//         }
-//     };
-
-//     view! {
-//         <Transition fallback=move || {
-//             view! {
-//                 <tr>
-//                     <td>Status</td>
-//                     <td>"Loading..."</td>
-//                 </tr>
-//             }
-//         }>
-//             {move || {
-//                 count_resource
-//                     .get()
-//                     .map(|result| match result {
-//                         Err(err) => {
-//                             view! {
-//                                 <tr>
-//                                     <td>Status</td>
-//                                     <td>{move || format!("Error: {}", err)}</td>
-//                                 </tr>
-//                             }
-//                                 .into_any()
-//                         }
-//                         Ok(counts) => {
-//                             view! {
-//                                 <tr>
-//                                     <td>Snapshot Count</td>
-//                                     <td>{counts.count}</td>
-//                                 </tr>
-//                                 <tr>
-//                                     <td>Latest Snapshot</td>
-//                                     <td>{fmt_datetime(counts.newest)}</td>
-//                                 </tr>
-//                                 <tr>
-//                                     <td>Oldest Snapshot</td>
-//                                     <td>{fmt_datetime(counts.oldest)}</td>
-//                                 </tr>
-//                             }
-//                                 .into_any()
-//                         }
-//                     })
-//             }}
-//         </Transition>
-//     }
-// }
+  return (
+    <Suspense fallback={'...'}>
+      <tr>
+        <td>Snapshot Count</td>
+        <td>{countsQuery()?.snapshotCount.count}</td>
+      </tr>
+      <Show when={countsQuery()?.snapshotCount.newest}>
+        <tr>
+          <td>Latest Snapshot</td>
+          <td>
+            {new Date(countsQuery()?.snapshotCount.newest).toLocaleString()}
+          </td>
+        </tr>
+      </Show>
+      <Show when={countsQuery()?.snapshotCount.oldest}>
+        <tr>
+          <td>Oldest Snapshot</td>
+          <td>
+            {new Date(countsQuery()?.snapshotCount.oldest).toLocaleString()}
+          </td>
+        </tr>
+      </Show>
+    </Suspense>
+  );
+}
 
 const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
   query {
@@ -371,8 +314,8 @@ function NoDatasetsHelp() {
               <p>No Data Sets</p>
             </div>
             <div class="message-body">
-              Visit the <a href="/datasets">Datasets</a>{' '}
-              page to configure a dataset to be backed up.
+              Visit the <a href="/datasets">Datasets</a> page to configure a
+              dataset to be backed up.
             </div>
           </article>
         </Match>
@@ -381,19 +324,104 @@ function NoDatasetsHelp() {
   );
 }
 
-// #[component]
-// fn StartBackupButton() -> impl IntoView {
-//     // TODO: consider how start/stop button could use an `Action` to wait on a running backup
-//     //       * if no backup running, show ~Start~
-//     //       * if backup running, wait for finish, action is ~pending~, button shows ~Stop~
-//     //       * when action is completed, button shows ~Start~ again
-//     // TODO: possibly use a timer to refresh the button based on backup status
-//     view! {
-//         <a href="#" class="card-footer-item">
-//             <span class="icon">
-//                 <i class="fa-solid fa-play" aria-hidden="true"></i>
-//             </span>
-//             <span>Start Backup</span>
-//         </a>
-//     }
-// }
+const START_BACKUP: TypedDocumentNode<Mutation, MutationStartBackupArgs> = gql`
+  mutation StartBackup($id: String!) {
+    startBackup(id: $id)
+  }
+`;
+
+interface StartButtonProps {
+  datasetId: string;
+  status: BackupState;
+}
+
+function StartButton(props: StartButtonProps) {
+  const client = useApolloClient();
+  const startAction = action(
+    async (): Promise<{ ok: boolean }> => {
+      await client.mutate({
+        mutation: START_BACKUP,
+        variables: {
+          id: props.datasetId
+        }
+      });
+      return { ok: true };
+    },
+    {
+      name: 'startBackup',
+      onComplete: (s: Submission<any, any>) => {
+        if (s.error) {
+          console.error('start backup failed:', s.error);
+        }
+      }
+    }
+  );
+  const startStart = useAction(startAction);
+  const startSubmission = useSubmission(startAction);
+
+  return (
+    <button
+      class="button card-footer-item"
+      disabled={props.status.status === 'RUNNING' || startSubmission.pending}
+      on:click={() => startStart()}
+    >
+      <span class="icon">
+        <i class="fa-solid fa-play"></i>
+      </span>
+      <span>Start Backup</span>
+    </button>
+  );
+}
+
+const STOP_BACKUP: TypedDocumentNode<Mutation, MutationStopBackupArgs> = gql`
+  mutation StopBackup($id: String!) {
+    stopBackup(id: $id)
+  }
+`;
+
+interface StopButtonProps {
+  datasetId: string;
+  status: BackupState;
+}
+
+function StopButton(props: StopButtonProps) {
+  const client = useApolloClient();
+  const stopAction = action(
+    async (): Promise<{ ok: boolean }> => {
+      await client.mutate({
+        mutation: STOP_BACKUP,
+        variables: {
+          id: props.datasetId
+        }
+      });
+      return { ok: true };
+    },
+    {
+      name: 'stopBackup',
+      onComplete: (s: Submission<any, any>) => {
+        if (s.error) {
+          console.error('stop backup failed:', s.error);
+        }
+      }
+    }
+  );
+  const startStop = useAction(stopAction);
+  const stopSubmission = useSubmission(stopAction);
+
+  return (
+    <button
+      class="button card-footer-item"
+      disabled={
+        props.status.status !== 'RUNNING' ||
+        props.status.stopRequested ||
+        stopSubmission.pending
+      }
+      on:click={() => startStop()}
+    >
+      <span class="icon">
+        <i class="fa-solid fa-stop"></i>
+      </span>
+      <span>Stop Backup</span>
+    </button>
+  );
+}

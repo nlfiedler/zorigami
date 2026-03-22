@@ -1,25 +1,40 @@
 * Tasks
+** TODO [#A] Centralize backup and restore into a single supervisor and priority queue
+*** design objectives
+**** app state becomes informative only, does not actually change anything
+**** use cases enqueue requests into a single priority queue (higher beats lower)
+**** requests and priorities
+| Request      | Priority | Principle                                                    |
+|--------------+----------+--------------------------------------------------------------|
+| Stop backup  |       30 | must be able to stop a backup in order for restore to happen |
+| Restore      |       20 | must process restore operations before doing more backups    |
+| Prune        |       10 | backup cannot start until pruning is complete                |
+| Start backup |        1 | when there is nothing else to do, then backup can start      |
+*** TODO implementation [0/9]
+- [ ] draw on paper the overall design for clarity
+- [ ] find a priority queue implementation
+- [ ] define request objects for start, stop, restore
+- [ ] implement a single actix supervisor for everything
+- [ ] move restore functionality into the main supervisor
+- [ ] remove the restorer supervisor
+- [ ] move pruning logic into the =tasks= module
+- [ ] incorporate snapshot pruning as a request to be processed
+- [ ] streamline the app state as appropriate
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
-*** DONE delete temp database and refine initial setup experience [9/9]
-- [X] home page: if no stores, guide toward defining a pack store, mention database restore, link to restore page
-- [X] home page: if no data sets, guide toward defining a data set
-- [X] store page: when there are no stores, provide instruction
-- [X] dataset page: when there are no stores, provide instruction
-- [X] dataset page: when there are no datasets, provide instruction
-- [X] snapshots page: when there are no stores, link to stores page
-- [X] snapshots page: when there are no datasets, link to datasets page
-- [X] snapshots page: when there are no snapshots, indicate that something will happen eventually
-- [X] restore page: when there are no stores, suggest going to stores page to define some stores
-*** TODO home page [0/9]
-- [ ] for each dataset, card header arrow icon navigates to =/datasets= page
+*** TODO home page [8/11]
+- [X] for each dataset, card header arrow icon navigates to =/datasets= page
+- [X] for each dataset, show basic status (running, paused, finished, etc)
+- [X] for each dataset, if backup started, show start time
+- [X] for each dataset, if backup finished, show completion time
+- [X] for each dataset, if backup finished, show # of changed files
+- [X] for each dataset, if backup running and stop requested, show that
+- [X] for each dataset, if error, show message
+- [X] for each dataset, show oldest, newest snapshot date-time, count
 - [ ] for each dataset, show schedule frequency
-- [ ] for each dataset, show retention policy
-- [ ] for each dataset, show status (running, paused, finished, etc)
-- [ ] use interval to refresh every few seconds
-- [ ] for each dataset, show how many snapshots exist
-- [ ] for each dataset, show date/time of oldest snapshot
-- [ ] for each dataset, show date/time of most recent snapshot
 - [ ] for each dataset, provide button to start/stop backup
+- [ ] use interval to refresh every few seconds
+*** TODO make the ~Restore~ page auto-refresh a checkbox option
+*** TODO all of the GraphQL mutations that return =Boolean= should return =String=
 *** TODO look for ~issues~ in browser tools on every page
 *** TODO deployment [0/1]
 - [ ] update Dockerfile; copy from tanuki
@@ -132,9 +147,6 @@
 **** TODO finish writing =verify_snapshot= use case tests
 **** TODO add GraphQL query to invoke =VerifySnapshot= usecase
 ** Improve backup reliability
-*** consider capturing all failed file backups in the database
-**** attempt to process the failed files during subsequent backups
-*** run a verification step after the backup is complete
 *** add some ~debug~ logging at regular intervals during the scan phase
 *** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
 **** should show the start time, not simply ~still running~

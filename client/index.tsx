@@ -7,7 +7,7 @@ import { Router, Route } from '@solidjs/router';
 import './assets/main.scss';
 import { ApolloProvider } from './apollo-provider.tsx';
 import Navbar from './components/navbar.tsx';
-import Home from './pages/home.tsx';
+import { Home } from './pages/home.tsx';
 import {
   SnapshotsPage,
   SnapshotHelp,
@@ -16,8 +16,8 @@ import {
 } from './pages/snapshots.tsx';
 import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
-import Restore from './pages/restore.tsx';
-import Settings from './pages/settings.tsx';
+import { Restore } from './pages/restore.tsx';
+import { Settings } from './pages/settings.tsx';
 
 function App(props: any) {
   return (

@@ -17,7 +17,7 @@ const CONFIGURATION: TypedDocumentNode<Query, Record<string, never>> = gql`
   }
 `;
 
-function Settings() {
+export function Settings() {
   const client = useApolloClient();
   const [confQuery] = createResource(async () => {
     const { data } = await client.query({ query: CONFIGURATION });
@@ -43,5 +43,3 @@ function Settings() {
     </Suspense>
   );
 }
-
-export default Settings;

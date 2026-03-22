@@ -144,17 +144,26 @@ scalar TreeReference
 
 "Detailed information of the state of the backup."
 type BackupState {
-  "True if the running backup has been paused."
-  paused: Boolean!
+  "Status of the backup."
+  status: BackupStatus!
   "True if the running backup received a request to stop prematurely."
   stopRequested: Boolean!
-  "Number of files that changed in this snapshot."
+  "Start time for the backup of this dataset, if started."
+  startTime: DateTime
+  "Completion time for the backup of this dataset, if completed."
+  endTime: DateTime
+  "Error for the most this backup, if any."
+  errorMessage: String
+  "Number of files that changed in this backup."
   changedFiles: BigInt!
   "Number of pack files uploaded so far."
   packsUploaded: BigInt!
   "Number of files uploaded so far."
   filesUploaded: BigInt!
-  "Number of bytes uploaded so far, which may change more often than the"
+  """
+    Number of bytes uploaded so far, which may change more often than the
+    number of files in the event that a very large file is being uploaded.
+  """
   bytesUploaded: BigInt!
 }
 
@@ -180,12 +189,8 @@ type Dataset {
   workspace: String!
   "Set of schedules that apply to this dataset."
   schedules: [Schedule!]!
-  "Status of the most recent snapshot for this dataset."
-  status: BackupStatus!
-  "Detailed state of the backup for this dataset."
-  backupState: BackupState
-  "Error message for the most recent snapshot, if any."
-  errorMessage: String
+  "Detailed status of the latest backup for this dataset."
+  status: BackupState!
   "Most recent snapshot for this dataset, if any."
   latestSnapshot: Snapshot
   "Preferred byte length of pack files."
@@ -352,6 +357,8 @@ type Query {
   restores: [RestoreRequest!]!
   "Retrieve all snapshots for a given data set in chronological order."
   snapshots(id: String!): [Snapshot!]!
+  "Return the newest and oldest snapshot dates and the total count."
+  snapshotCount(id: String!): SnapshotCount!
   "Retrieve a specific snapshot."
   snapshot(digest: Checksum!): Snapshot
   "Retrieve all pack store definitions."
@@ -446,6 +453,16 @@ type Snapshot {
   fileCounts: FileCounts!
   "Reference to the tree containing all of the files."
   tree: Checksum!
+}
+
+"Oldest and newest snapshot dates, total number of snapshots."
+type SnapshotCount {
+  "Number of existing snapshots."
+  count: BigInt!
+  "Most recent snapshot date-time."
+  newest: DateTime
+  "Earliest available snapshot date-time."
+  oldest: DateTime
 }
 
 type SnapshotRetention {

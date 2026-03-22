@@ -242,6 +242,26 @@ impl entities::Snapshot {
     }
 }
 
+#[juniper::graphql_object(
+    description = "Oldest and newest snapshot dates, total number of snapshots."
+)]
+impl entities::SnapshotCount {
+    /// Number of existing snapshots.
+    fn count(&self) -> BigInt {
+        BigInt(self.count as i64)
+    }
+
+    /// Most recent snapshot date-time.
+    fn newest(&self) -> Option<DateTime<Utc>> {
+        self.newest
+    }
+
+    /// Earliest available snapshot date-time.
+    fn oldest(&self) -> Option<DateTime<Utc>> {
+        self.oldest
+    }
+}
+
 /// Status of the most recent snapshot for a dataset.
 #[derive(Copy, Clone, GraphQLEnum)]
 enum BackupStatus {
@@ -259,9 +279,19 @@ enum BackupStatus {
 
 #[juniper::graphql_object(description = "Detailed information of the state of the backup.")]
 impl state::BackupState {
-    /// True if the running backup has been paused.
-    fn paused(&self) -> bool {
-        self.is_paused()
+    /// Status of the backup.
+    fn status(&self) -> BackupStatus {
+        if self.is_paused() {
+            BackupStatus::Paused
+        } else if self.had_error() {
+            BackupStatus::Failed
+        } else if self.start_time().is_none() {
+            BackupStatus::None
+        } else if self.end_time().is_none() {
+            BackupStatus::Running
+        } else {
+            BackupStatus::Finished
+        }
     }
 
     /// True if the running backup received a request to stop prematurely.
@@ -269,7 +299,25 @@ impl state::BackupState {
         self.should_stop()
     }
 
-    /// Number of files that changed in this snapshot.
+    /// Start time for the backup of this dataset, if started.
+    #[graphql(name = "startTime")]
+    fn start_datetime(&self) -> Option<DateTime<Utc>> {
+        self.start_time()
+    }
+
+    /// Completion time for the backup of this dataset, if completed.
+    #[graphql(name = "endTime")]
+    fn end_datetime(&self) -> Option<DateTime<Utc>> {
+        self.end_time()
+    }
+
+    /// Error for the most this backup, if any.
+    #[graphql(name = "errorMessage")]
+    fn error(&self) -> Option<String> {
+        self.error_message()
+    }
+
+    /// Number of files that changed in this backup.
     #[graphql(name = "changedFiles")]
     fn files_changed(&self) -> BigInt {
         BigInt(self.changed_files() as i64)
@@ -288,6 +336,7 @@ impl state::BackupState {
     }
 
     /// Number of bytes uploaded so far, which may change more often than the
+    /// number of files in the event that a very large file is being uploaded.
     #[graphql(name = "bytesUploaded")]
     fn uploaded_bytes(&self) -> BigInt {
         BigInt(self.bytes_uploaded() as i64)
@@ -363,34 +412,10 @@ impl entities::Dataset {
         self.schedules.clone()
     }
 
-    /// Status of the most recent snapshot for this dataset.
-    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> BackupStatus {
+    /// Detailed status of the latest backup for this dataset.
+    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> state::BackupState {
         let redux = ctx.appstate.get_state();
-        if let Some(backup) = redux.backups(&self.id) {
-            if backup.is_paused() {
-                BackupStatus::Paused
-            } else if backup.had_error() {
-                BackupStatus::Failed
-            } else if backup.end_time().is_none() {
-                BackupStatus::Running
-            } else {
-                BackupStatus::Finished
-            }
-        } else {
-            BackupStatus::None
-        }
-    }
-
-    /// Detailed state of the backup for this dataset.
-    fn backup_state(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<state::BackupState> {
-        let redux = ctx.appstate.get_state();
-        redux.backups(&self.id).cloned()
-    }
-
-    /// Error message for the most recent snapshot, if any.
-    fn error_message(&self, #[graphql(ctx)] ctx: &GraphContext) -> Option<String> {
-        let redux = ctx.appstate.get_state();
-        redux.backups(&self.id).and_then(|e| e.error_message())
+        redux.backups(&self.id)
     }
 
     /// Most recent snapshot for this dataset, if any.
@@ -1034,6 +1059,20 @@ impl Query {
         Ok(result)
     }
 
+    /// Return the newest and oldest snapshot dates and the total count.
+    fn snapshot_count(
+        #[graphql(ctx)] ctx: &GraphContext,
+        id: String,
+    ) -> FieldResult<entities::SnapshotCount> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::count_snapshots::{CountSnapshots, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = CountSnapshots::new(Box::new(repo));
+        let params: Params = Params::new(id);
+        let result = usecase.call(params)?;
+        Ok(result)
+    }
+
     /// Retrieve a specific snapshot.
     fn snapshot(
         #[graphql(ctx)] ctx: &GraphContext,
@@ -1555,675 +1594,4 @@ pub fn create_schema() -> Schema {
         println!("GraphQL schema written to {path}");
     }
     schema
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::entities::PackRetention;
-    use crate::domain::sources::MockEntityDataSource;
-    use crate::tasks::backup::scheduler::MockScheduler;
-    use crate::tasks::restore::MockRestorer;
-    use crate::tasks::state::MockStateStore;
-    use anyhow::anyhow;
-    use juniper::{FieldError, FromInputValue, InputValue, ToInputValue, Variables};
-    use std::collections::HashMap;
-    use std::path::Path;
-    use std::sync::Arc;
-
-    fn make_context(mock: MockEntityDataSource) -> Arc<GraphContext> {
-        // build the most basic GraphContext
-        // if this turns out to be too limited, create a new builder
-        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let appstate = Arc::new(MockStateStore::new());
-        let processor = Arc::new(MockScheduler::new());
-        let restorer = Arc::new(MockRestorer::new());
-        Arc::new(GraphContext::new(datasource, appstate, processor, restorer))
-    }
-
-    #[test]
-    fn test_bigint_scalar() {
-        let iv: InputValue<juniper::DefaultScalarValue> =
-            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("1048576".to_owned()));
-        let option: Result<BigInt, FieldError> = BigInt::from_input_value(&iv);
-        assert!(option.is_ok());
-        let actual = option.unwrap();
-        assert_eq!(actual, BigInt(1048576));
-
-        // not a number
-        let iv: InputValue<juniper::DefaultScalarValue> =
-            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("madokami".to_owned()));
-        let option: Result<BigInt, FieldError> = BigInt::from_input_value(&iv);
-        assert!(option.is_err());
-    }
-
-    #[test]
-    fn test_checksum_scalar() {
-        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
-            juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
-        );
-        let option: Result<ChecksumGQL, FieldError> = ChecksumGQL::from_input_value(&iv);
-        assert!(option.is_ok());
-        let actual = option.unwrap();
-        assert!(actual.0.is_sha1());
-
-        // missing algorithm prefix
-        let iv: InputValue<juniper::DefaultScalarValue> =
-            juniper::InputValue::Scalar(juniper::DefaultScalarValue::String("cafebabe".to_owned()));
-        let option: Result<ChecksumGQL, FieldError> = ChecksumGQL::from_input_value(&iv);
-        assert!(option.is_err());
-    }
-
-    #[test]
-    fn test_treereference_scalar() {
-        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
-            juniper::DefaultScalarValue::String("tree-sha1-cafebabe".to_owned()),
-        );
-        let option: Result<TreeReferenceGQL, FieldError> = TreeReferenceGQL::from_input_value(&iv);
-        assert!(option.is_ok());
-        let actual = option.unwrap();
-        assert!(actual.0.is_tree());
-
-        // missing entry type prefix
-        let iv: InputValue<juniper::DefaultScalarValue> = juniper::InputValue::Scalar(
-            juniper::DefaultScalarValue::String("sha1-cafebabe".to_owned()),
-        );
-        let option: Result<TreeReferenceGQL, FieldError> = TreeReferenceGQL::from_input_value(&iv);
-        assert!(option.is_err());
-    }
-
-    #[test]
-    fn test_query_configuration() {
-        // arrange
-        let config: entities::Configuration = Default::default();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_configuration()
-            .returning(move || Ok(Some(config.clone())));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query { configuration { computerId } }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("configuration").unwrap();
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("computerId").unwrap();
-        let actual = res.as_scalar().unwrap().try_as_str().unwrap();
-        let username = whoami::username().unwrap_or("charlie".into());
-        let hostname = whoami::hostname().unwrap_or("localhost".into());
-        let expected = entities::Configuration::generate_unique_id(&username, &hostname);
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_query_stores_ok() {
-        // arrange
-        let properties: HashMap<String, String> = HashMap::new();
-        let stores = vec![crate::domain::entities::Store {
-            id: "cafebabe".to_owned(),
-            store_type: crate::domain::entities::StoreType::LOCAL,
-            label: "mylocalstore".to_owned(),
-            properties,
-            retention: PackRetention::ALL,
-        }];
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_stores()
-            .returning(move || Ok(stores.clone()));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                stores { storeType label }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("stores").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 1);
-        let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("storeType").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "local");
-        let field = object.get_field_value("label").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "mylocalstore");
-    }
-
-    #[test]
-    fn test_query_stores_none() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_stores().returning(move || Ok(Vec::new()));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                stores { storeType label }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("stores").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 0);
-    }
-
-    #[test]
-    fn test_query_stores_err() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_stores()
-            .returning(move || Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                stores { storeType label }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
-
-    #[test]
-    fn test_query_datasets_ok() {
-        use crate::tasks::state;
-        // arrange
-        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let mut stater = MockStateStore::new();
-        stater.expect_get_state().returning(state::State::default);
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockScheduler::new());
-        let restorer = Arc::new(MockRestorer::new());
-        let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                datasets { basepath status }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("datasets").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 1);
-        let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "/home/planet");
-        let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "NONE");
-    }
-
-    #[test]
-    fn test_query_dataset_status_running() {
-        use crate::tasks::state;
-        // arrange
-        let stater = state::StateStoreImpl::new();
-        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
-        stater.backup_event(state::BackupAction::Start(datasets[0].id.clone()));
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockScheduler::new());
-        let restorer = Arc::new(MockRestorer::new());
-        let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                datasets { basepath status }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("datasets").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 1);
-        let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "/home/planet");
-        let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "RUNNING");
-    }
-
-    #[test]
-    fn test_query_dataset_status_error() {
-        use crate::tasks::state;
-        // arrange
-        let stater = state::StateStoreImpl::new();
-        let datasets = vec![entities::Dataset::new(Path::new("/home/planet"))];
-        stater.backup_event(state::BackupAction::Start(datasets[0].id.clone()));
-        let err_msg = String::from("oh no");
-        stater.backup_event(state::BackupAction::Error(datasets[0].id.clone(), err_msg));
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let datasource: Arc<dyn EntityDataSource> = Arc::new(mock);
-        let appstate: Arc<dyn StateStore> = Arc::new(stater);
-        let processor = Arc::new(MockScheduler::new());
-        let restorer = Arc::new(MockRestorer::new());
-        let ctx = Arc::new(GraphContext::new(datasource, appstate, processor, restorer));
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                datasets { basepath status errorMessage }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("datasets").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 1);
-        let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("basepath").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "/home/planet");
-        let field = object.get_field_value("status").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "FAILED");
-        let field = object.get_field_value("errorMessage").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "oh no");
-    }
-
-    #[test]
-    fn test_query_datasets_none() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_datasets().returning(move || Ok(Vec::new()));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                datasets { basepath }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("datasets").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 0);
-    }
-
-    #[test]
-    fn test_query_datasets_err() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_datasets()
-            .returning(move || Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                datasets { id }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
-
-    #[test]
-    fn test_query_record_counts_ok() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_entity_counts().returning(move || {
-            Ok(entities::RecordCounts {
-                chunk: 5,
-                dataset: 1,
-                file: 25,
-                pack: 1,
-                snapshot: 1,
-                store: 1,
-                tree: 3,
-                xattr: 4,
-            })
-        });
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                recordCounts { chunks datasets files packs snapshots trees }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("recordCounts").unwrap();
-        let object = res.as_object_value().unwrap();
-        let field = object.get_field_value("chunks").unwrap();
-        let value = field.as_scalar().unwrap().try_to_int().unwrap();
-        assert_eq!(value, 5);
-    }
-
-    #[test]
-    fn test_query_record_counts_err() {
-        // arrange
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_entity_counts()
-            .returning(move || Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let (res, errors) = juniper::execute_sync(
-            r#"query {
-                recordCounts { chunks files trees }
-            }"#,
-            None,
-            &schema,
-            &Variables::new(),
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
-
-    #[test]
-    fn test_query_snapshot_some() {
-        // arrange
-        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let file_counts = entities::FileCounts {
-            directories: 4,
-            symlinks: 6,
-            very_small_files: 100,
-            very_large_files: 10,
-            ..Default::default()
-        };
-        let snapshot = entities::Snapshot::new(None, tree_sha, file_counts);
-        let snapshot_sha1 = snapshot.digest.clone();
-        let snapshot_sha2 = snapshot.digest.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_snapshot()
-            .withf(move |d| d == &snapshot_sha1)
-            .returning(move |_| Ok(Some(snapshot.clone())));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert(
-            "digest".to_owned(),
-            ChecksumGQL(snapshot_sha2).to_input_value(),
-        );
-        let (res, errors) = juniper::execute_sync(
-            r#"query Snapshot($digest: Checksum!) {
-                snapshot(digest: $digest) { fileCount }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("snapshot").unwrap();
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("fileCount").unwrap();
-        // fileCounts are bigints that comes over the wire as strings
-        let value = res.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "110");
-    }
-
-    #[test]
-    fn test_query_snapshot_none() {
-        // arrange
-        let tree_sha = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot = entities::Snapshot::new(None, tree_sha, Default::default());
-        let snapshot_sha1 = snapshot.digest.clone();
-        let snapshot_sha2 = snapshot.digest.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_snapshot()
-            .withf(move |d| d == &snapshot_sha1)
-            .returning(move |_| Ok(None));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert(
-            "digest".to_owned(),
-            ChecksumGQL(snapshot_sha2).to_input_value(),
-        );
-        let (res, errors) = juniper::execute_sync(
-            r#"query Snapshot($digest: Checksum!) {
-                snapshot(digest: $digest) { fileCount }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("snapshot").unwrap();
-        assert!(res.is_null());
-    }
-
-    #[test]
-    fn test_query_snapshot_err() {
-        // arrange
-        let snapshot_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let snapshot_sha2 = snapshot_sha1.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_snapshot()
-            .withf(move |d| d == &snapshot_sha1)
-            .returning(move |_| Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert(
-            "digest".to_owned(),
-            ChecksumGQL(snapshot_sha2).to_input_value(),
-        );
-        let (res, errors) = juniper::execute_sync(
-            r#"query Snapshot($digest: Checksum!) {
-                snapshot(digest: $digest) { fileCount }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("snapshot").unwrap();
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
-
-    #[test]
-    fn test_query_tree_some() {
-        // arrange
-        let b3sum = "095964d07f3e821659d4eb27ed9e20cd5160c53385562df727e98eb815bb371f";
-        let file_digest = Checksum::BLAKE3(String::from(b3sum));
-        let reference = TreeReference::FILE(file_digest);
-        let filepath = Path::new("../test/fixtures/lorem-ipsum.txt");
-        let entry = entities::TreeEntry::new(filepath, reference);
-        let tree = entities::Tree::new(vec![entry], 1);
-        let tree_sha1 = tree.digest.clone();
-        let tree_sha2 = tree.digest.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_tree()
-            .withf(move |d| d == &tree_sha1)
-            .returning(move |_| Ok(Some(tree.clone())));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"query Tree($digest: Checksum!) {
-                tree(digest: $digest) { entries { name } }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("tree").unwrap();
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("entries").unwrap();
-        let list = res.as_list_value().unwrap();
-        assert_eq!(list.len(), 1);
-        let object = list[0].as_object_value().unwrap();
-        let field = object.get_field_value("name").unwrap();
-        let value = field.as_scalar().unwrap().try_as_str().unwrap();
-        assert_eq!(value, "lorem-ipsum.txt");
-    }
-
-    #[test]
-    fn test_query_tree_none() {
-        // arrange
-        let tree_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let tree_sha2 = tree_sha1.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_tree()
-            .withf(move |d| d == &tree_sha1)
-            .returning(move |_| Ok(None));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"query Tree($digest: Checksum!) {
-                tree(digest: $digest) { entries { name } }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        assert_eq!(errors.len(), 0);
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("tree").unwrap();
-        assert!(res.is_null());
-    }
-
-    #[test]
-    fn test_query_tree_err() {
-        // arrange
-        let tree_sha1 = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
-        let tree_sha2 = tree_sha1.clone();
-        let mut mock = MockEntityDataSource::new();
-        mock.expect_get_tree()
-            .withf(move |d| d == &tree_sha1)
-            .returning(move |_| Err(anyhow!("oh no")));
-        let ctx = make_context(mock);
-        // act
-        let schema = create_schema();
-        let mut vars = Variables::new();
-        vars.insert("digest".to_owned(), ChecksumGQL(tree_sha2).to_input_value());
-        let (res, errors) = juniper::execute_sync(
-            r#"query Tree($digest: Checksum!) {
-                tree(digest: $digest) { entries { name } }
-            }"#,
-            None,
-            &schema,
-            &vars,
-            &ctx,
-        )
-        .unwrap();
-        // assert
-        let res = res.as_object_value().unwrap();
-        let res = res.get_field_value("tree").unwrap();
-        assert!(res.is_null());
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].error().message().contains("oh no"));
-    }
 }

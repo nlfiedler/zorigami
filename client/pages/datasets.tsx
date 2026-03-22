@@ -45,7 +45,9 @@ const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
     datasets {
       id
       basepath
-      status
+      status {
+        status
+      }
     }
   }
 `;
@@ -137,7 +139,7 @@ export function DatasetsPage(props: any) {
                               {dataset.basepath}
                             </div>
                             <div class="list-item-description">
-                              Status: {dataset.status}
+                              Status: {dataset.status.status}
                             </div>
                           </div>
                         </div>

@@ -39,6 +39,7 @@ impl super::UseCase<Dataset, Params> for NewDataset {
     }
 }
 
+#[derive(Debug)]
 pub struct Params {
     /// Local base path of dataset to be saved.
     basepath: PathBuf,

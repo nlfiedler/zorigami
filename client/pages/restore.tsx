@@ -54,7 +54,7 @@ const CANCEL_RESTORE: TypedDocumentNode<Mutation, MutationCancelRestoreArgs> =
     }
   `;
 
-function Restore() {
+export function Restore() {
   const client = useApolloClient();
   const [restoresQuery, { refetch }] = createResource(async () => {
     const { data } = await client.query({ query: ALL_RESTORES });
@@ -366,11 +366,7 @@ function ConfirmDialog(props: ConfirmDialogProps) {
         ></button>
       </header>
       <section class="modal-card-body">
-        <article class="message">
-          <div class="message-body">
-            Are you sure you want to restore the database?
-          </div>
-        </article>
+        <h2 class="subtitle">Are you sure you want to restore the database?</h2>
         <Show when={errorMsg().length > 0}>
           <div class="notification is-warning">
             <button class="delete" on:click={() => setErrorMsg('')}></button>
@@ -399,5 +395,3 @@ function ConfirmDialog(props: ConfirmDialogProps) {
     </>
   );
 }
-
-export default Restore;

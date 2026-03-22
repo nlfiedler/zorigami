@@ -170,11 +170,9 @@ impl<'a> BackupDriver<'a> {
                 }
             }
             // check if the user requested that the backup stop
-            #[allow(clippy::collapsible_if)]
-            if let Some(backup) = self.state.get_state().backups(&self.dataset.id) {
-                if backup.should_stop() {
-                    return Err(Error::from(super::OutOfTimeFailure {}));
-                }
+            let backup = self.state.get_state().backups(&self.dataset.id);
+            if backup.should_stop() {
+                return Err(Error::from(super::OutOfTimeFailure {}));
             }
         }
         Ok(())
