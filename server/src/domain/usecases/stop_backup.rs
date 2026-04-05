@@ -1,32 +1,29 @@
 //
 // Copyright (c) 2022 Nathan Fiedler
 //
-use crate::tasks::state::{BackupAction, StateStore};
-use crate::domain::repositories::RecordRepository;
+use crate::tasks::leader::RingLeader;
 use anyhow::Error;
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
 
 pub struct StopBackup {
-    repo: Box<dyn RecordRepository>,
-    state: Arc<dyn StateStore>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl StopBackup {
-    pub fn new(repo: Box<dyn RecordRepository>, state: Arc<dyn StateStore>) -> Self {
-        Self { repo, state }
+    pub fn new(leader: Arc<dyn RingLeader>) -> Self {
+        Self { leader }
     }
 }
 
 impl super::UseCase<(), Params> for StopBackup {
     fn call(&self, params: Params) -> Result<(), Error> {
-        for dataset in self.repo.get_datasets()? {
-            if dataset.id == params.dataset_id {
-                self.state.backup_event(BackupAction::Stop(dataset.id));
-            }
+        if let Some(req) = self.leader.get_backup_by_dataset(&params.dataset_id) {
+            self.leader.cancel_backup(req.id)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -59,43 +56,23 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::Dataset;
-    use crate::tasks::state::MockStateStore;
-    use crate::domain::repositories::MockRecordRepository;
+    use crate::tasks::backup::Request;
+    use crate::tasks::leader::MockRingLeader;
     use anyhow::anyhow;
-    use std::path::Path;
 
     #[test]
     fn test_stop_backup_ok() {
         // arrange
-        let datasets = vec![Dataset::new(Path::new("/home/planet"))];
-        let dataset_id = datasets[0].id.clone();
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let mut state = MockStateStore::new();
-        state.expect_backup_event().returning(|_| ());
+        let dataset_id = xid::new().to_string();
+        let request = Request::new(dataset_id.clone(), "tiger", None);
+        let mut leader = MockRingLeader::new();
+        leader
+            .expect_get_backup_by_dataset()
+            .returning(move |_| Some(request.clone()));
+        leader.expect_cancel_backup().returning(move |_| Ok(()));
         // act
-        let usecase = StopBackup::new(Box::new(repo), Arc::new(state));
+        let usecase = StopBackup::new(Arc::new(leader));
         let params = Params { dataset_id };
-        let result = usecase.call(params);
-        // assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_stop_backup_not_found() {
-        // arrange
-        let datasets = vec![Dataset::new(Path::new("/home/planet"))];
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let state = MockStateStore::new();
-        // act
-        let usecase = StopBackup::new(Box::new(repo), Arc::new(state));
-        let params = Params {
-            dataset_id: "nonesuch".to_owned(),
-        };
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());
@@ -104,15 +81,18 @@ mod tests {
     #[test]
     fn test_stop_backup_err() {
         // arrange
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(|| Err(anyhow!("oh no")));
-        let state = MockStateStore::new();
+        let dataset_id = xid::new().to_string();
+        let request = Request::new(dataset_id.clone(), "tiger", None);
+        let mut leader = MockRingLeader::new();
+        leader
+            .expect_get_backup_by_dataset()
+            .returning(move |_| Some(request.clone()));
+        leader
+            .expect_cancel_backup()
+            .returning(move |_| Err(anyhow!("oh no")));
         // act
-        let usecase = StopBackup::new(Box::new(repo), Arc::new(state));
-        let params = Params {
-            dataset_id: "cafebabe".to_owned(),
-        };
+        let usecase = StopBackup::new(Arc::new(leader));
+        let params = Params { dataset_id };
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());

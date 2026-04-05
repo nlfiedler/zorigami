@@ -3,7 +3,7 @@
 //
 
 //! The main application binary that starts the web server and spawns the
-//! supervisor threads to manage the backups.
+//! supervised actors to manage the various background operations.
 
 use actix_cors::Cors;
 use actix_files::{Files, NamedFile};
@@ -15,36 +15,48 @@ use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
 use std::env;
 use std::io;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::repositories::RecordRepository;
 use zorigami::domain::sources::EntityDataSource;
 use zorigami::preso::graphql;
-use zorigami::tasks::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use zorigami::tasks::restore::{FileRestorer, FileRestorerImpl, Restorer, RestorerImpl};
-use zorigami::tasks::state;
-use zorigami::{DB_PATH, STATE_STORE};
+use zorigami::shared::state::{self, StateStore, StateStoreImpl};
+use zorigami::tasks::leader::{RingLeader, RingLeaderImpl};
+use zorigami::tasks::schedule::{Scheduler, SchedulerImpl};
 
-fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
-    Box::new(FileRestorerImpl::new(dbase))
-}
+// When running in test mode, the cwd is the server directory.
+#[cfg(test)]
+static DEFAULT_DB_PATH: &str = "../tmp/test/database";
 
-// File restore implementation.
-static FILE_RESTORER: LazyLock<Arc<dyn Restorer>> = LazyLock::new(|| {
-    Arc::new(RestorerImpl::new(
-        STATE_STORE.clone(),
-        file_restorer_factory,
-    ))
+// Running in debug/release mode we assume cwd is root directory.
+#[cfg(not(test))]
+static DEFAULT_DB_PATH: &str = "./tmp/database";
+
+// Path to the database files.
+static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+    let path = std::env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
+    PathBuf::from(path)
 });
-// Actual performer of the backups.
-static BACKUP_PERFORMER: LazyLock<Arc<dyn Performer>> =
-    LazyLock::new(|| Arc::new(PerformerImpl::default()));
-// Supervisor for managing the running of backups.
+
+// Application state store.
+static STATE_STORE: LazyLock<Arc<dyn StateStore>> =
+    LazyLock::new(|| Arc::new(StateStoreImpl::new()));
+
+// Ring leader implementation that manages the restore, backup, and prune requests.
+static RING_LEADER: LazyLock<Arc<dyn RingLeader>> =
+    LazyLock::new(|| Arc::new(RingLeaderImpl::new(STATE_STORE.clone())));
+
+// Scheduler implementation that sends backup and prune requests to the ring
+// leader according to the schedules defined for each of the datasets. Runs
+// every 5 minutes to check if any datasets need backing up.
+static SCHEDULER_INTERVAL: u64 = 300_000;
 static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
     Arc::new(SchedulerImpl::new(
         STATE_STORE.clone(),
-        BACKUP_PERFORMER.clone(),
+        RING_LEADER.clone(),
+        SCHEDULER_INTERVAL,
     ))
 });
 
@@ -62,12 +74,8 @@ async fn graphql(
     let source = EntityDataSourceImpl::new(DB_PATH.as_path())
         .map_err(|e| InternalError::new(e, http::StatusCode::INTERNAL_SERVER_ERROR))?;
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
-    let state = STATE_STORE.clone();
-    let processor = SCHEDULER.clone();
-    let restorer = FILE_RESTORER.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(
-        datasource, state, processor, restorer,
-    ));
+    let leader = RING_LEADER.clone();
+    let ctx = Arc::new(graphql::GraphContext::new(datasource, leader));
     let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
@@ -81,11 +89,11 @@ async fn index() -> actix_web::Result<NamedFile> {
 
 // Start and stop the supervisor(s) based on application state changes.
 fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
-    if state.supervisor == state::SupervisorState::Stopping {
+    if state.scheduler == state::SchedulerState::Stopping {
         if let Err(err) = SCHEDULER.stop() {
             error!("error stopping supervisor: {}", err);
         }
-    } else if state.supervisor == state::SupervisorState::Starting {
+    } else if state.scheduler == state::SchedulerState::Starting {
         match EntityDataSourceImpl::new(DB_PATH.as_path()) {
             Ok(datasource) => {
                 let repo = RecordRepositoryImpl::new(Arc::new(datasource));
@@ -97,49 +105,20 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
             Err(err) => error!("error opening database: {}", err),
         }
     }
-    if state.restorer == state::RestorerState::Stopping {
-        if let Err(err) = FILE_RESTORER.stop() {
+    if state.leader == state::LeaderState::Stopping {
+        if let Err(err) = RING_LEADER.stop() {
             error!("error stopping restorer: {}", err);
         }
-    } else if state.restorer == state::RestorerState::Starting {
+    } else if state.leader == state::LeaderState::Starting {
         match EntityDataSourceImpl::new(DB_PATH.as_path()) {
             Ok(datasource) => {
                 let repo = RecordRepositoryImpl::new(Arc::new(datasource));
                 let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-                if let Err(err) = FILE_RESTORER.start(dbase) {
+                if let Err(err) = RING_LEADER.start(dbase) {
                     error!("error starting file restorer: {}", err);
                 }
             }
             Err(err) => error!("error opening database: {}", err),
-        }
-    }
-}
-
-// Log interesting changes in the application state (i.e. backup status).
-fn log_state_changes(state: &state::State, _previous: Option<&state::State>) {
-    // Ideally would compare state with previous to know if there is really
-    // anything worth reporting, but that's more trouble than it's worth.
-    for (key, backup) in state.active_datasets() {
-        if let Some(end_time) = backup.end_time() {
-            // the backup finished recently, log one last entry
-            let sys_time = chrono::Utc::now();
-            let interval = sys_time - end_time;
-            if interval.num_seconds() < 60 {
-                info!(
-                    "complete for {}: packs: {}, files: {}",
-                    key,
-                    backup.packs_uploaded(),
-                    backup.files_uploaded()
-                );
-            }
-        } else {
-            // this backup is not yet finished
-            info!(
-                "progress for {}: packs: {}, files: {}",
-                key,
-                backup.packs_uploaded(),
-                backup.files_uploaded()
-            );
         }
     }
 }
@@ -149,9 +128,8 @@ async fn main() -> io::Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
     STATE_STORE.subscribe("super-manager", manage_supervisors);
-    STATE_STORE.subscribe("backup-logger", log_state_changes);
-    STATE_STORE.supervisor_event(state::SupervisorAction::Start);
-    STATE_STORE.restorer_event(state::RestorerAction::Start);
+    STATE_STORE.scheduler_event(state::SchedulerAction::Start);
+    STATE_STORE.leader_event(state::LeaderAction::Start);
 
     let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = env::var("PORT").unwrap_or_else(|_| "3000".to_owned());

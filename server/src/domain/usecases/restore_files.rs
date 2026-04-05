@@ -2,8 +2,9 @@
 // Copyright (c) 2023 Nathan Fiedler
 //
 use crate::domain::entities::Checksum;
-use crate::tasks::helpers;
-use crate::tasks::restore::{Request, Restorer};
+use crate::shared::packs;
+use crate::tasks::leader::RingLeader;
+use crate::tasks::restore::Request;
 use anyhow::Error;
 use std::cmp;
 use std::fmt;
@@ -11,20 +12,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct RestoreFiles {
-    restorer: Arc<dyn Restorer>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl RestoreFiles {
-    pub fn new(restorer: Arc<dyn Restorer>) -> Self {
-        Self { restorer }
+    pub fn new(leader: Arc<dyn RingLeader>) -> Self {
+        Self { leader }
     }
 }
 
 impl super::UseCase<(), Params> for RestoreFiles {
     fn call(&self, params: Params) -> Result<(), Error> {
         let mut request: Request = params.into();
-        request.passphrase = helpers::get_passphrase();
-        self.restorer.enqueue(request)
+        request.passphrase = packs::get_passphrase();
+        self.leader.restore(request)
     }
 }
 
@@ -80,13 +81,13 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::tasks::restore::MockRestorer;
+    use crate::tasks::leader::MockRingLeader;
 
     #[test]
     fn test_restore_files_ok() {
         // arrange
-        let mut mock = MockRestorer::new();
-        mock.expect_enqueue().returning(|_| Ok(()));
+        let mut mock = MockRingLeader::new();
+        mock.expect_restore().returning(|_| Ok(()));
         // act
         let usecase = RestoreFiles::new(Arc::new(mock));
         let tree = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".into());

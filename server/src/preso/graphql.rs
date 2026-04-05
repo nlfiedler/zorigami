@@ -8,10 +8,10 @@ use crate::data::repositories::RecordRepositoryImpl;
 use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::repositories::RecordRepository;
 use crate::domain::sources::EntityDataSource;
-use crate::tasks::backup::Scheduler;
-use crate::tasks::helpers;
-use crate::tasks::restore::{self, Restorer};
-use crate::tasks::state::{self, StateStore};
+use crate::shared::packs;
+use crate::tasks::backup;
+use crate::tasks::leader::RingLeader;
+use crate::tasks::restore;
 use chrono::prelude::*;
 use juniper::{
     EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
@@ -26,24 +26,12 @@ use std::sync::Arc;
 // Context for the GraphQL schema.
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
-    appstate: Arc<dyn StateStore>,
-    processor: Arc<dyn Scheduler>,
-    restorer: Arc<dyn Restorer>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl GraphContext {
-    pub fn new(
-        datasource: Arc<dyn EntityDataSource>,
-        appstate: Arc<dyn StateStore>,
-        processor: Arc<dyn Scheduler>,
-        restorer: Arc<dyn Restorer>,
-    ) -> Self {
-        Self {
-            datasource,
-            appstate,
-            processor,
-            restorer,
-        }
+    pub fn new(datasource: Arc<dyn EntityDataSource>, leader: Arc<dyn RingLeader>) -> Self {
+        Self { datasource, leader }
     }
 }
 
@@ -262,84 +250,81 @@ impl entities::SnapshotCount {
     }
 }
 
-/// Status of the most recent snapshot for a dataset.
+// Status of the most recent snapshot for a dataset.
 #[derive(Copy, Clone, GraphQLEnum)]
 enum BackupStatus {
     /// Backup has not run yet.
-    None,
+    Pending,
     /// Backup is still running.
     Running,
-    /// Backup has finished.
+    /// Backup was interrupted and will stop soon.
+    Stopping,
+    /// Backup has completed successfully.
     Finished,
     /// Backup paused due to schedule.
     Paused,
-    /// Backup failed, see `errorMessage` property.
+    /// Backup failed, see `errors` property for details.
     Failed,
 }
 
-#[juniper::graphql_object(description = "Detailed information of the state of the backup.")]
-impl state::BackupState {
+#[juniper::graphql_object(
+    name = "BackupState",
+    description = "Detailed information of the state of the backup."
+)]
+impl backup::Request {
     /// Status of the backup.
     fn status(&self) -> BackupStatus {
-        if self.is_paused() {
-            BackupStatus::Paused
-        } else if self.had_error() {
-            BackupStatus::Failed
-        } else if self.start_time().is_none() {
-            BackupStatus::None
-        } else if self.end_time().is_none() {
-            BackupStatus::Running
-        } else {
-            BackupStatus::Finished
+        match self.status {
+            backup::Status::PENDING => BackupStatus::Pending,
+            backup::Status::RUNNING => BackupStatus::Running,
+            backup::Status::STOPPING => BackupStatus::Stopping,
+            backup::Status::COMPLETED => BackupStatus::Finished,
+            backup::Status::PAUSED => BackupStatus::Paused,
+            backup::Status::FAILED => BackupStatus::Failed,
         }
-    }
-
-    /// True if the running backup received a request to stop prematurely.
-    fn stop_requested(&self) -> bool {
-        self.should_stop()
     }
 
     /// Start time for the backup of this dataset, if started.
     #[graphql(name = "startTime")]
     fn start_datetime(&self) -> Option<DateTime<Utc>> {
-        self.start_time()
+        self.started
     }
 
     /// Completion time for the backup of this dataset, if completed.
     #[graphql(name = "endTime")]
     fn end_datetime(&self) -> Option<DateTime<Utc>> {
-        self.end_time()
+        self.finished
     }
 
-    /// Error for the most this backup, if any.
-    #[graphql(name = "errorMessage")]
-    fn error(&self) -> Option<String> {
-        self.error_message()
+    /// Errors collected during the backup process, if any.
+    #[graphql(name = "errors")]
+    fn error(&self) -> Vec<String> {
+        self.errors.clone()
     }
 
     /// Number of files that changed in this backup.
     #[graphql(name = "changedFiles")]
     fn files_changed(&self) -> BigInt {
-        BigInt(self.changed_files() as i64)
+        BigInt(self.changed_files as i64)
     }
 
     /// Number of pack files uploaded so far.
     #[graphql(name = "packsUploaded")]
     fn uploaded_packs(&self) -> BigInt {
-        BigInt(self.packs_uploaded() as i64)
+        BigInt(self.packs_uploaded as i64)
     }
 
     /// Number of files uploaded so far.
     #[graphql(name = "filesUploaded")]
     fn uploaded_files(&self) -> BigInt {
-        BigInt(self.files_uploaded() as i64)
+        BigInt(self.files_uploaded as i64)
     }
 
     /// Number of bytes uploaded so far, which may change more often than the
     /// number of files in the event that a very large file is being uploaded.
     #[graphql(name = "bytesUploaded")]
     fn uploaded_bytes(&self) -> BigInt {
-        BigInt(self.bytes_uploaded() as i64)
+        BigInt(self.bytes_uploaded as i64)
     }
 }
 
@@ -413,9 +398,10 @@ impl entities::Dataset {
     }
 
     /// Detailed status of the latest backup for this dataset.
-    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> state::BackupState {
-        let redux = ctx.appstate.get_state();
-        redux.backups(&self.id)
+    fn status(&self, #[graphql(ctx)] ctx: &GraphContext) -> backup::Request {
+        ctx.leader
+            .get_backup_by_dataset(&self.id)
+            .unwrap_or_else(|| backup::Request::new(self.id.clone(), "tiger", None))
     }
 
     /// Most recent snapshot for this dataset, if any.
@@ -999,7 +985,7 @@ impl Query {
         use crate::domain::usecases::get_pack::{GetPack, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = GetPack::new(Box::new(repo));
-        let passphrase = helpers::get_passphrase();
+        let passphrase = packs::get_passphrase();
         let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: entities::PackFile = usecase.call(params)?;
         Ok(result)
@@ -1018,7 +1004,7 @@ impl Query {
         use crate::domain::usecases::scan_packs::{Params, ScanPacks};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = ScanPacks::new(Box::new(repo));
-        let passphrase = helpers::get_passphrase();
+        let passphrase = packs::get_passphrase();
         let params: Params = Params::new(dataset_id, digest.0, passphrase);
         let result: Option<Checksum> = usecase.call(params)?;
         Ok(result.map(ChecksumGQL))
@@ -1039,7 +1025,7 @@ impl Query {
     fn restores(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<restore::Request>> {
         use crate::domain::usecases::query_restores::QueryRestores;
         use crate::domain::usecases::{NoParams, UseCase};
-        let usecase = QueryRestores::new(ctx.restorer.clone());
+        let usecase = QueryRestores::new(ctx.leader.clone());
         let params: NoParams = NoParams {};
         let requests: Vec<restore::Request> = usecase.call(params)?;
         Ok(requests)
@@ -1436,9 +1422,9 @@ impl Mutation {
     fn start_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::start_backup::{Params, StartBackup};
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = StartBackup::new(Arc::new(repo), ctx.appstate.clone(), ctx.processor.clone());
-        let params: Params = Params::new(id);
+        let passphrase = packs::get_passphrase();
+        let usecase = StartBackup::new(ctx.leader.clone());
+        let params: Params = Params::new(id, passphrase);
         usecase.call(params)?;
         Ok(true)
     }
@@ -1447,8 +1433,7 @@ impl Mutation {
     fn stop_backup(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::stop_backup::{Params, StopBackup};
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = StopBackup::new(Box::new(repo), ctx.appstate.clone());
+        let usecase = StopBackup::new(ctx.leader.clone());
         let params: Params = Params::new(id);
         usecase.call(params)?;
         Ok(true)
@@ -1461,10 +1446,9 @@ impl Mutation {
     ) -> FieldResult<String> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::restore_database::{Params, RestoreDatabase};
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let passphrase = helpers::get_passphrase();
-        let usecase = RestoreDatabase::new(Box::new(repo));
-        let params: Params = Params::new(store_id, ctx.appstate.clone(), passphrase);
+        let passphrase = packs::get_passphrase();
+        let usecase = RestoreDatabase::new(ctx.leader.clone());
+        let params: Params = Params::new(store_id, passphrase);
         let result = usecase.call(params)?;
         Ok(result)
     }
@@ -1479,7 +1463,7 @@ impl Mutation {
     ) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::restore_files::{Params, RestoreFiles};
-        let usecase = RestoreFiles::new(ctx.restorer.clone());
+        let usecase = RestoreFiles::new(ctx.leader.clone());
         let fpath = PathBuf::from(filepath);
         let params: Params = Params::new(tree.0.clone(), entry.clone(), fpath, dataset);
         usecase.call(params)?;
@@ -1490,7 +1474,7 @@ impl Mutation {
     fn cancel_restore(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::cancel_restore::{CancelRestore, Params};
-        let usecase = CancelRestore::new(ctx.restorer.clone());
+        let usecase = CancelRestore::new(ctx.leader.clone());
         let params: Params = Params::new(id);
         let result = usecase.call(params)?;
         Ok(result)
@@ -1546,16 +1530,13 @@ impl Mutation {
 
     /// Apply the retention policy to the named dataset, pruning snapshots and
     /// everything that is no longer reachable (except for packs).
-    ///
-    /// Returns the number of snapshots removed from the dataset.
-    fn prune_snapshots(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<i32> {
+    fn prune_snapshots(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<bool> {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::prune_snapshots::{Params, PruneSnapshots};
-        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let usecase = PruneSnapshots::new(Box::new(repo));
+        let usecase = PruneSnapshots::new(ctx.leader.clone());
         let params: Params = Params::new(id.clone());
-        let count = usecase.call(params)?;
-        Ok(count as i32)
+        usecase.call(params)?;
+        Ok(true)
     }
 
     /// Create a missing file record from the given information.
@@ -1572,7 +1553,7 @@ impl Mutation {
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::insert_file::{InsertFile, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
-        let passphrase = helpers::get_passphrase();
+        let passphrase = packs::get_passphrase();
         let usecase = InsertFile::new(Box::new(repo));
         let params: Params = Params::new(dataset, chunk_digest.0, pack_digest.0, passphrase);
         usecase.call(params)?;

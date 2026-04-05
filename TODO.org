@@ -1,48 +1,6 @@
 * Tasks
-** TODO [#A] Centralize backup and restore into a single supervisor and 3 queues
-*** design objectives
-**** all backups, prunings, and restorations are processed sequentially
-**** requests are added into separate queues for ~backup~, ~restore~, and ~prune~
-**** requests to ~cancel~ anything will use the app state to signal the process to stop
-**** database restore is a synchronous user request that cancels everything and waits
-**** maybe spawn a thread that waits for the supervisor-actor to stop, then updates app state
-***** eliminate the timing issue in =RestoreDatabase=
-***** procedure
-1) spawn thread in =manage_supervisors()=
-2) start supervisor (which starts actor)
-3) supervisor fires ~started~ event
-4) eventually actor exits (supervisor remains)
-6) spawned thread fires ~stopped~ event
-***** Q: how to restart the actor again?
-**** requests and priorities
-| Request | Priority | Principle                                                 |
-|---------+----------+-----------------------------------------------------------|
-| Restore | high     | restore is a user action that must be serviced ASAP       |
-| Backup  | medium   | backup happens on a schedule, more important than pruning |
-| Prune   | low      | when there is nothing else to do, then pruning can happen |
-*** TODO implementation [1/19]
-- [X] move all of the =helpers/*.rs= into =helpers.rs=
-- [ ] draw on paper the overall design for clarity
-- [ ] sketch the new module layout for code organization
-- [ ] create 3 separate queues: backup, restore, prune
-- [ ] define request objects for backup, prune, restore
-- [ ] actor spawns thread to ~prune~, ~restore~, or ~backup~ and joins that thread to wait for it to finish
-- [ ] add ~pruning~ and ~restoring~ status to the =BackupState=
-- [ ] define use case and app state event to start/stop backup
-- [ ] define use case and app state event to start/stop restore
-- [ ] define use case and app state event to start/stop prune
-- [ ] implement a single actix supervisor for everything in =tasks/supervisor.rs=
-- [ ] implement a single actix actor that pulls requests from the queues in priority order (restore, backup, prune)
-- [ ] move restore functionality into the main supervisor
-- [ ] remove the restorer supervisor
-- [ ] backup processor must check app state for ~stop~ request
-- [ ] restore processor must check app state for ~stop~ request
-- [ ] prune processor must check app state for ~stop~ request
-- [ ] database restore must signal everythign to stop, wait for everything to stop
-- [ ] move pruning logic into the =tasks= module
-- [ ] incorporate snapshot pruning as a request to be processed
-- [ ] streamline the app state as appropriate
-*** TODO document the supervisor-actor model in the =doc/DESIGN.md= document
+** TODO add instructions for measuring code coverage of tests
+*** see exaf-rs for an example that uses grcov
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
 *** TODO home page [8/11]
 - [X] for each dataset, card header arrow icon navigates to =/datasets= page
@@ -100,13 +58,10 @@
 *** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
 *** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
 *** there will be 24 + 30 + 52 + N snapshots for any given dataset
-*** add ~Automatic~ member to snapshot retention policy enum
-*** add ~Automatic~ option to snapshot retention policy form in webui
-*** add support for automatic pruning to =PruneSnapshots= usecase
-*** =PruneSnapshots= usecase must now be invoked after every backup
-**** is it safe to prune while a backup or restore is in progress?
-**** all backups should be serialized
-**** pruning should be done as part of the backup
+*** TODO add ~Automatic~ member to snapshot retention policy enum
+*** TODO add ~Automatic~ option to snapshot retention policy form in webui
+*** TODO add support for automatic pruning to =PrunerImpl=
+*** TODO test: consider how to write a macro to declaratively produce lots of fake snapshots
 *** how to automatically prune old snapshots
 **** https://github.com/bastibe/timeup/blob/master/timeup.py
 **** basic outline (each ~keep~ step starts by filtering the full list, not the output of the previous step)
@@ -134,15 +89,32 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
-** Migrate to Vite 8.0
+** TODO [#C] Scheduler to test restoring a random file weekly
+*** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
+*** scheduler will send a new type of request to the ring leader
+*** restorer needs a ~noop~ mode to simply compare the checksums of the target and restored file
+*** expose the result somewhere that the home page ~dashboard~ and display
+** TODO [#C] Scheduler to perform a ~scrub~ of the database weekly
+*** like zfs scrub, make sure no records are missing
+*** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
+*** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
+*** expose the result somewhere that the home page ~dashboard~ and display
+** TODO [#C] Migrate to Vite 8.0
 *** https://vite.dev/blog/announcing-vite8
-** Preventing mistakes
+** TODO [#C] Preventing mistakes
 *** deleting a pack store that is still being used by a data set
 **** return an error to the GraphQL client so it can report to the user
 **** update store form to show error message if delete fails
 *** changing the base path of the dataset after snapshots have been made
 *** adding a pack store to a dataset once snapshots have been made
-** Clean up
+** TODO [#C] Dynamic bucket allocation
+*** hard-coded value of 128 is pretty low for local pack stores
+*** cloud-based pack stores can accommodate many objects per bucket
+*** could consider how frequently new packs are created (1 per day vs hundreds)
+** TODO [#C] Bucket collision and renaming
+*** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
+**** need to consider the buckets and objects that may have been renamed by the pack store
+** TODO [#C] Clean up
 *** TODO remove =FindMissingPacks= usecase and GraphQL query
 *** TODO remove =ScanPacks= usecase and GraphQL query
 *** TODO remove =ReassignPacks= usecase and GraphQL mutation
@@ -167,16 +139,6 @@
 [2023-08-08T15:51:20Z WARN  server::data::repositories] pack retrieval failed, will try another source: Err(Token retrieval failed: error trying to connect: Connection timed out (os error 110))
 #+end_src
 **** should try to set a timeout to something reasonble (1-2 minutes)
-** Database Integrity
-*** deleting a dataset should delete all of its snapshots
-*** add operation to prune anything unreachable by any dataset
-*** support database integrity checks
-**** ensure all referenced records actually exist
-**** like git fsck, start at the top and traverse everything
-**** find and report dangling objects
-**** TODO restore deleted =verify_snapshot.rs= from commit =d414266=
-**** TODO finish writing =verify_snapshot= use case tests
-**** TODO add GraphQL query to invoke =VerifySnapshot= usecase
 ** Improve backup reliability
 *** add some ~debug~ logging at regular intervals during the scan phase
 *** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
@@ -195,27 +157,33 @@
 ** Snapshot browsing
 *** ability to move through snapshots will staying within the selected path
 *** would be helpful to see all snapshots in which a file or directory changed
-** Restore to dissimilar hardware
-*** Allow modifying the configuration to change the computer identifier
-*** Test by restoring a backup to a different system
-** Dynamic bucket allocation
-*** hard-coded value of 128 is pretty low for local pack stores
-*** cloud-based pack stores can accommodate many objects per bucket
-*** could consider how frequently new packs are created (1 per day vs hundreds)
-** Bucket collision and renaming
-*** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
-**** need to consider the buckets and objects that may have been renamed by the pack store
 ** Store extended attributes (xattrs) in packs
 *** xattrs can be megabytes in size, they should be in the packs, not the database
-** File changes during backup
-*** what if a file changes between the snapshot and the backup? is there a better approach
+** File changes during backup (point-in-time)
+*** Backup procedure is file-by-file, which may yield broken snapshots for database files
 *** if a file changes between snapshot and packing, it will get backed up again the next time
-*** large files will get chunked and therefore not backed up twice
-** Manage user passphrase
-*** introduce a setup phase in which user is prompted for passphrase
-*** store passphrase in the local key store
-*** each dataset could/should have its own passphrase
-*** consider how to change the passphrase but retain old ones for decrypting packs
+*** if available, should use the OS functionality for FS snapshots
+**** ZFS has snapshot support
+**** APFS has snapshots, not sure what they are exactly
+***** how to determine that FS supports this feature?
+***** use =tmutil= to create, mount, and remove snapshots
+#+begin_src shell
+$ tmutil localsnapshot
+Created local snapshot with date: 2021-04-05-162425
+
+$ tmutil listlocalsnapshots /
+Snapshots for volume group containing disk /:
+com.apple.TimeMachine.2021-04-05-162416.local
+com.apple.TimeMachine.2021-04-05-162425.local
+
+# mount a specific snapshot
+mkdir -p /tmp/snapshot
+mount_apfs -s com.apple.TimeMachine.2021-04-05-162416.local / /tmp/snapshot
+open /tmp/snapshot
+
+$ tmutil deletelocalsnapshots 2021-04-05-162416
+Deleted local snapshot '2021-04-05-162416'
+#+end_src
 ** Loose backend issues
 *** maybe use a thread pool for bridging async barrier in data sources
 **** currently the data sources all spawn a new thread every time
@@ -323,31 +291,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** Support ~archive~ storage classes
 *** Azure, Amazon, and Google all support very slow response time storage
 *** requires subscribing to notifications (?) to facilitate file retrieval
-** Point-in-time snapshots
-*** Backup procedure is file-by-file, which may yield broken snapshots
-**** e.g. database files can change during the backup, leading to invalid snapshots
-*** If available, use the OS functionality for FS snapshots
-**** ZFS has snapshot support
-**** APFS has snapshots, not sure what they are exactly
-***** how to determine that FS supports this feature?
-***** use =tmutil= to create, mount, and remove snapshots
-#+begin_src shell
-$ tmutil localsnapshot
-Created local snapshot with date: 2021-04-05-162425
-
-$ tmutil listlocalsnapshots /
-Snapshots for volume group containing disk /:
-com.apple.TimeMachine.2021-04-05-162416.local
-com.apple.TimeMachine.2021-04-05-162425.local
-
-# mount a specific snapshot
-mkdir -p /tmp/snapshot
-mount_apfs -s com.apple.TimeMachine.2021-04-05-162416.local / /tmp/snapshot
-open /tmp/snapshot
-
-$ tmutil deletelocalsnapshots 2021-04-05-162416
-Deleted local snapshot '2021-04-05-162416'
-#+end_src
 ** Support SeaweedFS pack store
 *** https://github.com/seaweedfs/seaweedfs
 ** More Functionality

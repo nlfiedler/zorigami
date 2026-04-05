@@ -1,25 +1,25 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::tasks::restore::Restorer;
+use crate::tasks::leader::RingLeader;
 use anyhow::Error;
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
 
 pub struct CancelRestore {
-    restorer: Arc<dyn Restorer>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl CancelRestore {
-    pub fn new(restorer: Arc<dyn Restorer>) -> Self {
-        Self { restorer }
+    pub fn new(leader: Arc<dyn RingLeader>) -> Self {
+        Self { leader }
     }
 }
 
 impl super::UseCase<bool, Params> for CancelRestore {
     fn call(&self, params: Params) -> Result<bool, Error> {
-        Ok(self.restorer.cancel(params.id))
+        Ok(self.leader.cancel_restore(params.id))
     }
 }
 
@@ -52,13 +52,13 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::tasks::restore::MockRestorer;
+    use crate::tasks::leader::MockRingLeader;
 
     #[test]
-    fn test_restore_files_ok() {
+    fn test_cancel_restore_ok() {
         // arrange
-        let mut mock = MockRestorer::new();
-        mock.expect_cancel().returning(|_| true);
+        let mut mock = MockRingLeader::new();
+        mock.expect_cancel_restore().returning(|_| true);
         // act
         let usecase = CancelRestore::new(Arc::new(mock));
         let params = Params::new("abc123".into());

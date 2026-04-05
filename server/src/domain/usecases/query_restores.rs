@@ -1,24 +1,25 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::tasks::restore::{Request, Restorer};
+use crate::tasks::leader::RingLeader;
+use crate::tasks::restore::Request;
 use crate::domain::usecases::NoParams;
 use anyhow::Error;
 use std::sync::Arc;
 
 pub struct QueryRestores {
-    restorer: Arc<dyn Restorer>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl QueryRestores {
-    pub fn new(restorer: Arc<dyn Restorer>) -> Self {
-        Self { restorer }
+    pub fn new(leader: Arc<dyn RingLeader>) -> Self {
+        Self { leader }
     }
 }
 
 impl super::UseCase<Vec<Request>, NoParams> for QueryRestores {
     fn call(&self, _params: NoParams) -> Result<Vec<Request>, Error> {
-        Ok(self.restorer.requests())
+        Ok(self.leader.restores())
     }
 }
 
@@ -26,13 +27,13 @@ impl super::UseCase<Vec<Request>, NoParams> for QueryRestores {
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::tasks::restore::MockRestorer;
+    use crate::tasks::leader::MockRingLeader;
 
     #[test]
     fn test_restore_files_ok() {
         // arrange
-        let mut mock = MockRestorer::new();
-        mock.expect_requests().returning(Vec::new);
+        let mut mock = MockRingLeader::new();
+        mock.expect_restores().returning(Vec::new);
         // act
         let usecase = QueryRestores::new(Arc::new(mock));
         let params = NoParams {};

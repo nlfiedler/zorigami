@@ -3,23 +3,21 @@
 //
 use crate::domain::entities::{Checksum, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use crate::tasks::helpers;
-use crate::tasks::state::{RestorerAction, StateStore};
-use actix::prelude::*;
+use crate::shared::packs;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use log::{debug, error, info, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::cmp;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, RwLock};
 
 /// Status of a request.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Status {
     /// Request is waiting to be processed.
     PENDING,
@@ -48,7 +46,9 @@ pub struct Request {
     pub dataset: String,
     /// Password text for decrypting the pack files.
     pub passphrase: String,
-    /// The datetime when the request was completed.
+    /// The date-time when the request processing started.
+    pub started: Option<DateTime<Utc>>,
+    /// The date-time when the request was completed.
     pub finished: Option<DateTime<Utc>>,
     /// Number of files restored so far during the restoration.
     pub files_restored: u64,
@@ -73,6 +73,7 @@ impl Request {
             filepath,
             dataset,
             passphrase,
+            started: None,
             finished: None,
             files_restored: 0,
             errors: vec![],
@@ -82,41 +83,57 @@ impl Request {
 
 impl fmt::Display for Request {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Request({}, {})", self.tree, self.entry)
+        write!(f, "[Restore]Request({})", self.id)
     }
 }
 
 impl cmp::PartialEq for Request {
     fn eq(&self, other: &Self) -> bool {
-        self.tree == other.tree && self.entry == other.entry
+        self.id == other.id
     }
 }
 
 impl cmp::Eq for Request {}
 
 ///
-/// `Restorer` manages a supervised actor which in turn spawns actors to process
-/// file and tree restore requests.
+/// A `Subscriber` receives updates to the progress of a restore operation.
+///
+#[cfg_attr(test, automock)]
+pub trait Subscriber: Send + Sync {
+    /// Restore operation has begun to be processed.
+    ///
+    /// Returns a value for mockall tests.
+    fn started(&self, request_id: &str) -> bool;
+
+    /// One or more files have been restored.
+    ///
+    /// Returns a value for mockall tests.
+    fn restored(&self, request_id: &str, addend: u64) -> bool;
+
+    /// An error has occurred while restoring files, directories, or links.
+    ///
+    /// Returns a value for mockall tests.
+    fn error(&self, request_id: &str, error: String) -> bool;
+
+    /// Restore request has been completed.
+    ///
+    /// Returns a value for mockall tests.
+    fn finished(&self, request_id: &str) -> bool;
+}
+
+///
+/// `Restorer` restores individual files or entires directory trees. Can also
+/// restore the database from a recent snapshot.
 ///
 #[cfg_attr(test, automock)]
 pub trait Restorer: Send + Sync {
-    /// Start a supervisor that will run a file restore process.
-    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
+    /// Process a restore request for a file or directory. If the restorer
+    /// implementation supports subscribers, they will be notified of progress
+    /// during processing.
+    fn restore_files(&self, request: Request) -> Result<(), Error>;
 
-    /// Add the given request to the queue to be processed.
-    fn enqueue(&self, request: Request) -> Result<(), Error>;
-
-    /// Return all pending and recently completed requests.
-    fn requests(&self) -> Vec<Request>;
-
-    /// Cancel the pending request.
-    ///
-    /// Does not cancel the request if it has already begun the restoration
-    /// process. Returns true if successfully cancelled.
-    fn cancel(&self, request_id: String) -> bool;
-
-    /// Signal the supervisor to stop and release the database reference.
-    fn stop(&self) -> Result<(), Error>;
+    /// Restore the most recent database snapshot from the given pack store.
+    fn restore_database(&self, store_id: &str, passphrase: &str) -> Result<(), Error>;
 }
 
 ///
@@ -125,252 +142,61 @@ pub trait Restorer: Send + Sync {
 type FileRestorerFactory = fn(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer>;
 
 ///
-/// Concrete implementation of `Restorer` that uses the actix actor framework to
-/// spawn threads and send messages to actors to manage the restore requests.
+/// Construct the default file fetcher.
+///
+fn default_file_fetcher(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+    Box::new(FileRestorerImpl::new(dbase))
+}
+
+///
+/// Basic implementation of `Restorer`.
 ///
 pub struct RestorerImpl {
-    // Arbiter manages the supervised actor that initiates restores.
-    runner: Arbiter,
-    // Application state to be provided to supervisor and runners.
-    state: Arc<dyn StateStore>,
-    // Address of the supervisor actor, if it has been started.
-    super_addr: Mutex<Option<Addr<RestoreSupervisor>>>,
-    // Queue of incoming requests waiting to be processed.
-    pending: Arc<Mutex<VecDeque<Request>>>,
-    // Request actively being processed.
-    processing: Arc<Mutex<Option<Request>>>,
-    // Limited number of recently completed requests.
-    completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
+    // Database connection for querying datasets.
+    dbase: Arc<dyn RecordRepository>,
     // Factory method for the FileRestorer implementation.
-    fetcher: FileRestorerFactory,
+    fetch_factory: FileRestorerFactory,
+    // Events related to the restore are sent to the subscriber.
+    subscriber: Arc<dyn Subscriber>,
+    // If the value is true, the restore process should stop.
+    #[allow(dead_code)]
+    stop_requested: Arc<RwLock<bool>>,
 }
 
 impl RestorerImpl {
     /// Construct a new instance of RestorerImpl.
-    pub fn new(state: Arc<dyn StateStore>, fetcher: FileRestorerFactory) -> Self {
-        // create an Arbiter to manage an event loop on a new thread
-        Self {
-            runner: Arbiter::new(),
-            state: state.clone(),
-            super_addr: Mutex::new(None),
-            pending: Arc::new(Mutex::new(VecDeque::new())),
-            processing: Arc::new(Mutex::new(None)),
-            completed: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
-            fetcher,
-        }
-    }
-
-    /// Set the file restorer factory, for testing.
-    pub fn factory(&mut self, fetcher: FileRestorerFactory) -> Result<(), Error> {
-        self.fetcher = fetcher;
-        fn err_convert(err: SendError<SetFactory>) -> Error {
-            anyhow!(format!("RestorerImpl::factory(): {:?}", err))
-        }
-        let su_addr = self.super_addr.lock().unwrap();
-        if let Some(addr) = su_addr.as_ref() {
-            addr.try_send(SetFactory { fetcher }).map_err(err_convert)?;
-        }
-        Ok(())
-    }
-
-    /// Put the request into the completed set, trim the set to size.
-    fn push_completed(&self, request: Request) {
-        let pair = self.completed.clone();
-        let (lock, cvar) = &*pair;
-        let mut completed = lock.lock().unwrap();
-        // Push the completed request to the front of the list and truncate the
-        // older items to keep the list from growing indefinitely.
-        completed.push_front(request);
-        completed.truncate(32);
-        cvar.notify_all();
-    }
-
-    /// Clear the completed requests list, for testing.
-    pub fn reset_completed(&self) {
-        let pair = self.completed.clone();
-        let (lock, _cvar) = &*pair;
-        let mut completed = lock.lock().unwrap();
-        completed.clear();
-    }
-
-    /// Wait for at least one request to be completed, for testing.
-    pub fn wait_for_completed(&self) {
-        let pair = self.completed.clone();
-        let (lock, cvar) = &*pair;
-        let mut completed = lock.lock().unwrap();
-        while completed.is_empty() {
-            completed = cvar.wait(completed).unwrap();
-        }
-    }
-}
-
-impl Restorer for RestorerImpl {
-    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
-        debug!("restorer starting...");
-        let mut su_addr = self.super_addr.lock().unwrap();
-        if su_addr.is_none() {
-            // start supervisor within the arbiter created earlier
-            let state = self.state.clone();
-            let pending = self.pending.clone();
-            let processing = self.processing.clone();
-            let completed = self.completed.clone();
-            let fetcher = self.fetcher;
-            let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                RestoreSupervisor::new(repo, state, pending, processing, completed, fetcher)
-            });
-            *su_addr = Some(addr);
-        }
-        Ok(())
-    }
-
-    fn enqueue(&self, request: Request) -> Result<(), Error> {
-        info!(
-            "enqueue request for {} into {}",
-            request.entry,
-            request.filepath.display()
-        );
-        let mut queue = self.pending.lock().unwrap();
-        queue.push_back(request);
-        let su_addr = self.super_addr.lock().unwrap();
-        if let Some(addr) = su_addr.as_ref() {
-            fn err_convert(err: SendError<Restore>) -> Error {
-                anyhow!(format!("RestorerImpl::enqueue(): {:?}", err))
-            }
-            addr.try_send(Restore()).map_err(err_convert)
-        } else {
-            error!("must call start() first");
-            Err(anyhow!("must call start() first"))
-        }
-    }
-
-    fn requests(&self) -> Vec<Request> {
-        let mut requests: Vec<Request> = Vec::new();
-        let queue = self.pending.lock().unwrap();
-        let slices = queue.as_slices();
-        requests.extend_from_slice(slices.0);
-        requests.extend_from_slice(slices.1);
-        if let Some(ref req) = *self.processing.lock().unwrap() {
-            requests.push(req.clone());
-        }
-        let pair = self.completed.clone();
-        let (lock, _cvar) = &*pair;
-        let completed = lock.lock().unwrap();
-        let slices = completed.as_slices();
-        requests.extend_from_slice(slices.0);
-        requests.extend_from_slice(slices.1);
-        requests
-    }
-
-    fn cancel(&self, request_id: String) -> bool {
-        let mut queue = self.pending.lock().unwrap();
-        let position = queue.iter().position(|r| r.id == request_id);
-        if let Some(idx) = position {
-            if let Some(mut req) = queue.remove(idx) {
-                info!("cancelled request for {}/{}", req.tree, req.entry);
-                req.status = Status::CANCELLED;
-                self.push_completed(req);
-            }
-            return true;
-        } else {
-            warn!("cancel, request not found (in pending queue)");
-        }
-        false
-    }
-
-    fn stop(&self) -> Result<(), Error> {
-        fn err_convert(err: SendError<Stop>) -> Error {
-            anyhow!(format!("RestorerImpl::stop(): {:?}", err))
-        }
-        let mut su_addr = self.super_addr.lock().unwrap();
-        match su_addr.take() {
-            Some(addr) => addr.try_send(Stop()).map_err(err_convert),
-            _ => Ok(()),
-        }
-    }
-}
-
-struct RestoreSupervisor {
-    // Database connection for querying datasets.
-    dbase: Arc<dyn RecordRepository>,
-    // Application state for signaling changes in restore status.
-    state: Arc<dyn StateStore>,
-    // Queue of incoming requests to be processed.
-    pending: Arc<Mutex<VecDeque<Request>>>,
-    // Request actively being processed.
-    processing: Arc<Mutex<Option<Request>>>,
-    // List to which completed tasks are added (in the front).
-    completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
-    // Factory method for the FileRestorer implementation.
-    fetcher: FileRestorerFactory,
-}
-
-impl RestoreSupervisor {
-    fn new(
+    pub fn new(
         repo: Arc<dyn RecordRepository>,
-        state: Arc<dyn StateStore>,
-        pending: Arc<Mutex<VecDeque<Request>>>,
-        processing: Arc<Mutex<Option<Request>>>,
-        completed: Arc<(Mutex<VecDeque<Request>>, Condvar)>,
-        fetcher: FileRestorerFactory,
+        subscriber: Arc<dyn Subscriber>,
+        stop_requested: Arc<RwLock<bool>>,
     ) -> Self {
         Self {
             dbase: repo,
-            state,
-            pending,
-            processing,
-            completed,
-            fetcher,
+            fetch_factory: default_file_fetcher,
+            subscriber,
+            stop_requested,
         }
     }
 
-    fn process_queue(&mut self) -> Result<(), Error> {
-        if std::env::var("RESTORE_ALWAYS_PROCESSING").is_ok() {
-            let proc = self.processing.lock().unwrap();
-            if proc.is_some() {
-                // a request is already processing, we cannot take any more
-                return Ok(());
-            }
+    /// Construct a RestorerImpl with the given file fetcher factory.
+    pub fn with_factory(
+        repo: Arc<dyn RecordRepository>,
+        fetcher: FileRestorerFactory,
+        subscriber: Arc<dyn Subscriber>,
+
+        stop_requested: Arc<RwLock<bool>>,
+    ) -> Self {
+        Self {
+            dbase: repo,
+            fetch_factory: fetcher,
+            subscriber,
+            stop_requested,
         }
-        // Construct the pack fetcher that will keep track of which pack files
-        // have been downloaded to avoid fetching the same one twice.
-        let mut fetcher = (self.fetcher)(self.dbase.clone());
-        // Process all of the requests in the queue using the one fetcher, in
-        // the hopes that there may be some overlap of the pack files.
-        while let Some(request) = self.pop_incoming() {
-            info!("processing request {}/{}", request.tree, request.entry);
-            let mut req = request.clone();
-            req.status = Status::RUNNING;
-            self.set_processing(req.clone());
-            if std::env::var("RESTORE_ALWAYS_PROCESSING").is_ok() {
-                // if in test mode, do not really process the request
-                req.files_restored = 42;
-                req.errors.push("oh no, something went wrong!".into());
-                req.errors.push("something else went wrong!".into());
-                req.errors.push("abandon ship, abandon ship!".into());
-                self.set_processing(req.clone());
-            } else {
-                match fetcher.load_dataset(&request.dataset) {
-                    Err(error) => {
-                        error!("process_queue: error loading dataset: {}", error);
-                        self.add_error(error, &mut req);
-                    }
-                    _ => {
-                        if let Err(error) = self.process_entry(&mut req, &mut fetcher) {
-                            error!("process_queue: error processing entry: {}", error);
-                            self.add_error(error, &mut req);
-                        }
-                    }
-                }
-                info!("completed request {}/{}", request.tree, request.entry);
-                self.push_completed();
-            }
-        }
-        Ok(())
     }
 
     fn process_entry(
         &self,
-        request: &mut Request,
+        request: &Request,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
         let tree = self
@@ -402,7 +228,7 @@ impl RestoreSupervisor {
 
     fn process_file(
         &self,
-        request: &mut Request,
+        request: &Request,
         digest: Checksum,
         filepath: &Path,
         fetcher: &mut Box<dyn FileRestorer>,
@@ -410,14 +236,13 @@ impl RestoreSupervisor {
         // fetch the packs for the file and assemble the chunks
         fetcher.fetch_file(&digest, filepath, &request.passphrase)?;
         // update the count of files restored so far
-        request.files_restored += 1;
-        self.set_processing(request.clone());
+        self.subscriber.restored(&request.id, 1);
         Ok(())
     }
 
     fn process_tree(
         &self,
-        request: &mut Request,
+        request: &Request,
         digest: Checksum,
         path: &Path,
         fetcher: &mut Box<dyn FileRestorer>,
@@ -440,7 +265,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
-                        self.add_error(error, request);
+                        self.subscriber.error(&request.id, error.to_string());
                     }
                 }
                 TreeReference::TREE(digest) => {
@@ -452,7 +277,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
-                        self.add_error(error, request);
+                        self.subscriber.error(&request.id, error.to_string());
                     }
                 }
                 TreeReference::FILE(digest) => {
@@ -464,7 +289,7 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
-                        self.add_error(error, request);
+                        self.subscriber.error(&request.id, error.to_string());
                     }
                 }
                 TreeReference::SMALL(contents) => {
@@ -474,117 +299,69 @@ impl RestoreSupervisor {
                             filepath.display(),
                             error
                         );
-                        self.add_error(error, request);
+                        self.subscriber.error(&request.id, error.to_string());
                     }
                 }
             }
         }
         Ok(())
     }
+}
 
-    fn pop_incoming(&self) -> Option<Request> {
-        let mut queue = self.pending.lock().unwrap();
-        queue.pop_front()
-    }
-
-    fn set_processing(&self, request: Request) {
-        let mut opt = self.processing.lock().unwrap();
-        *opt = Some(request);
-    }
-
-    fn push_completed(&self) {
-        let mut opt = self.processing.lock().unwrap();
-        let mut req = opt.take().unwrap();
-        drop(opt);
-        req.finished = Some(Utc::now());
-        req.status = Status::COMPLETED;
-        let pair = self.completed.clone();
-        let (lock, cvar) = &*pair;
-        let mut completed = lock.lock().unwrap();
-        // Push the completed request to the front of the list and truncate the
-        // older items to keep the list from growing indefinitely.
-        completed.push_front(req);
-        completed.truncate(32);
-        cvar.notify_all();
-    }
-
-    fn add_error(&self, error: Error, request: &mut Request) {
-        // avoid collecting so many errors that we run out of memory
-        if request.errors.len() < 100 {
-            let err_string = error.to_string();
-            request.errors.push(err_string);
-            self.set_processing(request.clone());
+impl Restorer for RestorerImpl {
+    fn restore_files(&self, request: Request) -> Result<(), Error> {
+        // Construct the pack fetcher that will keep track of which pack files
+        // have been downloaded to avoid fetching the same one twice.
+        let mut fetcher = (self.fetch_factory)(self.dbase.clone());
+        info!("processing request {}/{}", request.tree, request.entry);
+        self.subscriber.started(&request.id);
+        if std::env::var("RESTORE_ALWAYS_PROCESSING").is_ok() {
+            // if in test mode, do not really process the request
+            self.subscriber.restored(&request.id, 42);
+            self.subscriber
+                .error(&request.id, "oh no, something went wrong!".into());
+            self.subscriber
+                .error(&request.id, "something else went wrong!".into());
+            self.subscriber
+                .error(&request.id, "abandon ship, abandon ship!".into());
+        } else {
+            match fetcher.load_dataset(&request.dataset) {
+                Err(error) => {
+                    error!("process_queue: error loading dataset: {}", error);
+                    self.subscriber.error(&request.id, error.to_string());
+                }
+                _ => {
+                    if let Err(error) = self.process_entry(&request, &mut fetcher) {
+                        error!("process_queue: error processing entry: {}", error);
+                        self.subscriber.error(&request.id, error.to_string());
+                    }
+                }
+            }
+            self.subscriber.finished(&request.id);
+            info!("completed request {}/{}", request.tree, request.entry);
         }
-    }
-}
-
-impl Actor for RestoreSupervisor {
-    type Context = Context<Self>;
-
-    fn started(&mut self, _ctx: &mut Self::Context) {
-        debug!("supervisor started");
-        self.state.restorer_event(RestorerAction::Started);
+        Ok(())
     }
 
-    fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
-        debug!("supervisor stopping");
-        Running::Stop
-    }
-
-    fn stopped(&mut self, _ctx: &mut Context<Self>) {
-        debug!("supervisor stopped");
-    }
-}
-
-impl Supervised for RestoreSupervisor {
-    fn restarting(&mut self, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("supervisor restarting");
-    }
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct SetFactory {
-    // Factory method for the FileRestorer implementation.
-    fetcher: FileRestorerFactory,
-}
-
-impl Handler<SetFactory> for RestoreSupervisor {
-    type Result = ();
-
-    fn handle(&mut self, msg: SetFactory, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("supervisor received SetFactory message");
-        self.fetcher = msg.fetcher;
-    }
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct Stop();
-
-impl Handler<Stop> for RestoreSupervisor {
-    type Result = ();
-
-    fn handle(&mut self, _msg: Stop, ctx: &mut Context<RestoreSupervisor>) {
-        debug!("supervisor received Stop message");
-        self.state.restorer_event(RestorerAction::Stopped);
-        ctx.stop();
-    }
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct Restore();
-
-impl Handler<Restore> for RestoreSupervisor {
-    type Result = ();
-
-    fn handle(&mut self, _msg: Restore, _ctx: &mut Context<RestoreSupervisor>) {
-        debug!("supervisor received Restore message");
-        if std::env::var("RESTORE_ALWAYS_PENDING").is_ok() {
-            info!("RESTORE_ALWAYS_PENDING is set, not processing the queue");
-        } else if let Err(err) = self.process_queue() {
-            error!("supervisor error processing queue: {}", err);
+    fn restore_database(&self, store_id: &str, passphrase: &str) -> Result<(), Error> {
+        let result = if let Some(store) = self.dbase.get_store(store_id)? {
+            let pack_repo = self.dbase.build_pack_repo(&store)?;
+            let config = self.dbase.get_configuration()?;
+            let archive_file = tempfile::NamedTempFile::new()?;
+            let archive_path = archive_file.into_temp_path();
+            info!("retrieving database snapshot from store {}", store.id);
+            pack_repo.retrieve_latest_database(&config.computer_id, &archive_path)?;
+            info!("restoring database from backup");
+            self.dbase.restore_from_backup(&archive_path, passphrase)
+        } else {
+            Err(anyhow!("pack store not found: {}", store_id))
+        };
+        if let Err(err) = result {
+            error!("database restore failed: {}", err);
+            Err(err)
+        } else {
+            info!("database restore complete");
+            Ok(())
         }
     }
 }
@@ -663,7 +440,7 @@ impl FileRestorerImpl {
             stores.retrieve_pack(&saved_pack.locations, &archive)?;
             // unpack the contents
             verify_pack_digest(pack_digest, &archive)?;
-            helpers::extract_pack(&archive, workspace, Some(passphrase))?;
+            packs::extract_pack(&archive, workspace, Some(passphrase))?;
             debug!("pack extracted");
             fs::remove_file(archive)?;
             // remember this pack as being downloaded
@@ -863,11 +640,12 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::{Dataset, Tree, TreeEntry};
-    use crate::domain::repositories::MockRecordRepository;
-    use crate::tasks;
-    use crate::tasks::helpers;
-    use crate::tasks::state::StateStoreImpl;
+    use crate::domain::entities::{
+        Configuration, Dataset, PackRetention, Store, StoreType, Tree, TreeEntry,
+    };
+    use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
+    use crate::shared::packs;
+    use std::collections::HashMap;
     use std::io;
     use std::str::FromStr;
 
@@ -898,26 +676,26 @@ mod tests {
                 .returning(|_| Err(anyhow!("oh no!")));
             Box::new(restorer)
         }
-        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        let sut = RestorerImpl::new(state, factory);
+        let mut submock = MockSubscriber::new();
+        submock.expect_started().once().returning(|_| false);
+        submock
+            .expect_error()
+            .withf(|_, err| err.contains("oh no"))
+            .returning(|_, _| false);
+        submock.expect_finished().once().returning(|_| false);
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
         // act
-        let result = sut.start(repo.clone());
-        assert!(result.is_ok());
-        let result = sut.enqueue(tasks::restore::Request::new(
+        let request = super::Request::new(
             Checksum::SHA1("cafebabe".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             "dataset1".into(),
             "password".into(),
-        ));
+        );
+        let result = sut.restore_files(request);
         // assert
         assert!(result.is_ok());
-        sut.wait_for_completed();
-        let requests = sut.requests();
-        assert_eq!(requests.len(), 1);
-        let request = &requests[0];
-        assert_eq!(request.errors.len(), 1);
-        assert!(request.errors[0].contains("oh no"));
         Ok(())
     }
 
@@ -941,7 +719,7 @@ mod tests {
             .withf(|digest| digest.to_string() == "sha1-cafebabe")
             .returning(move |_| Ok(Some(tree.clone())));
 
-        let passphrase = helpers::get_passphrase();
+        let passphrase = packs::get_passphrase();
 
         //
         // Debugging the mocks can be tricky with the restorer running on a
@@ -958,52 +736,53 @@ mod tests {
             Box::new(restorer)
         }
 
-        // act with failing request
+        // act/assert with failing request
         let repo = Arc::new(mock);
-        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        let mut sut = RestorerImpl::new(state, factory_fail);
-        let result = sut.start(repo.clone());
-        assert!(result.is_ok());
-        let result = sut.enqueue(tasks::restore::Request::new(
+        let mut submock = MockSubscriber::new();
+        submock.expect_started().once().returning(|_| false);
+        submock
+            .expect_error()
+            .withf(|_, err| err.contains("oh no"))
+            .returning(|_, _| false);
+        submock.expect_finished().once().returning(|_| false);
+        let stopper = Arc::new(RwLock::new(false));
+        let sut =
+            RestorerImpl::with_factory(repo.clone(), factory_fail, Arc::new(submock), stopper);
+        let request = super::Request::new(
             Checksum::SHA1("deadbeef".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
             passphrase.clone(),
-        ));
+        );
+        let result = sut.restore_files(request);
         assert!(result.is_ok());
-        // assert failure
-        sut.wait_for_completed();
-        let requests = sut.requests();
-        assert_eq!(requests.len(), 1);
-        let request = &requests[0];
-        assert_eq!(request.errors.len(), 1);
-        assert!(request.errors[0].contains("oh no"));
 
-        // act with successful request
+        // act/assert with successful request
         fn factory_pass(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
             let mut restorer = MockFileRestorer::new();
             restorer.expect_load_dataset().returning(|_| Ok(()));
             restorer.expect_fetch_file().returning(|_, _, _| Ok(()));
             Box::new(restorer)
         }
-        sut.reset_completed();
-        let result = sut.factory(factory_pass);
-        assert!(result.is_ok());
-        let result = sut.enqueue(tasks::restore::Request::new(
+        let mut submock = MockSubscriber::new();
+        submock.expect_started().once().returning(|_| false);
+        submock
+            .expect_restored()
+            .withf(|_, value| *value == 1)
+            .returning(|_, _| false);
+        submock.expect_finished().once().returning(|_| false);
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory_pass, Arc::new(submock), stopper);
+        let request = super::Request::new(
             Checksum::SHA1("cafebabe".into()),
             String::from("lorem-ipsum.txt"),
             PathBuf::from("lorem-ipsum.txt"),
             dataset_id.clone(),
             passphrase.clone(),
-        ));
+        );
+        let result = sut.restore_files(request);
         assert!(result.is_ok());
-        // assert success
-        sut.wait_for_completed();
-        let requests = sut.requests();
-        assert_eq!(requests.len(), 1);
-        let request = &requests[0];
-        assert_eq!(request.errors.len(), 0);
         Ok(())
     }
 
@@ -1073,54 +852,133 @@ mod tests {
             Box::new(restorer)
         }
 
-        // act
+        // act/assert
         let repo = Arc::new(mock);
-        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        let sut = RestorerImpl::new(state, factory);
-        let result = sut.start(repo.clone());
-        assert!(result.is_ok());
-        let passphrase = helpers::get_passphrase();
-        let result = sut.enqueue(tasks::restore::Request::new(
+        let mut submock = MockSubscriber::new();
+        submock.expect_started().once().returning(|_| false);
+        submock
+            .expect_restored()
+            .withf(|_, value| *value == 1)
+            .returning(|_, _| false);
+        submock.expect_finished().once().returning(|_| false);
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let passphrase = packs::get_passphrase();
+        let request = super::Request::new(
             roottree_sha1,
             String::from("fixtures"),
             PathBuf::from("/home/town"),
             dataset_id.clone(),
             passphrase.clone(),
-        ));
+        );
+        let result = sut.restore_files(request);
         assert!(result.is_ok());
-
-        // assert
-        sut.wait_for_completed();
-        let requests = sut.requests();
-        assert_eq!(requests.len(), 1);
-        let request = &requests[0];
-        assert_eq!(request.errors.len(), 0);
         Ok(())
     }
 
-    #[actix_rt::test]
-    #[serial_test::serial]
-    async fn test_restorer_start_stop_restart() -> io::Result<()> {
+    #[test]
+    fn test_restore_database_ok() {
         // arrange
-        fn factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
-            Box::new(FileRestorerImpl::new(dbase))
-        }
-        let mock = MockRecordRepository::new();
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .with(eq("cafebabe"))
+            .returning(move |_| Ok(Some(store.clone())));
+        mock.expect_build_pack_repo().returning(move |_| {
+            let mut mock_store = MockPackRepository::new();
+            mock_store
+                .expect_retrieve_latest_database()
+                .returning(move |_, _| Ok(()));
+            Ok(Box::new(mock_store))
+        });
+        let config: Configuration = Default::default();
+        mock.expect_get_configuration()
+            .returning(move || Ok(config.clone()));
+        mock.expect_restore_from_backup().returning(|_, _| Ok(()));
+        // act
         let repo = Arc::new(mock);
-        // start
-        let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-        let sut = RestorerImpl::new(state.clone(), factory);
-        let result = sut.start(repo.clone());
-        state.wait_for_restorer(RestorerAction::Started);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::new(repo, Arc::new(submock), stopper);
+        let passphrase = packs::get_passphrase();
+        let result = sut.restore_database("cafebabe", &passphrase);
+        // assert
         assert!(result.is_ok());
-        // stop
-        let result = sut.stop();
-        assert!(result.is_ok());
-        state.wait_for_restorer(RestorerAction::Stopped);
-        // restart
-        let result = sut.start(repo);
-        state.wait_for_restorer(RestorerAction::Started);
-        assert!(result.is_ok());
-        Ok(())
     }
+
+    #[test]
+    fn test_restore_database_no_database_err() {
+        // arrange
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/home/planet".to_owned());
+        let store = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "mylocalstore".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .with(eq("cafebabe"))
+            .returning(move |_| Ok(Some(store.clone())));
+        mock.expect_build_pack_repo().returning(move |_| {
+            let mut mock_store = MockPackRepository::new();
+            mock_store
+                .expect_retrieve_latest_database()
+                .returning(move |_, _| Ok(()));
+            Ok(Box::new(mock_store))
+        });
+        let config: Configuration = Default::default();
+        mock.expect_get_configuration()
+            .returning(move || Ok(config.clone()));
+        mock.expect_restore_from_backup()
+            .returning(|_, _| Err(anyhow!("no database archives available")));
+        // act
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::new(repo, Arc::new(submock), stopper);
+        let passphrase = packs::get_passphrase();
+        let result = sut.restore_database("cafebabe", &passphrase);
+        // assert
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no database archives available"));
+    }
+
+    // TODO: try to get this working with whatever solution is devised for stopping/starting the restore process
+    // #[actix_rt::test]
+    // #[serial_test::serial]
+    // async fn test_restorer_start_stop_restart() -> io::Result<()> {
+    //     // arrange
+    //     fn factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+    //         Box::new(FileRestorerImpl::new(dbase))
+    //     }
+    //     let mock = MockRecordRepository::new();
+    //     let repo = Arc::new(mock);
+    //     // start
+    //     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
+    //     let sut = RestorerImpl::new(state.clone(), factory);
+    //     let result = sut.start(repo.clone());
+    //     state.wait_for_restorer(RestorerAction::Started);
+    //     assert!(result.is_ok());
+    //     // stop
+    //     let result = sut.stop();
+    //     assert!(result.is_ok());
+    //     state.wait_for_restorer(RestorerAction::Stopped);
+    //     // restart
+    //     let result = sut.start(repo);
+    //     state.wait_for_restorer(RestorerAction::Started);
+    //     assert!(result.is_ok());
+    //     Ok(())
+    // }
 }

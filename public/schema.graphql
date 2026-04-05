@@ -7,13 +7,13 @@ schema {
   mutation: Mutation
 }
 
-"Status of the most recent snapshot for a dataset."
 enum BackupStatus {
-  "Backup has not run yet." NONE
+  "Backup has not run yet." PENDING
   "Backup is still running." RUNNING
-  "Backup has finished." FINISHED
+  "Backup was interrupted and will stop soon." STOPPING
+  "Backup has completed successfully." FINISHED
   "Backup paused due to schedule." PAUSED
-  "Backup failed, see `errorMessage` property." FAILED
+  "Backup failed, see `errors` property for details." FAILED
 }
 
 enum DayOfWeek {
@@ -146,14 +146,12 @@ scalar TreeReference
 type BackupState {
   "Status of the backup."
   status: BackupStatus!
-  "True if the running backup received a request to stop prematurely."
-  stopRequested: Boolean!
   "Start time for the backup of this dataset, if started."
   startTime: DateTime
   "Completion time for the backup of this dataset, if completed."
   endTime: DateTime
-  "Error for the most this backup, if any."
-  errorMessage: String
+  "Errors collected during the backup process, if any."
+  errors: [String!]!
   "Number of files that changed in this backup."
   changedFiles: BigInt!
   "Number of pack files uploaded so far."

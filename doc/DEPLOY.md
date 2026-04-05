@@ -100,15 +100,17 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 
 ### Amazon S3 Setup
 
+1. Navigate to the **IAM** console
 1. Create user that will act on behalf of zorigami
-1. Give specific permissions, not assign to a group
+1. Choose _Attach policies directly_, do not assign to a group
 1. Add **AmazonS3FullAccess** permission (search for _s3_)
 1. Add **AmazonDynamoDBFullAccess** permission (search for _dynamo_)
-1. View the newly created user
+1. Click **Next**, review the details, then click **Create user**
+1. Click on the user's name in the list
 1. Find the **Security credentials** tab
 1. Add a new **Access key** for this user
 1. Select _Application running outside AWS_ when asked
-1. Download the `.csv` file of the newly created key
+1. Copy the access key and secret key and save them in a safe place
 
 ### Azure Blob Storage
 

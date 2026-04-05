@@ -473,7 +473,7 @@ fn test_record_counts() -> Result<(), Error> {
 }
 
 #[test]
-fn test_backup_restore() -> Result<(), Error> {
+fn test_database_backup_restore() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;

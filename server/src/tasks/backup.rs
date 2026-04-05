@@ -1,67 +1,143 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-
-//! Defines the `Performer` trait and implementation that perform backups by
-//! taking a snapshot of a dataset, storing new entries in the database, finding
-//! the differences from the previous snapshot, building pack files, and sending
-//! them to the store.
-
 use crate::domain::entities;
-use crate::domain::repositories::RecordRepository;
-use crate::tasks::helpers;
-use crate::tasks::state::{BackupAction, StateStore};
-use anyhow::{Context, Error, anyhow};
+use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::shared::packs;
+use crate::shared::thread_pool::ThreadPool;
+use anyhow::{Error, anyhow};
 use chrono::{DateTime, Utc};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, info, trace, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
-use std::collections::VecDeque;
+use std::cmp;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::SystemTime;
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::time::{Duration, SystemTime, SystemTimeError};
 
-mod driver;
-pub mod scheduler;
-pub use scheduler::{Scheduler, SchedulerImpl};
+/// Status of a backup request.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Status {
+    /// Request is waiting to be processed.
+    PENDING,
+    /// Request is being processed.
+    RUNNING,
+    /// Request has been interrupted by the user, will stop soon.
+    STOPPING,
+    /// Request was paused due to scheduling.
+    PAUSED,
+    /// Request processing completed successfully.
+    COMPLETED,
+    /// Request processing encountered an error and could not finish.
+    FAILED,
+}
 
 ///
 /// Request to backup a specific dataset.
 ///
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Request {
-    /// Dataset to be backed up.
-    dataset: entities::Dataset,
-    /// Reference to the record repository.
-    repo: Arc<dyn RecordRepository>,
-    /// Reference to the shared application state.
-    state: Arc<dyn StateStore>,
+    /// Unique identifier for this request.
+    pub id: String,
+    /// Status of the request.
+    pub status: Status,
+    /// Identifier of the dataset to be backed up.
+    pub dataset: String,
     /// Passphrase used to generate a secret key to encrypt pack files.
-    passphrase: String,
+    pub passphrase: String,
     /// Optional time at which to stop the backup, albeit temporarily.
-    stop_time: Option<DateTime<Utc>>,
+    pub stop_time: Option<DateTime<Utc>>,
+    /// The date-time when the request processing started.
+    pub started: Option<DateTime<Utc>>,
+    /// The date-time when the request was completed.
+    pub finished: Option<DateTime<Utc>>,
+    /// Number of files that changed in this snapshot.
+    pub changed_files: u64,
+    /// Number of packs uploaded so far.
+    pub packs_uploaded: u64,
+    /// Number of files uploaded so far.
+    pub files_uploaded: u64,
+    /// Number of bytes uploaded so far, which may change more often than the
+    /// number of files in the event that a very large file is being uploaded.
+    pub bytes_uploaded: u64,
+    /// Error messages if anything went wrong during processing.
+    pub errors: Vec<String>,
 }
 
 impl Request {
     /// Construct a new instance of Request.
     pub fn new<T: Into<String>>(
-        dataset: entities::Dataset,
-        repo: Arc<dyn RecordRepository>,
-        state: Arc<dyn StateStore>,
+        dataset: String,
         passphrase: T,
         stop_time: Option<DateTime<Utc>>,
     ) -> Self {
+        let id = xid::new().to_string();
         Self {
+            id,
+            status: Status::PENDING,
             dataset,
-            repo,
-            state,
             passphrase: passphrase.into(),
             stop_time,
+            started: None,
+            finished: None,
+            changed_files: 0,
+            packs_uploaded: 0,
+            files_uploaded: 0,
+            bytes_uploaded: 0,
+            errors: vec![],
         }
     }
+}
+
+impl fmt::Display for Request {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[Backup]Request({})", self.id)
+    }
+}
+
+impl cmp::PartialEq for Request {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl cmp::Eq for Request {}
+
+///
+/// A `Subscriber` receives updates to the progress of a backup operation.
+///
+#[cfg_attr(test, automock)]
+pub trait Subscriber: Send + Sync {
+    /// Backup operation has begun to be processed.
+    fn started(&self, request_id: &str);
+
+    /// Backup found `count` many files changed since the previous snapshot.
+    fn files_changed(&self, request_id: &str, count: u64);
+
+    /// Backup process has successfully uploaded a pack file.
+    fn pack_uploaded(&self, request_id: &str);
+
+    /// An additional number of bytes have been uploaded.
+    fn bytes_uploaded(&self, request_id: &str, addend: u64);
+
+    /// An additional number of files have been uploaded.
+    fn files_uploaded(&self, request_id: &str, addend: u64);
+
+    /// An error has occurred while restoring files, directories, or links.
+    fn error(&self, request_id: &str, error: String);
+
+    /// The backup process has paused due to the schedule for the dataset.
+    fn paused(&self, request_id: &str);
+
+    /// A paused backup operation has begun to be processed again.
+    fn restarted(&self, request_id: &str);
+
+    /// Backup request has been completed.
+    fn finished(&self, request_id: &str);
 }
 
 ///
@@ -69,52 +145,68 @@ impl Request {
 /// changed files, creating packs, uploading them, and updating the database.
 ///
 #[cfg_attr(test, automock)]
-pub trait Performer: Send + Sync {
-    /// Perform a backup immediately on the current thread.
+pub trait Backuper: Send + Sync {
+    /// Synchronously perform the backup for a certain data set.
+    ///
+    /// Returns the digest of the snapshot, or `None` if there were no changes.
+    ///
+    /// May return `OutOfTimeFailure` if the process reached the end of the
+    /// range of time permitted in the schedule.
     fn backup(&self, request: Request) -> Result<Option<entities::Checksum>, Error>;
 }
 
 ///
-/// A simple concrete implementation of Performer that processes backups linearly on
-/// the current thread, allowing for easier management of the database locks
-/// when performing a full database restore.
+/// Basic implementation of `Backuper`.
 ///
-#[derive(Default)]
-pub struct PerformerImpl();
+pub struct BackuperImpl {
+    dbase: Arc<dyn RecordRepository>,
+    // Events related to the backup are sent to the subscriber.
+    subscriber: Arc<dyn Subscriber>,
+    // If the value is true, the backup process should stop.
+    stop_requested: Arc<RwLock<bool>>,
+}
 
-impl Performer for PerformerImpl {
-    fn backup(&self, request: Request) -> Result<Option<entities::Checksum>, Error> {
+impl BackuperImpl {
+    /// Construct a new instance of BackuperImpl.
+    pub fn new(
+        repo: Arc<dyn RecordRepository>,
+        subscriber: Arc<dyn Subscriber>,
+        stop_requested: Arc<RwLock<bool>>,
+    ) -> Self {
+        Self {
+            dbase: repo,
+            subscriber,
+            stop_requested,
+        }
+    }
+
+    /// Process the backup request for a given dataset.
+    fn start_backup(&self, request: &Request) -> Result<Option<entities::Checksum>, Error> {
+        use anyhow::Context;
+        let dataset = self
+            .dbase
+            .get_dataset(&request.dataset)?
+            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", request.dataset)))?;
         if let Some(time) = &request.stop_time {
             debug!("backup: starting for {} until {}", request.dataset, time);
         } else {
             debug!("backup: starting for {} until completion", request.dataset);
         }
-        fs::create_dir_all(&request.dataset.workspace).with_context(|| {
-            format!(
-                "backup fs::create_dir_all({})",
-                request.dataset.workspace.display()
-            )
+        fs::create_dir_all(&dataset.workspace).with_context(|| {
+            format!("backup fs::create_dir_all({})", dataset.workspace.display())
         })?;
         // Check if latest snapshot exists and lacks an end time, which indicates
         // that the previous backup did not complete successfully.
-        let latest_snapshot = request.dataset.snapshot.clone();
+        let latest_snapshot = dataset.snapshot.clone();
         #[allow(clippy::collapsible_if)]
         if let Some(latest) = latest_snapshot.as_ref() {
-            if let Some(snapshot) = request.repo.get_snapshot(latest)? {
+            if let Some(snapshot) = self.dbase.get_snapshot(latest)? {
                 if snapshot.end_time.is_none() {
                     // continue from the previous incomplete backup
                     let parent_sha1 = snapshot.parent;
                     let current_sha1 = latest.to_owned();
                     debug!("backup: continuing previous snapshot {}", &current_sha1);
-                    return continue_backup(
-                        &request.dataset,
-                        &request.repo,
-                        &request.state,
-                        &request.passphrase,
-                        parent_sha1,
-                        current_sha1,
-                        request.stop_time,
-                    );
+                    return self.continue_backup(request, dataset, parent_sha1, current_sha1);
                 }
             }
         }
@@ -122,14 +214,12 @@ impl Performer for PerformerImpl {
         // taken. The snapshot can take a long time to build, and another thread may
         // spawn in the mean time and start taking another snapshot, and again, and
         // again until the system runs out of resources.
-        request
-            .state
-            .backup_event(BackupAction::Start(request.dataset.id.clone()));
+        self.subscriber.started(&request.id);
         // In addition to the exclusions defined in the dataset, we exclude the
         // temporary workspace and repository database files.
-        let mut excludes = request.repo.get_excludes();
-        excludes.push(request.dataset.workspace.clone());
-        for exclusion in request.dataset.excludes.iter() {
+        let mut excludes = self.dbase.get_excludes();
+        excludes.push(dataset.workspace.clone());
+        for exclusion in dataset.excludes.iter() {
             excludes.push(PathBuf::from(exclusion));
         }
         debug!("backup: dataset exclusions: {:?}", excludes);
@@ -137,98 +227,136 @@ impl Performer for PerformerImpl {
         // dataset, to allow detecting a running backup, and thus recover from a
         // crash or forced shutdown.
         let snap_opt = take_snapshot(
-            &request.dataset.basepath,
+            &dataset.basepath,
             latest_snapshot.clone(),
-            &request.repo,
+            &self.dbase,
             excludes,
         )?;
         match snap_opt {
             None => {
                 // indicate that the backup has finished (doing nothing)
-                request
-                    .state
-                    .backup_event(BackupAction::Finish(request.dataset.id.clone()));
+                self.subscriber.finished(&request.id);
                 Ok(None)
             }
             Some(new_snapshot) => {
-                let mut ds = request.dataset.clone();
+                let mut ds = dataset.clone();
                 ds.snapshot = Some(new_snapshot.clone());
-                request.repo.put_dataset(&ds)?;
+                self.dbase.put_dataset(&ds)?;
                 debug!("backup: starting new snapshot {}", &new_snapshot);
-                continue_backup(
-                    &ds,
-                    &request.repo,
-                    &request.state,
-                    &request.passphrase,
-                    latest_snapshot,
-                    new_snapshot,
-                    request.stop_time,
-                )
+                self.continue_backup(request, dataset, latest_snapshot, new_snapshot)
             }
         }
+    }
+
+    ///
+    /// Continue the backup for the most recent snapshot, comparing against the
+    /// parent snapshot, if any.
+    ///
+    fn continue_backup(
+        &self,
+        request: &Request,
+        dataset: entities::Dataset,
+        parent_sha1: Option<entities::Checksum>,
+        current_sha1: entities::Checksum,
+    ) -> Result<Option<entities::Checksum>, Error> {
+        let mut driver = BackupDriver::new(
+            request.to_owned(),
+            dataset.clone(),
+            self.dbase.clone(),
+            self.subscriber.clone(),
+            self.stop_requested.clone(),
+        )?;
+        // if no previous snapshot, visit every file in the new snapshot, otherwise
+        // find those files that changed from the previous snapshot
+        match parent_sha1 {
+            None => {
+                let snapshot = self
+                    .dbase
+                    .get_snapshot(&current_sha1)?
+                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", current_sha1)))?;
+                let tree = snapshot.tree;
+                // count the changed files and emit an event
+                let iter = TreeWalker::new(&self.dbase, &dataset.basepath, tree.clone());
+                let count: u64 = iter.count() as u64;
+                self.subscriber.files_changed(&dataset.id, count);
+                // perform the backup
+                let iter = TreeWalker::new(&self.dbase, &dataset.basepath, tree);
+                for result in iter {
+                    driver.add_file(result?)?;
+                }
+            }
+            Some(ref parent) => {
+                // count the changed files and emit an event
+                let iter = find_changed_files(
+                    &self.dbase,
+                    dataset.basepath.clone(),
+                    parent.clone(),
+                    current_sha1.clone(),
+                )?;
+                let count: u64 = iter.count() as u64;
+                self.subscriber.files_changed(&dataset.id, count);
+                // perform the backup
+                let iter = find_changed_files(
+                    &self.dbase,
+                    dataset.basepath.clone(),
+                    parent.clone(),
+                    current_sha1.clone(),
+                )?;
+                for result in iter {
+                    driver.add_file(result?)?;
+                }
+            }
+        }
+        // finish packing and uploading the changed files
+        driver.finish_remainder()?;
+        // commit everything to the database
+        driver.update_snapshot(&current_sha1)?;
+        driver.backup_database()?;
+        Ok(Some(current_sha1))
     }
 }
 
-///
-/// Continue the backup for the most recent snapshot, comparing against the
-/// parent snapshot, if any.
-///
-fn continue_backup(
-    dataset: &entities::Dataset,
-    repo: &Arc<dyn RecordRepository>,
-    state: &Arc<dyn StateStore>,
-    passphrase: &str,
-    parent_sha1: Option<entities::Checksum>,
-    current_sha1: entities::Checksum,
-    stop_time: Option<DateTime<Utc>>,
-) -> Result<Option<entities::Checksum>, Error> {
-    let mut driver = driver::BackupDriver::new(dataset, repo, state, passphrase, stop_time)?;
-    // if no previous snapshot, visit every file in the new snapshot, otherwise
-    // find those files that changed from the previous snapshot
-    match parent_sha1 {
-        None => {
-            let snapshot = repo
-                .get_snapshot(&current_sha1)?
-                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", current_sha1)))?;
-            let tree = snapshot.tree;
-            // count the changed files and emit an event
-            let iter = TreeWalker::new(repo, &dataset.basepath, tree.clone());
-            let count: u64 = iter.count() as u64;
-            state.backup_event(BackupAction::BeginUpload(dataset.id.clone(), count));
-            // perform the backup
-            let iter = TreeWalker::new(repo, &dataset.basepath, tree);
-            for result in iter {
-                driver.add_file(result?)?;
+impl Backuper for BackuperImpl {
+    fn backup(&self, request: Request) -> Result<Option<entities::Checksum>, Error> {
+        info!("dataset {} to be backed up", &request.dataset);
+        let start_time = SystemTime::now();
+        // reset any error state in the backup
+        self.subscriber.restarted(&request.id);
+        let dataset_id = request.dataset.clone();
+        match self.start_backup(&request) {
+            Ok(Some(checksum)) => {
+                self.subscriber.finished(&request.id);
+                let end_time = SystemTime::now();
+                let time_diff = end_time.duration_since(start_time);
+                let pretty_time = pretty_print_duration(time_diff);
+                info!("created new snapshot {}", &checksum);
+                info!(
+                    "dataset {} backup complete after {}",
+                    &dataset_id, pretty_time
+                );
+                Ok(Some(checksum))
             }
-        }
-        Some(ref parent) => {
-            // count the changed files and emit an event
-            let iter = find_changed_files(
-                repo,
-                dataset.basepath.clone(),
-                parent.clone(),
-                current_sha1.clone(),
-            )?;
-            let count: u64 = iter.count() as u64;
-            state.backup_event(BackupAction::BeginUpload(dataset.id.clone(), count));
-            // perform the backup
-            let iter = find_changed_files(
-                repo,
-                dataset.basepath.clone(),
-                parent.clone(),
-                current_sha1.clone(),
-            )?;
-            for result in iter {
-                driver.add_file(result?)?;
+            Ok(None) => {
+                info!("no new snapshot required");
+                Ok(None)
             }
+            Err(err) => match err.downcast::<OutOfTimeFailure>() {
+                Ok(err) => {
+                    info!("backup window has reached its end");
+                    // put the backup in the paused state for the time being
+                    self.subscriber.paused(&request.id);
+                    Err(Error::from(err))
+                }
+                Err(err) => {
+                    // here `err` is the original error
+                    error!("could not perform backup: {}", err);
+                    // put the backup in the error state so we try again
+                    self.subscriber.error(&request.id, err.to_string());
+                    Err(err)
+                }
+            },
         }
     }
-    // finish packing and uploading the changed files
-    driver.finish_remainder()?;
-    // commit everything to the database
-    driver.update_snapshot(&current_sha1)?;
-    driver.backup_database()?;
-    Ok(Some(current_sha1))
 }
 
 ///
@@ -260,7 +388,7 @@ fn take_snapshot(
     let exclusions = build_exclusions(basepath, &excludes);
     let mut file_counts: entities::FileCounts = Default::default();
     let cpu_count = std::thread::available_parallelism()?.get();
-    let pool = helpers::ThreadPool::new(cpu_count);
+    let pool = ThreadPool::new(cpu_count);
     debug!("take_snapshot: creating pool of {cpu_count} threads");
     let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
     if let Some(ref parent_sha1) = parent {
@@ -274,7 +402,7 @@ fn take_snapshot(
     }
     let end_time = SystemTime::now();
     let time_diff = end_time.duration_since(start_time);
-    let pretty_time = helpers::pretty_print_duration(time_diff);
+    let pretty_time = pretty_print_duration(time_diff);
     let mut snap = entities::Snapshot::new(parent, tree.digest.clone(), file_counts);
     info!(
         "took snapshot {} with {} files after {}",
@@ -680,7 +808,7 @@ fn scan_tree(
     dbase: &Arc<dyn RecordRepository>,
     excludes: &GlobSet,
     file_counts: &mut entities::FileCounts,
-    pool: &helpers::ThreadPool,
+    pool: &ThreadPool,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
@@ -756,7 +884,7 @@ fn scan_tree(
 fn process_files(
     paths: Vec<PathBuf>,
     dbase: &Arc<dyn RecordRepository>,
-    pool: &helpers::ThreadPool,
+    pool: &ThreadPool,
 ) -> Vec<entities::TreeEntry> {
     // list of results that are either successful (Some(TreeEntry)) or resulted
     // in an error (None), paired with a condvar so the main thread can wait
@@ -856,19 +984,530 @@ fn count_files(metadata: &fs::Metadata, file_counts: &mut entities::FileCounts) 
     }
 }
 
+///
+/// Receives changed files, placing them in packs and uploading to the pack
+/// stores. If time has run out, will raise an `OutOfTimeFailure` error.
+///
+pub struct BackupDriver {
+    request: Request,
+    dataset: entities::Dataset,
+    dbase: Arc<dyn RecordRepository>,
+    stores: Box<dyn PackRepository>,
+    /// Preferred size of chunks in bytes.
+    chunk_size: u32,
+    /// Builds a pack file comprised of compressed chunks.
+    builder: packs::PackBuilder,
+    /// Tracks files and chunks in the current pack.
+    record: PackRecord,
+    /// Map of file checksum to the chunks it contains that have not yet been
+    /// uploaded in a pack file.
+    file_chunks: BTreeMap<entities::Checksum, Vec<entities::Chunk>>,
+    /// Those chunks that have been packed using this builder.
+    packed_chunks: HashSet<entities::Checksum>,
+    /// Those chunks that have been uploaded previously.
+    done_chunks: HashSet<entities::Checksum>,
+    // Events related to the backup are sent to the subscriber.
+    subscriber: Arc<dyn Subscriber>,
+    stop_requested: Arc<RwLock<bool>>,
+}
+
+impl BackupDriver {
+    /// Build a BackupDriver.
+    pub fn new(
+        request: Request,
+        dataset: entities::Dataset,
+        dbase: Arc<dyn RecordRepository>,
+        subscriber: Arc<dyn Subscriber>,
+        stop_requested: Arc<RwLock<bool>>,
+    ) -> Result<Self, Error> {
+        let stores = dbase.load_dataset_stores(&dataset)?;
+        let chunk_size = calc_chunk_size(dataset.pack_size);
+        // Because EXAF combines content into 16mb blocks, it is possible that
+        // it will produce something that is just under the desired pack size,
+        // and subsequently more chunks will be added, pushing it well past the
+        // desired pack size.
+        let target_size = (dataset.pack_size / 10) * 9;
+        let passphrase = request.passphrase.clone();
+        Ok(Self {
+            request,
+            dataset,
+            dbase,
+            stores,
+            chunk_size,
+            builder: packs::PackBuilder::new(target_size).password(passphrase),
+            record: Default::default(),
+            file_chunks: BTreeMap::new(),
+            packed_chunks: HashSet::new(),
+            done_chunks: HashSet::new(),
+            subscriber,
+            stop_requested,
+        })
+    }
+
+    /// Process a single changed file, adding it to the pack, and possibly
+    /// uploading one or more pack files as needed.
+    pub fn add_file(&mut self, changed: ChangedFile) -> Result<(), Error> {
+        // ignore files which already have records
+        if self.dbase.get_file(&changed.digest)?.is_none() {
+            if self
+                .split_file(&changed.path, changed.digest.clone())
+                .is_err()
+            {
+                // file disappeared out from under us, record it as
+                // having zero length; file restore will handle it
+                // without any problem
+                error!("file {} went missing during backup", changed.path.display());
+                let file = entities::File::new(changed.digest, 0, vec![]);
+                self.dbase.insert_file(&file)?;
+            }
+            self.process_queue()?;
+        } else {
+            // count finished files for accurate progress tracking
+            self.record.file_already_uploaded();
+        }
+        Ok(())
+    }
+
+    /// Split the given file into chunks as necessary, using the database to
+    /// eliminate duplicate chunks.
+    fn split_file(&mut self, path: &Path, file_digest: entities::Checksum) -> Result<(), Error> {
+        if self.file_chunks.contains_key(&file_digest) {
+            // do not bother processing a file we have already seen; once the
+            // files have been completely uploaded, we rely on the database to
+            // detect duplicate chunks
+            return Ok(());
+        }
+        trace!("split_file '{}' digest {}", path.display(), file_digest);
+        let attr = fs::metadata(path)?;
+        let file_size = attr.len();
+        let chunks = if file_size > self.chunk_size as u64 {
+            // split large files into chunks, add chunks to the list
+            packs::find_file_chunks(path, self.chunk_size)?
+        } else {
+            let mut chunk = entities::Chunk::new(file_digest.clone(), 0, file_size as usize);
+            chunk = chunk.filepath(path);
+            vec![chunk]
+        };
+        // find chunks that have already been recorded in the database
+        chunks.iter().for_each(|chunk| {
+            let result = self.dbase.get_chunk(&chunk.digest);
+            #[allow(clippy::collapsible_if)]
+            if let Ok(value) = result {
+                if value.is_some() {
+                    self.done_chunks.insert(chunk.digest.clone());
+                }
+            }
+        });
+        if chunks.len() > 120 {
+            // For very large files, give some indication that we will be busy
+            // for a while processing that one file since it requires many pack
+            // files to completely finish this one file.
+            warn!(
+                "packing large file {} with {} chunks",
+                path.to_string_lossy(),
+                chunks.len()
+            );
+        }
+        // save the chunks under the digest of the file they came from to make
+        // it easy to update the database later
+        self.file_chunks.insert(file_digest, chunks);
+        Ok(())
+    }
+
+    /// Add file chunks to packs and upload until there is nothing left. Ignores
+    /// files and chunks that have already been processed. Raises an error if
+    /// time runs out.
+    fn process_queue(&mut self) -> Result<(), Error> {
+        while let Some((filesum, chunks)) = self.file_chunks.pop_first() {
+            // this may run for a long time if the file is very large
+            self.process_file(filesum, chunks)?;
+            // check if the stop time (if any) has been reached
+            if let Some(stop_time) = self.request.stop_time {
+                let now = Utc::now();
+                if now > stop_time {
+                    return Err(Error::from(OutOfTimeFailure {}));
+                }
+            }
+            // check if the user requested that the backup stop
+            {
+                let should_stop = self.stop_requested.read().unwrap();
+                if *should_stop {
+                    return Err(Error::from(OutOfTimeFailure {}));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Process a single file and all of its chunks until completion. While not
+    /// necessary, the implementation is more streamlined and the ownership of
+    /// the data is easier to manage without cloning.
+    fn process_file(
+        &mut self,
+        filesum: entities::Checksum,
+        chunks: Vec<entities::Chunk>,
+    ) -> Result<(), Error> {
+        let mut chunks_processed = 0;
+        let chunks_length = chunks.len();
+        for chunk in chunks.iter() {
+            chunks_processed += 1;
+            // determine if this chunk has already been processed
+            let already_done = self.done_chunks.contains(&chunk.digest);
+            let already_packed = self.packed_chunks.contains(&chunk.digest);
+            if !already_done && !already_packed {
+                self.record.add_chunk(chunk.clone());
+                self.packed_chunks.insert(chunk.digest.clone());
+                // ensure the pack builder is ready to receive chunks
+                if !self.builder.is_ready() {
+                    // build a "temporary" file that persists beyond the
+                    // lifetime of the reference, just to get a unique name
+                    let (_outfile, outpath) = tempfile::Builder::new()
+                        .suffix(".pack")
+                        .tempfile_in(&self.dataset.workspace)?
+                        .keep()?;
+                    self.builder.initialize(&outpath)?;
+                }
+                // add the chunk to the pack file; if the pack becomes full but
+                // there are more chunks in this file that need processing, then
+                // send it up now and reset
+                if self.builder.add_chunk(chunk)? && chunks_processed < chunks_length {
+                    let pack_path = self.builder.finalize()?;
+                    self.upload_record_reset(&pack_path)?;
+                }
+            }
+        }
+        // now that we successfully visited all the chunks in this file, then
+        // this file is considered done
+        self.record.add_file(filesum, chunks);
+        // if the builder is full, send it up now and reset in preparation for
+        // the next file
+        if self.builder.is_full() {
+            let pack_path = self.builder.finalize()?;
+            self.upload_record_reset(&pack_path)?;
+        }
+        Ok(())
+    }
+
+    /// If the pack builder has content, finalize the pack and upload.
+    pub fn finish_remainder(&mut self) -> Result<(), Error> {
+        self.process_queue()?;
+        if !self.builder.is_empty() {
+            let pack_path = self.builder.finalize()?;
+            self.upload_record_reset(&pack_path)?;
+        }
+        Ok(())
+    }
+
+    /// Upload a single pack to the pack store and record the results.
+    fn upload_record_reset(&mut self, pack_path: &Path) -> Result<(), Error> {
+        trace!("upload_record_reset {}", pack_path.display());
+        // verify that the pack contents match the record; this is not perfect
+        // since the record itself could also be wrong, but it's quick and easy
+        if !self
+            .record
+            .verify_pack(pack_path, &self.request.passphrase)?
+        {
+            return Err(anyhow!(
+                "missing chunks from pack file {}",
+                pack_path.display()
+            ));
+        }
+        let pack_digest = entities::Checksum::blake3_from_file(pack_path)?;
+        // basically impossible to produce the same pack twice because the EXAF
+        // encryption involves a random nonce per archive content block
+        if self.dbase.get_pack(&pack_digest)?.is_none() {
+            // new pack file, need to upload this and record to database
+            let config = self.dbase.get_configuration()?;
+            let bucket_name = self.stores.get_bucket_name(&config.computer_id);
+            let object_name = format!("{}", pack_digest);
+            // capture and record the remote object name, in case it differs from
+            // the name we generated ourselves; either value is expected to be
+            // sufficiently unique for our purposes
+            let locations = self
+                .stores
+                .store_pack(pack_path, &bucket_name, &object_name)?;
+            self.record
+                .record_completed_pack(&self.dbase, &pack_digest, locations)?;
+            self.subscriber.pack_uploaded(&self.request.id);
+        } else {
+            info!("pack record already exists for {}", pack_digest);
+        }
+        fs::remove_file(pack_path)?;
+        let count = self
+            .record
+            .record_completed_files(&self.dbase, &pack_digest)? as u64;
+        self.subscriber
+            .bytes_uploaded(&self.request.id, self.record.bytes_packed as u64);
+        self.subscriber.files_uploaded(&self.request.id, count);
+        self.record = Default::default();
+        Ok(())
+    }
+
+    /// Update the current snapshot with the end time set to the current time.
+    pub fn update_snapshot(&self, snap_sha1: &entities::Checksum) -> Result<(), Error> {
+        let mut snapshot = self
+            .dbase
+            .get_snapshot(snap_sha1)?
+            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snap_sha1)))?;
+        snapshot.set_end_time(Utc::now());
+        self.dbase.put_snapshot(&snapshot)?;
+        Ok(())
+    }
+
+    /// Upload an archive of the database files to the pack stores.
+    pub fn backup_database(&self) -> Result<(), Error> {
+        // Create a stable snapshot of the database as a single file, upload it
+        // to a special place in the pack store, then record the pseudo-pack to
+        // enable accurate pack pruning.
+        let backup_path = self.dbase.create_backup(&self.request.passphrase)?;
+        let config = self.dbase.get_configuration()?;
+        let coords = self
+            .stores
+            .store_database(&config.computer_id, &backup_path)?;
+        let digest = entities::Checksum::blake3_from_file(&backup_path)?;
+        let pack = entities::Pack::new(digest.clone(), coords);
+        self.dbase.insert_database(&pack)?;
+        Ok(())
+    }
+}
+
+// The default desired chunk size should be a little larger than the typical
+// image file, and small enough that packs do not end up with a wide range
+// of sizes due to large chunks.
+const DEFAULT_CHUNK_SIZE: u64 = 4_194_304;
+
+/// Compute the desired size for the chunks based on the pack size.
+fn calc_chunk_size(pack_size: u64) -> u32 {
+    // Use our default chunk size unless the desired pack size is so small that
+    // the chunks would be a significant portion of the pack file.
+    let chunk_size = if pack_size < DEFAULT_CHUNK_SIZE * 4 {
+        pack_size / 4
+    } else {
+        DEFAULT_CHUNK_SIZE
+    };
+    #[allow(clippy::useless_conversion)]
+    chunk_size
+        .try_into()
+        .map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
+}
+
+/// Tracks the files and chunks that comprise a pack, and provides functions for
+/// saving the results to the database.
+#[derive(Default)]
+pub struct PackRecord {
+    /// Count of previously completed files.
+    completed_files: usize,
+    /// Sum of the lengths of all chunks in this pack.
+    bytes_packed: usize,
+    /// Those files that have been completed with this pack.
+    files: HashMap<entities::Checksum, Vec<entities::Chunk>>,
+    /// Those chunks that are contained in this pack.
+    chunks: Vec<entities::Chunk>,
+}
+
+impl PackRecord {
+    /// Add a completed file to this pack.
+    fn add_file(&mut self, digest: entities::Checksum, chunks: Vec<entities::Chunk>) {
+        self.files.insert(digest, chunks);
+    }
+
+    /// Increment the number of files uploaded previously.
+    fn file_already_uploaded(&mut self) {
+        self.completed_files += 1;
+    }
+
+    /// Add a chunk to this pack.
+    fn add_chunk(&mut self, chunk: entities::Chunk) {
+        self.bytes_packed += chunk.length;
+        self.chunks.push(chunk);
+    }
+
+    /// Return true if the given (unencrypted) pack file contains everything
+    /// this record expects to be in the pack file, false otherwise.
+    fn verify_pack(&self, pack_path: &Path, password: &str) -> Result<bool, Error> {
+        use std::str::FromStr;
+        // This is an n^2 search which is fine because the number of chunks in a
+        // typical pack file is not a significantly high number (10s to 1,000s).
+        let mut found_count: usize = 0;
+        let mut reader = exaf_rs::reader::Entries::new(pack_path)?;
+        reader.enable_encryption(password)?;
+        for maybe_entry in reader {
+            let entry = maybe_entry?;
+            // we know the names are valid UTF-8, we created them
+            let digest = entities::Checksum::from_str(entry.name())?;
+            let mut found = false;
+            for chunk in self.chunks.iter() {
+                if chunk.digest == digest {
+                    found = true;
+                    found_count += 1;
+                    break;
+                }
+            }
+            if !found {
+                // this is wrong for an entirely different reason
+                return Err(anyhow!(
+                    "unexpected chunk {} found in pack {}",
+                    digest,
+                    pack_path.display()
+                ));
+            }
+        }
+        // ensure we found all of the chunks
+        Ok(found_count == self.chunks.len())
+    }
+
+    /// Record the results of building this pack to the database. This includes
+    /// all of the chunks and the pack itself.
+    fn record_completed_pack(
+        &mut self,
+        dbase: &Arc<dyn RecordRepository>,
+        digest: &entities::Checksum,
+        coords: Vec<entities::PackLocation>,
+    ) -> Result<(), Error> {
+        // record the uploaded chunks to the database
+        for chunk in self.chunks.iter_mut() {
+            // Detect the case of a chunk whose digest matches an entire file,
+            // which means the chunk will _not_ get a record of its own but
+            // instead the file record will point directly to a pack record.
+            if !self.files.contains_key(&chunk.digest) {
+                // set the pack digest for each chunk record
+                chunk.packfile = Some(digest.to_owned());
+                dbase.insert_chunk(chunk)?;
+            }
+        }
+        self.chunks.clear();
+        // record the pack in the database
+        let pack = entities::Pack::new(digest.to_owned(), coords);
+        dbase.insert_pack(&pack)?;
+        Ok(())
+    }
+
+    /// Record the set of files completed by uploading this pack file.
+    /// Returns the number of completed files.
+    fn record_completed_files(
+        &mut self,
+        dbase: &Arc<dyn RecordRepository>,
+        digest: &entities::Checksum,
+    ) -> Result<usize, Error> {
+        // massage the file/chunk data into database records for those files
+        // that have been completely uploaded
+        for (filesum, parts) in &self.files {
+            let mut length: u64 = 0;
+            let mut chunks: Vec<(u64, entities::Checksum)> = Vec::new();
+            // Determine if a chunk record is needed, as the information is only
+            // useful when a file produces multiple chunks. In many cases the
+            // files are small and will result in only a single chunk. As such,
+            // do not create a chunk record and instead save the pack digest as
+            // the "chunk" in the file record. The fact that the file record
+            // contains only a single chunk will be sufficient information for
+            // the file restore to know that the "chunk" digest is a pack.
+            if parts.len() == 1 {
+                length += parts[0].length as u64;
+                chunks.push((0, digest.to_owned()));
+            } else {
+                for chunk in parts {
+                    length += chunk.length as u64;
+                    chunks.push((chunk.offset as u64, chunk.digest.clone()));
+                }
+            }
+            let file = entities::File::new(filesum.clone(), length, chunks);
+            dbase.insert_file(&file)?;
+        }
+        Ok(self.files.len() + self.completed_files)
+    }
+}
+
+// Return a clear and accurate description of the duration.
+fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
+    let mut result = String::new();
+    match duration {
+        Ok(value) => {
+            let mut seconds = value.as_secs();
+            if seconds > 3600 {
+                let hours = seconds / 3600;
+                result.push_str(format!("{} hours ", hours).as_ref());
+                seconds -= hours * 3600;
+            }
+            if seconds > 60 {
+                let minutes = seconds / 60;
+                result.push_str(format!("{} minutes ", minutes).as_ref());
+                seconds -= minutes * 60;
+            }
+            if seconds > 0 {
+                result.push_str(format!("{} seconds", seconds).as_ref());
+            } else if result.is_empty() {
+                // special case of a zero duration
+                result.push_str("0 seconds");
+            }
+        }
+        Err(_) => result.push_str("(error)"),
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::data::repositories::RecordRepositoryImpl;
     use crate::data::sources::EntityDataSourceImpl;
-    use crate::domain::entities::{self, Checksum};
+    use crate::domain::entities::{self, Checksum, PackRetention};
     use crate::domain::repositories::MockRecordRepository;
     use crate::domain::repositories::RecordRepository;
+    use crate::tasks::backup::ChangedFile;
     use anyhow::Error;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::tempdir;
+
+    #[test]
+    fn test_pretty_print_duration() {
+        let input = Duration::from_secs(0);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "0 seconds");
+
+        let input = Duration::from_secs(5);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "5 seconds");
+
+        let input = Duration::from_secs(65);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "1 minutes 5 seconds");
+
+        let input = Duration::from_secs(4949);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "1 hours 22 minutes 29 seconds");
+
+        let input = Duration::from_secs(7300);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "2 hours 1 minutes 40 seconds");
+
+        let input = Duration::from_secs(10090);
+        let result = pretty_print_duration(Ok(input));
+        assert_eq!(result, "2 hours 48 minutes 10 seconds");
+    }
+
+    struct DummySubscriber();
+
+    impl Subscriber for DummySubscriber {
+        fn started(&self, _request_id: &str) {}
+
+        fn files_changed(&self, _request_id: &str, _count: u64) {}
+
+        fn pack_uploaded(&self, _request_id: &str) {}
+
+        fn bytes_uploaded(&self, _request_id: &str, _addend: u64) {}
+
+        fn files_uploaded(&self, _request_id: &str, _addend: u64) {}
+
+        fn error(&self, _request_id: &str, _error: String) {}
+
+        fn paused(&self, _request_id: &str) {}
+
+        fn restarted(&self, _request_id: &str) {}
+
+        fn finished(&self, _request_id: &str) {}
+    }
 
     #[test]
     fn test_process_path() {
@@ -907,7 +1546,7 @@ mod tests {
         ];
         let dbase: Arc<dyn crate::domain::repositories::RecordRepository + 'static> =
             Arc::new(mock);
-        let pool = helpers::ThreadPool::new(1);
+        let pool = ThreadPool::new(1);
         let entries = process_files(paths, &dbase, &pool);
         // assert
         assert_eq!(entries.len(), 4);
@@ -1472,6 +2111,394 @@ mod tests {
         assert_eq!(changed.len(), 2);
         assert_eq!(changed[0].as_ref().unwrap().path, bbb);
         assert_eq!(changed[1].as_ref().unwrap().path, ccc);
+        Ok(())
+    }
+
+    #[test]
+    fn test_calc_chunk_size() {
+        assert_eq!(calc_chunk_size(65_536), 16_384);
+        assert_eq!(calc_chunk_size(131_072), 32_768);
+        assert_eq!(calc_chunk_size(262_144), 65_536);
+        assert_eq!(calc_chunk_size(16_777_216), 4_194_304);
+        assert_eq!(calc_chunk_size(33_554_432), 4_194_304);
+        assert_eq!(calc_chunk_size(134_217_728), 4_194_304);
+    }
+
+    #[test]
+    fn test_pack_record_verify_pack() -> Result<(), Error> {
+        let mut record: PackRecord = Default::default();
+        let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
+        let chunks = super::packs::find_file_chunks(infile, 16384)?;
+        let mut builder = packs::PackBuilder::new(1048576).password("secret123");
+        let outdir = tempdir()?;
+        let packfile = outdir.path().join("multi-pack.pack");
+        builder.initialize(&packfile)?;
+        for chunk in chunks.iter() {
+            if builder.add_chunk(chunk)? {
+                break;
+            }
+            record.add_chunk(chunk.to_owned());
+        }
+        let _ = builder.finalize()?;
+        let result = record.verify_pack(&packfile, "secret123")?;
+        assert!(result);
+
+        // inject a "missing" chunk into record, should return false
+        let chunk = entities::Chunk::new(
+            entities::Checksum::BLAKE3(
+                "7b5352a6d7116e70b420c6e2f5ad3b49ba0af92923ab53ee43bd3fd0374d2521".to_owned(),
+            ),
+            0,
+            11364,
+        );
+        record.chunks.push(chunk);
+        let result = record.verify_pack(&packfile, "secret123")?;
+        assert!(!result);
+
+        // remove one of the chunks from record, should raise an error
+        record.chunks.pop();
+        record.chunks.pop();
+        let result = record.verify_pack(&packfile, "secret123");
+        assert!(result.is_err());
+        let err_string = result.unwrap_err().to_string();
+        assert!(err_string.contains("unexpected chunk"));
+        Ok(())
+    }
+
+    fn download_and_verify_pack(
+        pack_rec: &entities::Pack,
+        chunks: &[entities::Checksum],
+        workspace: &Path,
+        passphrase: &str,
+        stores: &Arc<dyn PackRepository>,
+    ) -> Result<bool, Error> {
+        use std::str::FromStr;
+        // retrieve the pack file
+        let mut archive = PathBuf::new();
+        archive.push(workspace);
+        archive.push(pack_rec.digest.to_string());
+        stores.retrieve_pack(&pack_rec.locations, &archive)?;
+        // unpack the contents
+        let mut reader = exaf_rs::reader::Entries::new(&archive)?;
+        reader.enable_encryption(passphrase)?;
+        let mut found_count: usize = 0;
+        for maybe_entry in reader {
+            let entry = maybe_entry?;
+            let digest = entities::Checksum::from_str(entry.name())?;
+            let mut found = false;
+            for chunk in chunks {
+                if chunk == &digest {
+                    found = true;
+                    found_count += 1;
+                    break;
+                }
+            }
+            if !found {
+                // this is wrong for an entirely different reason
+                return Err(anyhow!(
+                    "unexpected chunk {} found in pack {}",
+                    digest,
+                    archive.display()
+                ));
+            }
+        }
+        // ensure we found all of the chunks
+        fs::remove_file(archive)?;
+        Ok(found_count == chunks.len())
+    }
+
+    #[test]
+    fn test_backup_driver_small_file_finishes_pack() -> Result<(), Error> {
+        let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+        fs::create_dir_all(&db_base)?;
+        let db_path = tempfile::tempdir_in(&db_base)?;
+        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+        // set up local pack store
+        let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+        fs::create_dir_all(&pack_base)?;
+        let pack_path = tempfile::tempdir_in(&pack_base)?;
+        let mut local_props: HashMap<String, String> = HashMap::new();
+        local_props.insert(
+            "basepath".to_owned(),
+            pack_path.keep().to_string_lossy().into(),
+        );
+        let store = entities::Store {
+            id: "local123".to_owned(),
+            store_type: entities::StoreType::LOCAL,
+            label: "my local".to_owned(),
+            properties: local_props,
+            retention: PackRetention::ALL,
+        };
+        dbase.put_store(&store)?;
+
+        // create a dataset
+        let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
+        let mut dataset = entities::Dataset::new(&fixture_base);
+        dataset.add_store("local123");
+        dataset.pack_size = 131072;
+        fs::create_dir_all(&dataset.workspace)?;
+        let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
+        fs::create_dir_all(&workspace)?;
+        let stores = Arc::from(dbase.load_dataset_stores(&dataset)?);
+
+        //
+        // Create the driver and add two files such that the second one will
+        // cause the pack being built to reach capacity; note that these two
+        // files are sized perfectly to fill the pack without causing a split
+        // and resulting in two packs being built.
+        //
+        // Then continue by adding one more small file and ensuring that it also
+        // is recorded properly in the database.
+        //
+        // This test case exposed two related bugs with respect to packing and
+        // recording the chunk and file records.
+        //
+        let stopper = Arc::new(RwLock::new(false));
+        let dataset_id = dataset.id.clone();
+        let request = super::Request::new(dataset_id, "secret123", None);
+        let subscriber = Arc::new(DummySubscriber());
+        let mut driver =
+            BackupDriver::new(request, dataset.clone(), dbase.clone(), subscriber, stopper)?;
+        let file1_digest = Checksum::BLAKE3(
+            "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f".to_owned(),
+        );
+        let changed_file = ChangedFile::new(
+            Path::new("../test/fixtures/SekienAkashita.jpg"),
+            file1_digest.clone(),
+        );
+        driver.add_file(changed_file)?;
+        let file2_digest = Checksum::BLAKE3(
+            "2cd10c8eafa9bb6562eae34758bd7bcffd840afb1c503b42d0659b0718cafe99".to_owned(),
+        );
+        let changed_file = ChangedFile::new(
+            Path::new("../test/fixtures/baby-birth.jpg"),
+            file2_digest.clone(),
+        );
+        driver.add_file(changed_file)?;
+        let file3_digest = Checksum::BLAKE3(
+            "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60".to_owned(),
+        );
+        let changed_file = ChangedFile::new(
+            Path::new("../test/fixtures/washington-journal.txt"),
+            file3_digest.clone(),
+        );
+        driver.add_file(changed_file)?;
+        driver.finish_remainder()?;
+
+        // verify that the first file record exists, and its chunks, and that
+        // the chunks are both stored in the same pack
+        let maybe_file = dbase.get_file(&file1_digest)?;
+        assert!(maybe_file.is_some());
+        let file_rec = maybe_file.unwrap();
+        assert_eq!(file_rec.length, 109466);
+        assert_eq!(file_rec.chunks.len(), 2);
+        let chunk_rec = dbase
+            .get_chunk(&file_rec.chunks[0].1)?
+            .ok_or_else(|| anyhow!("missing chunk 1 of 2"))?;
+        assert!(chunk_rec.packfile.is_some());
+        let pack_digest = chunk_rec.packfile.clone().unwrap();
+        let chunk_rec2 = dbase
+            .get_chunk(&file_rec.chunks[1].1)?
+            .ok_or_else(|| anyhow!("missing chunk 2 of 2"))?;
+        assert_eq!(chunk_rec.packfile, chunk_rec2.packfile);
+
+        // verify that the second file record exists, and its "chunk", which is
+        // actually a pack digest, and that it matches the first pack
+        let maybe_file = dbase.get_file(&file2_digest)?;
+        assert!(maybe_file.is_some());
+        let file_rec = maybe_file.unwrap();
+        assert_eq!(file_rec.length, 31399);
+        assert_eq!(file_rec.chunks.len(), 1);
+        let maybe_pack = dbase.get_pack(&file_rec.chunks[0].1)?;
+        assert!(maybe_pack.is_some());
+        let pack_rec = maybe_pack.unwrap();
+        assert_eq!(pack_rec.digest, pack_digest);
+
+        // verify that the pack file actually contains the expected chunks
+        let chunks: Vec<entities::Checksum> = vec![
+            // first file is split into two chunks
+            Checksum::BLAKE3(
+                "c3a9c101999bcd14212cbac34a78a5018c6d1548a32c084f43499c254adf07ef".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "4b5f350ca573fc4f44b0da18d6aef9cdb2bcb7eeab1ad371af82557d0f353454".to_owned(),
+            ),
+            // second file is a single chunk
+            Checksum::BLAKE3(
+                "2cd10c8eafa9bb6562eae34758bd7bcffd840afb1c503b42d0659b0718cafe99".to_owned(),
+            ),
+        ];
+        assert!(download_and_verify_pack(
+            &pack_rec,
+            &chunks,
+            &workspace,
+            "secret123",
+            &stores
+        )?);
+
+        // verify that the third file record exists, and its "chunk", which is
+        // actually a pack digest, and that it does not match the first pack
+        let maybe_file = dbase.get_file(&file3_digest)?;
+        assert!(maybe_file.is_some());
+        let file_rec = maybe_file.unwrap();
+        #[cfg(target_family = "unix")]
+        assert_eq!(file_rec.length, 3375);
+        #[cfg(target_family = "windows")]
+        assert_eq!(file_rec.length, 3428);
+        assert_eq!(file_rec.chunks.len(), 1);
+        let maybe_pack = dbase.get_pack(&file_rec.chunks[0].1)?;
+        assert!(maybe_pack.is_some());
+        let pack_rec = maybe_pack.unwrap();
+        assert_ne!(pack_rec.digest, pack_digest);
+
+        // verify that the pack file actually contains the expected chunk(s)
+        let chunks: Vec<entities::Checksum> = vec![Checksum::BLAKE3(
+            "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60".to_owned(),
+        )];
+        let stores = Arc::from(dbase.load_dataset_stores(&dataset)?);
+        assert!(download_and_verify_pack(
+            &pack_rec,
+            &chunks,
+            &workspace,
+            "secret123",
+            &stores
+        )?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_backup_driver_large_file_multiple_packs() -> Result<(), Error> {
+        let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+        fs::create_dir_all(&db_base)?;
+        let db_path = tempfile::tempdir_in(&db_base)?;
+        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+        // set up local pack store
+        let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+        fs::create_dir_all(&pack_base)?;
+        let pack_path = tempfile::tempdir_in(&pack_base)?;
+        let mut local_props: HashMap<String, String> = HashMap::new();
+        local_props.insert(
+            "basepath".to_owned(),
+            pack_path.keep().to_string_lossy().into(),
+        );
+        let store = entities::Store {
+            id: "local123".to_owned(),
+            store_type: entities::StoreType::LOCAL,
+            label: "my local".to_owned(),
+            properties: local_props,
+            retention: PackRetention::ALL,
+        };
+        dbase.put_store(&store)?;
+
+        // create a dataset
+        let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
+        let mut dataset = entities::Dataset::new(&fixture_base);
+        dataset.add_store("local123");
+        dataset.pack_size = 582540;
+        fs::create_dir_all(&dataset.workspace)?;
+        let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
+        fs::create_dir_all(&workspace)?;
+        let stores: Arc<dyn PackRepository> = Arc::from(dbase.load_dataset_stores(&dataset)?);
+
+        //
+        // Create the driver and add the one large file that should result in
+        // two pack files and seven chunks being generated.
+        //
+        let stopper = Arc::new(RwLock::new(false));
+        let dataset_id = dataset.id.clone();
+        let request = super::Request::new(dataset_id, "secret123", None);
+        let subscriber = Arc::new(DummySubscriber());
+        let mut driver =
+            BackupDriver::new(request, dataset.clone(), dbase.clone(), subscriber, stopper)?;
+        let file1_digest = Checksum::BLAKE3(
+            "b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8".to_owned(),
+        );
+        let changed_file = ChangedFile::new(
+            Path::new("../test/fixtures/C++98-tutorial.pdf"),
+            file1_digest.clone(),
+        );
+        driver.add_file(changed_file)?;
+        driver.finish_remainder()?;
+
+        // verify information about the file, collect unique pack digests
+        let maybe_file = dbase.get_file(&file1_digest)?;
+        assert!(maybe_file.is_some());
+        let file_rec = maybe_file.unwrap();
+        assert_eq!(file_rec.length, 1272254);
+        assert_eq!(file_rec.chunks.len(), 7);
+        // need the pack digests in the correct order since the checksums will
+        // change when encryption is enabled
+        let mut pack_digests: Vec<Checksum> = vec![];
+        for (_, checksum) in file_rec.chunks.iter() {
+            let chunk_rec = dbase
+                .get_chunk(checksum)?
+                .ok_or_else(|| anyhow!("missing chunk {}", checksum))?;
+            assert!(chunk_rec.packfile.is_some());
+            let pack_digest = chunk_rec.packfile.clone().unwrap();
+            if !pack_digests.contains(&pack_digest) {
+                pack_digests.push(pack_digest);
+            }
+        }
+
+        // verify that there are two packs and their records exist
+        assert_eq!(pack_digests.len(), 2);
+        for pack_digest in pack_digests.iter() {
+            let maybe_pack = dbase.get_pack(pack_digest)?;
+            assert!(maybe_pack.is_some());
+        }
+
+        // verify the contents of the first pack file
+        let pack_rec = dbase.get_pack(&pack_digests[0])?.unwrap();
+        let chunks: Vec<entities::Checksum> = vec![
+            Checksum::BLAKE3(
+                "0480af365eef43f62ce523bbc027018594fc58f60ef83373c0747833c5a76a34".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "0652fd2632ffff1dae524121485d0f36a538eaaff0873091a827f88e1e87e532".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "fcc513b817b91c5a65dff05977b7efacf4f7b3c66ab3d1148c4d6fda8657901e".to_owned(),
+            ),
+        ];
+        assert!(download_and_verify_pack(
+            &pack_rec,
+            &chunks,
+            &workspace,
+            "secret123",
+            &stores
+        )?);
+
+        // verify the contents of the second pack file
+        let pack_rec = dbase.get_pack(&pack_digests[1])?.unwrap();
+        let chunks: Vec<entities::Checksum> = vec![
+            Checksum::BLAKE3(
+                "84ffcbd58ba181caa30ee1c22025f3c5a3a0d0572570d8e19573ed2b20459bba".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "b71e6d19e69fc78ca8f09cc789e52517ee328b6f84ec0587a5aa02437c6d7b0c".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "676fc9716d83f0c279d7aa45193459f2671cc39c12e466b0122dd565ab260bfb".to_owned(),
+            ),
+            Checksum::BLAKE3(
+                "7ca63166ddd184501ece9a84adf9b5d6d1193bdc5343006bbe23e2a3da1694f9".to_owned(),
+            ),
+        ];
+        assert!(download_and_verify_pack(
+            &pack_rec,
+            &chunks,
+            &workspace,
+            "secret123",
+            &stores
+        )?);
+
         Ok(())
     }
 }

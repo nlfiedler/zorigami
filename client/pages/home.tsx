@@ -117,12 +117,7 @@ function DatasetCard(props: DatasetCardProps) {
                 </td>
               </tr>
             </Show>
-            <Show
-              when={
-                props.dataset.status.status === 'RUNNING' &&
-                props.dataset.status.stopRequested
-              }
-            >
+            <Show when={props.dataset.status.status === 'STOPPING'}>
               <tr>
                 <td>Stop Requested</td>
                 <td>backup will stop soon...</td>
@@ -148,10 +143,10 @@ function DatasetCard(props: DatasetCardProps) {
                 <td>{props.dataset.status.changedFiles}</td>
               </tr>
             </Show>
-            <Show when={props.dataset.status.errorMessage}>
+            <Show when={props.dataset.status.errors}>
               <tr>
                 <td>Error Message</td>
-                <td>{props.dataset.status.errorMessage}</td>
+                <td>{props.dataset.status.errors.join(', ')}</td>
               </tr>
             </Show>
             <SnapshotCount datasetId={props.dataset.id} />
@@ -411,11 +406,7 @@ function StopButton(props: StopButtonProps) {
   return (
     <button
       class="button card-footer-item"
-      disabled={
-        props.status.status !== 'RUNNING' ||
-        props.status.stopRequested ||
-        stopSubmission.pending
-      }
+      disabled={props.status.status !== 'RUNNING' || stopSubmission.pending}
       on:click={() => startStop()}
     >
       <span class="icon">

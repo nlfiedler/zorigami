@@ -5,22 +5,58 @@ use anyhow::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
 use zorigami::domain::repositories::RecordRepository;
-use zorigami::tasks::backup::{self, Performer, PerformerImpl};
-use zorigami::tasks::restore::*;
-use zorigami::tasks::state::{StateStore, StateStoreImpl};
+use zorigami::tasks::backup::{self, Backuper, BackuperImpl};
+use zorigami::tasks::restore::{self, Restorer, RestorerImpl};
 
-fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
-    Box::new(FileRestorerImpl::new(dbase))
+struct DummyBackupSubscriber();
+
+impl backup::Subscriber for DummyBackupSubscriber {
+    fn started(&self, _request_id: &str) {}
+
+    fn files_changed(&self, _request_id: &str, _count: u64) {}
+
+    fn pack_uploaded(&self, _request_id: &str) {}
+
+    fn bytes_uploaded(&self, _request_id: &str, _addend: u64) {}
+
+    fn files_uploaded(&self, _request_id: &str, _addend: u64) {}
+
+    fn error(&self, _request_id: &str, _error: String) {}
+
+    fn paused(&self, _request_id: &str) {}
+
+    fn restarted(&self, _request_id: &str) {}
+
+    fn finished(&self, _request_id: &str) {}
 }
 
-#[actix_rt::test]
-#[serial_test::serial]
-async fn test_backup_restore() -> Result<(), Error> {
+struct DummyRestoreSubscriber();
+
+impl restore::Subscriber for DummyRestoreSubscriber {
+    fn started(&self, _request_id: &str) -> bool {
+        false
+    }
+
+    fn restored(&self, _request_id: &str, _addend: u64) -> bool {
+        false
+    }
+
+    fn error(&self, _request_id: &str, _error: String) -> bool {
+        false
+    }
+
+    fn finished(&self, _request_id: &str) -> bool {
+        false
+    }
+}
+
+#[test]
+fn test_restorer_full_cycle() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
@@ -56,21 +92,16 @@ async fn test_backup_restore() -> Result<(), Error> {
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
-    let performer = PerformerImpl::default();
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyBackupSubscriber());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let first_backup = performer.backup(request)?.unwrap();
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
     assert_eq!(counts.file, 1);
@@ -80,14 +111,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     // perform the second backup
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let second_backup = performer.backup(request)?.unwrap();
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 2);
     assert_eq!(counts.file, 2);
@@ -97,14 +122,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     // perform the third backup
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let third_backup = performer.backup(request)?.unwrap();
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let third_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 3);
     assert_eq!(counts.file, 3);
@@ -115,19 +134,18 @@ async fn test_backup_restore() -> Result<(), Error> {
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = fixture_path.path().join("SekienShifted.jpg");
     copy_with_prefix("mary had a little lamb", infile, &outfile)?;
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let fourth_backup = performer.backup(request)?.unwrap();
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let fourth_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
     assert_eq!(counts.file, 4);
     assert_eq!(counts.chunk, 3);
     assert_eq!(counts.tree, 4);
+
+    // set up the restorer to perform restores
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
 
     // restore the file from the first snapshot
     #[cfg(target_family = "unix")]
@@ -139,10 +157,7 @@ async fn test_backup_restore() -> Result<(), Error> {
         "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
     ));
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
-    let sut = RestorerImpl::new(state, file_restorer_factory);
-    let result = sut.start(dbase.clone());
-    assert!(result.is_ok());
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("lorem-ipsum.txt"),
         PathBuf::from("restored.bin"),
@@ -150,11 +165,6 @@ async fn test_backup_restore() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
@@ -164,9 +174,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_expected = Checksum::BLAKE3(String::from(
         "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f",
     ));
-    sut.reset_completed();
     let snapshot = dbase.get_snapshot(&second_backup)?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("SekienAkashita.jpg"),
         PathBuf::from("restored.bin"),
@@ -174,11 +183,6 @@ async fn test_backup_restore() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -191,9 +195,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_expected = Checksum::BLAKE3(String::from(
         "183d52ff928be3e77cccf1b78b12b31910d5079195a637a9a2b499059f99b781",
     ));
-    sut.reset_completed();
     let snapshot = dbase.get_snapshot(&third_backup)?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("washington-journal.txt"),
         PathBuf::from("restored.bin"),
@@ -201,11 +204,6 @@ async fn test_backup_restore() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -213,9 +211,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_expected = Checksum::BLAKE3(String::from(
         "3153cbf8ed39aa92c6dbe17eb08b3253ec3d600aef6b0a0fc43673ac6d255427",
     ));
-    sut.reset_completed();
     let snapshot = dbase.get_snapshot(&fourth_backup)?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("SekienShifted.jpg"),
         PathBuf::from("restored.bin"),
@@ -223,11 +220,6 @@ async fn test_backup_restore() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
@@ -235,9 +227,8 @@ async fn test_backup_restore() -> Result<(), Error> {
     let digest_expected = Checksum::BLAKE3(String::from(
         "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
     ));
-    sut.reset_completed();
     let snapshot = dbase.get_snapshot(&first_backup)?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("zero-length.txt"),
         PathBuf::from("restored.bin"),
@@ -245,18 +236,9 @@ async fn test_backup_restore() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
     assert_eq!(digest_expected, digest_actual);
 
-    // shutdown the restorer supervisor to release the database lock
-    let result = sut.stop();
-    assert!(result.is_ok());
-    actix::System::current().stop();
     Ok(())
 }
 
@@ -273,9 +255,8 @@ fn copy_with_prefix(header: &str, infile: &Path, outfile: &Path) -> Result<(), E
 }
 
 #[cfg(target_family = "unix")]
-#[actix_rt::test]
-#[serial_test::serial]
-async fn test_backup_recover_errorred_files() -> Result<(), Error> {
+#[test]
+fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
     use std::fs::Permissions;
     use std::os::unix::fs::PermissionsExt;
 
@@ -313,19 +294,14 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
-    let performer = PerformerImpl::default();
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyBackupSubscriber());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let first_backup = performer.backup(request)?;
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?;
     assert!(first_backup.is_some());
 
     // perform the second backup with a file that is not readable
@@ -335,21 +311,21 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let second_backup = performer.backup(request)?.unwrap();
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?.unwrap();
 
-    // try to restore the file, it should fail
-    let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
-    let result = sut.start(dbase.clone());
-    assert!(result.is_ok());
+    // reset the permissions and delete the file in order to try to restore it
+    fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
+    fs::remove_file(&dest)?;
+
+    // set up the restorer to perform restores
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
+
+    // try to restore the file, it will quietly fail since it was not backed up
     let snapshot = dbase.get_snapshot(&second_backup)?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("washington-journal.txt"),
         PathBuf::from("washington-journal.txt"),
@@ -357,31 +333,18 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    // assert sort-of failure: the file was not actually successfully restored
-    // because it was never really backed up
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
-    assert_eq!(request.files_restored, 0);
+    assert!(!fs::exists(&dest).unwrap());
 
-    // fix the file permissions and perform the third backup
-    fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let third_backup = performer.backup(request)?;
+    // produce the original file again and perform the third backup
+    assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let third_backup = backuper.backup(request)?;
     assert!(third_backup.is_some());
 
-    // restore the file from the third snapshot
-    sut.reset_completed();
+    // delete the file and restore it from the third snapshot
+    fs::remove_file(&dest)?;
     let snapshot = dbase.get_snapshot(&third_backup.unwrap())?.unwrap();
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("washington-journal.txt"),
         PathBuf::from("washington-journal.txt"),
@@ -389,13 +352,18 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    // assert success
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
-    assert_eq!(request.files_restored, 1);
+
+    #[cfg(target_family = "unix")]
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "540c45803112958ab53e31daee5eec067b1442d579eb1e787cf7684657275b60",
+    ));
+    #[cfg(target_family = "windows")]
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "183d52ff928be3e77cccf1b78b12b31910d5079195a637a9a2b499059f99b781",
+    ));
+    let digest_actual = Checksum::blake3_from_file(&dest)?;
+    assert_eq!(digest_expected, digest_actual);
+
     Ok(())
 }
 
@@ -405,7 +373,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //
 // #[actix_rt::test]
 // #[serial_test::serial]
-// async fn test_backup_restore_over_existing() -> Result<(), Error> {
+// async fn test_restorer_backup_restore_over_existing() -> Result<(), Error> {
 //     // create the database
 //     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
 //     fs::create_dir_all(&db_base)?;
@@ -442,7 +410,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //     dbase.put_computer_id(&dataset.id, &computer_id)?;
 
 //     // perform the first backup
-//     let performer = PerformerImpl::new();
+//     let backuper = BackuperImpl::new();
 //     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
 //     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
 //     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
@@ -454,7 +422,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //         &passphrase,
 //         None,
 //     );
-//     let first_backup = performer.backup(request)?;
+//     let first_backup = backuper.backup(request)?;
 //     assert!(first_backup.is_some());
 //     let first_backup_sum = first_backup.unwrap();
 
@@ -463,7 +431,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //     let result = sut.start(dbase.clone());
 //     assert!(result.is_ok());
 //     let snapshot = dbase.get_snapshot(&first_backup_sum)?.unwrap();
-//     let result = sut.enqueue(Request::new(
+//     let result = sut.enqueue(restore::Request::new(
 //         snapshot.tree,
 //         String::from("lorem-ipsum.txt"),
 //         PathBuf::from("lorem-ipsum.txt"),
@@ -471,7 +439,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //         "keyboard cat".into(),
 //     ));
 //     assert!(result.is_ok());
-//     sut.wait_for_completed();
+//     sut.wait_for_restores();
 //     let requests = sut.requests();
 //     assert_eq!(requests.len(), 1);
 //     let request = &requests[0];
@@ -488,13 +456,13 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //     //     &passphrase,
 //     //     None,
 //     // );
-//     // let third_backup = performer.backup(request)?;
+//     // let third_backup = backuper.backup(request)?;
 //     // assert!(third_backup.is_some());
 
 //     // TODO: restore the file from the first snapshot, should overwrite modified target
-//     // sut.reset_completed();
+//     // sut.reset_restores();
 //     // let snapshot = dbase.get_snapshot(&third_backup.unwrap())?.unwrap();
-//     // let result = sut.enqueue(Request::new(
+//     // let result = sut.enqueue(restore::Request::new(
 //     //     snapshot.tree,
 //     //     String::from("washington-journal.txt"),
 //     //     PathBuf::from("washington-journal.txt"),
@@ -503,7 +471,7 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //     // ));
 //     // assert!(result.is_ok());
 //     // // assert success
-//     // sut.wait_for_completed();
+//     // sut.wait_for_restores();
 //     // let requests = sut.requests();
 //     // assert_eq!(requests.len(), 1);
 //     // let request = &requests[0];
@@ -512,9 +480,8 @@ async fn test_backup_recover_errorred_files() -> Result<(), Error> {
 //     Ok(())
 // }
 
-#[actix_rt::test]
-#[serial_test::serial]
-async fn test_backup_restore_symlink() -> Result<(), Error> {
+#[test]
+fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
@@ -550,7 +517,9 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
-    let performer = PerformerImpl::default();
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyBackupSubscriber());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let real_dest: PathBuf = fixture_path.path().join("link-to-lorem.txt");
@@ -572,16 +541,9 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         #[cfg(target_family = "windows")]
         fs::symlink_file("link-value-is-meaningless", &fake_dest)?;
     }
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let first_backup = performer.backup(request)?;
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?;
     assert!(first_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
@@ -604,14 +566,8 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         #[cfg(target_family = "windows")]
         fs::symlink_file(&target, &dest)?;
     }
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let second_backup = performer.backup(request)?;
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?;
     assert!(second_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 1);
@@ -619,12 +575,14 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     assert_eq!(counts.chunk, 0);
     assert_eq!(counts.tree, 2);
 
+    // set up the restorer to perform restores
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
+
     // restore the normal symlink from the first snapshot
     let snapshot = dbase.get_snapshot(first_backup.as_ref().unwrap())?.unwrap();
-    let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
-    let result = sut.start(dbase.clone());
-    assert!(result.is_ok());
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("link-to-lorem.txt"),
         PathBuf::from("link-to-lorem.txt"),
@@ -632,11 +590,6 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
 
     // ensure symlink contains expected contents
     let link_path: PathBuf = fixture_path.path().join("link-to-lorem.txt");
@@ -648,10 +601,7 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     // the symlink from the dataset to ensure restore functions correctly
     fs::remove_file(&fake_dest).unwrap();
     let snapshot = dbase.get_snapshot(first_backup.as_ref().unwrap())?.unwrap();
-    let sut = RestorerImpl::new(state, file_restorer_factory);
-    let result = sut.start(dbase);
-    assert!(result.is_ok());
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("link-to-nothing"),
         PathBuf::from("link-to-nothing"),
@@ -659,11 +609,6 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
 
     // ensure symlink contains expected contents
     let link_path: PathBuf = fixture_path.path().join("link-to-nothing");
@@ -671,16 +616,11 @@ async fn test_backup_restore_symlink() -> Result<(), Error> {
     let value_str = value_path.to_str().unwrap();
     assert_eq!(value_str, "link-value-is-meaningless");
 
-    // shutdown the restorer supervisor to release the database lock
-    let result = sut.stop();
-    assert!(result.is_ok());
-    actix::System::current().stop();
     Ok(())
 }
 
-#[actix_rt::test]
-#[serial_test::serial]
-async fn test_backup_restore_small() -> Result<(), Error> {
+#[test]
+fn test_restorer_backup_restore_small() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
@@ -716,22 +656,17 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup
-    let performer = PerformerImpl::default();
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyBackupSubscriber());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
     let dest: PathBuf = fixture_path.path().join("very-small.txt");
     let content = "keyboard cat".as_bytes().to_vec();
     assert!(fs::write(dest, content).is_ok());
-    let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let passphrase = String::from("keyboard cat");
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let first_backup = performer.backup(request)?;
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?;
     assert!(first_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 0);
@@ -746,14 +681,8 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     let dest: PathBuf = fixture_path.path().join("very-small.txt");
     let content = "danger mouse".as_bytes().to_vec();
     assert!(fs::write(dest, content).is_ok());
-    let request = backup::Request::new(
-        dataset.clone(),
-        dbase.clone(),
-        state.clone(),
-        &passphrase,
-        None,
-    );
-    let second_backup = performer.backup(request)?;
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?;
     assert!(second_backup.is_some());
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 0);
@@ -761,12 +690,14 @@ async fn test_backup_restore_small() -> Result<(), Error> {
     assert_eq!(counts.chunk, 0);
     assert_eq!(counts.tree, 2);
 
+    // set up the restorer to perform restores
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
+
     // restore the small file from the first snapshot
     let snapshot = dbase.get_snapshot(&first_backup.unwrap())?.unwrap();
-    let sut = RestorerImpl::new(state, file_restorer_factory);
-    let result = sut.start(dbase);
-    assert!(result.is_ok());
-    let result = sut.enqueue(Request::new(
+    let result = restorer.restore_files(restore::Request::new(
         snapshot.tree,
         String::from("very-small.txt"),
         PathBuf::from("very-small.txt"),
@@ -774,20 +705,11 @@ async fn test_backup_restore_small() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    sut.wait_for_completed();
-    let requests = sut.requests();
-    assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
 
     // ensure small file contains expected contents
     let small_path: PathBuf = fixture_path.path().join("very-small.txt");
     let value_str = fs::read_to_string(small_path).unwrap();
     assert_eq!(value_str, "keyboard cat");
 
-    // shutdown the restorer supervisor to release the database lock
-    let result = sut.stop();
-    assert!(result.is_ok());
-    actix::System::current().stop();
     Ok(())
 }

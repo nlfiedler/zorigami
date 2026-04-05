@@ -157,6 +157,10 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
 
 ## Further Details
 
+### Long-running Tasks
+
+In the **tasks** layer of the server code, there are two supervised Actix actors that schedule and coordinate tasks. The _scheduler_ will send requests to the _leader_ at the appropriate time. The _leader_ receives all backup, restore, and prune requests and processes them sequentially in the appropriate order -- restore before backup before prune. A full database restore is also handled sequentially by the _leader_ in order to avoid conflicting with other operations.
+
 ### Deduplication
 
 Files larger than the desired chunk size are broken up using a content-defined chunking algorithm to determine suitable chunk boundaries. Each chunk is stored once based on the BLAKE3 digest of the chunk. The CDC algorithm is [FastCDC](https://crates.io/crates/fastcdc).

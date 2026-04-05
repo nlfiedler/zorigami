@@ -12,21 +12,19 @@ use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::schedule::Schedule;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::tasks::backup::{Performer, PerformerImpl, Scheduler, SchedulerImpl};
-use zorigami::tasks::restore::*;
-use zorigami::tasks::state::{BackupAction, StateStore, StateStoreImpl};
 use zorigami::domain::repositories::RecordRepository;
-
-fn file_restorer_factory(dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
-    Box::new(FileRestorerImpl::new(dbase))
-}
+use zorigami::shared::state::{StateStore, StateStoreImpl};
+use zorigami::tasks::backup;
+use zorigami::tasks::leader::{RingLeader, RingLeaderImpl};
+use zorigami::tasks::restore;
 
 //
-// Test the full backup with a pack store that uses async calls.
+// Test the full backup and partial restore with a pack store that uses async
+// calls to the backing store. Use the ring leader to process the requests.
 //
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_process_manager_async_store() -> Result<(), Error> {
+async fn test_backup_restore_async_store() -> Result<(), Error> {
     // set up the environment and remote connection
     dotenv().ok();
     let endp_var = env::var("MINIO_ENDPOINT");
@@ -69,26 +67,38 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     dataset.add_store("minio123");
     dataset.add_schedule(Schedule::Hourly);
     dbase.put_dataset(&dataset)?;
+    let dataset_id = dataset.id.clone();
 
     // perform a single backup
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-    let performer: Arc<dyn Performer> = Arc::new(PerformerImpl::default());
-    let processor = SchedulerImpl::new(state.clone(), performer).interval(100);
-    let result = processor.start(dbase.clone());
-    assert!(result.is_ok());
+    let leader = Arc::new(RingLeaderImpl::new(state.clone()));
+    assert!(leader.start(dbase.clone()).is_ok());
+    leader.reset_backups();
+    let request = backup::Request::new(dataset_id.clone(), "keyboard cat", None);
+    assert!(leader.backup(request).is_ok());
     //
     // n.b. If the tests seem to be hanging here, check that the store_minio
     // tests are passing, there could be an issue with the access keys; be sure
     // to define new access keys if the minio docker container is rebuilt.
     //
     println!("waiting for backup...");
-    state.wait_for_backup(BackupAction::Finish(dataset.id.clone()));
+    leader.wait_for_backup();
     println!("backup finished");
 
+    // request a second backup in which nothing has changed, status should
+    // show "completed" even though not happened
+    leader.reset_backups();
+    leader.backup(backup::Request::new(dataset_id.clone(), "keyboard cat", None))?;
+    println!("waiting for backup...");
+    leader.wait_for_backup();
+    println!("backup finished");
+    let backup_request = leader.get_backup_by_dataset(&dataset_id).unwrap();
+    assert!(backup_request.status == backup::Status::COMPLETED);
+
     // restore a file from backup
-    let dataset = dbase.get_dataset(&dataset.id)?.unwrap();
+    let dataset = dbase.get_dataset(&dataset_id)?.unwrap();
     assert!(dataset.snapshot.is_some(), "latest snapshot not available");
     let snapshot_sha1 = dataset.snapshot.unwrap();
     #[cfg(target_family = "unix")]
@@ -100,10 +110,8 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
         "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
     ));
     let snapshot = dbase.get_snapshot(&snapshot_sha1)?.unwrap();
-    let restorer = RestorerImpl::new(state, file_restorer_factory);
-    let result = restorer.start(dbase.clone());
-    assert!(result.is_ok());
-    let result = restorer.enqueue(Request::new(
+    leader.reset_restores();
+    let result = leader.restore(restore::Request::new(
         snapshot.tree,
         String::from("lorem-ipsum.txt"),
         PathBuf::from("restored.bin"),
@@ -111,11 +119,10 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
         "keyboard cat".into(),
     ));
     assert!(result.is_ok());
-    restorer.wait_for_completed();
-    let requests = restorer.requests();
+    leader.wait_for_restores();
+    let requests = leader.restores();
     assert_eq!(requests.len(), 1);
-    let request = &requests[0];
-    assert_eq!(request.errors.len(), 0);
+    assert_eq!(requests[0].errors.len(), 0);
     let outfile: PathBuf = fixture_path.path().join("restored.bin");
     assert!(outfile.exists());
     let digest_actual = Checksum::blake3_from_file(&outfile)?;
@@ -125,9 +132,8 @@ async fn test_process_manager_async_store() -> Result<(), Error> {
     // from minio, but eventually the store_minio tests will run and clean up
     // everything anyway.
 
-    // shutdown the restorer supervisor to release the database lock
-    let result = restorer.stop();
-    assert!(result.is_ok());
+    // shutdown the leader to release the database lock
+    assert!(leader.stop().is_ok());
     actix::System::current().stop();
     Ok(())
 }

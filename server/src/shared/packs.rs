@@ -5,149 +5,15 @@ use crate::domain::entities::{Checksum, Chunk};
 use anyhow::{Context, Error, anyhow};
 use exaf_rs::writer::{Options, Writer};
 use fastcdc::v2020::FastCDC;
-use log::{debug, error, trace, warn};
 use memmap2::Mmap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, mpsc};
-use std::thread;
-use std::time::{Duration, SystemTimeError};
 
-// Return a clear and accurate description of the duration.
-pub fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String {
-    let mut result = String::new();
-    match duration {
-        Ok(value) => {
-            let mut seconds = value.as_secs();
-            if seconds > 3600 {
-                let hours = seconds / 3600;
-                result.push_str(format!("{} hours ", hours).as_ref());
-                seconds -= hours * 3600;
-            }
-            if seconds > 60 {
-                let minutes = seconds / 60;
-                result.push_str(format!("{} minutes ", minutes).as_ref());
-                seconds -= minutes * 60;
-            }
-            if seconds > 0 {
-                result.push_str(format!("{} seconds", seconds).as_ref());
-            } else if result.is_empty() {
-                // special case of a zero duration
-                result.push_str("0 seconds");
-            }
-        }
-        Err(_) => result.push_str("(error)"),
-    }
-    result
-}
-
+/// Retrieve the user-defined passphrase that is used to encrypt and decrypt
+/// pack files and the database snapshots.
 ///
-/// Use `new()` to create a thread pool and `execute()` to send functions
-/// to be executed on the worker threads.
-///
-pub struct ThreadPool {
-    workers: Vec<Worker>,
-    sender: Option<mpsc::Sender<Job>>,
-}
-
-type Job = Box<dyn FnOnce() + Send + 'static>;
-
-impl ThreadPool {
-    /// Create a pool of threads to run arbitrary functions. The pool of threads
-    /// will remain active until the pool is dropped.
-    ///
-    /// The `size` is the number of threads in the pool.
-    ///
-    /// # Panics
-    ///
-    /// The `new` function will panic if the size is zero.
-    pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
-        let (sender, receiver) = mpsc::channel();
-        let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers = Vec::with_capacity(size);
-        for id in 0..size {
-            workers.push(Worker::new(id, Arc::clone(&receiver)));
-        }
-        ThreadPool {
-            workers,
-            sender: Some(sender),
-        }
-    }
-
-    /// Execute the given function on a worker in the pool.
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        if let Some(worker) = self.sender.as_ref() {
-            let job = Box::new(f);
-            if let Err(err) = worker.send(job) {
-                error!("failed to send job: {err}");
-            }
-        }
-    }
-
-    pub fn size(&self) -> usize {
-        self.workers.len()
-    }
-}
-
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        drop(self.sender.take());
-        for worker in &mut self.workers {
-            debug!("thread_pool: shutting down worker {}", worker.id);
-            #[allow(clippy::collapsible_if)]
-            if let Some(thread) = worker.thread.take() {
-                if let Err(err) = thread.join() {
-                    error!("failed to join thread: {err:?}")
-                }
-            }
-        }
-    }
-}
-
-struct Worker {
-    id: usize,
-    thread: Option<thread::JoinHandle<()>>,
-}
-
-impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || {
-            loop {
-                let message = match receiver.lock() {
-                    Ok(guard) => guard.recv(),
-                    Err(poisoned) => {
-                        // hard to imagine how this would matter
-                        warn!("using poisoned receiver");
-                        poisoned.into_inner().recv()
-                    }
-                };
-                match message {
-                    Ok(job) => {
-                        trace!("worker {id} got a job; executing...");
-                        job();
-                    }
-                    Err(_) => {
-                        trace!("worker {id} disconnected; shutting down...");
-                        break;
-                    }
-                }
-            }
-        });
-        Worker {
-            id,
-            thread: Some(thread),
-        }
-    }
-}
-
-/// Retrieve the user-defined passphrase.
-///
-/// Returns a default if one has not been defined.
+/// Returns a default value if one has not been defined.
 pub fn get_passphrase() -> String {
     std::env::var("PASSPHRASE").unwrap_or_else(|_| "keyboard cat".to_owned())
 }
@@ -345,52 +211,6 @@ mod tests {
     use super::*;
     use crate::domain::entities::Checksum;
     use tempfile::tempdir;
-
-    #[test]
-    fn test_pretty_print_duration() {
-        let input = Duration::from_secs(0);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "0 seconds");
-
-        let input = Duration::from_secs(5);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "5 seconds");
-
-        let input = Duration::from_secs(65);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "1 minutes 5 seconds");
-
-        let input = Duration::from_secs(4949);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "1 hours 22 minutes 29 seconds");
-
-        let input = Duration::from_secs(7300);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "2 hours 1 minutes 40 seconds");
-
-        let input = Duration::from_secs(10090);
-        let result = pretty_print_duration(Ok(input));
-        assert_eq!(result, "2 hours 48 minutes 10 seconds");
-    }
-
-    #[test]
-    fn test_thread_pool() {
-        let counter = Arc::new(Mutex::new(0));
-        // scope the pool so it will be dropped and shut down
-        {
-            let pool = ThreadPool::new(4);
-            for _ in 0..pool.size() {
-                let counter = counter.clone();
-                pool.execute(move || {
-                    let mut v = counter.lock().unwrap();
-                    *v += 1;
-                });
-            }
-        }
-        // by now the thread pool has shut down
-        let value = counter.lock().unwrap();
-        assert_eq!(*value, 4);
-    }
 
     #[test]
     fn test_file_chunking_16k() -> io::Result<()> {

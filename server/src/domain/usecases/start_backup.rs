@@ -1,53 +1,27 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
-use crate::tasks::backup::Scheduler;
-use crate::tasks::state::{RestorerState, StateStore};
-use crate::domain::repositories::RecordRepository;
+use crate::tasks::backup::Request;
+use crate::tasks::leader::RingLeader;
 use anyhow::Error;
-use log::{error, info};
 use std::cmp;
 use std::fmt;
 use std::sync::Arc;
 
 pub struct StartBackup {
-    repo: Arc<dyn RecordRepository>,
-    state: Arc<dyn StateStore>,
-    processor: Arc<dyn Scheduler>,
+    leader: Arc<dyn RingLeader>,
 }
 
 impl StartBackup {
-    pub fn new(
-        repo: Arc<dyn RecordRepository>,
-        state: Arc<dyn StateStore>,
-        processor: Arc<dyn Scheduler>,
-    ) -> Self {
-        Self {
-            repo,
-            state,
-            processor,
-        }
+    pub fn new(leader: Arc<dyn RingLeader>) -> Self {
+        Self { leader }
     }
 }
 
 impl super::UseCase<(), Params> for StartBackup {
     fn call(&self, params: Params) -> Result<(), Error> {
-        for dataset in self.repo.get_datasets()? {
-            if dataset.id == params.dataset_id {
-                info!("checking if backup can be started for {}", dataset.id);
-                // ensure restorer is not doing anything right now
-                let state = self.state.get_state();
-                if state.restorer == RestorerState::Stopped {
-                    // ensure supervisor has started, waiting for it to be ready
-                    info!("starting backup for {}", dataset.id);
-                    self.processor.start(self.repo.clone())?;
-                    self.processor.start_backup(dataset.clone())?;
-                    info!("backup started for {}", dataset.id);
-                } else {
-                    error!("restore in progress, cannot start backup");
-                }
-            }
-        }
+        self.leader
+            .backup(Request::new(params.dataset_id, params.passphrase, None))?;
         Ok(())
     }
 }
@@ -55,11 +29,16 @@ impl super::UseCase<(), Params> for StartBackup {
 pub struct Params {
     /// Unique identifier of the dataset.
     dataset_id: String,
+    /// Pass phrase for encrypting pack files.
+    passphrase: String,
 }
 
 impl Params {
-    pub fn new(dataset_id: String) -> Self {
-        Self { dataset_id }
+    pub fn new(dataset_id: impl Into<String>, passphrase: impl Into<String>) -> Self {
+        Self {
+            dataset_id: dataset_id.into(),
+            passphrase: passphrase.into(),
+        }
     }
 }
 
@@ -81,48 +60,18 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
-    use crate::domain::entities::Dataset;
-    use crate::tasks::backup::scheduler::MockScheduler;
-    use crate::tasks::state::{self, MockStateStore};
-    use crate::domain::repositories::MockRecordRepository;
+    use crate::tasks::leader::MockRingLeader;
     use anyhow::anyhow;
-    use std::path::Path;
 
     #[test]
     fn test_start_backup_ok() {
         // arrange
-        let datasets = vec![Dataset::new(Path::new("/home/planet"))];
-        let dataset_id = datasets[0].id.clone();
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let mut state = MockStateStore::new();
-        state.expect_get_state().returning(state::State::default);
-        let mut processor = MockScheduler::new();
-        processor.expect_start().returning(|_| Ok(()));
-        processor.expect_start_backup().returning(|_| Ok(()));
+        let dataset_id = xid::new().to_string();
+        let mut leader = MockRingLeader::new();
+        leader.expect_backup().returning(move |_| Ok(()));
         // act
-        let usecase = StartBackup::new(Arc::new(repo), Arc::new(state), Arc::new(processor));
-        let params = Params { dataset_id };
-        let result = usecase.call(params);
-        // assert
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_start_backup_not_found() {
-        // arrange
-        let datasets = vec![Dataset::new(Path::new("/home/planet"))];
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(move || Ok(datasets.clone()));
-        let state = MockStateStore::new();
-        let processor = MockScheduler::new();
-        // act
-        let usecase = StartBackup::new(Arc::new(repo), Arc::new(state), Arc::new(processor));
-        let params = Params {
-            dataset_id: "nonesuch".to_owned(),
-        };
+        let usecase = StartBackup::new(Arc::new(leader));
+        let params = Params::new(dataset_id, "tiger");
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());
@@ -131,16 +80,14 @@ mod tests {
     #[test]
     fn test_start_backup_err() {
         // arrange
-        let mut repo = MockRecordRepository::new();
-        repo.expect_get_datasets()
-            .returning(|| Err(anyhow!("oh no")));
-        let state = MockStateStore::new();
-        let processor = MockScheduler::new();
+        let dataset_id = xid::new().to_string();
+        let mut leader = MockRingLeader::new();
+        leader
+            .expect_backup()
+            .returning(move |_| Err(anyhow!("oh no")));
         // act
-        let usecase = StartBackup::new(Arc::new(repo), Arc::new(state), Arc::new(processor));
-        let params = Params {
-            dataset_id: "cafebabe".to_owned(),
-        };
+        let usecase = StartBackup::new(Arc::new(leader));
+        let params = Params::new(dataset_id, "tiger");
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());
