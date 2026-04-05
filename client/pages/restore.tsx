@@ -22,6 +22,7 @@ import {
 } from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
+import { AutoRefreshCheckbox } from '../components/refresh-checkbox';
 import {
   type Mutation,
   type MutationCancelRestoreArgs,
@@ -85,15 +86,16 @@ export function Restore() {
     }
   );
   const startCancel = useAction(cancelAction);
-  const interval = setInterval(() => {
-    refetch();
-  }, 5000);
-  onCleanup(() => {
-    clearInterval(interval);
-  });
 
   return (
     <>
+      <nav class="m-4 level">
+        <div class="level-left">
+          <div class="level-item">
+            <AutoRefreshCheckbox refetch={refetch} />
+          </div>
+        </div>
+      </nav>
       <div class="section">
         <h1 class="title">File and Directory Restore</h1>
         <h2 class="subtitle">Pending, Active, and Completed Requests</h2>

@@ -11,6 +11,7 @@ import {
 } from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
+import { AutoRefreshCheckbox } from '../components/refresh-checkbox';
 import {
   type BackupState,
   type Dataset,
@@ -29,6 +30,10 @@ const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
       basepath
       status {
         status
+        changedFiles
+        packsUploaded
+        filesUploaded
+        bytesUploaded
       }
       latestSnapshot {
         fileCount
@@ -55,28 +60,37 @@ export function Home() {
   });
 
   return (
-    <div class="container mt-4">
-      <Suspense fallback={'...'}>
-        <Switch>
-          <Match when={datasetsQuery()?.datasets.length === 0}>
-            <NoDatasetsHelp />
-          </Match>
-          <Match when={datasetsQuery()?.datasets}>
-            <div class="container">
-              <div class="grid is-col-min-20">
-                <For each={datasetsQuery()?.datasets}>
-                  {(item) => (
-                    <div class="cell">
-                      <DatasetCard dataset={item} />
-                    </div>
-                  )}
-                </For>
+    <>
+      <nav class="m-4 level">
+        <div class="level-left">
+          <div class="level-item">
+            <AutoRefreshCheckbox refetch={refetch} />
+          </div>
+        </div>
+      </nav>
+      <div class="container mt-4">
+        <Suspense fallback={'...'}>
+          <Switch>
+            <Match when={datasetsQuery()?.datasets.length === 0}>
+              <NoDatasetsHelp />
+            </Match>
+            <Match when={datasetsQuery()?.datasets}>
+              <div class="container">
+                <div class="grid is-col-min-20">
+                  <For each={datasetsQuery()?.datasets}>
+                    {(item) => (
+                      <div class="cell">
+                        <DatasetCard dataset={item} />
+                      </div>
+                    )}
+                  </For>
+                </div>
               </div>
-            </div>
-          </Match>
-        </Switch>
-      </Suspense>
-    </div>
+            </Match>
+          </Switch>
+        </Suspense>
+      </div>
+    </>
   );
 }
 
@@ -137,12 +151,22 @@ function DatasetCard(props: DatasetCardProps) {
                 <td>{props.dataset.latestSnapshot?.fileCount}</td>
               </tr>
             </Show>
-            <Show when={props.dataset.status.changedFiles}>
-              <tr>
-                <td>Files Changed</td>
-                <td>{props.dataset.status.changedFiles}</td>
-              </tr>
-            </Show>
+            <tr>
+              <td>Files Changed</td>
+              <td>{props.dataset.status.changedFiles}</td>
+            </tr>
+            <tr>
+              <td>Files Uploaded</td>
+              <td>{props.dataset.status.filesUploaded}</td>
+            </tr>
+            <tr>
+              <td>Bytees Uploaded</td>
+              <td>{props.dataset.status.bytesUploaded}</td>
+            </tr>
+            <tr>
+              <td>Packs Uploaded</td>
+              <td>{props.dataset.status.packsUploaded}</td>
+            </tr>
             <Show when={props.dataset.status.errors}>
               <tr>
                 <td>Error Message</td>
