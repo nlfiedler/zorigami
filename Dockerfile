@@ -22,30 +22,28 @@ COPY healthcheck/src src/
 RUN cargo build --release
 
 #
-# build the flutter app
+# build the solidjs app
 #
-# For consistency, use the Dart image as a base, add a version of Flutter that
-# is known to work via the fvm tool, and then enable the web platform as a build
-# target.
-#
-FROM dart:stable AS flutter
-ARG BASE_URL=http://localhost:8080
-ENV DEBIAN_FRONTEND noninteractive
+FROM debian:latest AS solidjs
+ENV DEBIAN_FRONTEND="noninteractive"
+# The bun install script itself needs curl to fetch the zip file from
+# github.com; while manually installing Bun is not too difficult, the install
+# script is sure to work regardless of what changes are made in the future. Set
+# BUN_INSTALL so the subsequent stages can find the bun executable.
 RUN apt-get -q update && \
-    apt-get -q -y install unzip
-RUN dart pub global activate fvm
-RUN fvm install stable
-WORKDIR /flutter
-COPY fonts fonts/
-COPY lib lib/
-COPY pubspec.yaml .
-COPY web web/
-RUN fvm use --force stable
-RUN fvm flutter config --enable-web
-RUN fvm flutter pub get
-ENV BASE_URL ${BASE_URL}
-RUN fvm flutter pub run environment_config:generate
-RUN fvm flutter build web
+    apt-get -q -y install curl unzip
+ENV BUN_INSTALL="/usr/local"
+RUN curl -fsSL https://bun.com/install | bash
+WORKDIR /build
+COPY client client
+COPY public public
+COPY codegen.ts codegen.ts
+COPY index.html index.html
+COPY package.json package.json
+COPY vite.config.ts vite.config.ts
+RUN bun install
+RUN bun run codegen
+RUN bunx vite build
 
 #
 # build the final image
@@ -58,7 +56,7 @@ RUN apt-get -q update && \
 WORKDIR /zorigami
 COPY --from=builder /build/target/release/zorigami zorigami
 COPY --from=healthy /health/target/release/healthcheck .
-COPY --from=flutter /flutter/build/web web/
+COPY --from=solidjs /build/dist dist/
 VOLUME /database
 VOLUME /datasets
 VOLUME /packstore
