@@ -67,6 +67,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
     let dataset_id = dataset.id.clone();
     dbase.put_dataset(&dataset)?;
@@ -143,6 +144,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 16384;
     dataset.pack_size = 65536;
     dbase.put_dataset(&dataset)?;
 
@@ -195,6 +197,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 16384;
     dataset.pack_size = 65536;
     dbase.put_dataset(&dataset)?;
 
@@ -251,6 +254,7 @@ async fn test_backup_no_changes() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
     let dataset_id = dataset.id.clone();

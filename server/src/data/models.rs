@@ -469,6 +469,13 @@ impl Model for Dataset {
                         .into_text()
                         .map_err(|_| anyhow!("workspace: cbor into_text() error"))?;
                     dataset.workspace = PathBuf::from(workspace);
+                } else if name == "chunksize" {
+                    // chunk_size
+                    let iv: ciborium::value::Integer = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("chunksize: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    dataset.chunk_size = ii as u32;
                 } else if name == "packsize" {
                     // pack_size
                     let iv: ciborium::value::Integer = value
@@ -555,6 +562,12 @@ impl Model for Dataset {
         fields.push((
             Value::Text("workspace".into()),
             Value::Text(workspace_string.to_string()),
+        ));
+
+        // chunk_size
+        fields.push((
+            Value::Text("chunksize".into()),
+            Value::Integer(self.chunk_size.into()),
         ));
 
         // pack_size
@@ -1504,7 +1517,7 @@ mod tests {
         // bare minimum
         let original = Dataset::new(Path::new("/home/planet"));
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 116);
+        assert_eq!(as_bytes.len(), 131);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);
@@ -1528,7 +1541,7 @@ mod tests {
         original.excludes.push("target".into());
         original.retention = SnapshotRetention::COUNT(10);
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 189);
+        assert_eq!(as_bytes.len(), 204);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);

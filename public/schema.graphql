@@ -69,6 +69,7 @@ input DatasetInput {
   "Path that is being backed up." basepath: String!
   "List of schedules to apply to this dataset." schedules: [ScheduleInput!]!
   "Path to temporary workspace for backup process." workspace: String
+  "Desired byte length of content-defined chunks." chunkSize: BigInt!
   "Desired byte length of pack files." packSize: BigInt!
   "Identifiers of stores used for saving packs." stores: [String!]!
   "List of paths to be excluded from backups. Can include * and ** wildcards." excludes: [String!]!
@@ -191,6 +192,8 @@ type Dataset {
   status: BackupState!
   "Most recent snapshot for this dataset, if any."
   latestSnapshot: Snapshot
+  "Preferred byte length of content-defined chunks."
+  chunkSize: BigInt!
   "Preferred byte length of pack files."
   packSize: BigInt!
   "Identifiers of stores used for saving packs."
@@ -260,10 +263,8 @@ type Mutation {
   """
     Apply the retention policy to the named dataset, pruning snapshots and
     everything that is no longer reachable (except for packs).
-
-    Returns the number of snapshots removed from the dataset.
   """
-  pruneSnapshots(id: String!): Int!
+  pruneSnapshots(id: String!): Boolean!
   """
     Create a missing file record from the given information.
 

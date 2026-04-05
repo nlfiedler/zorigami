@@ -88,6 +88,7 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 
@@ -290,6 +291,7 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 16384;
     dataset.pack_size = 65536;
     dbase.put_dataset(&dataset)?;
 
@@ -513,6 +515,7 @@ fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 
@@ -652,6 +655,7 @@ fn test_restorer_backup_restore_small() -> Result<(), Error> {
     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
     let mut dataset = entities::Dataset::new(fixture_path.path());
     dataset.add_store("local123");
+    dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
     dbase.put_dataset(&dataset)?;
 

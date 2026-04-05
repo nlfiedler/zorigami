@@ -993,8 +993,6 @@ pub struct BackupDriver {
     dataset: entities::Dataset,
     dbase: Arc<dyn RecordRepository>,
     stores: Box<dyn PackRepository>,
-    /// Preferred size of chunks in bytes.
-    chunk_size: u32,
     /// Builds a pack file comprised of compressed chunks.
     builder: packs::PackBuilder,
     /// Tracks files and chunks in the current pack.
@@ -1021,7 +1019,6 @@ impl BackupDriver {
         stop_requested: Arc<RwLock<bool>>,
     ) -> Result<Self, Error> {
         let stores = dbase.load_dataset_stores(&dataset)?;
-        let chunk_size = calc_chunk_size(dataset.pack_size);
         // Because EXAF combines content into 16mb blocks, it is possible that
         // it will produce something that is just under the desired pack size,
         // and subsequently more chunks will be added, pushing it well past the
@@ -1033,7 +1030,6 @@ impl BackupDriver {
             dataset,
             dbase,
             stores,
-            chunk_size,
             builder: packs::PackBuilder::new(target_size).password(passphrase),
             record: Default::default(),
             file_chunks: BTreeMap::new(),
@@ -1080,9 +1076,9 @@ impl BackupDriver {
         trace!("split_file '{}' digest {}", path.display(), file_digest);
         let attr = fs::metadata(path)?;
         let file_size = attr.len();
-        let chunks = if file_size > self.chunk_size as u64 {
+        let chunks = if file_size > self.dataset.chunk_size as u64 {
             // split large files into chunks, add chunks to the list
-            packs::find_file_chunks(path, self.chunk_size)?
+            packs::find_file_chunks(path, self.dataset.chunk_size)?
         } else {
             let mut chunk = entities::Chunk::new(file_digest.clone(), 0, file_size as usize);
             chunk = chunk.filepath(path);
@@ -1269,26 +1265,6 @@ impl BackupDriver {
         self.dbase.insert_database(&pack)?;
         Ok(())
     }
-}
-
-// The default desired chunk size should be a little larger than the typical
-// image file, and small enough that packs do not end up with a wide range
-// of sizes due to large chunks.
-const DEFAULT_CHUNK_SIZE: u64 = 4_194_304;
-
-/// Compute the desired size for the chunks based on the pack size.
-fn calc_chunk_size(pack_size: u64) -> u32 {
-    // Use our default chunk size unless the desired pack size is so small that
-    // the chunks would be a significant portion of the pack file.
-    let chunk_size = if pack_size < DEFAULT_CHUNK_SIZE * 4 {
-        pack_size / 4
-    } else {
-        DEFAULT_CHUNK_SIZE
-    };
-    #[allow(clippy::useless_conversion)]
-    chunk_size
-        .try_into()
-        .map_or(DEFAULT_CHUNK_SIZE as u32, |v: u64| v as u32)
 }
 
 /// Tracks the files and chunks that comprise a pack, and provides functions for
@@ -2115,16 +2091,6 @@ mod tests {
     }
 
     #[test]
-    fn test_calc_chunk_size() {
-        assert_eq!(calc_chunk_size(65_536), 16_384);
-        assert_eq!(calc_chunk_size(131_072), 32_768);
-        assert_eq!(calc_chunk_size(262_144), 65_536);
-        assert_eq!(calc_chunk_size(16_777_216), 4_194_304);
-        assert_eq!(calc_chunk_size(33_554_432), 4_194_304);
-        assert_eq!(calc_chunk_size(134_217_728), 4_194_304);
-    }
-
-    #[test]
     fn test_pack_record_verify_pack() -> Result<(), Error> {
         let mut record: PackRecord = Default::default();
         let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
@@ -2238,6 +2204,7 @@ mod tests {
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
+        dataset.chunk_size = 32768;
         dataset.pack_size = 131072;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();
@@ -2401,6 +2368,7 @@ mod tests {
         let fixture_base: PathBuf = ["test", "fixtures"].iter().collect();
         let mut dataset = entities::Dataset::new(&fixture_base);
         dataset.add_store("local123");
+        dataset.chunk_size = 145635;
         dataset.pack_size = 582540;
         fs::create_dir_all(&dataset.workspace)?;
         let workspace: PathBuf = ["tmp", "test", "workspace"].iter().collect();

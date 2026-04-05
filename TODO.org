@@ -1,34 +1,7 @@
 * Tasks
-** TODO [#A] Rewrite client with SolidJS in TypeScript
-*** TODO home page [8/11]
-- [X] for each dataset, card header arrow icon navigates to =/datasets= page
-- [X] for each dataset, show basic status (running, paused, finished, etc)
-- [X] for each dataset, if backup started, show start time
-- [X] for each dataset, if backup finished, show completion time
-- [X] for each dataset, if backup finished, show # of changed files
-- [X] for each dataset, if backup running and stop requested, show that
-- [X] for each dataset, if error, show message
-- [X] for each dataset, show oldest, newest snapshot date-time, count
-- [ ] for each dataset, show schedule frequency
-- [ ] for each dataset, provide button to start/stop backup
-- [ ] use interval to refresh every few seconds
-*** TODO make the ~Restore~ page auto-refresh a checkbox option
-*** TODO all of the GraphQL mutations that return =Boolean= should return =String=
-*** TODO look for ~issues~ in browser tools on every page
-*** TODO deployment [0/1]
-- [ ] update Dockerfile; copy from tanuki
-*** TODO documentation [5/9]
-- [X] how to generate SDL file (=env GENERATE_SDL=public/schema.graphql cargo run=)
-- [X] how to generate GraphQL TypeScript code (=bun run codegen=)
-- [X] README.md (need to install =bun= globally)
-- [ ] doc/DEPLOY.txt
-- [ ] doc/HISTORY.txt
-- [X] doc/DESIGN.txt
-- [ ] copy SOLIDJS.md from tanuki
-- [ ] write ADR for why SolidJS, TypeScript
-- [X] remove doc/LEPTOS.md
-*** TODO create a =docs/CHANGES.md= to record when database schema changes incompatibly
-**** include when EXAF was added, changed database and pack files
+** TODO SolidJS
+*** TODO update =Dockerfile= based on tanuki
+*** TODO update =DEPLOY.txt= regarding macOS installation
 *** TODO snapshots page [4/6]
 - [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
 - [X] show list of snapshots
@@ -36,22 +9,7 @@
 - [X] show breadcrumbs of the path leading up to this tree
 - [ ] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#B] Variable chunk size, defined in data set
-*** need to allow for setting the desired chunk size per data set
-*** 96% of server files are 4 mb or less
-*** 98% of mini files are 1 mb or less
-*** document that the tradeoff is the overhead of tracking chunks in the database
-*** comment that the min/max will be 0.25x and 4x to improve deduplication
-*** min/max that are 0.5x and 2x result in many more blocks cut off at the maximum (1 vs 7 in one example)
-*** implementation [0/7]
-- [ ] add =chunk_size= number to =Dataset=
-- [ ] add serde for =chunk_size= to data model
-- [ ] remove =chunk_size= from =BackupDriver=
-- [ ] remove =calc_chunk_size()=
-- [ ] remove =DEFAULT_CHUNK_SIZE=
-- [ ] add =chunkSize= to =Dataset= in GraphQL query, mutation
-- [ ] add ~chunk size~ form field to dataset form
-** TODO [#B] Automatic scheduling a la Time Machine
+** TODO [#A] Automatic snapshot pruning a la Time Machine
 *** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
 *** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
 *** there will be 24 + 30 + 52 + N snapshots for any given dataset
@@ -70,6 +28,16 @@
 6. keep the oldest for each year
 7. sort ~retain~ list by date-time, dedupe, update parent linkage, save each record
 8. all remaining snapshots will be unreachable and can be pruned as usual
+** TODO [#B] Scheduler to test restoring a random file weekly
+*** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
+*** scheduler will send a new type of request to the ring leader
+*** restorer needs a ~noop~ mode to simply compare the checksums of the target and restored file
+*** expose the result somewhere that the home page ~dashboard~ and display
+** TODO [#B] Scheduler to perform a ~scrub~ of the database weekly
+*** like zfs scrub, make sure no records are missing
+*** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
+*** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
+*** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
@@ -86,16 +54,6 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
-** TODO [#C] Scheduler to test restoring a random file weekly
-*** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
-*** scheduler will send a new type of request to the ring leader
-*** restorer needs a ~noop~ mode to simply compare the checksums of the target and restored file
-*** expose the result somewhere that the home page ~dashboard~ and display
-** TODO [#C] Scheduler to perform a ~scrub~ of the database weekly
-*** like zfs scrub, make sure no records are missing
-*** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
-*** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
-*** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#C] Migrate to Vite 8.0
 *** https://vite.dev/blog/announcing-vite8
 ** TODO [#C] Preventing mistakes
@@ -153,6 +111,11 @@
 *** provide lots of logging and frequent webui status updates
 ** Snapshot browsing
 *** ability to move through snapshots will staying within the selected path
+*** show differences between any two snapshots
+**** should be able to implement this in the client only
+**** select two snapshots, get their roots, show the added/changed/removed/same as a directory listing
+**** ~added~ and ~changed~ entries can be clicked on to visit the child tree of each snapshot
+**** ~removed~ and ~same~ are not navigable (no reason to browse these)
 *** would be helpful to see all snapshots in which a file or directory changed
 ** Store extended attributes (xattrs) in packs
 *** xattrs can be megabytes in size, they should be in the packs, not the database
@@ -329,9 +292,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ** More Information
 *** track start and finish time for a backup
 **** account for time when backup is paused due to schedule
-*** show differences between any two snapshots
-**** collect the paths and sizes of all new/changed files
-**** somehow show all of that information in a scalable fashion
 *** show =fileCounts= query for each of latest N snapshots to show recent data growth
 *** Show details about snapshots and files
 **** show differences between two snapshots
@@ -342,30 +302,10 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** count number of files with N chunks for all values of N
 *** Show number of packs stored in a pack store
 ** Architecture Review
-*** Rust dependency injection, is it helpful?
-**** https://github.com/mineichen/minfac
-**** https://github.com/AzureMarker/shaku
-**** https://github.com/p0lunin/teloc
-**** https://github.com/dmitryb-dev/waiter
-*** Actor framework review, is actix still good?
-**** https://github.com/slawlor/ractor aims to be like Erlang
-**** no framework, just tokio: https://ryhl.io/blog/actors-with-tokio/
-**** c.f. https://leapcell.io/blog/building-robust-background-task-processing-in-rust-web-services
-*** Database per dataset directory
-**** Centralized configuration in a known location
-***** would default to something sensible in user home directory
-***** overridden by environment variable
-***** JSON or XML format
-***** Holds paths to the various data sets
-***** Holds pack store configuration
-**** Each data set directory has a database directory (and backup)
-**** Backup process automatically excludes the database and its backup
-**** What would a full restore procedure look like?
-**** Benefits
-***** reduced risk in the event of database corruption
-**** Drawbacks
-***** additional disk usage for database overhead
-***** forces user to keep database with the dataset
+*** Evaluate alternative databases, serde formats
+**** CBOR is not well supported, crates starved of love
+**** JSON may be good enough
+**** RocksDB is very good, but is it the best available now?
 *** Parallel backups
 **** Currently the backup supervisor spawns a single thread (=Arbiter=) to manage backups
 **** This causes all backups to be serialized
@@ -377,9 +317,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** New fields will need accessors that convert from old fields as needed
 ***** reset the old field to indicate it is no longer relevant
 **** Removing a field is no problem for serde
-*** Shared pack repository
-**** Current design basically forces each user/install to have a separate pack repo
-**** Otherwise the pack pruning would delete the packs for other users saving to the same repo
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application

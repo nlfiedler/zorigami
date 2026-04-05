@@ -54,7 +54,7 @@ All SHA256 digests were replaced with BLAKE3 for improved performance.
 
 ### October
 
-Added `retention` field to `dataset` records.
+Added `retention` field to `dataset` records, defaults to all snapshots.
 
 ## 2025
 
@@ -66,4 +66,10 @@ No longer shortening the computer UUID value.
 
 Removed `snapshot/` and `computer/` records, folded the latest snapshot checksum into the dataset record (again). The computer records are not needed, the configuration record already has that information, and there is no need to have that value associated with the datasets.
 
-Added `retention` field to pack stores for future pack file and database snapshot pruning.
+Added `retention` field to pack stores for future pack file and database snapshot pruning (defaults to all retaining packs).
+
+## 2026
+
+### April
+
+Added `chunk_size` to `dataset` records, defaults to 1mb.

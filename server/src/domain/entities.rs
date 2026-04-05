@@ -296,6 +296,8 @@ pub struct Dataset {
     pub snapshot: Option<Checksum>,
     /// Path for temporary pack building.
     pub workspace: PathBuf,
+    /// Target size in bytes for content-defined chunks.
+    pub chunk_size: u32,
     /// Target size in bytes for pack files.
     pub pack_size: u64,
     /// Identifiers of the stores to contain pack files.
@@ -306,6 +308,11 @@ pub struct Dataset {
     pub retention: SnapshotRetention,
 }
 
+// Default chunk size is 1mb because that works for typical data sets where most
+// files are tens of kilobytes or less. Fitting most files into a single chunk
+// results in fewer chunk records, which reduces overall disk usage.
+const DEFAULT_CHUNK_SIZE: u32 = 1_048_576;
+
 // Default pack size is 64mb just because. With a typical ADSL home broadband
 // connection a 64mb pack file should take about 5 minutes to upload.
 const DEFAULT_PACK_SIZE: u64 = 67_108_864;
@@ -313,11 +320,6 @@ const DEFAULT_PACK_SIZE: u64 = 67_108_864;
 impl Dataset {
     /// Construct a Dataset with the path of the directory tree to be saved.
     pub fn new(basepath: &Path) -> Dataset {
-        Dataset::with_pack_size(basepath, DEFAULT_PACK_SIZE)
-    }
-
-    /// Construct a `Dataset` with the given path and pack size.
-    pub fn with_pack_size(basepath: &Path, pack_size: u64) -> Self {
         let id = xid::new().to_string();
         let mut workspace = basepath.to_owned();
         workspace.push(".tmp");
@@ -327,11 +329,22 @@ impl Dataset {
             schedules: vec![],
             snapshot: None,
             workspace,
-            pack_size,
+            chunk_size: DEFAULT_CHUNK_SIZE,
+            pack_size: DEFAULT_PACK_SIZE,
             stores: vec![],
             excludes: vec![],
             retention: Default::default(),
         }
+    }
+
+    /// Set the chunk size for this dataset.
+    pub fn set_chunk_size(&mut self, chunk_size: u32) {
+        self.chunk_size = chunk_size;
+    }
+
+    /// Set the pack size for this dataset.
+    pub fn set_pack_size(&mut self, pack_size: u64) {
+        self.pack_size = pack_size;
     }
 
     /// Add the given store identifier to the dataset.
@@ -353,7 +366,8 @@ impl Default for Dataset {
             schedules: vec![],
             snapshot: None,
             workspace: PathBuf::new(),
-            pack_size: 0,
+            chunk_size: DEFAULT_CHUNK_SIZE,
+            pack_size: DEFAULT_PACK_SIZE,
             stores: vec![],
             excludes: vec![],
             retention: Default::default(),

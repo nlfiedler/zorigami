@@ -416,6 +416,11 @@ impl entities::Dataset {
         None
     }
 
+    /// Preferred byte length of content-defined chunks.
+    fn chunk_size(&self) -> BigInt {
+        BigInt(self.chunk_size as i64)
+    }
+
     /// Preferred byte length of pack files.
     fn pack_size(&self) -> BigInt {
         BigInt(self.pack_size as i64)
@@ -1278,6 +1283,8 @@ struct DatasetInput {
     schedules: Vec<ScheduleInput>,
     /// Path to temporary workspace for backup process.
     workspace: Option<String>,
+    /// Desired byte length of content-defined chunks.
+    chunk_size: BigInt,
     /// Desired byte length of pack files.
     pack_size: BigInt,
     /// Identifiers of stores used for saving packs.
@@ -1291,7 +1298,9 @@ struct DatasetInput {
 impl From<DatasetInput> for entities::Dataset {
     fn from(val: DatasetInput) -> Self {
         let basepath = std::path::Path::new(&val.basepath);
-        let mut ds = entities::Dataset::with_pack_size(basepath, val.pack_size.into());
+        let mut ds = entities::Dataset::new(basepath);
+        ds.set_chunk_size(val.chunk_size.into());
+        ds.set_pack_size(val.pack_size.into());
         ds.id = val.id.unwrap_or(String::from("default"));
         for sched in val.schedules.into_iter() {
             ds.add_schedule(sched.into());
@@ -1371,17 +1380,11 @@ impl Mutation {
 
     /// Create a new data set with all default properties.
     fn new_dataset(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<entities::Dataset> {
-        use crate::domain::usecases::UseCase;
-        use crate::domain::usecases::new_dataset::{NewDataset, Params};
+        use crate::domain::usecases::new_dataset::NewDataset;
+        use crate::domain::usecases::{NoParams, UseCase};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = NewDataset::new(Box::new(repo));
-        let basepath = std::path::PathBuf::from(".");
-        let schedules: Vec<entities::schedule::Schedule> = vec![];
-        let pack_size: u64 = 64 * 1048756;
-        let stores: Vec<String> = vec![];
-        let excludes: Vec<String> = vec![];
-        let params: Params = Params::new(basepath, schedules, pack_size, stores, excludes);
-        let result: entities::Dataset = usecase.call(params)?;
+        let result: entities::Dataset = usecase.call(NoParams {})?;
         Ok(result)
     }
 

@@ -220,6 +220,7 @@ const GET_DATASET: TypedDocumentNode<Query, QueryDatasetArgs> = gql`
         dayOfWeek
         dayOfMonth
       }
+      chunkSize
       packSize
       stores
       excludes
@@ -314,6 +315,9 @@ function DatasetForm(props: DatasetFormProps) {
   const [excludes, setExcludes] = createSignal(
     props.dataset.excludes.join(', ')
   );
+  const [chunksize, setChunksize] = createSignal(
+    Math.floor(props.dataset.chunkSize / 1_048_576)
+  );
   const [packsize, setPacksize] = createSignal(
     Math.floor(props.dataset.packSize / 1_048_576)
   );
@@ -333,6 +337,7 @@ function DatasetForm(props: DatasetFormProps) {
       id: props.dataset.id,
       basepath: basepath(),
       schedules: schedules(),
+      chunkSize: (chunksize() * 1_048_576).toString(),
       packSize: (packsize() * 1_048_576).toString(),
       stores: Array.from(selectedStores()),
       excludes: excludes()
@@ -347,16 +352,22 @@ function DatasetForm(props: DatasetFormProps) {
   };
 
   const [basepathError, setBasepathError] = createSignal('');
+  const [chunksizeError, setChunksizeError] = createSignal('');
   const [packsizeError, setPacksizeError] = createSignal('');
   const [storesError, setStoresError] = createSignal('');
   const [invalid, setInvalid] = createSignal(false);
   const validate = () => {
     setBasepathError('');
+    setChunksizeError('');
     setPacksizeError('');
     setStoresError('');
     setInvalid(false);
     if (basepath().length === 0) {
       setBasepathError('Base path cannot be empty.');
+      setInvalid(true);
+    }
+    if (chunksize() < 1 || chunksize() > 16) {
+      setChunksizeError('Chunk size must be between 1 and 16.');
       setInvalid(true);
     }
     if (packsize() < 16 || packsize() > 256) {
@@ -437,6 +448,42 @@ function DatasetForm(props: DatasetFormProps) {
               <p class="help">
                 File patterns to exclude from backup, separated by commas.
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-2 field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label" for="chunksize-input">
+              Chunk Size (MB)
+            </label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <p class="control is-expanded has-icons-left">
+                <input
+                  class="input"
+                  type="number"
+                  id="chunksize-input"
+                  min="1"
+                  max="16"
+                  value={chunksize()}
+                  on:blur={(ev) => {
+                    setChunksize(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                  on:change={(ev) => {
+                    setChunksize(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                />
+                <span class="icon is-small is-left">
+                  <i class="fa-solid fa-file-fragment"></i>
+                </span>
+              </p>
+              <Show when={chunksizeError().length > 0}>
+                <p class="help is-danger">{chunksizeError()}</p>
+              </Show>
             </div>
           </div>
         </div>
