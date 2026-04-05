@@ -88,6 +88,22 @@ Similarly, to have restore requests stuck in the _processing_ state indefinitely
 env RESTORE_ALWAYS_PROCESSING=1 RUST_LOG=info cargo run
 ```
 
+### Code Coverage
+
+Using [grcov](https://github.com/mozilla/grcov) seems to be the easiest at this time.
+
+```shell
+cargo install grcov
+rustup component add llvm-tools
+export RUSTFLAGS="-Cinstrument-coverage"
+export LLVM_PROFILE_FILE="zorigami-%p-%m.profraw"
+cargo clean
+cargo build
+cargo test
+grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/
+open target/debug/coverage/index.html
+```
+
 ## Tools
 
 ### Finding Outdated Crates
