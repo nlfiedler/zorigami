@@ -524,7 +524,7 @@ mod tests {
     fn test_build_source_sftp() {
         let builder = PackSourceBuilderImpl {};
         let mut properties: HashMap<String, String> = HashMap::new();
-        properties.insert("remote_addr".to_owned(), "localhost:22".to_owned());
+        properties.insert("address".to_owned(), "localhost:22".to_owned());
         properties.insert("username".to_owned(), "charlie".to_owned());
         let store = Store {
             id: "sftp123".to_owned(),

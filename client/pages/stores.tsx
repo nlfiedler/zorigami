@@ -102,7 +102,7 @@ const STORE_TYPES: StoreType[] = [
     kind: 'sftp',
     label: 'SFTP',
     properties: [
-      { name: 'remote_addr', value: '127.0.0.1:22' },
+      { name: 'address', value: '127.0.0.1:22' },
       { name: 'username', value: 'scott' },
       { name: 'password', value: 'tiger' },
       { name: 'basepath', value: '.' }
@@ -1284,7 +1284,7 @@ interface SftpStoreFormProps {
 function SftpStoreForm(props: SftpStoreFormProps) {
   const [label, setLabel] = createSignal(props.store.label);
   const [address, setAddress] = createSignal(
-    getProperty(props.store.properties, 'remote_addr')
+    getProperty(props.store.properties, 'address')
   );
   const [username, setUsername] = createSignal(
     getProperty(props.store.properties, 'username')
@@ -1302,7 +1302,7 @@ function SftpStoreForm(props: SftpStoreFormProps) {
       storeType: props.store.storeType,
       label: label(),
       properties: [
-        { name: 'remote_addr', value: address() },
+        { name: 'address', value: address() },
         { name: 'username', value: username() },
         { name: 'password', value: password() },
         { name: 'basepath', value: basepath() }

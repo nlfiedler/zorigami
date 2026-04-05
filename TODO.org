@@ -1,6 +1,4 @@
 * Tasks
-** TODO add instructions for measuring code coverage of tests
-*** see exaf-rs for an example that uses grcov
 ** TODO [#A] Rewrite client with SolidJS in TypeScript
 *** TODO home page [8/11]
 - [X] for each dataset, card header arrow icon navigates to =/datasets= page
@@ -38,7 +36,6 @@
 - [X] show breadcrumbs of the path leading up to this tree
 - [ ] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#B] rename SFTP property =remote_addr= to simply =address=
 ** TODO [#B] Variable chunk size, defined in data set
 *** need to allow for setting the desired chunk size per data set
 *** 96% of server files are 4 mb or less
@@ -54,7 +51,7 @@
 - [ ] remove =DEFAULT_CHUNK_SIZE=
 - [ ] add =chunkSize= to =Dataset= in GraphQL query, mutation
 - [ ] add ~chunk size~ form field to dataset form
-** TODO [#C] Automatic scheduling a la Time Machine
+** TODO [#B] Automatic scheduling a la Time Machine
 *** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
 *** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
 *** there will be 24 + 30 + 52 + N snapshots for any given dataset

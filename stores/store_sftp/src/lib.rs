@@ -17,7 +17,7 @@ use store_core::Coordinates;
 #[derive(Debug)]
 pub struct SftpStore {
     store_id: String,
-    remote_addr: String,
+    address: String,
     username: String,
     password: Option<String>,
     basepath: Option<String>,
@@ -28,9 +28,9 @@ pub struct SftpStore {
 impl SftpStore {
     /// Validate the given store and construct a secure FTP pack source.
     pub fn new(store_id: &str, props: &HashMap<String, String>) -> Result<Self, Error> {
-        let remote_addr = props
-            .get("remote_addr")
-            .ok_or_else(|| anyhow!("missing remote_addr property"))?;
+        let address = props
+            .get("address")
+            .ok_or_else(|| anyhow!("missing address property"))?;
         let username = props
             .get("username")
             .ok_or_else(|| anyhow!("missing username property"))?;
@@ -38,7 +38,7 @@ impl SftpStore {
         let basepath = props.get("basepath").map(|s| s.to_owned());
         Ok(Self {
             store_id: store_id.to_owned(),
-            remote_addr: remote_addr.to_owned(),
+            address: address.to_owned(),
             username: username.to_owned(),
             password,
             basepath,
@@ -51,7 +51,7 @@ impl SftpStore {
         // Simply build a new session and connection every time. Trying to reuse
         // the session though a combination of Rc and RefCell does not improve
         // the run time in the slightest.
-        let tcp = TcpStream::connect(&self.remote_addr)?;
+        let tcp = TcpStream::connect(&self.address)?;
         let mut sess = Session::new()?;
         sess.set_tcp_stream(tcp);
         sess.handshake()?;
@@ -191,14 +191,14 @@ mod tests {
         let result = SftpStore::new("sftp123", &properties);
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
-        assert!(err_string.contains("missing remote_addr property"));
+        assert!(err_string.contains("missing address property"));
         // could check all of the others, I guess?
     }
 
     #[test]
     fn test_new_sftp_store_ok() {
         let mut properties: HashMap<String, String> = HashMap::new();
-        properties.insert("remote_addr".to_owned(), "localhost:22".to_owned());
+        properties.insert("address".to_owned(), "localhost:22".to_owned());
         properties.insert("username".to_owned(), "charlie".to_owned());
         let result = SftpStore::new("sftp123", &properties);
         assert!(result.is_ok());
@@ -216,7 +216,7 @@ mod tests {
         let address = addr_var.unwrap();
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
-        properties.insert("remote_addr".to_owned(), address);
+        properties.insert("address".to_owned(), address);
         properties.insert("username".to_owned(), "charlie".into());
         properties.insert("password".to_owned(), "secret123".into());
         properties.insert("basepath".to_owned(), "/".into());
@@ -245,7 +245,7 @@ mod tests {
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
-        properties.insert("remote_addr".to_owned(), address);
+        properties.insert("address".to_owned(), address);
         properties.insert("username".to_owned(), username);
         properties.insert("password".to_owned(), password);
         properties.insert("basepath".to_owned(), basepath);
