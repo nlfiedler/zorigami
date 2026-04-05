@@ -2,18 +2,18 @@
 
 ## Deploy via Docker
 
-The base directory contains a `docker-compose.yml` file which is used to build the application in stages and produce a relatively small final image.
+The base directory contains a `Dockerfile` file which is used to build the application in stages and produce a relatively small final image.
 
 On the build host:
 
 ```shell
-docker compose build --pull --build-arg BASE_URL=http://192.168.50.201:8080
-docker image rm 192.168.50.201:5000/zorigami
-docker image tag zorigami-app 192.168.50.201:5000/zorigami
-docker push 192.168.50.201:5000/zorigami
+docker build -t zorigami-app .
+docker image rm 192.168.1.4:5000/zorigami
+docker image tag zorigami-app 192.168.1.4:5000/zorigami
+docker push 192.168.1.4:5000/zorigami
 ```
 
-On the docker host, with a production version of the `docker-compose.yml` file:
+On the server, with a production version of the `docker-compose.yml` file:
 
 ```shell
 docker compose down

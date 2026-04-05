@@ -34,7 +34,7 @@ Deployed to server using Docker. Replaced gpgme encryption with libsodium.
 
 ## February 2020
 
-Replaced the ReasonML web interface with Flutter.
+Replaced the ReasonML web interface with [Flutter](https://flutter.dev).
 
 ## June/July 2020
 
@@ -42,7 +42,7 @@ Rewrite server code according to Clean Architecture design, breaking database an
 
 ## August 2023
 
-Found and fixed a major bug in the recording of the file and chunk metadata. If a single-chunk file were to finish filling a pack, it would be recorded as belonging to the next pack that was created. If no other pack was created, the file record would not be created. This led to two problems on restore, one in which the chunk could not be found, and the other in which the file record was missing. Added a query to track down the missing chunks by searching all pack archives, and a mutation that inserts a new file record. An unused usecase has been committed to the repository for gathering the data regarding the chunks of a file that point to the wrong packs (the first problem).
+Found and fixed a major bug in the recording of the file and chunk metadata. If a single-chunk file were to finish filling a pack, it would be recorded as belonging to the next pack that was created. If no other pack was created, the file record would not be created. This led to two problems on restore, one in which the chunk could not be found, and the other in which the file record was missing. Added a query to track down the missing chunks by searching all pack archives, and a mutation that inserts a new file record. An unused use case has been committed to the repository for gathering the data regarding the chunks of a file that point to the wrong packs (the first problem).
 
 Tested full backup and restore on the 300+GB shared dataset. Verified that a 30GB file was restored correctly. Symbolic links are also restored correctly.
 
@@ -55,3 +55,9 @@ Replace all use of SHA256 with BLAKE3 for improved performance (the latter is ab
 ## May 2025
 
 Added GraphQL mutation to enable pruning snapshots for a dataset, once a retention policy has been set. Policies include **keep all**, **keep N days**, and **keep N snapshots**. All unreachable non-pack records are removed from the database.
+
+## April 2026
+
+Significant refactoring of the supervised actors and application state that manage the scheduling of backups. The _scheduler_ is a supervised actor that sends requests to a supervised actor called the _ring leader_. The ring leader receives the backup, restore, and prune requests and processes them sequentially. The application state has been reduced to simply tracking the state of these two supervisors.
+
+The web interface was rewritten using [SolidJS](https://www.solidjs.com) and [TypeScript](https://www.typescriptlang.org) which proved to be a splendid decision for the [tanuki](https://github.com/nlfiedler/tanuki) project. To support this, the GraphQL API received updates to support all of the functionality.
