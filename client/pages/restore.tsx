@@ -9,8 +9,7 @@ import {
   Suspense,
   Switch,
   createResource,
-  createSignal,
-  onCleanup
+  createSignal
 } from 'solid-js';
 import {
   A,

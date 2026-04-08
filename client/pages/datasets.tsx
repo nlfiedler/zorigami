@@ -887,6 +887,15 @@ function SnapshotRetentionForm(props: SnapshotRetentionFormProps) {
                   />
                   Limited by Days
                 </label>
+                <label class="radio">
+                  <input
+                    type="radio"
+                    name="retention"
+                    checked={policy() === SnapshotRetentionPolicy.Auto}
+                    on:change={() => setPolicy(SnapshotRetentionPolicy.Auto)}
+                  />
+                  Automatic
+                </label>
               </div>
             </div>
           </div>

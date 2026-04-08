@@ -53,6 +53,10 @@ enum SnapshotRetentionPolicy {
   "Retain all snapshots." ALL
   "Keep only the N most recent snapshots." COUNT
   "Keep only snapshots completed in the last N days." DAYS
+  """
+    Retain all in the last 24 hours, daily for 30 days, weekly for 52 weeks,
+    and yearly for 10 years.
+  """ AUTO
 }
 
 "In combination with DayOfWeek, selects the particular week."

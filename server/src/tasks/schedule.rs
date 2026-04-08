@@ -177,7 +177,10 @@ impl Actor for ScheduleSupervisor {
         });
 
         // every day have all datasets prune old snapshots
-        ctx.run_interval(Duration::from_hours(24), |this, _ctx| {
+        let prune_interval_hours = std::env::var("PRUNE_INTERVAL_HOURS")
+            .map(|s| s.parse::<u64>().unwrap_or(24))
+            .unwrap_or(24);
+        ctx.run_interval(Duration::from_hours(prune_interval_hours), |this, _ctx| {
             trace!("schedule prune interval fired");
             if let Err(err) = this.prune_all_datasets() {
                 error!("failed to prune datasets: {}", err);

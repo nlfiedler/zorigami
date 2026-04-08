@@ -2,38 +2,23 @@
 ** TODO SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation
-*** TODO snapshots page [4/6]
+*** TODO snapshots page [6/7]
 - [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
 - [X] show list of snapshots
 - [X] add =/tree= route to show tree by its digest
 - [X] show breadcrumbs of the path leading up to this tree
-- [ ] empty files should show something rather than nothing
+- [X] show icons for small files and symbolic links
+- [X] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#A] Automatic snapshot pruning a la Time Machine
-*** TM keeps weekly backups ~as space allows~ but that only works for fixed-size storage
-*** hourly for 24 hours, daily for 30 days, weekly for one year, annually forever
-*** there will be 24 + 30 + 52 + N snapshots for any given dataset
-*** TODO add ~Automatic~ member to snapshot retention policy enum
-*** TODO add ~Automatic~ option to snapshot retention policy form in webui
-*** TODO add support for automatic pruning to =PrunerImpl=
-*** TODO test: consider how to write a macro to declaratively produce lots of fake snapshots
-*** how to automatically prune old snapshots
-**** https://github.com/bastibe/timeup/blob/master/timeup.py
-**** basic outline (each ~keep~ step starts by filtering the full list, not the output of the previous step)
-1. retrieve list of all snapshots
-2. create an empty ~retain~ list
-3. keep all within the last 24 hours
-4. keep the oldest from each day within the last 30 days
-5. keep the oldest from each week (same ISO 8601 week number) within the last year
-6. keep the oldest for each year
-7. sort ~retain~ list by date-time, dedupe, update parent linkage, save each record
-8. all remaining snapshots will be unreachable and can be pruned as usual
-** TODO [#B] Scheduler to test restoring a random file weekly
+** TODO [#A] BUG: ~Files Changed~ is 0 even though ~Files Uploaded~ is 1
+*** added files, backup finished, =changed_files= is still zero
+*** is it a timing issue?
+** TODO [#A] Scheduler to test restoring a random file weekly
 *** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
 *** scheduler will send a new type of request to the ring leader
 *** restorer needs a ~noop~ mode to simply compare the checksums of the target and restored file
 *** expose the result somewhere that the home page ~dashboard~ and display
-** TODO [#B] Scheduler to perform a ~scrub~ of the database weekly
+** TODO [#A] Scheduler to perform a ~scrub~ of the database weekly
 *** like zfs scrub, make sure no records are missing
 *** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
 *** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
@@ -54,14 +39,18 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
-** TODO [#C] Migrate to Vite 8.0
+** TODO [#B] Migrate to Vite 8.0
 *** https://vite.dev/blog/announcing-vite8
-** TODO [#C] Preventing mistakes
+** TODO [#B] Preventing mistakes
 *** deleting a pack store that is still being used by a data set
 **** return an error to the GraphQL client so it can report to the user
 **** update store form to show error message if delete fails
 *** changing the base path of the dataset after snapshots have been made
-*** adding a pack store to a dataset once snapshots have been made
+** TODO [#B] Clean up
+*** TODO remove =FindMissingPacks= usecase and GraphQL query
+*** TODO remove =ScanPacks= usecase and GraphQL query
+*** TODO remove =ReassignPacks= usecase and GraphQL mutation
+*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** TODO [#C] Dynamic bucket allocation
 *** hard-coded value of 128 is pretty low for local pack stores
 *** cloud-based pack stores can accommodate many objects per bucket
@@ -69,11 +58,6 @@
 ** TODO [#C] Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
-** TODO [#C] Clean up
-*** TODO remove =FindMissingPacks= usecase and GraphQL query
-*** TODO remove =ScanPacks= usecase and GraphQL query
-*** TODO remove =ReassignPacks= usecase and GraphQL mutation
-*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files
@@ -94,12 +78,16 @@
 [2023-08-08T15:51:20Z WARN  server::data::repositories] pack retrieval failed, will try another source: Err(Token retrieval failed: error trying to connect: Connection timed out (os error 110))
 #+end_src
 **** should try to set a timeout to something reasonble (1-2 minutes)
+*** store restore requests in database to tolerate application restart
+**** currently restore requests are queued in memory only, so a crash means everything is forgotten
 ** Improve backup reliability
 *** add some ~debug~ logging at regular intervals during the scan phase
 *** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
 **** should show the start time, not simply ~still running~
 **** show number of files packed, number of packs uploaded (what info logging shows now)
 **** capture actual time spent in each phase, accounting for ~pause~ times
+*** Detect and prune stale snapshots that never completely uploaded
+**** Stale snapshots exist in the database but are not referenced elsewhere
 ** AWS SDK for Rust now available
 *** c.f. https://aws.amazon.com/blogs/developer/announcing-general-availability-of-the-aws-sdk-for-rust/
 ** Efficient restore
@@ -117,6 +105,10 @@
 **** ~added~ and ~changed~ entries can be clicked on to visit the child tree of each snapshot
 **** ~removed~ and ~same~ are not navigable (no reason to browse these)
 *** would be helpful to see all snapshots in which a file or directory changed
+*** search snapshots to find a file/directory by a given pattern
+**** the file/dir is not in the latest snapshot but some older one, go find it
+**** might not even know the full path of the file/dir in question
+**** e.g. search for all =.avi= files
 ** Store extended attributes (xattrs) in packs
 *** xattrs can be megabytes in size, they should be in the packs, not the database
 ** File changes during backup (point-in-time)
@@ -168,7 +160,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** maybe consider a means of countering this error at runtime
 ** Loose WebUI tasks
 *** test with a smaller browser window to surface sizing issues
-*** local store basepath should use file picker
+*** local store basepath could offer button to use file picker
 *** improve (server) error handling
 **** when a temporary server error occurs, offer a "Retry" button
 *** tree entries of =ERROR= type should be displayed as such
@@ -198,47 +190,52 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
   ]
 }
 #+end_src
-*** webui: change =ServerFailure= to capture original error cause, not just as a string
-**** add factory function that detects common types of errors and produces more helpful failure messages
-**** e.g. backend is not responding on home screen, shows ugly stack trace
 *** Detect cloud credential issues and display friendly message
 **** errors from cloud providers can be cryptic, need to detect and decipher for the user
-*** Collect and present errors encountered during the backup
-**** e.g. all the "permission denied" and such
 *** Data set input validation
 **** Ask backend to verify the entered basepath before trying to save
 *** Pack store input validation
 **** should validate Google Cloud service account key when defining pack
-*** Consider a structured design for error types and handling
-**** c.f. https://fettblog.eu/rust-enums-wrapping-errors/
-*** Look at https://github.com/dtolnay/thiserror for defining error types
-** Remote pack store interaction
+** Pack store management
 *** Store impl needs to consider chosen storage class when answering ~fast~ or ~slow~ question
 **** e.g. Google ~coldline~ is slow but ~nearline~ is fast
+*** Add a new pack store to an existing dataset
+**** Could provide a means of copying packs between stores
+**** Would be like =Backuper= and =Restorer=, managed by supervised actor, processes in the background
+**** Would travese each bucket in the source and ensure target has everything
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
 **** probably minio and S3 have similar default limits
 **** the API generally offers a means of paging to get everything in chunks
+*** Repair missing pack files in pack stores
+**** Like adding a new pack store, add function to ensure target has everything in source
+*** Permit moving from one store to another
+**** would mean downloading the packs and uploading them to the new store
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
 ** Advanced Scheduling
-*** backend
-**** Permit ~hourly~ backups every N hours
-**** Permit ~daily~ backups every N days
-**** Permit ~weekly~ backups every N weeks
-**** Permit ~monthly~ backups every N months
-*** frontend
+*** frontend changes
 **** Support ~weekly~ with day-of-week
 **** Support ~monthly~ with day-of-month
 **** Support ~monthly~ with week-of-month
 ** Filters for excluding files by size
 *** allow adding rules on a dataset to ignore files that are too small/large
-** Evaluate =async-graphql= vs =juniper= some day
-*** so far juniper is working
-*** https://crates.io/crates/async-graphql
-*** TODO structure the code into smaller files
-*** TODO action items [0/6]
+** Support ~archive~ storage classes
+*** Azure, Amazon, and Google all support very slow response time storage
+*** requires subscribing to notifications (?) to facilitate file retrieval
+** Support SeaweedFS pack store
+*** https://github.com/seaweedfs/seaweedfs
+** Architecture Review
+*** Evaluate alternative databases, serde formats
+**** CBOR is not well supported, crates starved of love
+**** JSON may be good enough
+**** RocksDB is very good, but is it the best available now?
+*** Evaluate =async-graphql= vs =juniper= some day
+**** so far juniper is working
+**** https://crates.io/crates/async-graphql
+**** TODO structure the code into smaller files
+**** TODO action items [0/6]
 - [ ] detach from juniper
 - [ ] cargo add async-graphql
 - [ ] add =chrono= feature
@@ -248,75 +245,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 - [ ] try =playground= feature
 - [ ] set up the context to provide things to resolvers
 - [ ] try =string_number= feature to use =StringNumber= instead of =BigInt=
-** Support ~archive~ storage classes
-*** Azure, Amazon, and Google all support very slow response time storage
-*** requires subscribing to notifications (?) to facilitate file retrieval
-** Support SeaweedFS pack store
-*** https://github.com/seaweedfs/seaweedfs
-** More Functionality
-*** search snapshots to find a file/directory by a given pattern
-**** the file/dir is not in the latest snapshot but some older one, go find it
-**** might not even know the full path of the file/dir in question
-**** e.g. search for all =.avi= files
-*** store restore requests in database to tolerate application restart
-**** currently restore requests are queued in memory only, so a crash means everything is forgotten
-*** Perform a full backup on demand, discard all previous backups
-**** Wifey doesn't like the idea of accumulating old stuff
-**** Gives the user a chance to save space by removing old content
-**** remove all records that are _not_ stores and datasets
-- latest/
-- chunk/
-- pack/
-- file/
-- xattr/
-- dbase/
-- tree/
-**** Optionally prune all existing packs in the process
-*** event dispatching for the web interface
-**** use the state management to manage "events" and state
-**** engine emits actions/events to the store
-***** for backup and restore functions
-***** e.g. "downloaded a pack", "uploaded a pack"
-**** store holds the cumulative data so late attachers can gather everything
-**** supervisor threads register as subscribers to the store
-**** clients will use GraphQL subscriptions to receive updates
-**** supervisor threads emit GraphQL subscription events
-*** Secure FTP improvements
-**** SFTP is twice as slow as MinIO, should investigate why
-**** support SFTP with private key authentication
-***** use store form to take paths for public and private keys
-**** allow private key that is locked with a passphrase
-***** passphrase for private key would be provided by envar
-*** Repair missing pack files in pack stores
-**** expose the GraphQL operation via the graphical interface
-** More Information
-*** track start and finish time for a backup
-**** account for time when backup is paused due to schedule
-*** show =fileCounts= query for each of latest N snapshots to show recent data growth
-*** Show details about snapshots and files
-**** show differences between two snapshots
-**** show pack/chunk metrics for   all   files in a snapshot
-**** show pack/chunk metrics for changed files in a snapshot
-*** Query to see histogram of file sizes, number of chunks, etc
-**** for a given snapshot
-***** count number of files with N chunks for all values of N
-*** Show number of packs stored in a pack store
-** Architecture Review
-*** Evaluate alternative databases, serde formats
-**** CBOR is not well supported, crates starved of love
-**** JSON may be good enough
-**** RocksDB is very good, but is it the best available now?
-*** Parallel backups
-**** Currently the backup supervisor spawns a single thread (=Arbiter=) to manage backups
-**** This causes all backups to be serialized
-**** For parallel backups, would use the =SyncArbiter= from actix
-*** Database migrations
-**** Use the =serde= crate features (c.f. https://serde.rs)
-**** Use =#[serde(default)]= on struct to fill in blanks for new fields
-**** Add =#[serde(skip_serializing)]= to a deprecated struct field
-**** New fields will need accessors that convert from old fields as needed
-***** reset the old field to indicate it is no longer relevant
-**** Removing a field is no problem for serde
 ** Full Restore
 *** Procedure for full restore
 **** User installs and configures application
@@ -331,22 +259,6 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 ***** Copy records for datasets, stores, snapshots, packs, etc
 **** User can now browse datasets and restore as usual
 **** Restoring an entire dataset is simply the "tree restore" case
-*** Walk the user through the process
-**** Configure the primary pack store for retrieval
-**** Inform user that this pack store configuration is only temporary
-**** Select database to retrieve based on computer UUID
-**** Instruct user to restore as usual from dataset(s)
-*** Restore file attributes from tree entry
-**** TODO File mode
-**** TODO File user/group
-**** TODO File extended attributes
-*** Restore directories from snapshot
-**** restoring an empty directory does nothing, should create the directory
-**** restore directory mode bits, user/group ownership, extended attributes
-*** Detect and prune stale snapshots that never completely uploaded
-**** Stale snapshots exist in the database but are not referenced elsewhere
-*** Support snapshots consisting only of mode/owner changes
-**** i.e. no file content changes, just the database records
 ** More Better
 *** Ransomware protection
 **** descriptions of what this means
@@ -381,13 +293,11 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** At the start of backup, sync with the ~peer~ to get latest chunks/packs
 *** Consider how to deal with partial uploads
 **** e.g. Minio/S3 has a means of handling these
-*** Permit removing a store from a dataset
-**** would encourage user to clean up the remote files
-**** for local store, could remove the files immediately
-**** must invalidate all of the snapshots effected by the missing store
-*** Permit moving from one store to another
-**** would mean downloading the packs and uploading them to the new store
 * Documentation
+** Automatic snapshot pruning
+*** Retention policy applies to the snapshots for a dataset
+*** Any schedule will work, but ~hourly~ makes the most sense
+*** Policy: hourly for 24 hours, daily for 30 days, weekly for 52 weeks, annually for 10 years
 ** Duplicati has a fun description of how the backup works
 *** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
 *** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/

@@ -337,6 +337,9 @@ enum SnapshotRetentionPolicy {
     Count,
     /// Keep only snapshots completed in the last N days.
     Days,
+    /// Retain all in the last 24 hours, daily for 30 days, weekly for 52 weeks,
+    /// and yearly for 10 years.
+    Auto,
 }
 
 #[derive(GraphQLObject)]
@@ -352,6 +355,10 @@ impl From<entities::SnapshotRetention> for SnapshotRetention {
         match retention {
             entities::SnapshotRetention::ALL => SnapshotRetention {
                 policy: SnapshotRetentionPolicy::All,
+                value: 0,
+            },
+            entities::SnapshotRetention::AUTO => SnapshotRetention {
+                policy: SnapshotRetentionPolicy::Auto,
                 value: 0,
             },
             entities::SnapshotRetention::COUNT(n) => SnapshotRetention {
@@ -1267,6 +1274,7 @@ impl From<SnapshotRetentionInput> for entities::SnapshotRetention {
         };
         match retention.policy {
             SnapshotRetentionPolicy::All => entities::SnapshotRetention::ALL,
+            SnapshotRetentionPolicy::Auto => entities::SnapshotRetention::AUTO,
             SnapshotRetentionPolicy::Count => entities::SnapshotRetention::COUNT(value as u16),
             SnapshotRetentionPolicy::Days => entities::SnapshotRetention::DAYS(value as u16),
         }

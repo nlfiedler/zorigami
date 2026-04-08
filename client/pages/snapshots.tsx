@@ -627,10 +627,14 @@ function TreeViewer(props: TreeViewerProps) {
                 >
                   <span class="icon">
                     <i
-                      class="fa-regular"
                       classList={{
-                        'fa-file': item.reference.startsWith('file-'),
-                        'fa-folder': item.reference.startsWith('tree-')
+                        'fa-regular fa-file':
+                          item.reference.startsWith('file-'),
+                        'fa-regular fa-folder':
+                          item.reference.startsWith('tree-'),
+                        'fa-solid fa-link': item.reference.startsWith('link-'),
+                        'fa-solid fa-compress':
+                          item.reference.startsWith('small-')
                       }}
                     ></i>
                   </span>
@@ -638,7 +642,7 @@ function TreeViewer(props: TreeViewerProps) {
                 </td>
                 <td>{new Date(item.modTime).toLocaleString()}</td>
                 <td>
-                  <code>{item.reference.slice(5)}</code>
+                  <code>{itemName(item.reference)}</code>
                 </td>
               </tr>
             )}
@@ -647,4 +651,19 @@ function TreeViewer(props: TreeViewerProps) {
       </table>
     </Show>
   );
+}
+
+function itemName(reference: string): string {
+  if (reference.startsWith('file-')) {
+    return reference.slice(5);
+  } else if (reference.startsWith('tree-')) {
+    return reference.slice(5);
+  } else if (reference === 'small-') {
+    return '(empty)';
+  } else if (reference.startsWith('small-')) {
+    return reference.slice(6);
+  } else if (reference.startsWith('link-')) {
+    return reference.slice(5);
+  }
+  return reference;
 }

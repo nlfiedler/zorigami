@@ -508,6 +508,9 @@ impl Model for Dataset {
                 } else if name == "retain_all" {
                     // retention (all)
                     dataset.retention = SnapshotRetention::ALL;
+                } else if name == "retain_auto" {
+                    // retention (auto)
+                    dataset.retention = SnapshotRetention::AUTO;
                 } else if name == "retain_count" {
                     // retention (count)
                     let iv: ciborium::value::Integer = value
@@ -594,6 +597,9 @@ impl Model for Dataset {
         match self.retention {
             SnapshotRetention::ALL => {
                 fields.push((Value::Text("retain_all".into()), Value::Null));
+            }
+            SnapshotRetention::AUTO => {
+                fields.push((Value::Text("retain_auto".into()), Value::Null));
             }
             SnapshotRetention::COUNT(count) => {
                 fields.push((

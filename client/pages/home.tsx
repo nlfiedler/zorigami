@@ -160,7 +160,7 @@ function DatasetCard(props: DatasetCardProps) {
               <td>{props.dataset.status.filesUploaded}</td>
             </tr>
             <tr>
-              <td>Bytees Uploaded</td>
+              <td>Bytes Uploaded</td>
               <td>{props.dataset.status.bytesUploaded}</td>
             </tr>
             <tr>

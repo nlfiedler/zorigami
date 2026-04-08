@@ -1,15 +1,15 @@
 //
 // Copyright (c) 2026 Nathan Fiedler
 //
-use crate::domain::entities::{Checksum, SnapshotRetention, TreeReference};
+use crate::domain::entities::{Checksum, Snapshot, SnapshotRetention, TreeReference};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, TimeDelta, Utc};
 use log::info;
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::cmp;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
@@ -151,7 +151,7 @@ impl PrunerImpl {
     }
 
     // Walk backward from the given snapshot, visiting snapshots whose start
-    // time occurs after the date that is `days` in the past. Returns the digest
+    // time occurs before the date that is `days` in the past. Returns the digest
     // of the last snapshot that was visited. If `None` is returned, then there
     // were were no snapshots from before `days` ago.
     fn visit_days_snapshots(&self, start: Checksum, days: u16) -> Result<Option<Checksum>, Error> {
@@ -204,9 +204,80 @@ impl PrunerImpl {
         Ok(count)
     }
 
+    // Starting from the given (latest) snapshot, count backwards `count`
+    // snapshots and prune all the snapshots thereafter.
+    fn prune_snapshots_after_count(&self, start: Checksum, count: u16) -> Result<usize, Error> {
+        let maybe_oldest_snapshot: Option<Checksum> = self.visit_count_snapshots(start, count)?;
+        let pruned_count = if let Some(oldest) = maybe_oldest_snapshot {
+            info!("pruning snapshots after {}", oldest);
+            self.prune_snapshots_after(oldest)?
+        } else {
+            0
+        };
+        Ok(pruned_count)
+    }
+
+    // Starting from the given (latest) snapshot, walk backwards through the
+    // snapshots and prune all the occur after the given days in the past.
+    fn prune_snapshots_after_days(&self, start: Checksum, days: u16) -> Result<usize, Error> {
+        let maybe_oldest_snapshot: Option<Checksum> = self.visit_days_snapshots(start, days)?;
+        let pruned_count = if let Some(oldest) = maybe_oldest_snapshot {
+            info!("pruning snapshots after {}", oldest);
+            self.prune_snapshots_after(oldest)?
+        } else {
+            0
+        };
+        Ok(pruned_count)
+    }
+
+    // Prune snapshots automatically according to a convention similar to that
+    // of Apple Time Machine.
+    fn prune_snapshots_auto(&self, start: Checksum) -> Result<usize, Error> {
+        // read all snapshots for the given dataset
+        let mut digest = start;
+        let mut snapshots: HashMap<Checksum, Snapshot> = HashMap::new();
+        loop {
+            let snapshot = self
+                .repo
+                .get_snapshot(&digest)?
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+            let maybe_parent = snapshot.parent.clone();
+            snapshots.insert(snapshot.digest.clone(), snapshot);
+            if let Some(parent) = maybe_parent {
+                digest = parent;
+            } else {
+                break;
+            }
+        }
+        // prune the snapshots down to those that should remain
+        let candidates: Vec<(Checksum, DateTime<Utc>)> = snapshots
+            .values()
+            .map(|s| (s.digest.clone(), s.start_time))
+            .collect();
+        let candidates_len = candidates.len();
+        let keepers = auto_prune_snapshots(candidates);
+        // update all snapshot records accordingly -- take them in pairs and
+        // update the first to point to the next, with the last one having its
+        // parent set to none to cut off the remaining snapshots
+        for pair in keepers.windows(2) {
+            let mut snap = snapshots.remove(&pair[0].0).unwrap();
+            snap.parent = Some(pair[1].0.clone());
+            self.repo.put_snapshot(&snap)?;
+        }
+        let mut snap = snapshots.remove(&keepers.last().unwrap().0).unwrap();
+        snap.parent = None;
+        self.repo.put_snapshot(&snap)?;
+        // delete all of the remaining snapshots
+        for remaining in snapshots.keys() {
+            let id = remaining.to_string();
+            self.repo.delete_snapshot(&id)?;
+        }
+        Ok(candidates_len - keepers.len())
+    }
+
     // Find all records that are no longer reachable from the configured
     // datasets, removing them from the database. This ignores pack records as
-    // this usecase does not handle pack pruning.
+    // this function does not handle pack pruning.
     fn prune_unreachable_records(&self) -> Result<(), Error> {
         //
         // get the digests of all tree, file, chunk, and xattr records; after
@@ -229,7 +300,6 @@ impl PrunerImpl {
         let mut visit_tree = |tree_sum: Checksum| -> Result<(), Error> {
             // Rust does not know how to compile recursive closures, so use a
             // function within the closure to get around the types issue.
-            #[allow(clippy::borrowed_box)]
             fn rec(
                 repo: &Arc<dyn RecordRepository>,
                 tree_sum: Checksum,
@@ -363,28 +433,26 @@ impl Pruner for PrunerImpl {
             .snapshot
             .clone()
             .ok_or_else(|| anyhow!(format!("no snapshots for dataset: {:?}", &request.dataset)))?;
-        let maybe_oldest_snapshot: Option<Checksum> = match dataset.retention {
+        let pruned_count = match dataset.retention {
             SnapshotRetention::ALL => {
                 info!("will retain all snapshots for dataset {}", dataset.id);
-                None
+                0
             }
             SnapshotRetention::COUNT(count) => {
                 info!("will retain {} snapshots for dataset {}", count, dataset.id);
-                self.visit_count_snapshots(latest_hash, count)?
+                self.prune_snapshots_after_count(latest_hash, count)?
             }
             SnapshotRetention::DAYS(days) => {
                 info!(
                     "will retain {} days of snapshots for dataset {}",
                     days, dataset.id
                 );
-                self.visit_days_snapshots(latest_hash, days)?
+                self.prune_snapshots_after_days(latest_hash, days)?
             }
-        };
-        let pruned_count = if let Some(oldest) = maybe_oldest_snapshot {
-            info!("pruning snapshots after {}", oldest);
-            self.prune_snapshots_after(oldest)?
-        } else {
-            0
+            SnapshotRetention::AUTO => {
+                info!("will auto-prune snapshots for dataset {}", dataset.id);
+                self.prune_snapshots_auto(latest_hash)?
+            }
         };
         if pruned_count > 0 {
             info!(
@@ -400,12 +468,162 @@ impl Pruner for PrunerImpl {
     }
 }
 
+/// Given a set of snapshots from a dataset, given here as their digest and the
+/// start date-time, return those that conform to the following convention:
+///
+/// * Keep all within the past 24 hours
+/// * The oldest for each day for the past 30 days
+/// * The oldest for each week for the past 52 weeks
+/// * The oldest for each year for the past 10 years
+///
+/// At most there will be 116 remaining snapshots, if running hourly backups.
+fn auto_prune_snapshots(
+    incoming: Vec<(Checksum, DateTime<Utc>)>,
+) -> Vec<(Checksum, DateTime<Utc>)> {
+    // uses the basic logic from https://github.com/bastibe/timeup with some
+    // adjustments for the intended retention convention
+    let mut retain: Vec<(Checksum, DateTime<Utc>)> = vec![];
+    let now = Utc::now();
+
+    // keep all within the last day
+    let twenty4_ago = now - TimeDelta::hours(24);
+    for entry in incoming.iter() {
+        if entry.1 > twenty4_ago {
+            retain.push(entry.clone());
+        }
+    }
+
+    // keep the oldest from each day within the last month
+    for day in 1..30 {
+        let date = (now - TimeDelta::days(day)).date_naive();
+        if let Some(on_date) = incoming
+            .iter()
+            .filter(|(_, d)| d.date_naive() == date)
+            .min_by_key(|(_, d)| d)
+        {
+            retain.push(on_date.to_owned());
+        }
+    }
+
+    // keep the oldest from each week (same ISO 8601 week) within the last year
+    for week in 1..52 {
+        let date = (now - TimeDelta::weeks(week)).date_naive();
+        if let Some(on_date) = incoming
+            .iter()
+            .filter(|(_, d)| d.year() == date.year() && d.iso_week() == date.iso_week())
+            .min_by_key(|(_, d)| d)
+        {
+            retain.push(on_date.to_owned());
+        }
+    }
+
+    // keep the oldest for each year within the last decade
+    for year in 1..10 {
+        let date = (now - TimeDelta::weeks(52 * year)).date_naive();
+        if let Some(on_date) = incoming
+            .iter()
+            .filter(|(_, d)| d.year() == date.year())
+            .min_by_key(|(_, d)| d)
+        {
+            retain.push(on_date.to_owned());
+        }
+    }
+
+    // dedupe by checksum
+    retain.sort_by(|a, b| a.0.cmp(&b.0));
+    retain.dedup_by(|a, b| a.0 == b.0);
+
+    // sort by date-time in reverse order (most recent first)
+    retain.sort_by(|a, b| b.1.cmp(&a.1));
+    retain
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::{Dataset, File, Snapshot, Tree, TreeEntry};
+    use crate::domain::entities::{Dataset, File, FileCounts, Snapshot, Tree, TreeEntry};
     use crate::domain::repositories::MockRecordRepository;
+    use chrono::Timelike;
     use hashed_array_tree::{HashedArrayTree, hat};
+
+    #[test]
+    fn test_pruner_auto_prune_snapshots_empty() {
+        let inputs: Vec<(Checksum, DateTime<Utc>)> = vec![];
+        let actual = auto_prune_snapshots(inputs);
+        assert_eq!(actual.len(), 0);
+    }
+
+    #[test]
+    fn test_pruner_auto_prune_snapshots_many() {
+        #[rustfmt::skip]
+        let raw_inputs = [
+            // snapshot digest, time delta, specific hour, is-keeper
+            ("58950e2", TimeDelta::hours(1), 0, true), // within last 24 hours
+            ("e21d304", TimeDelta::hours(6), 0, true), // within last 24 hours
+            ("af09fd7", TimeDelta::hours(12), 0, true), // within last 24 hours
+            ("0a3f167", TimeDelta::hours(23), 0, true), // within last 24 hours
+            ("d68ae86", TimeDelta::days(1), 1, true), // oldest from that day
+            ("56662fc", TimeDelta::days(1), 2, false),
+            ("e017530", TimeDelta::days(1), 3, false),
+            ("24d6ec6", TimeDelta::days(2), 1, true), // oldest from that day
+            ("6f8c483", TimeDelta::days(3), 2, true), // oldest from that day
+            ("3c1cbff", TimeDelta::days(3), 3, false),
+            ("c586348", TimeDelta::days(4), 1, true), // oldest from that day
+            ("31e2791", TimeDelta::days(7), 1, true), // oldest from that day
+            ("2b4a1e4", TimeDelta::days(14), 1, true), // oldest from that day
+            ("8896097", TimeDelta::days(21), 1, true), // oldest from that day
+            ("24492a8", TimeDelta::days(28), 1, true), // oldest from that day
+            ("401824a", TimeDelta::days(28), 2, false),
+            ("30b5ca4", TimeDelta::weeks(5), 0, true), // keep
+            ("7898463", TimeDelta::weeks(6), 1, true), // keep
+            ("85f9d33", TimeDelta::weeks(6), 2, false),
+            ("1910012", TimeDelta::weeks(8), 0, true), // keep
+            ("ff56c08", TimeDelta::weeks(9), 0, true), // keep
+            ("59932e2", TimeDelta::weeks(10), 0, true), // keep
+            ("481b645", TimeDelta::weeks(20), 0, true), // keep
+            ("4a8e558", TimeDelta::weeks(52), 0, true), // keep
+            ("5f34e9f", TimeDelta::weeks(80), 0, false),
+            ("4947c86", TimeDelta::weeks(104), 0, true), // keep
+            ("963fcca", TimeDelta::weeks(156), 0, false),
+            ("eed11b3", TimeDelta::weeks(157), 0, true), // keep
+            ("d14d877", TimeDelta::weeks(208), 0, false),
+            ("3e50f75", TimeDelta::weeks(209), 0, true), // keep
+            ("dc96392", TimeDelta::weeks(260), 0, false),
+            ("31d1259", TimeDelta::weeks(261), 0, true), // keep
+            ("00b01d2", TimeDelta::weeks(521), 0, false),
+            ("d16da00", TimeDelta::weeks(522), 0, false)
+        ];
+        let now = Utc::now();
+        let inputs: Vec<(Checksum, DateTime<Utc>)> = raw_inputs
+            .iter()
+            .map(|input| {
+                if input.2 > 0 {
+                    let that_time = now - input.1;
+                    (
+                        Checksum::SHA1(input.0.into()),
+                        that_time.with_hour(input.2).unwrap(),
+                    )
+                } else {
+                    (Checksum::SHA1(input.0.into()), now - input.1)
+                }
+            })
+            .collect();
+        let expected: Vec<Checksum> = raw_inputs
+            .iter()
+            .filter_map(|input| {
+                if input.3 {
+                    Some(Checksum::SHA1(input.0.into()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let actual = auto_prune_snapshots(inputs);
+        assert_eq!(actual.len(), expected.len());
+        for (a, e) in actual.iter().zip(expected.iter()) {
+            assert_eq!(a.0, *e);
+        }
+    }
 
     #[test]
     fn test_pruner_visit_count_snapshots_less() {
@@ -724,7 +942,107 @@ mod tests {
     }
 
     #[test]
-    fn test_pruner_snapshots_returns_count() {
+    fn test_pruner_prune_snapshots_auto() {
+        // arrange
+        #[rustfmt::skip]
+        let raw_inputs = [
+            // digest, tree, time delta, specific hour, parent, put, delete
+            ("58950e2", "cafebabe", TimeDelta::hours(1), 0, "e21d304", true), // within last 24 hours
+            ("e21d304", "cafebabe", TimeDelta::hours(6), 0, "af09fd7", true), // within last 24 hours
+            ("af09fd7", "cafebabe", TimeDelta::hours(12), 0, "0a3f167", true), // within last 24 hours
+            ("0a3f167", "cafebabe", TimeDelta::hours(23), 0, "d68ae86", true), // within last 24 hours
+            ("d68ae86", "cafebabe", TimeDelta::days(1), 1, "56662fc", true), // oldest from that day
+            ("56662fc", "cafebabe", TimeDelta::days(1), 2, "e017530", false),
+            ("e017530", "cafebabe", TimeDelta::days(1), 3, "24d6ec6", false),
+            ("24d6ec6", "cafebabe", TimeDelta::days(2), 1, "6f8c483", true), // oldest from that day
+            ("6f8c483", "cafebabe", TimeDelta::days(3), 2, "3c1cbff", true), // oldest from that day
+            ("3c1cbff", "cafebabe", TimeDelta::days(3), 3, "c586348", false),
+            ("c586348", "cafebabe", TimeDelta::days(4), 1, "31e2791", true), // oldest from that day
+            ("31e2791", "cafebabe", TimeDelta::days(7), 1, "2b4a1e4", true), // oldest from that day
+            ("2b4a1e4", "cafebabe", TimeDelta::days(14), 1, "8896097", true), // oldest from that day
+            ("8896097", "cafebabe", TimeDelta::days(21), 1, "24492a8", true), // oldest from that day
+            ("24492a8", "cafebabe", TimeDelta::days(28), 1, "401824a", true), // oldest from that day
+            ("401824a", "cafebabe", TimeDelta::days(28), 2, "30b5ca4", false),
+            ("30b5ca4", "cafebabe", TimeDelta::weeks(5), 0, "7898463", true), // keep
+            ("7898463", "cafebabe", TimeDelta::weeks(6), 1, "85f9d33", true), // keep
+            ("85f9d33", "cafebabe", TimeDelta::weeks(6), 2, "1910012", false),
+            ("1910012", "cafebabe", TimeDelta::weeks(8), 0, "ff56c08", true), // keep
+            ("ff56c08", "cafebabe", TimeDelta::weeks(9), 0, "59932e2", true), // keep
+            ("59932e2", "cafebabe", TimeDelta::weeks(10), 0, "481b645", true), // keep
+            ("481b645", "cafebabe", TimeDelta::weeks(20), 0, "4a8e558", true), // keep
+            ("4a8e558", "cafebabe", TimeDelta::weeks(52), 0, "5f34e9f", true), // keep
+            ("5f34e9f", "cafebabe", TimeDelta::weeks(80), 0, "4947c86", false),
+            ("4947c86", "cafebabe", TimeDelta::weeks(104), 0, "963fcca", true), // keep
+            ("963fcca", "cafebabe", TimeDelta::weeks(156), 0, "eed11b3", false),
+            ("eed11b3", "cafebabe", TimeDelta::weeks(157), 0, "d14d877", true), // keep
+            ("d14d877", "cafebabe", TimeDelta::weeks(208), 0, "3e50f75", false),
+            ("3e50f75", "cafebabe", TimeDelta::weeks(209), 0, "dc96392", true), // keep
+            ("dc96392", "cafebabe", TimeDelta::weeks(260), 0, "31d1259", false),
+            ("31d1259", "cafebabe", TimeDelta::weeks(261), 0, "00b01d2", true), // keep
+            ("00b01d2", "cafebabe", TimeDelta::weeks(521), 0, "d16da00", false),
+            ("d16da00", "cafebabe", TimeDelta::weeks(522), 0, "", false)
+        ];
+        let mut mock = MockRecordRepository::new();
+        let now = Utc::now();
+        for orig in raw_inputs.iter() {
+            #[allow(clippy::clone_on_copy)]
+            let input = orig.clone();
+            mock.expect_get_snapshot()
+                .withf(move |d| d == &Checksum::SHA1(input.0.into()))
+                .returning(move |_| {
+                    let parent = if input.4.is_empty() {
+                        None
+                    } else {
+                        Some(Checksum::SHA1(input.4.into()))
+                    };
+                    let start_time: DateTime<Utc> = if input.3 > 0 {
+                        (now - input.2).with_hour(input.3).unwrap()
+                    } else {
+                        now - input.2
+                    };
+                    Ok(Some(Snapshot {
+                        digest: Checksum::SHA1(input.0.into()),
+                        parent,
+                        start_time,
+                        end_time: Some(start_time + TimeDelta::hours(1)),
+                        file_counts: FileCounts::default(),
+                        tree: Checksum::SHA1(input.1.into()),
+                    }))
+                });
+            if input.5 {
+                if input.0 == "31d1259" {
+                    // last snapshot has its parent set to none
+                    mock.expect_put_snapshot()
+                        .withf(move |s| {
+                            s.digest == Checksum::SHA1(input.0.into()) && s.parent.is_none()
+                        })
+                        .returning(|_| Ok(()));
+                } else {
+                    // other snapshots have fields we won't verify
+                    mock.expect_put_snapshot()
+                        .withf(move |s| s.digest == Checksum::SHA1(input.0.into()))
+                        .returning(|_| Ok(()));
+                }
+            } else {
+                let expected_id = format!("sha1-{}", input.0);
+                mock.expect_delete_snapshot()
+                    .withf(move |id| id == expected_id)
+                    .returning(|_| Ok(()));
+            }
+        }
+        let submock = MockSubscriber::new();
+        // act
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let result = pruner.prune_snapshots_auto(Checksum::SHA1(raw_inputs[0].0.into()));
+        // assert
+        assert!(result.is_ok());
+        let count = result.unwrap();
+        assert_eq!(count, 11); // 11 pruned, 23 retained
+    }
+
+    #[test]
+    fn test_pruner_snapshots_removes_all_dangling() {
         // arrange
         let mut mock = MockRecordRepository::new();
 

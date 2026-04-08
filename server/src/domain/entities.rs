@@ -280,6 +280,9 @@ pub enum SnapshotRetention {
     COUNT(u16),
     /// Retain snapshots for this many days.
     DAYS(u16),
+    /// Retain all in the last 24 hours, daily for 30 days, weekly for 52 weeks,
+    /// and yearly for 10 years.
+    AUTO,
 }
 
 /// Represents a directory tree that will be backed up according to a schedule,
