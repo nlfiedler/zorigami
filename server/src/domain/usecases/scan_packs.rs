@@ -114,6 +114,7 @@ mod tests {
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use crate::shared::packs;
     use std::path::Path;
+    use hashed_array_tree::{hat, HashedArrayTree};
     use tempfile::tempdir;
 
     #[test]
@@ -146,7 +147,7 @@ mod tests {
             let mock_store = MockPackRepository::new();
             Ok(Box::new(mock_store))
         });
-        mock.expect_get_all_packs().returning(|| Ok(Vec::new()));
+        mock.expect_get_all_packs().returning(|| Ok(HashedArrayTree::new()));
         mock.expect_get_file().returning(|_| {
             Ok(Some(File::new(
                 Checksum::BLAKE3("deadbeef".into()),
@@ -205,7 +206,7 @@ mod tests {
             // this pack digest will be captured as the correct ("new") value
             let pack_sum = Checksum::SHA1("b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned());
             let locations = vec![PackLocation::new("storeid", "bucketid", "objectid")];
-            Ok(vec![Pack::new(pack_sum, locations)])
+            Ok(hat![Pack::new(pack_sum, locations)])
         });
 
         // act

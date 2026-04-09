@@ -149,10 +149,10 @@ impl EntityDataSource for EntityDataSourceImpl {
         Ok(results)
     }
 
-    fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
+    fn get_all_packs(&self) -> Result<HashedArrayTree<Pack>, Error> {
         let db = self.database.lock().unwrap();
         let packs = db.fetch_prefix("pack/")?;
-        let mut results: Vec<Pack> = Vec::new();
+        let mut results: HashedArrayTree<Pack> = HashedArrayTree::new();
         for (key, value) in packs {
             let result = Pack::from_bytes(key.as_bytes(), &value)?;
             results.push(result);

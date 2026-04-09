@@ -83,7 +83,7 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.get_packs(store_id)
     }
 
-    fn get_all_packs(&self) -> Result<Vec<Pack>, Error> {
+    fn get_all_packs(&self) -> Result<HashedArrayTree<Pack>, Error> {
         self.datasource.get_all_packs()
     }
 
