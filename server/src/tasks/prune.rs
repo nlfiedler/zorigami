@@ -255,7 +255,7 @@ impl PrunerImpl {
             .map(|s| (s.digest.clone(), s.start_time))
             .collect();
         let candidates_len = candidates.len();
-        let keepers = auto_prune_snapshots(candidates);
+        let keepers = auto_prune_snapshots(candidates, Utc::now());
         // update all snapshot records accordingly -- take them in pairs and
         // update the first to point to the next, with the last one having its
         // parent set to none to cut off the remaining snapshots
@@ -478,12 +478,11 @@ impl Pruner for PrunerImpl {
 ///
 /// At most there will be 116 remaining snapshots, if running hourly backups.
 fn auto_prune_snapshots(
-    incoming: Vec<(Checksum, DateTime<Utc>)>,
+    incoming: Vec<(Checksum, DateTime<Utc>)>, now: DateTime<Utc>,
 ) -> Vec<(Checksum, DateTime<Utc>)> {
     // uses the basic logic from https://github.com/bastibe/timeup with some
     // adjustments for the intended retention convention
     let mut retain: Vec<(Checksum, DateTime<Utc>)> = vec![];
-    let now = Utc::now();
 
     // keep all within the last day
     let twenty4_ago = now - TimeDelta::hours(24);
@@ -549,7 +548,7 @@ mod tests {
     #[test]
     fn test_pruner_auto_prune_snapshots_empty() {
         let inputs: Vec<(Checksum, DateTime<Utc>)> = vec![];
-        let actual = auto_prune_snapshots(inputs);
+        let actual = auto_prune_snapshots(inputs, Utc::now());
         assert_eq!(actual.len(), 0);
     }
 
@@ -562,10 +561,9 @@ mod tests {
             ("e21d304", TimeDelta::hours(6), 0, true), // within last 24 hours
             ("af09fd7", TimeDelta::hours(12), 0, true), // within last 24 hours
             ("0a3f167", TimeDelta::hours(23), 0, true), // within last 24 hours
-            ("d68ae86", TimeDelta::days(1), 1, true), // oldest from that day
-            ("56662fc", TimeDelta::days(1), 2, false),
-            ("e017530", TimeDelta::days(1), 3, false),
             ("24d6ec6", TimeDelta::days(2), 1, true), // oldest from that day
+            ("56662fc", TimeDelta::days(2), 2, false),
+            ("e017530", TimeDelta::days(2), 3, false),
             ("6f8c483", TimeDelta::days(3), 2, true), // oldest from that day
             ("3c1cbff", TimeDelta::days(3), 3, false),
             ("c586348", TimeDelta::days(4), 1, true), // oldest from that day
@@ -618,7 +616,7 @@ mod tests {
                 }
             })
             .collect();
-        let actual = auto_prune_snapshots(inputs);
+        let actual = auto_prune_snapshots(inputs, now);
         assert_eq!(actual.len(), expected.len());
         for (a, e) in actual.iter().zip(expected.iter()) {
             assert_eq!(a.0, *e);
@@ -951,10 +949,9 @@ mod tests {
             ("e21d304", "cafebabe", TimeDelta::hours(6), 0, "af09fd7", true), // within last 24 hours
             ("af09fd7", "cafebabe", TimeDelta::hours(12), 0, "0a3f167", true), // within last 24 hours
             ("0a3f167", "cafebabe", TimeDelta::hours(23), 0, "d68ae86", true), // within last 24 hours
-            ("d68ae86", "cafebabe", TimeDelta::days(1), 1, "56662fc", true), // oldest from that day
-            ("56662fc", "cafebabe", TimeDelta::days(1), 2, "e017530", false),
-            ("e017530", "cafebabe", TimeDelta::days(1), 3, "24d6ec6", false),
             ("24d6ec6", "cafebabe", TimeDelta::days(2), 1, "6f8c483", true), // oldest from that day
+            ("56662fc", "cafebabe", TimeDelta::days(2), 2, "e017530", false),
+            ("e017530", "cafebabe", TimeDelta::days(2), 3, "24d6ec6", false),
             ("6f8c483", "cafebabe", TimeDelta::days(3), 2, "3c1cbff", true), // oldest from that day
             ("3c1cbff", "cafebabe", TimeDelta::days(3), 3, "c586348", false),
             ("c586348", "cafebabe", TimeDelta::days(4), 1, "31e2791", true), // oldest from that day

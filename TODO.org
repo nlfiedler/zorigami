@@ -10,19 +10,32 @@
 - [X] show icons for small files and symbolic links
 - [X] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#A] BUG: ~Files Changed~ is 0 even though ~Files Uploaded~ is 1
-*** added files, backup finished, =changed_files= is still zero
-*** is it a timing issue?
 ** TODO [#A] Scheduler to test restoring a random file weekly
 *** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
 *** scheduler will send a new type of request to the ring leader
-*** restorer needs a ~noop~ mode to simply compare the checksums of the target and restored file
+*** TODO add a =restore_test()= to =Restorer= [0/3]
+- [ ] find a random =file/= record from the database (may need a new db fn for performance)
+- [ ] find the chunk and pack that contains the file
+- [ ] retrieve the pack(s), extract, verify file digests
+*** TODO add =restore_test()= to =Leader= and its supervisor to call restorer
 *** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#A] Scheduler to perform a ~scrub~ of the database weekly
 *** like zfs scrub, make sure no records are missing
 *** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
 *** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
 *** expose the result somewhere that the home page ~dashboard~ and display
+** TODO [#B] Migrate to Vite 8.0
+*** https://vite.dev/blog/announcing-vite8
+** TODO [#B] Preventing mistakes
+*** deleting a pack store that is still being used by a data set
+**** return an error to the GraphQL client so it can report to the user
+**** update store form to show error message if delete fails
+*** changing the base path of the dataset after snapshots have been made
+** TODO [#B] Clean up
+*** TODO remove =FindMissingPacks= usecase and GraphQL query
+*** TODO remove =ScanPacks= usecase and GraphQL query
+*** TODO remove =ReassignPacks= usecase and GraphQL mutation
+*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** TODO [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
@@ -39,18 +52,6 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
-** TODO [#B] Migrate to Vite 8.0
-*** https://vite.dev/blog/announcing-vite8
-** TODO [#B] Preventing mistakes
-*** deleting a pack store that is still being used by a data set
-**** return an error to the GraphQL client so it can report to the user
-**** update store form to show error message if delete fails
-*** changing the base path of the dataset after snapshots have been made
-** TODO [#B] Clean up
-*** TODO remove =FindMissingPacks= usecase and GraphQL query
-*** TODO remove =ScanPacks= usecase and GraphQL query
-*** TODO remove =ReassignPacks= usecase and GraphQL mutation
-*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** TODO [#C] Dynamic bucket allocation
 *** hard-coded value of 128 is pretty low for local pack stores
 *** cloud-based pack stores can accommodate many objects per bucket

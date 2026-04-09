@@ -61,3 +61,5 @@ Added GraphQL mutation to enable pruning snapshots for a dataset, once a retenti
 Significant refactoring of the supervised actors and application state that manage the scheduling of backups. The _scheduler_ is a supervised actor that sends requests to a supervised actor called the _ring leader_. The ring leader receives the backup, restore, and prune requests and processes them sequentially. The application state has been reduced to simply tracking the state of these two supervisors.
 
 The web interface was rewritten using [SolidJS](https://www.solidjs.com) and [TypeScript](https://www.typescriptlang.org) which proved to be a splendid decision for the [tanuki](https://github.com/nlfiedler/tanuki) project. To support this, the GraphQL API received updates to support all of the functionality.
+
+Implemented a snapshot retention policy similar to that of macOS Time Machine: all (hourly) snapshots for the last 24 hours, the oldest snapshot from each day for the last 30 days, the oldest snapshot from each week for the last 52 weeks, and the oldest snapshot from each year for the last 10 years.

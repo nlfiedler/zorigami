@@ -12,6 +12,8 @@ A backup and restore application written in [Rust](https://www.rust-lang.org) an
 * Restore entire directory tree as well as individual files
 * Backups can be stored both locally and remotely
 * Backups can be run manually, hourly, or daily at a set time of day
+* Snapshots can be pruned automatically by count, by days, or Time Machine style
+  - Time Machine-like retention policy keeps all (hourly) snapshots for the last 24 hours, the oldest snapshot from each day for the last 30 days, the oldest snapshot from each week for the last 52 weeks, and the oldest snapshot from each year for the last 10 years.
 * Cross Platform: Linux, macOS, Windows
 
 ## Shortcomings
@@ -86,6 +88,14 @@ Similarly, to have restore requests stuck in the _processing_ state indefinitely
 
 ```shell
 env RESTORE_ALWAYS_PROCESSING=1 RUST_LOG=info cargo run
+```
+
+### Testing Prune
+
+To have the automatic snapshot pruning occur more frequently than the default 24 hours, set the `PRUNE_INTERVAL_HOURS` environment variable to a numeric value.
+
+```shell
+env PRUNE_INTERVAL_HOURS=1 RUST_LOG=info cargo run
 ```
 
 ### Code Coverage
