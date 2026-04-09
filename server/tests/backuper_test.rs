@@ -15,23 +15,41 @@ use zorigami::tasks::backup::{Backuper, BackuperImpl, OutOfTimeFailure, Request,
 struct DummySubscriber();
 
 impl Subscriber for DummySubscriber {
-    fn started(&self, _request_id: &str) {}
+    fn started(&self, _request_id: &str) -> bool {
+        false
+    }
 
-    fn files_changed(&self, _request_id: &str, _count: u64) {}
+    fn files_changed(&self, _request_id: &str, _count: u64) -> bool {
+        false
+    }
 
-    fn pack_uploaded(&self, _request_id: &str) {}
+    fn pack_uploaded(&self, _request_id: &str) -> bool {
+        false
+    }
 
-    fn bytes_uploaded(&self, _request_id: &str, _addend: u64) {}
+    fn bytes_uploaded(&self, _request_id: &str, _addend: u64) -> bool {
+        false
+    }
 
-    fn files_uploaded(&self, _request_id: &str, _addend: u64) {}
+    fn files_uploaded(&self, _request_id: &str, _addend: u64) -> bool {
+        false
+    }
 
-    fn error(&self, _request_id: &str, _error: String) {}
+    fn error(&self, _request_id: &str, _error: String) -> bool {
+        false
+    }
 
-    fn paused(&self, _request_id: &str) {}
+    fn paused(&self, _request_id: &str) -> bool {
+        false
+    }
 
-    fn restarted(&self, _request_id: &str) {}
+    fn restarted(&self, _request_id: &str) -> bool {
+        false
+    }
 
-    fn finished(&self, _request_id: &str) {}
+    fn finished(&self, _request_id: &str) -> bool {
+        false
+    }
 }
 
 #[test]

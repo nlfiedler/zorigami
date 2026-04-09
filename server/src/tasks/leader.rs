@@ -716,7 +716,7 @@ impl LeaderContext {
 }
 
 impl backup::Subscriber for LeaderContext {
-    fn started(&self, request_id: &str) {
+    fn started(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -729,9 +729,10 @@ impl backup::Subscriber for LeaderContext {
         }
         // notify the waiting tests
         cvar.notify_all();
+        true
     }
 
-    fn files_changed(&self, request_id: &str, count: u64) {
+    fn files_changed(&self, request_id: &str, count: u64) -> bool {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -741,9 +742,10 @@ impl backup::Subscriber for LeaderContext {
                 break;
             }
         }
+        true
     }
 
-    fn pack_uploaded(&self, request_id: &str) {
+    fn pack_uploaded(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -753,9 +755,10 @@ impl backup::Subscriber for LeaderContext {
                 break;
             }
         }
+        true
     }
 
-    fn bytes_uploaded(&self, request_id: &str, addend: u64) {
+    fn bytes_uploaded(&self, request_id: &str, addend: u64) -> bool {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -765,9 +768,10 @@ impl backup::Subscriber for LeaderContext {
                 break;
             }
         }
+        true
     }
 
-    fn files_uploaded(&self, request_id: &str, addend: u64) {
+    fn files_uploaded(&self, request_id: &str, addend: u64) -> bool {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -777,9 +781,10 @@ impl backup::Subscriber for LeaderContext {
                 break;
             }
         }
+        true
     }
 
-    fn error(&self, request_id: &str, error: String) {
+    fn error(&self, request_id: &str, error: String) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -792,9 +797,10 @@ impl backup::Subscriber for LeaderContext {
         }
         // notify the waiting tests
         cvar.notify_all();
+        true
     }
 
-    fn paused(&self, request_id: &str) {
+    fn paused(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -806,9 +812,10 @@ impl backup::Subscriber for LeaderContext {
         }
         // notify the waiting tests
         cvar.notify_all();
+        true
     }
 
-    fn restarted(&self, request_id: &str) {
+    fn restarted(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -821,9 +828,10 @@ impl backup::Subscriber for LeaderContext {
         }
         // notify the waiting tests
         cvar.notify_all();
+        true
     }
 
-    fn finished(&self, request_id: &str) {
+    fn finished(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
         let mut map = lock.lock().unwrap();
@@ -836,6 +844,7 @@ impl backup::Subscriber for LeaderContext {
         }
         // notify the waiting tests
         cvar.notify_all();
+        true
     }
 }
 

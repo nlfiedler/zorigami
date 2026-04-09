@@ -113,31 +113,49 @@ impl cmp::Eq for Request {}
 #[cfg_attr(test, automock)]
 pub trait Subscriber: Send + Sync {
     /// Backup operation has begun to be processed.
-    fn started(&self, request_id: &str);
+    ///
+    /// Returns a value for mockall tests.
+    fn started(&self, request_id: &str) -> bool;
 
     /// Backup found `count` many files changed since the previous snapshot.
-    fn files_changed(&self, request_id: &str, count: u64);
+    ///
+    /// Returns a value for mockall tests.
+    fn files_changed(&self, request_id: &str, count: u64) -> bool;
 
     /// Backup process has successfully uploaded a pack file.
-    fn pack_uploaded(&self, request_id: &str);
+    ///
+    /// Returns a value for mockall tests.
+    fn pack_uploaded(&self, request_id: &str) -> bool;
 
     /// An additional number of bytes have been uploaded.
-    fn bytes_uploaded(&self, request_id: &str, addend: u64);
+    ///
+    /// Returns a value for mockall tests.
+    fn bytes_uploaded(&self, request_id: &str, addend: u64) -> bool;
 
     /// An additional number of files have been uploaded.
-    fn files_uploaded(&self, request_id: &str, addend: u64);
+    ///
+    /// Returns a value for mockall tests.
+    fn files_uploaded(&self, request_id: &str, addend: u64) -> bool;
 
     /// An error has occurred while restoring files, directories, or links.
-    fn error(&self, request_id: &str, error: String);
+    ///
+    /// Returns a value for mockall tests.
+    fn error(&self, request_id: &str, error: String) -> bool;
 
     /// The backup process has paused due to the schedule for the dataset.
-    fn paused(&self, request_id: &str);
+    ///
+    /// Returns a value for mockall tests.
+    fn paused(&self, request_id: &str) -> bool;
 
     /// A paused backup operation has begun to be processed again.
-    fn restarted(&self, request_id: &str);
+    ///
+    /// Returns a value for mockall tests.
+    fn restarted(&self, request_id: &str) -> bool;
 
     /// Backup request has been completed.
-    fn finished(&self, request_id: &str);
+    ///
+    /// Returns a value for mockall tests.
+    fn finished(&self, request_id: &str) -> bool;
 }
 
 ///
@@ -278,7 +296,7 @@ impl BackuperImpl {
                 // count the changed files and emit an event
                 let iter = TreeWalker::new(&self.dbase, &dataset.basepath, tree.clone());
                 let count: u64 = iter.count() as u64;
-                self.subscriber.files_changed(&dataset.id, count);
+                self.subscriber.files_changed(&request.id, count);
                 // perform the backup
                 let iter = TreeWalker::new(&self.dbase, &dataset.basepath, tree);
                 for result in iter {
@@ -294,7 +312,7 @@ impl BackuperImpl {
                     current_sha1.clone(),
                 )?;
                 let count: u64 = iter.count() as u64;
-                self.subscriber.files_changed(&dataset.id, count);
+                self.subscriber.files_changed(&request.id, count);
                 // perform the backup
                 let iter = find_changed_files(
                     &self.dbase,
@@ -1234,7 +1252,9 @@ impl BackupDriver {
             .record_completed_files(&self.dbase, &pack_digest)? as u64;
         self.subscriber
             .bytes_uploaded(&self.request.id, self.record.bytes_packed as u64);
-        self.subscriber.files_uploaded(&self.request.id, count);
+        if count > 0 {
+            self.subscriber.files_uploaded(&self.request.id, count);
+        }
         self.record = Default::default();
         Ok(())
     }
@@ -1461,28 +1481,6 @@ mod tests {
         let input = Duration::from_secs(10090);
         let result = pretty_print_duration(Ok(input));
         assert_eq!(result, "2 hours 48 minutes 10 seconds");
-    }
-
-    struct DummySubscriber();
-
-    impl Subscriber for DummySubscriber {
-        fn started(&self, _request_id: &str) {}
-
-        fn files_changed(&self, _request_id: &str, _count: u64) {}
-
-        fn pack_uploaded(&self, _request_id: &str) {}
-
-        fn bytes_uploaded(&self, _request_id: &str, _addend: u64) {}
-
-        fn files_uploaded(&self, _request_id: &str, _addend: u64) {}
-
-        fn error(&self, _request_id: &str, _error: String) {}
-
-        fn paused(&self, _request_id: &str) {}
-
-        fn restarted(&self, _request_id: &str) {}
-
-        fn finished(&self, _request_id: &str) {}
     }
 
     #[test]
@@ -2225,10 +2223,28 @@ mod tests {
         //
         let stopper = Arc::new(RwLock::new(false));
         let dataset_id = dataset.id.clone();
-        let request = super::Request::new(dataset_id, "secret123", None);
-        let subscriber = Arc::new(DummySubscriber());
-        let mut driver =
-            BackupDriver::new(request, dataset.clone(), dbase.clone(), subscriber, stopper)?;
+        let mut request = super::Request::new(dataset_id, "secret123", None);
+        request.id = "backreq1".into();
+        let mut subscriber = MockSubscriber::new();
+        subscriber
+            .expect_pack_uploaded()
+            .withf(move |req| req == "backreq1")
+            .returning(|_| false);
+        subscriber
+            .expect_bytes_uploaded()
+            .withf(move |req, addend| req == "backreq1" && *addend > 0)
+            .returning(|_, _| false);
+        subscriber
+            .expect_files_uploaded()
+            .withf(move |req, addend| req == "backreq1" && *addend > 0)
+            .returning(|_, _| false);
+        let mut driver = BackupDriver::new(
+            request,
+            dataset.clone(),
+            dbase.clone(),
+            Arc::new(subscriber),
+            stopper,
+        )?;
         let file1_digest = Checksum::BLAKE3(
             "dba425aa7292ef1209841ab3855a93d4dfa6855658a347f85c502f2c2208cf0f".to_owned(),
         );
@@ -2381,10 +2397,28 @@ mod tests {
         //
         let stopper = Arc::new(RwLock::new(false));
         let dataset_id = dataset.id.clone();
-        let request = super::Request::new(dataset_id, "secret123", None);
-        let subscriber = Arc::new(DummySubscriber());
-        let mut driver =
-            BackupDriver::new(request, dataset.clone(), dbase.clone(), subscriber, stopper)?;
+        let mut request = super::Request::new(dataset_id, "secret123", None);
+        request.id = "backreq2".into();
+        let mut subscriber = MockSubscriber::new();
+        subscriber
+            .expect_pack_uploaded()
+            .withf(move |req| req == "backreq2")
+            .returning(|_| false);
+        subscriber
+            .expect_bytes_uploaded()
+            .withf(move |req, addend| req == "backreq2" && *addend > 0)
+            .returning(|_, _| false);
+        subscriber
+            .expect_files_uploaded()
+            .withf(move |req, addend| req == "backreq2" && *addend > 0)
+            .returning(|_, _| false);
+        let mut driver = BackupDriver::new(
+            request,
+            dataset.clone(),
+            dbase.clone(),
+            Arc::new(subscriber),
+            stopper,
+        )?;
         let file1_digest = Checksum::BLAKE3(
             "b740be03e10f454b6f45acdc821822b455aa4ab3721bbe8e3f03923f5cd688b8".to_owned(),
         );

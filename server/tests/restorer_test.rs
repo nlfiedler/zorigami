@@ -5,7 +5,7 @@ use anyhow::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use zorigami::data::repositories::RecordRepositoryImpl;
 use zorigami::data::sources::EntityDataSourceImpl;
 use zorigami::domain::entities::{self, Checksum, PackRetention};
@@ -13,26 +13,121 @@ use zorigami::domain::repositories::RecordRepository;
 use zorigami::tasks::backup::{self, Backuper, BackuperImpl};
 use zorigami::tasks::restore::{self, Restorer, RestorerImpl};
 
-struct DummyBackupSubscriber();
+#[derive(Debug, Default)]
+struct TestBackupSubscriber {
+    has_started: Arc<Mutex<bool>>,
+    files_changed: Arc<Mutex<u64>>,
+    packs_uploaded: Arc<Mutex<u64>>,
+    files_uploaded: Arc<Mutex<u64>>,
+    bytes_uploaded: Arc<Mutex<u64>>,
+    had_error: Arc<Mutex<bool>>,
+    has_finished: Arc<Mutex<bool>>,
+}
 
-impl backup::Subscriber for DummyBackupSubscriber {
-    fn started(&self, _request_id: &str) {}
+impl TestBackupSubscriber {
+    fn get_started(&self) -> bool {
+        let guard = self.has_started.lock().unwrap();
+        *guard
+    }
 
-    fn files_changed(&self, _request_id: &str, _count: u64) {}
+    fn get_files_changed(&self) -> u64 {
+        let guard = self.files_changed.lock().unwrap();
+        *guard
+    }
 
-    fn pack_uploaded(&self, _request_id: &str) {}
+    fn get_packs_uploaded(&self) -> u64 {
+        let guard = self.packs_uploaded.lock().unwrap();
+        *guard
+    }
 
-    fn bytes_uploaded(&self, _request_id: &str, _addend: u64) {}
+    fn get_files_uploaded(&self) -> u64 {
+        let guard = self.files_uploaded.lock().unwrap();
+        *guard
+    }
 
-    fn files_uploaded(&self, _request_id: &str, _addend: u64) {}
+    fn get_bytes_uploaded(&self) -> u64 {
+        let guard = self.bytes_uploaded.lock().unwrap();
+        *guard
+    }
 
-    fn error(&self, _request_id: &str, _error: String) {}
+    fn get_had_error(&self) -> bool {
+        let guard = self.had_error.lock().unwrap();
+        *guard
+    }
 
-    fn paused(&self, _request_id: &str) {}
+    fn get_finished(&self) -> bool {
+        let guard = self.has_finished.lock().unwrap();
+        *guard
+    }
 
-    fn restarted(&self, _request_id: &str) {}
+    fn reset(&self) {
+        let mut guard = self.has_started.lock().unwrap();
+        *guard = false;
+        let mut guard = self.files_changed.lock().unwrap();
+        *guard = 0;
+        let mut guard = self.packs_uploaded.lock().unwrap();
+        *guard = 0;
+        let mut guard = self.files_uploaded.lock().unwrap();
+        *guard = 0;
+        let mut guard = self.bytes_uploaded.lock().unwrap();
+        *guard = 0;
+        let mut guard = self.had_error.lock().unwrap();
+        *guard = false;
+        let mut guard = self.has_finished.lock().unwrap();
+        *guard = false;
+    }
+}
 
-    fn finished(&self, _request_id: &str) {}
+impl backup::Subscriber for TestBackupSubscriber {
+    fn started(&self, _request_id: &str) -> bool {
+        let mut guard = self.has_started.lock().unwrap();
+        *guard = true;
+        false
+    }
+
+    fn files_changed(&self, _request_id: &str, count: u64) -> bool {
+        let mut guard = self.files_changed.lock().unwrap();
+        *guard = count;
+        false
+    }
+
+    fn pack_uploaded(&self, _request_id: &str) -> bool {
+        let mut guard = self.packs_uploaded.lock().unwrap();
+        *guard += 1;
+        false
+    }
+
+    fn bytes_uploaded(&self, _request_id: &str, addend: u64) -> bool {
+        let mut guard = self.bytes_uploaded.lock().unwrap();
+        *guard += addend;
+        false
+    }
+
+    fn files_uploaded(&self, _request_id: &str, addend: u64) -> bool {
+        let mut guard = self.files_uploaded.lock().unwrap();
+        *guard += addend;
+        false
+    }
+
+    fn error(&self, _request_id: &str, _error: String) -> bool {
+        let mut guard = self.had_error.lock().unwrap();
+        *guard = true;
+        false
+    }
+
+    fn paused(&self, _request_id: &str) -> bool {
+        false
+    }
+
+    fn restarted(&self, _request_id: &str) -> bool {
+        false
+    }
+
+    fn finished(&self, _request_id: &str) -> bool {
+        let mut guard = self.has_finished.lock().unwrap();
+        *guard = true;
+        false
+    }
 }
 
 struct DummyRestoreSubscriber();
@@ -94,8 +189,8 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
 
     // perform the first backup
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyBackupSubscriber());
-    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
+    let subscriber = Arc::new(TestBackupSubscriber::default());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber.clone(), stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
@@ -108,40 +203,71 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     assert_eq!(counts.file, 1);
     assert_eq!(counts.chunk, 0);
     assert_eq!(counts.tree, 1);
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 1);
+    assert_eq!(subscriber.get_packs_uploaded(), 1);
+    assert_eq!(subscriber.get_files_uploaded(), 1);
+    assert_eq!(subscriber.get_bytes_uploaded(), 3129);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // perform the second backup
     let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
     assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
     let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    subscriber.reset();
     let second_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 2);
     assert_eq!(counts.file, 2);
     assert_eq!(counts.chunk, 2);
     assert_eq!(counts.tree, 2);
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 1);
+    assert_eq!(subscriber.get_packs_uploaded(), 1);
+    assert_eq!(subscriber.get_files_uploaded(), 1);
+    assert_eq!(subscriber.get_bytes_uploaded(), 109466);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // perform the third backup
     let dest: PathBuf = fixture_path.path().join("washington-journal.txt");
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    subscriber.reset();
     let third_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 3);
     assert_eq!(counts.file, 3);
     assert_eq!(counts.chunk, 2);
     assert_eq!(counts.tree, 3);
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 1);
+    assert_eq!(subscriber.get_packs_uploaded(), 1);
+    assert_eq!(subscriber.get_files_uploaded(), 1);
+    assert_eq!(subscriber.get_bytes_uploaded(), 3375);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // perform the fourth backup with shifted larger file
     let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
     let outfile: PathBuf = fixture_path.path().join("SekienShifted.jpg");
     copy_with_prefix("mary had a little lamb", infile, &outfile)?;
     let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    subscriber.reset();
     let fourth_backup = backuper.backup(request)?.unwrap();
     let counts = dbase.get_entity_counts().unwrap();
     assert_eq!(counts.pack, 4);
     assert_eq!(counts.file, 4);
     assert_eq!(counts.chunk, 3);
     assert_eq!(counts.tree, 4);
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 1);
+    assert_eq!(subscriber.get_packs_uploaded(), 1);
+    assert_eq!(subscriber.get_files_uploaded(), 1);
+    assert_eq!(subscriber.get_bytes_uploaded(), 66571);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // set up the restorer to perform restores
     let stopper = Arc::new(RwLock::new(false));
@@ -297,14 +423,21 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
 
     // perform the first backup
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyBackupSubscriber());
-    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
+    let subscriber = Arc::new(TestBackupSubscriber::default());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber.clone(), stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let passphrase = String::from("keyboard cat");
     let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
     let first_backup = backuper.backup(request)?;
     assert!(first_backup.is_some());
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 1);
+    assert_eq!(subscriber.get_packs_uploaded(), 1);
+    assert_eq!(subscriber.get_files_uploaded(), 1);
+    assert_eq!(subscriber.get_bytes_uploaded(), 3129);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // perform the second backup with a file that is not readable
     // (add two files so there is something to backup, producing a snapshot)
@@ -314,7 +447,15 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
     assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
     fs::set_permissions(&dest, Permissions::from_mode(0o000))?;
     let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    subscriber.reset();
     let second_backup = backuper.backup(request)?.unwrap();
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_changed(), 0);
+    assert_eq!(subscriber.get_packs_uploaded(), 0);
+    assert_eq!(subscriber.get_files_uploaded(), 0);
+    assert_eq!(subscriber.get_bytes_uploaded(), 0);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
 
     // reset the permissions and delete the file in order to try to restore it
     fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
@@ -521,7 +662,7 @@ fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
 
     // perform the first backup
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyBackupSubscriber());
+    let subscriber = Arc::new(TestBackupSubscriber::default());
     let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
@@ -661,7 +802,7 @@ fn test_restorer_backup_restore_small() -> Result<(), Error> {
 
     // perform the first backup
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyBackupSubscriber());
+    let subscriber = Arc::new(TestBackupSubscriber::default());
     let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
     let dest: PathBuf = fixture_path.path().join("zero-length.txt");
     assert!(fs::write(dest, vec![]).is_ok());
