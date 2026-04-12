@@ -71,6 +71,12 @@ impl From<BigInt> for u32 {
     }
 }
 
+impl From<BigInt> for usize {
+    fn from(val: BigInt) -> Self {
+        val.0 as usize
+    }
+}
+
 impl From<BigInt> for u64 {
     fn from(val: BigInt) -> Self {
         val.0 as u64

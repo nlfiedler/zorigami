@@ -475,7 +475,7 @@ impl Model for Dataset {
                         .into_integer()
                         .map_err(|_| anyhow!("chunksize: cbor into_integer() error"))?;
                     let ii: i128 = ciborium::value::Integer::into(iv);
-                    dataset.chunk_size = ii as u32;
+                    dataset.chunk_size = ii as usize;
                 } else if name == "packsize" {
                     // pack_size
                     let iv: ciborium::value::Integer = value

@@ -28,8 +28,8 @@ database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenvy = "0.15.7"
 env_logger = "0.11.0"
-exaf-rs = "1.1.1"
-fastcdc = "3.0.0"
+exaf-rs = "2.0.0"
+fastcdc = "4.0.0"
 globset = "0.4.13"
 hashed-array-tree = "1.2.0"
 juniper = { version = "0.17.0", features = ["chrono", "schema-language"] }

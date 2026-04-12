@@ -28,7 +28,7 @@ pub fn get_passphrase() -> String {
 /// implementation of FastCDC by the original author
 /// (https://github.com/wxiacode/FastCDC-c).
 ///
-pub fn find_file_chunks(infile: &Path, avg_size: u32) -> io::Result<Vec<Chunk>> {
+pub fn find_file_chunks(infile: &Path, avg_size: usize) -> io::Result<Vec<Chunk>> {
     let file = fs::File::open(infile)?;
     let mmap = unsafe { Mmap::map(&file).expect("cannot create memmap?") };
     let min_size = avg_size / 4;

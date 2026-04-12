@@ -300,7 +300,7 @@ pub struct Dataset {
     /// Path for temporary pack building.
     pub workspace: PathBuf,
     /// Target size in bytes for content-defined chunks.
-    pub chunk_size: u32,
+    pub chunk_size: usize,
     /// Target size in bytes for pack files.
     pub pack_size: u64,
     /// Identifiers of the stores to contain pack files.
@@ -314,10 +314,11 @@ pub struct Dataset {
 // Default chunk size is 1mb because that works for typical data sets where most
 // files are tens of kilobytes or less. Fitting most files into a single chunk
 // results in fewer chunk records, which reduces overall disk usage.
-const DEFAULT_CHUNK_SIZE: u32 = 1_048_576;
+const DEFAULT_CHUNK_SIZE: usize = 1_048_576;
 
 // Default pack size is 64mb just because. With a typical ADSL home broadband
-// connection a 64mb pack file should take about 5 minutes to upload.
+// connection offering 3Mbps upload speed, a 64mb pack file should take less
+// than 3 minutes to upload.
 const DEFAULT_PACK_SIZE: u64 = 67_108_864;
 
 impl Dataset {
@@ -341,7 +342,7 @@ impl Dataset {
     }
 
     /// Set the chunk size for this dataset.
-    pub fn set_chunk_size(&mut self, chunk_size: u32) {
+    pub fn set_chunk_size(&mut self, chunk_size: usize) {
         self.chunk_size = chunk_size;
     }
 
