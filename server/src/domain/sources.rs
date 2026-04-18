@@ -176,7 +176,7 @@ pub trait PackDataSource: Send + Sync {
     /// given path.
     fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error>;
 
-    /// List the known buckets in the repository.
+    /// List the known buckets in the pack data source.
     fn list_buckets(&self) -> Result<Vec<String>, Error>;
 
     /// List of all objects in the named bucket.

@@ -311,10 +311,9 @@ impl PackRepositoryImpl {
     }
 
     // Try to store the pack file up to three times before giving up.
-    #[allow(clippy::borrowed_box)]
     fn store_pack_retry(
         &self,
-        source: &Box<dyn PackDataSource>,
+        source: &dyn PackDataSource,
         packfile: &Path,
         bucket: &str,
         object: &str,
@@ -373,7 +372,7 @@ impl PackRepository for PackRepositoryImpl {
                 store.id, store.label, bucket, object
             );
             let loc = self
-                .store_pack_retry(source, packfile, bucket, object)
+                .store_pack_retry(source.as_ref(), packfile, bucket, object)
                 .context(ctx)?;
             results.push(loc)
         }
@@ -454,7 +453,7 @@ impl PackRepository for PackRepositoryImpl {
                 "database store {} ({}) failed for {}/{}",
                 store.id, store.label, bucket, object
             );
-            let loc = store_database_retry(source, infile, &bucket, &object).context(ctx)?;
+            let loc = store_database_retry(source.as_ref(), infile, &bucket, &object).context(ctx)?;
             results.push(loc)
         }
         Ok(results)
@@ -520,9 +519,9 @@ impl PackRepository for PackRepositoryImpl {
                 for bucket in buckets.iter() {
                     info!("prune_extra scanning bucket {}", bucket);
                     if is_bucket_referenced(store_id, bucket, packs) {
-                        count += remove_objects(store_id, bucket, source, packs)?;
+                        count += remove_objects(store_id, bucket, source.as_ref(), packs)?;
                     } else {
-                        count += remove_bucket(bucket, source)?;
+                        count += remove_bucket(bucket, source.as_ref())?;
                     }
                 }
                 return Ok(count);
@@ -594,11 +593,10 @@ fn is_bucket_referenced(store: &str, bucket: &str, packs: &[Pack]) -> bool {
 // Remove all unreferenced objects from the bucket.
 //
 // If the bucket becomes empty, remove it.
-#[allow(clippy::borrowed_box)]
 fn remove_objects(
     store: &str,
     bucket: &str,
-    source: &Box<dyn PackDataSource>,
+    source: &dyn PackDataSource,
     packs: &[Pack],
 ) -> Result<u32, Error> {
     // build a set of object names associated with store_id+bucket
@@ -631,8 +629,7 @@ fn remove_objects(
 // Remove all objects from the bucket, and the bucket itself.
 //
 // Return the number of objects in the bucket that were removed.
-#[allow(clippy::borrowed_box)]
-fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, Error> {
+fn remove_bucket(bucket: &str, source: &dyn PackDataSource) -> Result<u32, Error> {
     let objects = source.list_objects(bucket)?;
     for object in objects.iter() {
         info!("remove_bucket: deleting object {}", object);
@@ -644,9 +641,8 @@ fn remove_bucket(bucket: &str, source: &Box<dyn PackDataSource>) -> Result<u32, 
 }
 
 // Try to store the database archive up to three times before giving up.
-#[allow(clippy::borrowed_box)]
 fn store_database_retry(
-    source: &Box<dyn PackDataSource>,
+    source: &dyn PackDataSource,
     packfile: &Path,
     bucket: &str,
     object: &str,

@@ -534,7 +534,7 @@ fn auto_prune_snapshots(
     retain.dedup_by(|a, b| a.0 == b.0);
 
     // sort by date-time in reverse order (most recent first)
-    retain.sort_by(|a, b| b.1.cmp(&a.1));
+    retain.sort_by_key(|a| std::cmp::Reverse(a.1));
     retain
 }
 

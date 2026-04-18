@@ -998,7 +998,7 @@ impl PackFile {
             }
         }
         let count: u64 = entries.len() as u64;
-        let average: u64 = if count > 0 { content_length / count } else { 0 };
+        let average: u64 = content_length.checked_div(count).unwrap_or(0);
         if content_length == 0 {
             smallest = 0;
         }
