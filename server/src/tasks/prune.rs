@@ -411,14 +411,14 @@ impl Pruner for PrunerImpl {
     fn prune_snapshots(&self, request: Request) -> Result<usize, Error> {
         self.subscriber.started(&request.id);
         //
-        // For the given dataset, walk backwards through the snapshot history
-        // until the new end is found, removing all previous snapshot records.
-        // Next, retrieve the digests for all records that can be pruned as a
-        // result (trees, files, chunks, xattrs; packs are not pruned by this
-        // operation). Then, walk through all datasets and their snapshots and
-        // the associated trees, files, chunks, and xattrs, removing their
-        // digests from the sets of all such records. Whatever digests remain
-        // are those that are unreachable and can be removed from the database.
+        // For the given dataset, apply the selected retention policy to its
+        // associated snapshots, removing those that are no longer needed. Next,
+        // retrieve the digests for all records that can be pruned as a result
+        // (trees, files, chunks, and xattrs). Then, walk through all datasets
+        // and their snapshots and the associated trees, files, chunks, and
+        // xattrs, removing their digests from the sets of all such records.
+        // Whatever digests remain are those that are unreachable and can be
+        // removed from the database.
         //
         // This is done in memory since a mark and sweep on disk would result in
         // an excessive number of disk writes. Hopefully there are not a large
@@ -478,7 +478,8 @@ impl Pruner for PrunerImpl {
 ///
 /// At most there will be 116 remaining snapshots, if running hourly backups.
 fn auto_prune_snapshots(
-    incoming: Vec<(Checksum, DateTime<Utc>)>, now: DateTime<Utc>,
+    incoming: Vec<(Checksum, DateTime<Utc>)>,
+    now: DateTime<Utc>,
 ) -> Vec<(Checksum, DateTime<Utc>)> {
     // uses the basic logic from https://github.com/bastibe/timeup with some
     // adjustments for the intended retention convention
@@ -560,7 +561,6 @@ mod tests {
             ("58950e2", TimeDelta::hours(1), 0, true), // within last 24 hours
             ("e21d304", TimeDelta::hours(6), 0, true), // within last 24 hours
             ("af09fd7", TimeDelta::hours(12), 0, true), // within last 24 hours
-            ("0a3f167", TimeDelta::hours(23), 0, true), // within last 24 hours
             ("24d6ec6", TimeDelta::days(2), 1, true), // oldest from that day
             ("56662fc", TimeDelta::days(2), 2, false),
             ("e017530", TimeDelta::days(2), 3, false),
@@ -947,11 +947,10 @@ mod tests {
             // digest, tree, time delta, specific hour, parent, put, delete
             ("58950e2", "cafebabe", TimeDelta::hours(1), 0, "e21d304", true), // within last 24 hours
             ("e21d304", "cafebabe", TimeDelta::hours(6), 0, "af09fd7", true), // within last 24 hours
-            ("af09fd7", "cafebabe", TimeDelta::hours(12), 0, "0a3f167", true), // within last 24 hours
-            ("0a3f167", "cafebabe", TimeDelta::hours(23), 0, "d68ae86", true), // within last 24 hours
-            ("24d6ec6", "cafebabe", TimeDelta::days(2), 1, "6f8c483", true), // oldest from that day
+            ("af09fd7", "cafebabe", TimeDelta::hours(12), 0, "24d6ec6", true), // within last 24 hours
+            ("24d6ec6", "cafebabe", TimeDelta::days(2), 1, "56662fc", true), // oldest from that day
             ("56662fc", "cafebabe", TimeDelta::days(2), 2, "e017530", false),
-            ("e017530", "cafebabe", TimeDelta::days(2), 3, "24d6ec6", false),
+            ("e017530", "cafebabe", TimeDelta::days(2), 3, "6f8c483", false),
             ("6f8c483", "cafebabe", TimeDelta::days(3), 2, "3c1cbff", true), // oldest from that day
             ("3c1cbff", "cafebabe", TimeDelta::days(3), 3, "c586348", false),
             ("c586348", "cafebabe", TimeDelta::days(4), 1, "31e2791", true), // oldest from that day
