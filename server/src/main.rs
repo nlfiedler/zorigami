@@ -17,14 +17,14 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
-use zorigami::data::repositories::RecordRepositoryImpl;
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::repositories::RecordRepository;
-use zorigami::domain::sources::EntityDataSource;
-use zorigami::preso::graphql;
-use zorigami::shared::state::{self, StateStore, StateStoreImpl};
-use zorigami::tasks::leader::{RingLeader, RingLeaderImpl};
-use zorigami::tasks::schedule::{Scheduler, SchedulerImpl};
+use server::data::repositories::RecordRepositoryImpl;
+use server::data::sources::EntityDataSourceImpl;
+use server::domain::repositories::RecordRepository;
+use server::domain::sources::EntityDataSource;
+use server::preso::graphql;
+use server::shared::state::{self, StateStore, StateStoreImpl};
+use server::tasks::leader::{RingLeader, RingLeaderImpl};
+use server::tasks::schedule::{Scheduler, SchedulerImpl};
 
 // When running in test mode, the cwd is the server directory.
 #[cfg(test)]

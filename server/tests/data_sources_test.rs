@@ -5,9 +5,9 @@ use anyhow::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::sources::EntityDataSource;
+use server::data::sources::EntityDataSourceImpl;
+use server::domain::entities::{self, Checksum, PackRetention};
+use server::domain::sources::EntityDataSource;
 
 #[test]
 fn test_insert_get_chunk() -> Result<(), Error> {

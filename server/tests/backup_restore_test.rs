@@ -8,15 +8,15 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use zorigami::data::repositories::RecordRepositoryImpl;
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::entities::schedule::Schedule;
-use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::repositories::RecordRepository;
-use zorigami::shared::state::{StateStore, StateStoreImpl};
-use zorigami::tasks::backup;
-use zorigami::tasks::leader::{RingLeader, RingLeaderImpl};
-use zorigami::tasks::restore;
+use server::data::repositories::RecordRepositoryImpl;
+use server::data::sources::EntityDataSourceImpl;
+use server::domain::entities::schedule::Schedule;
+use server::domain::entities::{self, Checksum, PackRetention};
+use server::domain::repositories::RecordRepository;
+use server::shared::state::{StateStore, StateStoreImpl};
+use server::tasks::backup;
+use server::tasks::leader::{RingLeader, RingLeaderImpl};
+use server::tasks::restore;
 
 //
 // Test the full backup and partial restore with a pack store that uses async

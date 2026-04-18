@@ -1,13 +1,7 @@
 [package]
-name = "zorigami"
-version = "0.1.0"
-authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+name = "server"
+version = "1.0.0"
 edition = "2024"
-description = "Backup and restore application."
-repository = "https://github.com/nlfiedler/zorigami"
-readme = "README.md"
-keywords = ["backup", "archival"]
-license = "MIT"
 
 [[bin]]
 name = "zorigami"

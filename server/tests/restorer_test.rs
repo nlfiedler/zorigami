@@ -6,12 +6,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
-use zorigami::data::repositories::RecordRepositoryImpl;
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::entities::{self, Checksum, PackRetention};
-use zorigami::domain::repositories::RecordRepository;
-use zorigami::tasks::backup::{self, Backuper, BackuperImpl};
-use zorigami::tasks::restore::{self, Restorer, RestorerImpl};
+use server::data::repositories::RecordRepositoryImpl;
+use server::data::sources::EntityDataSourceImpl;
+use server::domain::entities::{self, Checksum, PackRetention};
+use server::domain::repositories::RecordRepository;
+use server::tasks::backup::{self, Backuper, BackuperImpl};
+use server::tasks::restore::{self, Restorer, RestorerImpl};
 
 #[derive(Debug, Default)]
 struct TestBackupSubscriber {

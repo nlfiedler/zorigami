@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use zorigami::data::repositories::RecordRepositoryImpl;
-use zorigami::data::sources::EntityDataSourceImpl;
-use zorigami::domain::entities::{self, PackRetention};
-use zorigami::domain::repositories::RecordRepository;
-use zorigami::tasks::backup::{Backuper, BackuperImpl, OutOfTimeFailure, Request, Subscriber};
+use server::data::repositories::RecordRepositoryImpl;
+use server::data::sources::EntityDataSourceImpl;
+use server::domain::entities::{self, PackRetention};
+use server::domain::repositories::RecordRepository;
+use server::tasks::backup::{Backuper, BackuperImpl, OutOfTimeFailure, Request, Subscriber};
 
 struct DummySubscriber();
 

@@ -1,9 +1,7 @@
 [package]
 name = "database_rocks"
-version = "0.1.0"
-authors = ["Nathan Fiedler <nathanfiedler@fastmail.fm>"]
+version = "1.0.0"
 edition = "2024"
-license = "MIT"
 
 [dependencies]
 database_core = { path = "../database_core" }
