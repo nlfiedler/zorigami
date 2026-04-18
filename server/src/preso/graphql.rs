@@ -795,7 +795,7 @@ impl entities::PackFile {
 
 #[juniper::graphql_object(description = "Location within a store of a saved pack.")]
 impl entities::PackLocation {
-    /// ULID of the pack store.
+    /// Unique identifier of the pack store.
     fn store(&self) -> String {
         self.store.clone()
     }

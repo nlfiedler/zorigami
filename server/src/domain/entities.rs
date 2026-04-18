@@ -2,8 +2,8 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::{Error, anyhow};
-use base64::{Engine as _, engine::general_purpose};
 use chrono::prelude::*;
+use data_encoding::BASE64;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -453,13 +453,13 @@ impl fmt::Display for TreeReference {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TreeReference::LINK(value) => {
-                let encoded = general_purpose::STANDARD.encode(value);
+                let encoded = BASE64.encode(value);
                 write!(f, "link-{}", encoded)
             }
             TreeReference::TREE(digest) => write!(f, "tree-{}", digest),
             TreeReference::FILE(digest) => write!(f, "file-{}", digest),
             TreeReference::SMALL(contents) => {
-                let encoded = general_purpose::STANDARD.encode(contents);
+                let encoded = BASE64.encode(contents);
                 write!(f, "small-{}", encoded)
             }
         }
@@ -471,7 +471,7 @@ impl FromStr for TreeReference {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(value) = s.strip_prefix("link-") {
-            let decoded = general_purpose::STANDARD.decode(value)?;
+            let decoded = BASE64.decode(value.as_bytes())?;
             Ok(TreeReference::LINK(decoded))
         } else if let Some(value) = s.strip_prefix("tree-") {
             let digest: Result<Checksum, Error> = FromStr::from_str(value);
@@ -480,7 +480,7 @@ impl FromStr for TreeReference {
             let digest: Result<Checksum, Error> = FromStr::from_str(value);
             Ok(TreeReference::FILE(digest.expect("invalid file BLAKE3")))
         } else if let Some(value) = s.strip_prefix("small-") {
-            let decoded = general_purpose::STANDARD.decode(value)?;
+            let decoded = BASE64.decode(value.as_bytes())?;
             Ok(TreeReference::SMALL(decoded))
         } else {
             Err(anyhow!(format!("not a recognized reference: {}", s)))

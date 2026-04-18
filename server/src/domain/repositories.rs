@@ -168,9 +168,7 @@ pub trait PackRepository: Send + Sync {
     ///
     /// This function should be called for each call to `store_pack()` in order
     /// to ensure buckets are reused and yet not overused, as appropriate.
-    ///
-    /// The computer identifier is typically used in generating the bucket name.
-    fn get_bucket_name(&self, computer_id: &str) -> String;
+    fn get_bucket_name(&self) -> String;
 
     /// Save the given pack to the stores provided in the constructor.
     ///

@@ -58,16 +58,20 @@ The packs are stored in buckets whose names are described below.
     - conforms to Amazon Glacier vault name restrictions
         + https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html
     - conforms to Amazon S3 bucket name restrictions
-        + https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        + https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
     - conforms to Azure blob storage name restrictions
         + https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
+    - conforms to MinIO (S3 API) name restrictions
+        + https://github.com/minio/minio/blob/master/docs/minio-limits.md
+    - works for MinIO, SFTP, and modern file systems
 * ULID contains the date/time
-* UUID makes it easy to find buckets associated with this computer
+* UUID makes it easy to find buckets associated with a specific computer
 * UUID may change after (re)installation and this is okay
     - Pack records contain the fully-qualified locations regardless of UUID
 * Database snapshots saved to bucket whose name is the computer UUID
     - Cloud-based pack stores handle bucket collision using remote database
-        + Amazon pack store uses DynamoDB, Google uses Firestore
+        + Amazon pack store uses DynamoDB
+        + Google pack store uses Firestore
 
 ### Pack Files
 
@@ -76,7 +80,7 @@ The packs are stored in buckets whose names are described below.
 * Pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
     - entry names are the chunk hash digest plus algorithm prefix
     - encrypted with key derived from passphrase and random salt
-* File metadata is _not_ stored in pack files because of chunking
+* File metadata and extended attributes are _not_ stored in pack files because of chunking
 
 ### Database Schema
 
@@ -93,6 +97,7 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - schedule
     - excludes
     - pack size
+    - chunk size
     - stores
     - latest snapshot
     - retention policy
@@ -163,14 +168,14 @@ In the **tasks** layer of the server code, there are two supervised Actix actors
 
 ### Deduplication
 
-Files larger than the desired chunk size are broken up using a content-defined chunking algorithm to determine suitable chunk boundaries. Each chunk is stored once based on the BLAKE3 digest of the chunk. The CDC algorithm is [FastCDC](https://crates.io/crates/fastcdc).
+Files larger than the desired chunk size are broken up using a content-defined chunking algorithm to determine suitable chunk boundaries. Each chunk is stored once based on the BLAKE3 digest of the chunk. The CDC algorithm is [FastCDC](https://crates.io/crates/fastcdc) and the default chunk size is 1MB.
 
 ### Database Snapshots
 
-Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed archive and uploaded to the pack store in the special bucket. The compressed archive is the same EXAF as the pack files, so manual restoration is possible using the `exaf` binary as the appropriate pass phrase.
+Database files are copied to an off-line archive using RocksDB functionality, then that directory structure is written to a compressed archive and uploaded to the pack store in the special bucket. The compressed archive is the same EXAF as the pack files, so manual restoration is possible using the `exaf` binary and the appropriate pass phrase.
 
 ### Bucket Collision
 
 Generated bucket names are random and long but collisions with existing buckets owned by other accounts can still happen. As a result, the pack repository will generate a new name and try again. The updated bucket name is returned as the _pack location_ that is stored in the database.
 
-For the database backups, the bucket rename solution is different, and relies on the cloud service provider to offer a per-account database of some sort. When a bucket collision occurs when storing the database snapshot, the pack source (not repository) will use the cloud services to record a new name, and use that name each time thereafter. This is not possible for all pack sources, such as MinIO, which does not offer other services. It is assumed that MinIO, as well as the local and SFTP pack sources, can reliably use whatever bucket names they need.
+For the database backups, the bucket rename solution is different, and relies on the cloud service provider to offer a per-account database of some sort (such as DynamoDB, Firestore). When a bucket collision occurs when storing the database snapshot, the pack source (not repository) will use the cloud services to record a new name, and use that name each time thereafter. This is not possible for all pack sources, such as MinIO, which does not offer database-like services. It is assumed that MinIO, as well as the local and SFTP pack sources, can reliably use whatever bucket names they need.

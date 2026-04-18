@@ -9,18 +9,14 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, Snapshot, Store, StoreType,
     Tree,
 };
-use crate::domain::sources::{EntityDataSource, PackDataSource};
+use crate::domain::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
 use anyhow::Error;
 use database_core::Database;
 use database_rocks;
 use hashed_array_tree::HashedArrayTree;
 use log::debug;
-#[cfg(test)]
-use mockall::automock;
-use std::{
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 mod amazon;
 mod azure;
@@ -449,13 +445,6 @@ impl EntityDataSource for EntityDataSourceImpl {
             xattr: xattrs,
         })
     }
-}
-
-/// Builder for pack data sources.
-#[cfg_attr(test, automock)]
-pub trait PackSourceBuilder {
-    /// Construct pack data source for the given store.
-    fn build_source(&self, store: &Store) -> Result<Box<dyn PackDataSource>, Error>;
 }
 
 pub struct PackSourceBuilderImpl {}

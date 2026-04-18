@@ -1231,8 +1231,7 @@ impl BackupDriver {
         // encryption involves a random nonce per archive content block
         if self.dbase.get_pack(&pack_digest)?.is_none() {
             // new pack file, need to upload this and record to database
-            let config = self.dbase.get_configuration()?;
-            let bucket_name = self.stores.get_bucket_name(&config.computer_id);
+            let bucket_name = self.stores.get_bucket_name();
             let object_name = format!("{}", pack_digest);
             // capture and record the remote object name, in case it differs from
             // the name we generated ourselves; either value is expected to be

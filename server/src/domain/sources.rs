@@ -206,3 +206,10 @@ pub trait PackDataSource: Send + Sync {
     /// List all database archives in the named bucket.
     fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error>;
 }
+
+/// Builder for pack data sources.
+#[cfg_attr(test, automock)]
+pub trait PackSourceBuilder: Send + Sync {
+    /// Construct pack data source for the given store.
+    fn build_source(&self, store: &Store) -> Result<Box<dyn PackDataSource>, Error>;
+}

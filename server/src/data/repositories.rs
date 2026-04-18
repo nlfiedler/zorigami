@@ -1,16 +1,16 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::data::sources::{PackSourceBuilder, PackSourceBuilderImpl};
+use crate::data::sources::PackSourceBuilderImpl;
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
-use crate::domain::sources::{EntityDataSource, PackDataSource};
+use crate::domain::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
 use anyhow::{Context, Error, Result, anyhow};
 use hashed_array_tree::HashedArrayTree;
-use log::{error, info, warn};
+use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -180,7 +180,7 @@ impl RecordRepository for RecordRepositoryImpl {
                 dataset.id
             )));
         }
-        let store_builder = Box::new(PackSourceBuilderImpl {});
+        let store_builder: Box<dyn PackSourceBuilder> = Box::new(PackSourceBuilderImpl {});
         let packs: Box<dyn PackRepository> =
             Box::new(PackRepositoryImpl::new(stores, store_builder)?);
         Ok(packs)
@@ -188,7 +188,7 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn build_pack_repo(&self, store: &Store) -> Result<Box<dyn PackRepository>, Error> {
         let stores: Vec<Store> = vec![store.to_owned()];
-        let store_builder = Box::new(PackSourceBuilderImpl {});
+        let store_builder: Box<dyn PackSourceBuilder> = Box::new(PackSourceBuilderImpl {});
         let pack: Box<dyn PackRepository> =
             Box::new(PackRepositoryImpl::new(stores, store_builder)?);
         Ok(pack)
@@ -301,12 +301,12 @@ impl PackRepositoryImpl {
         Ok(Self { sources })
     }
 
-    // Use the old bucket name to generate a new one.
-    fn get_new_bucket_name(&self, bucket_name: &str) -> String {
+    /// There was a bucket name collision, need to generate a new name.
+    fn get_new_bucket_name(&self) -> String {
         let mut count = NAME_COUNT.lock().unwrap();
         *count = 0;
         let mut name = BUCKET_NAME.lock().unwrap();
-        *name = generate_new_bucket_name(bucket_name);
+        *name = generate_bucket_name();
         name.clone()
     }
 
@@ -330,7 +330,7 @@ impl PackRepositoryImpl {
                 Ok(coords) => return Ok(coords),
                 Err(err) => match err.downcast::<CollisionError>() {
                     Ok(_) => {
-                        bucket_name = self.get_new_bucket_name(&bucket_name);
+                        bucket_name = self.get_new_bucket_name();
                     }
                     Err(e) => {
                         retries -= 1;
@@ -346,11 +346,11 @@ impl PackRepositoryImpl {
 }
 
 impl PackRepository for PackRepositoryImpl {
-    fn get_bucket_name(&self, computer_id: &str) -> String {
+    fn get_bucket_name(&self) -> String {
         let mut count = NAME_COUNT.lock().unwrap();
         if *count == 0 {
             let mut name = BUCKET_NAME.lock().unwrap();
-            *name = generate_bucket_name(computer_id);
+            *name = generate_bucket_name();
         }
         *count += 1;
         if *count > 127 {
@@ -447,7 +447,7 @@ impl PackRepository for PackRepositoryImpl {
         // it easier to find the latest database archive later.
         let object = ulid::Ulid::new().to_string();
         // Use a predictable bucket name so we can find it easily later.
-        let bucket = computer_bucket_name(computer_id);
+        let bucket = computer_bucket_name(computer_id)?;
         let mut results: Vec<PackLocation> = Vec::new();
         for (store, source) in self.sources.iter() {
             let ctx = format!(
@@ -461,7 +461,7 @@ impl PackRepository for PackRepositoryImpl {
     }
 
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error> {
-        let bucket_name = computer_bucket_name(computer_id);
+        let bucket_name = computer_bucket_name(computer_id)?;
         // use the first store returned by the iterator, probably only one anyway
         if let Some((store, source)) = self.sources.iter().next() {
             let mut objects = source.list_databases(&bucket_name)?;
@@ -532,41 +532,48 @@ impl PackRepository for PackRepositoryImpl {
     }
 }
 
-// Return the unique bucket name for this computer and user.
-fn computer_bucket_name(unique_id: &str) -> String {
-    match uuid::Uuid::try_parse(unique_id) {
-        Ok(uuid) => uuid.simple().to_string(),
-        Err(err) => {
-            error!("failed to parse UUID: {:?}", err);
-            ulid::Ulid::new().to_string().to_lowercase()
-        }
-    }
+/// Return the unique bucket name for this computer and user.
+///
+/// This amounts to parsing the value as a UUID and converting it to its
+/// shortened form (without dash separators).
+fn computer_bucket_name(unique_id: &str) -> Result<String, Error> {
+    uuid::Uuid::try_parse(unique_id)
+        .map_err(Error::from)
+        .map(|uuid| uuid.simple().to_string())
 }
 
-// Generate a suitable bucket name, using a ULID and the given unique ID.
-fn generate_bucket_name(unique_id: &str) -> String {
-    match uuid::Uuid::try_parse(unique_id) {
-        Ok(uuid) => {
-            let shorter = uuid.simple().to_string();
-            let mut ulid = ulid::Ulid::new().to_string();
-            ulid.push_str(&shorter);
-            ulid.to_lowercase()
-        }
-        Err(err) => {
-            error!("failed to convert unique ID: {:?}", err);
-            ulid::Ulid::new().to_string().to_lowercase()
-        }
-    }
-}
+/// Generate a suitable bucket name using the current time and random bytes.
+///
+/// Ideally the name should conform to all of the requirements of all of the
+/// supported cloud services, although the pack sources are allowed to fix the
+/// names if there is a problem.
+///
+/// In short, the result will be fairly long but less than 63 characters, does
+/// not include any prohibited characters, and will be lowercase.
+///
+/// The value is inspired by ULID and as such the first 48 bits are the
+/// milliseconds since the epoch plus 256 bits of randomness, then base32hex
+/// encoded so that the generated names sort lexicographically.
+fn generate_bucket_name() -> String {
+    use rand::RngExt;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-// Split the given bucket name apart and generate a new prefix such that the new
-// name will be different and possibly work-around a collision error.
-fn generate_new_bucket_name(bucket_name: &str) -> String {
-    // ULID as ASCII is 26 characters long, computer id is everything else
-    let suffix = &bucket_name[26..];
-    let mut ulid = ulid::Ulid::new().to_string();
-    ulid.push_str(suffix);
-    ulid.to_lowercase()
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is before Unix epoch")
+        .as_millis() as u64;
+    let mut rando = [0u8; 32];
+    rand::rng().fill(&mut rando);
+    let mut result = [0u8; 38];
+    // Copy low 6 bytes (48 bits) of time into the high bytes of result, then
+    // copy all 32 bytes of rando into the lower bytes of result, and finally
+    // base32hex encode and lowercase.
+    let ms_bytes = ms.to_be_bytes();
+    result[..6].copy_from_slice(&ms_bytes[2..]);
+    result[6..].copy_from_slice(&rando);
+    data_encoding::BASE32HEX_NOPAD
+        .encode(&result)
+        .to_lowercase()
 }
 
 // Determine if the named bucket is referenced by any of the packs.
@@ -661,9 +668,8 @@ fn store_database_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::sources::MockPackSourceBuilder;
     use crate::domain::entities::{PackLocation, PackRetention, StoreType};
-    use crate::domain::sources::{MockEntityDataSource, MockPackDataSource};
+    use crate::domain::sources::{MockEntityDataSource, MockPackDataSource, MockPackSourceBuilder};
     use mockall::predicate::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -695,18 +701,20 @@ mod tests {
 
     #[test]
     fn test_generate_bucket_name() {
-        let uuid = Configuration::generate_unique_id("charlie", "localhost");
-        let bucket = generate_bucket_name(&uuid);
-        // Ensure the generated name is safe for the "cloud", which so far means
-        // Google Cloud Storage and Amazon Glacier. It needs to be reasonably
-        // short, must consist only of lowercase letters or digits.
-        assert_eq!(bucket.len(), 58, "bucket name is 58 characters");
+        let bucket = generate_bucket_name();
+        // Ensure the generated name is safe for all supported cloud services;
+        // it needs to be reasonably short (63 characters at most) and consist
+        // only of lowercase letters or numbers.
+        assert_eq!(bucket.len(), 61, "bucket name is 61 characters");
         for c in bucket.chars() {
             assert!(c.is_ascii_alphanumeric());
             if c.is_ascii_alphabetic() {
                 assert!(c.is_ascii_lowercase());
             }
         }
+        // each invocation should generate a different value
+        let second = generate_bucket_name();
+        assert_ne!(bucket, second);
     }
 
     #[test]
@@ -810,16 +818,15 @@ mod tests {
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
         assert!(result.is_ok());
         let repo = result.unwrap();
-        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
-        let actual = repo.get_bucket_name(&computer_id);
+        let actual = repo.get_bucket_name();
         // assert
         assert!(!actual.is_empty());
-        let again = repo.get_bucket_name(&computer_id);
+        let again = repo.get_bucket_name();
         assert_eq!(actual, again);
         for _ in 1..200 {
-            repo.get_bucket_name(&computer_id);
+            repo.get_bucket_name();
         }
-        let last1 = repo.get_bucket_name(&computer_id);
+        let last1 = repo.get_bucket_name();
         assert_ne!(actual, last1);
     }
 
@@ -841,21 +848,17 @@ mod tests {
         let result = PackRepositoryImpl::new(stores, Box::new(builder));
         assert!(result.is_ok());
         let repo = result.unwrap();
-        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
-        let first = repo.get_bucket_name(&computer_id);
+        let first = repo.get_bucket_name();
         // assert
         assert!(!first.is_empty());
-        let second = repo.get_new_bucket_name(&first);
+        let second = repo.get_new_bucket_name();
         assert_ne!(first, second);
-        assert_eq!(first.len(), second.len());
-        assert_eq!(&first[26..], &second[26..]);
     }
 
     #[test]
     fn test_store_pack_collision() {
         // arrange
-        let computer_id = Configuration::generate_unique_id("charlie", "localhost");
-        let bucket_name = generate_bucket_name(&computer_id);
+        let bucket_name = generate_bucket_name();
         let name_clone = bucket_name.clone();
         let mut builder = MockPackSourceBuilder::new();
         builder.expect_build_source().returning(move |_| {
@@ -891,7 +894,6 @@ mod tests {
         assert_eq!(locations.len(), 1);
         let location = &locations[0];
         assert_ne!(location.bucket, bucket_name);
-        assert_eq!(&location.bucket[26..], &bucket_name[26..]);
     }
 
     #[test]
@@ -1207,7 +1209,8 @@ mod tests {
         assert!(result.is_ok());
         let repo = result.unwrap();
         let input_file = PathBuf::from("/home/planet/important.txt");
-        let result = repo.store_database("hal9000", &input_file);
+        let computer_id = uuid::Uuid::new_v4().to_string();
+        let result = repo.store_database(&computer_id, &input_file);
         // assert
         assert!(result.is_ok());
     }
@@ -1234,7 +1237,8 @@ mod tests {
         assert!(result.is_ok());
         let repo = result.unwrap();
         let input_file = PathBuf::from("/home/planet/important.txt");
-        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        let computer_id = uuid::Uuid::new_v4().to_string();
+        let result = repo.retrieve_latest_database(&computer_id, &input_file);
         // assert
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -1268,7 +1272,8 @@ mod tests {
         assert!(result.is_ok());
         let repo = result.unwrap();
         let input_file = PathBuf::from("/home/planet/important.txt");
-        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        let computer_id = uuid::Uuid::new_v4().to_string();
+        let result = repo.retrieve_latest_database(&computer_id, &input_file);
         // assert
         assert!(result.is_ok());
     }
@@ -1305,7 +1310,8 @@ mod tests {
         assert!(result.is_ok());
         let repo = result.unwrap();
         let input_file = PathBuf::from("/home/planet/important.txt");
-        let result = repo.retrieve_latest_database("hal9000", &input_file);
+        let computer_id = uuid::Uuid::new_v4().to_string();
+        let result = repo.retrieve_latest_database(&computer_id, &input_file);
         // assert
         assert!(result.is_ok());
     }
