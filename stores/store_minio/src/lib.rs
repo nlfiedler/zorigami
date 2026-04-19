@@ -86,8 +86,9 @@ impl MinioStore {
         object: &str,
     ) -> Result<Coordinates, Error> {
         let client = self.connect();
-        // the bucket must exist before receiving objects
-        create_bucket(&client, bucket).await?;
+        // the bucket must exist before receiving objects; the bucket may be
+        // renamed if the chosen name collides with an existing bucket
+        let bucket = try_create_bucket(&client, bucket).await?;
         //
         // An alternative to streaming the entire file is to use a multi-part
         // upload and upload the large file in chunks.
@@ -114,7 +115,7 @@ impl MinioStore {
                 return Err(anyhow!("returned e_tag does not match MD5 of pack file"));
             }
         }
-        let loc = Coordinates::new(&self.store_id, bucket, object);
+        let loc = Coordinates::new(&self.store_id, &bucket, object);
         Ok(loc)
     }
 
@@ -266,6 +267,26 @@ impl MinioStore {
 
     pub fn list_databases_sync(&self, bucket: &str) -> Result<Vec<String>, Error> {
         self.list_objects_sync(bucket)
+    }
+}
+
+/// Ensure a bucket exists, generating a new name on collision.
+///
+/// If the given bucket name already exists and belongs to a different account,
+/// generate a new random bucket name and retry. Returns the name of the bucket
+/// that was successfully created or already owned by this account.
+async fn try_create_bucket(client: &S3Client, bucket: &str) -> Result<String, Error> {
+    let mut bucket_name = bucket.to_owned();
+    loop {
+        match create_bucket(client, &bucket_name).await {
+            Ok(()) => return Ok(bucket_name),
+            Err(err) => match err.downcast::<CollisionError>() {
+                Ok(_) => {
+                    bucket_name = uuid::Uuid::new_v4().to_string();
+                }
+                Err(err) => return Err(err),
+            },
+        }
     }
 }
 

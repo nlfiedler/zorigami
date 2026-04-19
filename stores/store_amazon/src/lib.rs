@@ -117,31 +117,41 @@ impl AmazonStore {
 
     // Try to create the named bucket.
     //
-    // If that fails due to too many buckets, select one of the existing buckets
-    // at random and use that instead.
+    // If creation fails because the bucket name is already taken by another
+    // account, generate a new random bucket name and try again. If creation
+    // fails because the account has too many buckets, select one of the
+    // existing buckets at random and use that instead.
     //
     // Returns the name of the bucket that was created or selected.
     async fn try_create_bucket(&self, client: &S3Client, bucket: &str) -> Result<String, Error> {
-        match create_bucket(client, bucket, &self.region).await {
-            Err(err) => match err.downcast::<TooManyBucketsError>() {
-                Ok(_) => {
-                    let mut names = BUCKET_NAMES.lock().unwrap();
-                    if names.is_empty() {
-                        // The mutex is held during the time of requesting the
-                        // list of buckets, which is acceptable. Note also that
-                        // the list of buckets is never updated again, as that
-                        // is assumed to be acceptable as well (normally never
-                        // remove any buckets so the list remains static).
-                        *names = self.list_buckets().await?;
+        let mut bucket_name = bucket.to_owned();
+        loop {
+            match create_bucket(client, &bucket_name, &self.region).await {
+                Ok(()) => return Ok(bucket_name),
+                Err(err) => match err.downcast::<CollisionError>() {
+                    Ok(_) => {
+                        bucket_name = uuid::Uuid::new_v4().to_string();
                     }
-                    use rand::RngExt;
-                    let mut rng = rand::rng();
-                    let idx = rng.random_range(0..names.len());
-                    Ok(names[idx].to_owned())
-                }
-                Err(err) => Err(err),
-            },
-            Ok(()) => Ok(bucket.to_owned()),
+                    Err(err) => match err.downcast::<TooManyBucketsError>() {
+                        Ok(_) => {
+                            let mut names = BUCKET_NAMES.lock().unwrap();
+                            if names.is_empty() {
+                                // The mutex is held during the time of requesting the
+                                // list of buckets, which is acceptable. Note also that
+                                // the list of buckets is never updated again, as that
+                                // is assumed to be acceptable as well (normally never
+                                // remove any buckets so the list remains static).
+                                *names = self.list_buckets().await?;
+                            }
+                            use rand::RngExt;
+                            let mut rng = rand::rng();
+                            let idx = rng.random_range(0..names.len());
+                            return Ok(names[idx].to_owned());
+                        }
+                        Err(err) => return Err(err),
+                    },
+                },
+            }
         }
     }
 
@@ -453,36 +463,20 @@ impl AmazonStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        if let Some(renamed) = self.get_bucket_name(bucket).await? {
-            // If the renamed bucket fails for some reason, then report it
-            // immediately, do not attempt to generate a new name again.
-            self.store_pack(packfile, &renamed, object).await
-        } else {
-            // Store the database in the same manner as any pack file, using the
-            // given bucket and object names. If there is a collision with an
-            // existing bucket that belongs to a different project, generate a
-            // new random bucket name and try that instead. Loop until it works
-            // or fails in some other manner.
-            let mut bucket_name = bucket.to_owned();
-            loop {
-                match self.store_pack(packfile, &bucket_name, object).await {
-                    Ok(coords) => return Ok(coords),
-                    Err(err) => {
-                        match err.downcast::<CollisionError>() {
-                            Ok(_) => {
-                                // There was a collision, simply generate a new
-                                // name and hope that it will work. Type 4 UUID
-                                // works well since it conforms to Amazon's
-                                // bucket naming conventions.
-                                bucket_name = uuid::Uuid::new_v4().to_string();
-                                self.save_bucket_name(bucket, &bucket_name).await?;
-                            }
-                            Err(err) => return Err(err),
-                        }
-                    }
-                }
-            }
+        // If a previous call already remapped this bucket name, use the
+        // remapped name; otherwise use the caller-provided name. store_pack()
+        // handles bucket collisions internally by picking a new random name --
+        // if the returned bucket differs from the one we attempted, persist the
+        // mapping so subsequent calls (and retrievals) find it.
+        let attempted = self
+            .get_bucket_name(bucket)
+            .await?
+            .unwrap_or_else(|| bucket.to_owned());
+        let coords = self.store_pack(packfile, &attempted, object).await?;
+        if coords.bucket != attempted {
+            self.save_bucket_name(bucket, &coords.bucket).await?;
         }
+        Ok(coords)
     }
 
     pub fn retrieve_database_sync(
@@ -576,6 +570,7 @@ fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
 mod tests {
     use super::*;
     use dotenvy::dotenv;
+    use serial_test::serial;
     use std::env;
     use tempfile::tempdir;
 
@@ -619,6 +614,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_amazon_bucket_collision() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
@@ -640,19 +636,25 @@ mod tests {
         let source = AmazonStore::new("amazonone", &properties)?;
 
         // store an object in a bucket that already exists and belongs to
-        // another AWS account (surprise, mybucketname is already taken)
+        // another AWS account (surprise, mybucketname is already taken); the
+        // store should recover by generating a new bucket name and retrying
         let bucket = "mybucketname".to_owned();
         let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let result = source.store_pack_sync(packfile, &bucket, &object);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.downcast::<CollisionError>().is_ok());
+        assert!(result.is_ok());
+        let coords = result.unwrap();
+        assert_ne!(coords.bucket, bucket);
+
+        // clean up the newly created object and bucket
+        source.delete_object_sync(&coords.bucket, &coords.object)?;
+        source.delete_bucket_sync(&coords.bucket)?;
 
         Ok(())
     }
 
     #[test]
+    #[serial]
     fn test_amazon_store_roundtrip() -> Result<(), Error> {
         //
         // N.B. the rusoto crate will pick up environment variables, such as
@@ -727,6 +729,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_amazon_database_bucket_collision() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();

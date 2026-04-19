@@ -19,5 +19,6 @@ uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
 dotenvy = "0.15.7"
+serial_test = "3.0.0"
 tempfile = "3.7.1"
 xid = "1.0.0"

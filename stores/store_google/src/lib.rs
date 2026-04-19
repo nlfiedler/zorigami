@@ -94,6 +94,26 @@ impl GoogleStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
+        let mut bucket_name = bucket.to_owned();
+        loop {
+            match self.try_store_pack(packfile, &bucket_name, object).await {
+                Ok(coords) => return Ok(coords),
+                Err(err) => match err.downcast::<CollisionError>() {
+                    Ok(_) => {
+                        bucket_name = uuid::Uuid::new_v4().to_string();
+                    }
+                    Err(err) => return Err(err),
+                },
+            }
+        }
+    }
+
+    async fn try_store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
         let hub = self.connect().await?;
         // the bucket must exist before receiving objects
         create_bucket(&hub, &self.project, bucket, &self.region, &self.storage).await?;
@@ -366,7 +386,7 @@ impl GoogleStore {
         if let Some(renamed) = self.get_bucket_name(bucket).await? {
             // If the renamed bucket fails for some reason, then report it
             // immediately, do not attempt to generate a new name again.
-            self.store_pack(packfile, &renamed, object).await
+            self.try_store_pack(packfile, &renamed, object).await
         } else {
             // Store the database in the same manner as any pack file, using the
             // given bucket and object names. If there is a collision with an
@@ -375,7 +395,7 @@ impl GoogleStore {
             // or fails in some other manner.
             let mut bucket_name = bucket.to_owned();
             loop {
-                match self.store_pack(packfile, &bucket_name, object).await {
+                match self.try_store_pack(packfile, &bucket_name, object).await {
                     Ok(coords) => return Ok(coords),
                     Err(err) => {
                         match err.downcast::<CollisionError>() {
@@ -497,6 +517,7 @@ fn block_on<F: core::future::Future>(future: F) -> Result<F::Output, Error> {
 mod tests {
     use super::*;
     use dotenvy::dotenv;
+    use serial_test::serial;
     use std::env;
     use tempfile::tempdir;
 
@@ -521,6 +542,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_google_store_roundtrip() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
@@ -592,6 +614,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_google_collision_error() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
@@ -615,19 +638,25 @@ mod tests {
 
         // attempt to store an object in a bucket that exists but does not
         // belong to this project (yes, need to change this value whenever the
-        // bucket suddenly becomes available again)
+        // bucket suddenly becomes available again); the store should recover
+        // by generating a new bucket name and retrying
         let bucket = "caefd289-4314-4ff3-bd0a-5be30c4fb8c2".to_owned();
         let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let result = source.store_pack_sync(packfile, &bucket, &object);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.downcast::<CollisionError>().is_ok());
+        assert!(result.is_ok());
+        let coords = result.unwrap();
+        assert_ne!(coords.bucket, bucket);
+
+        // clean up the newly created object and bucket
+        source.delete_object_sync(&coords.bucket, &coords.object)?;
+        source.delete_bucket_sync(&coords.bucket)?;
 
         Ok(())
     }
 
     #[test]
+    #[serial]
     fn test_google_database_bucket_collision() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();

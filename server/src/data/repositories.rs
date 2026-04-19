@@ -14,7 +14,6 @@ use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
-use store_core::CollisionError;
 
 // Name that will be returned by get_bucket_name(), unless of course it is
 // blank, in which case a new name will be generated.
@@ -301,16 +300,8 @@ impl PackRepositoryImpl {
         Ok(Self { sources })
     }
 
-    /// There was a bucket name collision, need to generate a new name.
-    fn get_new_bucket_name(&self) -> String {
-        let mut count = NAME_COUNT.lock().unwrap();
-        *count = 0;
-        let mut name = BUCKET_NAME.lock().unwrap();
-        *name = generate_bucket_name();
-        name.clone()
-    }
-
-    // Try to store the pack file up to three times before giving up.
+    // Try to store the pack file up to three times before giving up. Bucket
+    // collisions are handled inside each pack store implementation.
     fn store_pack_retry(
         &self,
         source: &dyn PackDataSource,
@@ -319,26 +310,16 @@ impl PackRepositoryImpl {
         object: &str,
     ) -> anyhow::Result<PackLocation, Error> {
         let mut retries = 3;
-        let mut bucket_name: String = bucket.to_owned();
-        // Loop a few times if the pack store (typically a network operation)
-        // fails, in case it is successful on retry. If there is a bucket
-        // collision, generate a new bucket name for that store (and each one
-        // after), returning the updated pack location.
         loop {
-            match source.store_pack(packfile, &bucket_name, object) {
+            match source.store_pack(packfile, bucket, object) {
                 Ok(coords) => return Ok(coords),
-                Err(err) => match err.downcast::<CollisionError>() {
-                    Ok(_) => {
-                        bucket_name = self.get_new_bucket_name();
+                Err(err) => {
+                    retries -= 1;
+                    if retries == 0 {
+                        return Err(err);
                     }
-                    Err(e) => {
-                        retries -= 1;
-                        if retries == 0 {
-                            return Err(e);
-                        }
-                        warn!("pack store failed, will retry: {:?}", e);
-                    }
-                },
+                    warn!("pack store failed, will retry: {:?}", err);
+                }
             }
         }
     }
@@ -824,72 +805,6 @@ mod tests {
         }
         let last1 = repo.get_bucket_name();
         assert_ne!(actual, last1);
-    }
-
-    #[test]
-    fn test_get_new_bucket_name() {
-        // arrange
-        let mut builder = MockPackSourceBuilder::new();
-        builder
-            .expect_build_source()
-            .returning(|_| Ok(Box::new(MockPackDataSource::new())));
-        let stores = vec![Store {
-            id: "localtmp".to_owned(),
-            store_type: StoreType::LOCAL,
-            label: "temporary".to_owned(),
-            properties: HashMap::new(),
-            retention: PackRetention::ALL,
-        }];
-        // act
-        let result = PackRepositoryImpl::new(stores, Box::new(builder));
-        assert!(result.is_ok());
-        let repo = result.unwrap();
-        let first = repo.get_bucket_name();
-        // assert
-        assert!(!first.is_empty());
-        let second = repo.get_new_bucket_name();
-        assert_ne!(first, second);
-    }
-
-    #[test]
-    fn test_store_pack_collision() {
-        // arrange
-        let bucket_name = generate_bucket_name();
-        let name_clone = bucket_name.clone();
-        let mut builder = MockPackSourceBuilder::new();
-        builder.expect_build_source().returning(move |_| {
-            let mut source = MockPackDataSource::new();
-            let name1 = name_clone.clone();
-            let name2 = name_clone.clone();
-            source
-                .expect_store_pack()
-                .with(always(), eq(name1), always())
-                .returning(|_, _, _| Err(Error::from(CollisionError {})));
-            source
-                .expect_store_pack()
-                .with(always(), ne(name2), always())
-                .returning(|_, bucket, object| Ok(PackLocation::new("store", bucket, object)));
-            Ok(Box::new(source))
-        });
-        let stores = vec![Store {
-            id: "localtmp".to_owned(),
-            store_type: StoreType::LOCAL,
-            label: "temporary".to_owned(),
-            properties: HashMap::new(),
-            retention: PackRetention::ALL,
-        }];
-        // act
-        let result = PackRepositoryImpl::new(stores, Box::new(builder));
-        assert!(result.is_ok());
-        let repo = result.unwrap();
-        let input_file = PathBuf::from("/home/planet/important.txt");
-        let result = repo.store_pack(&input_file, &bucket_name, "object1");
-        // assert
-        assert!(result.is_ok());
-        let locations = result.unwrap();
-        assert_eq!(locations.len(), 1);
-        let location = &locations[0];
-        assert_ne!(location.bucket, bucket_name);
     }
 
     #[test]
