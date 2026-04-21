@@ -31,6 +31,7 @@ pub mod scan_packs;
 pub mod start_backup;
 pub mod stop_backup;
 pub mod test_store;
+pub mod update_configuration;
 pub mod update_dataset;
 pub mod update_store;
 

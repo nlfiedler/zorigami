@@ -1,6 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use crate::domain::services::buckets::BucketNamingPolicy;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use data_encoding::BASE64;
@@ -1022,6 +1023,8 @@ pub struct Configuration {
     pub username: String,
     /// Computer UUID for generating bucket names.
     pub computer_id: String,
+    /// Selected policy for generating bucket names, if any.
+    pub bucket_naming: Option<BucketNamingPolicy>,
 }
 
 impl Configuration {
@@ -1045,6 +1048,7 @@ impl Default for Configuration {
             hostname,
             username,
             computer_id,
+            bucket_naming: None,
         }
     }
 }

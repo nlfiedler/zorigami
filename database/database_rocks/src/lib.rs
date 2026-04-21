@@ -5,6 +5,7 @@
 //! Manages instances of RocksDB associated with file paths.
 
 use anyhow::{Error, anyhow};
+use database_core::MaybeEntry;
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::{DB, Options};
 use std::collections::HashMap;
@@ -193,5 +194,122 @@ impl database_core::Database for Database {
             results.insert(key_str.to_owned(), value);
         }
         Ok(results)
+    }
+
+    /// Fetch the key/value pair at the given zero-based offset within the set
+    /// of keys that start with the prefix. The prefix is stripped from the
+    /// returned key. Returns `None` when the offset is past the end of the
+    /// matching range.
+    fn fetch_prefix_single(&self, prefix: &str, offset: usize) -> Result<MaybeEntry, Error> {
+        let pre_bytes = prefix.as_bytes();
+        let iter = self.db.prefix_iterator(pre_bytes);
+        for (seen, item) in iter.enumerate() {
+            let (key, value) = item?;
+            if key.len() < pre_bytes.len() || &key[..pre_bytes.len()] != pre_bytes {
+                break;
+            }
+            if seen == offset {
+                let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?.to_owned();
+                return Ok(Some((key_str, value)));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Fetch the lexicographically greatest key/value pair whose key starts
+    /// with the given prefix. The prefix is stripped from the returned key.
+    /// Returns `None` when no keys match.
+    fn fetch_prefix_last(&self, prefix: &str) -> Result<MaybeEntry, Error> {
+        use rocksdb::{Direction, IteratorMode};
+        let pre_bytes = prefix.as_bytes();
+        // Seek to just past the prefix range (prefix with last byte
+        // incremented) and iterate backward so the first yielded key is the
+        // largest key still starting with the prefix. Relies on the prefix
+        // being non-empty and its last byte not being 0xFF, both true for the
+        // "bucket/" style prefixes used in this codebase.
+        let mut upper = pre_bytes.to_vec();
+        let last = upper.len() - 1;
+        upper[last] = upper[last].saturating_add(1);
+        let mut iter = self
+            .db
+            .iterator(IteratorMode::From(&upper, Direction::Reverse));
+        if let Some(item) = iter.next() {
+            let (key, value) = item?;
+            if key.len() < pre_bytes.len() || &key[..pre_bytes.len()] != pre_bytes {
+                return Ok(None);
+            }
+            let key_str = std::str::from_utf8(&key[pre_bytes.len()..])?.to_owned();
+            return Ok(Some((key_str, value)));
+        }
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use database_core::Database as _;
+
+    fn new_db() -> (tempfile::TempDir, Database) {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Database::new(tmp.path()).unwrap();
+        (tmp, db)
+    }
+
+    #[test]
+    fn fetch_prefix_single_empty() {
+        let (_tmp, db) = new_db();
+        assert!(db.fetch_prefix_single("bucket/", 0).unwrap().is_none());
+        assert!(db.fetch_prefix_single("bucket/", 5).unwrap().is_none());
+    }
+
+    #[test]
+    fn fetch_prefix_single_offsets() {
+        let (_tmp, db) = new_db();
+        db.insert_document(b"bucket/aaa", b"val-a").unwrap();
+        db.insert_document(b"bucket/bbb", b"val-b").unwrap();
+        db.insert_document(b"bucket/ccc", b"val-c").unwrap();
+        // Unrelated prefixes that sort before and after "bucket/"
+        db.insert_document(b"apple/zzz", b"val-z").unwrap();
+        db.insert_document(b"chunk/xxx", b"val-x").unwrap();
+
+        let (k0, v0) = db.fetch_prefix_single("bucket/", 0).unwrap().unwrap();
+        assert_eq!(k0, "aaa");
+        assert_eq!(&*v0, b"val-a");
+        let (k1, v1) = db.fetch_prefix_single("bucket/", 1).unwrap().unwrap();
+        assert_eq!(k1, "bbb");
+        assert_eq!(&*v1, b"val-b");
+        let (k2, v2) = db.fetch_prefix_single("bucket/", 2).unwrap().unwrap();
+        assert_eq!(k2, "ccc");
+        assert_eq!(&*v2, b"val-c");
+        assert!(db.fetch_prefix_single("bucket/", 3).unwrap().is_none());
+    }
+
+    #[test]
+    fn fetch_prefix_last_empty() {
+        let (_tmp, db) = new_db();
+        assert!(db.fetch_prefix_last("bucket/").unwrap().is_none());
+    }
+
+    #[test]
+    fn fetch_prefix_last_returns_greatest() {
+        let (_tmp, db) = new_db();
+        db.insert_document(b"bucket/aaa", b"val-a").unwrap();
+        db.insert_document(b"bucket/ccc", b"val-c").unwrap();
+        db.insert_document(b"bucket/bbb", b"val-b").unwrap();
+        // Keys that come after "bucket/" lexicographically; must be skipped.
+        db.insert_document(b"chunk/zzz", b"val-z").unwrap();
+        db.insert_document(b"pack/yyy", b"val-y").unwrap();
+
+        let (key, value) = db.fetch_prefix_last("bucket/").unwrap().unwrap();
+        assert_eq!(key, "ccc");
+        assert_eq!(&*value, b"val-c");
+    }
+
+    #[test]
+    fn fetch_prefix_last_none_when_only_other_prefixes() {
+        let (_tmp, db) = new_db();
+        db.insert_document(b"chunk/zzz", b"val-z").unwrap();
+        assert!(db.fetch_prefix_last("bucket/").unwrap().is_none());
     }
 }

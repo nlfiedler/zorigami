@@ -5,6 +5,7 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
+use crate::domain::services::buckets::BucketNameGenerator;
 use anyhow::Error;
 use hashed_array_tree::HashedArrayTree;
 #[cfg(test)]
@@ -18,6 +19,9 @@ use std::path::{Path, PathBuf};
 pub trait RecordRepository: Send + Sync {
     /// Retrieve the configuration, or build a new one using default values.
     fn get_configuration(&self) -> Result<Configuration, Error>;
+
+    /// Save the given configuration to the repository.
+    fn put_configuration(&self, config: &Configuration) -> Result<(), Error>;
 
     /// Provide the set of paths that should be excluded from backup, if any.
     fn get_excludes(&self) -> Vec<PathBuf>;
@@ -157,6 +161,24 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve the counts of the various record types in the data source.
     fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
+
+    /// Record a generated bucket name for future lookup.
+    fn add_bucket(&self, name: &str) -> Result<(), Error>;
+
+    /// Return a randomly selected bucket name, or `None` if no buckets exist.
+    fn get_random_bucket(&self) -> Result<Option<String>, Error>;
+
+    /// Return the number of recorded bucket names.
+    fn count_buckets(&self) -> Result<usize, Error>;
+
+    /// Return the most recently generated bucket name (lexicographically
+    /// greatest), or `None` if no buckets exist.
+    fn get_last_bucket(&self) -> Result<Option<String>, Error>;
+
+    /// Return a bucket name generator for the currently configured naming
+    /// policy. Falls back to `BucketNamingPolicy::RandomPool(100)` when no
+    /// policy is stored in the configuration record.
+    fn bucket_namer(&self) -> Result<Box<dyn BucketNameGenerator>, Error>;
 }
 
 ///
@@ -164,12 +186,6 @@ pub trait RecordRepository: Send + Sync {
 ///
 #[cfg_attr(test, automock)]
 pub trait PackRepository: Send + Sync {
-    /// Generate a unique bucket name for storing pack files.
-    ///
-    /// This function should be called for each call to `store_pack()` in order
-    /// to ensure buckets are reused and yet not overused, as appropriate.
-    fn get_bucket_name(&self) -> String;
-
     /// Save the given pack to the stores provided in the constructor.
     ///
     /// Returns the list of all pack locations, which can be used to retrieve

@@ -1,26 +1,23 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use crate::data::services::buckets::BucketNamingPolicyResolverImpl;
 use crate::data::sources::PackSourceBuilderImpl;
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
     Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::domain::services::buckets::{
+    BucketNameGenerator, BucketNamingPolicy, BucketNamingPolicyResolver,
+};
 use crate::domain::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
 use anyhow::{Context, Error, Result, anyhow};
 use hashed_array_tree::HashedArrayTree;
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
-
-// Name that will be returned by get_bucket_name(), unless of course it is
-// blank, in which case a new name will be generated.
-static BUCKET_NAME: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new("".into()));
-// Number of times get_bucket_name() has been called and returned the same
-// bucket name. When the value is zero, a new name is generated.
-static NAME_COUNT: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(0));
+use std::sync::Arc;
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
 // using a `Box` instead, cloning it would involve adding fake clone operations
@@ -44,6 +41,10 @@ impl RecordRepository for RecordRepositoryImpl {
         let config: Configuration = Default::default();
         self.datasource.put_configuration(&config)?;
         Ok(config)
+    }
+
+    fn put_configuration(&self, config: &Configuration) -> Result<(), Error> {
+        self.datasource.put_configuration(config)
     }
 
     fn get_excludes(&self) -> Vec<PathBuf> {
@@ -239,6 +240,34 @@ impl RecordRepository for RecordRepositoryImpl {
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
         self.datasource.get_entity_counts()
     }
+
+    fn add_bucket(&self, name: &str) -> Result<(), Error> {
+        self.datasource.add_bucket(name)
+    }
+
+    fn get_random_bucket(&self) -> Result<Option<String>, Error> {
+        self.datasource.get_random_bucket()
+    }
+
+    fn count_buckets(&self) -> Result<usize, Error> {
+        self.datasource.count_buckets()
+    }
+
+    fn get_last_bucket(&self) -> Result<Option<String>, Error> {
+        self.datasource.get_last_bucket()
+    }
+
+    fn bucket_namer(&self) -> Result<Box<dyn BucketNameGenerator>, Error> {
+        let config = self.get_configuration()?;
+        let policy = config
+            .bucket_naming
+            .unwrap_or(BucketNamingPolicy::RandomPool(100));
+        let repo: Arc<dyn RecordRepository> = Arc::new(Self {
+            datasource: Arc::clone(&self.datasource),
+        });
+        let resolver = BucketNamingPolicyResolverImpl::new(repo);
+        resolver.build_generator(policy)
+    }
 }
 
 ///
@@ -326,20 +355,6 @@ impl PackRepositoryImpl {
 }
 
 impl PackRepository for PackRepositoryImpl {
-    fn get_bucket_name(&self) -> String {
-        let mut count = NAME_COUNT.lock().unwrap();
-        if *count == 0 {
-            let mut name = BUCKET_NAME.lock().unwrap();
-            *name = generate_bucket_name();
-        }
-        *count += 1;
-        if *count > 127 {
-            *count = 0;
-        }
-        let name = BUCKET_NAME.lock().unwrap();
-        name.clone()
-    }
-
     fn store_pack(
         &self,
         packfile: &Path,
@@ -434,7 +449,8 @@ impl PackRepository for PackRepositoryImpl {
                 "database store {} ({}) failed for {}/{}",
                 store.id, store.label, bucket, object
             );
-            let loc = store_database_retry(source.as_ref(), infile, &bucket, &object).context(ctx)?;
+            let loc =
+                store_database_retry(source.as_ref(), infile, &bucket, &object).context(ctx)?;
             results.push(loc)
         }
         Ok(results)
@@ -520,40 +536,6 @@ fn computer_bucket_name(unique_id: &str) -> Result<String, Error> {
     uuid::Uuid::try_parse(unique_id)
         .map_err(Error::from)
         .map(|uuid| uuid.simple().to_string())
-}
-
-/// Generate a suitable bucket name using the current time and random bytes.
-///
-/// Ideally the name should conform to all of the requirements of all of the
-/// supported cloud services, although the pack sources are allowed to fix the
-/// names if there is a problem.
-///
-/// In short, the result will be fairly long but less than 63 characters, does
-/// not include any prohibited characters, and will be lowercase.
-///
-/// The value is inspired by ULID and as such the first 48 bits are the
-/// milliseconds since the epoch plus 256 bits of randomness, then base32hex
-/// encoded so that the generated names sort lexicographically.
-fn generate_bucket_name() -> String {
-    use rand::RngExt;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before Unix epoch")
-        .as_millis() as u64;
-    let mut rando = [0u8; 32];
-    rand::rng().fill(&mut rando);
-    let mut result = [0u8; 38];
-    // Copy low 6 bytes (48 bits) of time into the high bytes of result, then
-    // copy all 32 bytes of rando into the lower bytes of result, and finally
-    // base32hex encode and lowercase.
-    let ms_bytes = ms.to_be_bytes();
-    result[..6].copy_from_slice(&ms_bytes[2..]);
-    result[6..].copy_from_slice(&rando);
-    data_encoding::BASE32HEX_NOPAD
-        .encode(&result)
-        .to_lowercase()
 }
 
 // Determine if the named bucket is referenced by any of the packs.
@@ -677,24 +659,6 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_bucket_name() {
-        let bucket = generate_bucket_name();
-        // Ensure the generated name is safe for all supported cloud services;
-        // it needs to be reasonably short (63 characters at most) and consist
-        // only of lowercase letters or numbers.
-        assert_eq!(bucket.len(), 61, "bucket name is 61 characters");
-        for c in bucket.chars() {
-            assert!(c.is_ascii_alphanumeric());
-            if c.is_ascii_alphabetic() {
-                assert!(c.is_ascii_lowercase());
-            }
-        }
-        // each invocation should generate a different value
-        let second = generate_bucket_name();
-        assert_ne!(bucket, second);
-    }
-
-    #[test]
     fn test_load_dataset_stores_ok() {
         // arrange
         let mut local_props: HashMap<String, String> = HashMap::new();
@@ -758,6 +722,24 @@ mod tests {
     }
 
     #[test]
+    fn test_bucket_namer_default() {
+        // arrange: configuration has no bucket_naming policy set
+        let config: Configuration = Default::default();
+        let mut mock = MockEntityDataSource::new();
+        mock.expect_get_configuration()
+            .returning(move || Ok(Some(config.clone())));
+        mock.expect_count_buckets().returning(|| Ok(0));
+        mock.expect_add_bucket().returning(|_| Ok(()));
+        // act: bucket_namer falls back to RandomPool(100); with 0 buckets the
+        // generator mints a new name via generate_bucket_name (61 ASCII chars).
+        let repo = RecordRepositoryImpl::new(Arc::new(mock));
+        let generator = repo.bucket_namer().expect("bucket_namer should succeed");
+        let name = generator.generate_name();
+        // assert
+        assert_eq!(name.len(), 61);
+    }
+
+    #[test]
     fn test_create_restore_database() {
         // arrange
         let mut mock = MockEntityDataSource::new();
@@ -775,36 +757,6 @@ mod tests {
         let result = repo.restore_from_backup(&archive_path, "Secret123");
         // assert
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_get_bucket_name() {
-        // arrange
-        let mut builder = MockPackSourceBuilder::new();
-        builder
-            .expect_build_source()
-            .returning(|_| Ok(Box::new(MockPackDataSource::new())));
-        let stores = vec![Store {
-            id: "localtmp".to_owned(),
-            store_type: StoreType::LOCAL,
-            label: "temporary".to_owned(),
-            properties: HashMap::new(),
-            retention: PackRetention::ALL,
-        }];
-        // act
-        let result = PackRepositoryImpl::new(stores, Box::new(builder));
-        assert!(result.is_ok());
-        let repo = result.unwrap();
-        let actual = repo.get_bucket_name();
-        // assert
-        assert!(!actual.is_empty());
-        let again = repo.get_bucket_name();
-        assert_eq!(actual, again);
-        for _ in 1..200 {
-            repo.get_bucket_name();
-        }
-        let last1 = repo.get_bucket_name();
-        assert_ne!(actual, last1);
     }
 
     #[test]

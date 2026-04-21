@@ -149,6 +149,19 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Retrieve the counts of the various record types in the data source.
     fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
+
+    /// Record a generated bucket name for future lookup.
+    fn add_bucket(&self, name: &str) -> Result<(), Error>;
+
+    /// Return a randomly selected bucket name, or `None` if no buckets exist.
+    fn get_random_bucket(&self) -> Result<Option<String>, Error>;
+
+    /// Return the number of recorded bucket names.
+    fn count_buckets(&self) -> Result<usize, Error>;
+
+    /// Return the most recently generated bucket name (lexicographically
+    /// greatest), or `None` if no buckets exist.
+    fn get_last_bucket(&self) -> Result<Option<String>, Error>;
 }
 
 ///

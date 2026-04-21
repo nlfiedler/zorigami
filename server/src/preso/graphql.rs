@@ -7,6 +7,7 @@
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::domain::entities::{self, Checksum, TreeReference};
 use crate::domain::repositories::RecordRepository;
+use crate::domain::services::buckets::BucketNamingPolicy as DomainBucketNamingPolicy;
 use crate::domain::sources::EntityDataSource;
 use crate::shared::packs;
 use crate::tasks::backup;
@@ -719,6 +720,96 @@ impl From<entities::Store> for Store {
     }
 }
 
+/// Kind of policy used to generate bucket names.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum BucketPolicyKind {
+    /// Generate up to `limit` buckets, then select randomly thereafter.
+    RandomPool,
+    /// Generate a new bucket every `days` days.
+    Scheduled,
+    /// Generate a new bucket every `days` days, up to `limit` buckets, then
+    /// select randomly thereafter.
+    ScheduledRandomPool,
+}
+
+#[derive(GraphQLObject)]
+/// Policy controlling how bucket names are generated for pack file uploads.
+struct BucketNamingPolicy {
+    /// Kind of bucket naming policy in effect.
+    policy: BucketPolicyKind,
+    /// Age threshold in days (set for Scheduled and ScheduledRandomPool).
+    days: Option<i32>,
+    /// Maximum number of buckets (set for RandomPool and ScheduledRandomPool).
+    limit: Option<i32>,
+}
+
+impl From<DomainBucketNamingPolicy> for BucketNamingPolicy {
+    fn from(policy: DomainBucketNamingPolicy) -> Self {
+        match policy {
+            DomainBucketNamingPolicy::RandomPool(limit) => Self {
+                policy: BucketPolicyKind::RandomPool,
+                days: None,
+                limit: Some(limit as i32),
+            },
+            DomainBucketNamingPolicy::Scheduled(days) => Self {
+                policy: BucketPolicyKind::Scheduled,
+                days: Some(days as i32),
+                limit: None,
+            },
+            DomainBucketNamingPolicy::ScheduledRandomPool { days, limit } => Self {
+                policy: BucketPolicyKind::ScheduledRandomPool,
+                days: Some(days as i32),
+                limit: Some(limit as i32),
+            },
+        }
+    }
+}
+
+/// Input for specifying a bucket naming policy.
+#[derive(GraphQLInputObject)]
+struct BucketNamingPolicyInput {
+    /// Kind of bucket naming policy to apply.
+    policy: BucketPolicyKind,
+    /// Age threshold in days (required for Scheduled and ScheduledRandomPool).
+    days: Option<i32>,
+    /// Maximum number of buckets (required for RandomPool and ScheduledRandomPool).
+    limit: Option<i32>,
+}
+
+impl TryFrom<BucketNamingPolicyInput> for DomainBucketNamingPolicy {
+    type Error = FieldError;
+
+    fn try_from(input: BucketNamingPolicyInput) -> Result<Self, Self::Error> {
+        fn positive_usize(name: &str, value: Option<i32>) -> Result<usize, FieldError> {
+            match value {
+                Some(v) if v > 0 => Ok(v as usize),
+                Some(_) => Err(FieldError::new(
+                    format!("`{name}` must be greater than zero"),
+                    Value::null(),
+                )),
+                None => Err(FieldError::new(
+                    format!("`{name}` is required for this policy"),
+                    Value::null(),
+                )),
+            }
+        }
+        match input.policy {
+            BucketPolicyKind::RandomPool => Ok(DomainBucketNamingPolicy::RandomPool(
+                positive_usize("limit", input.limit)?,
+            )),
+            BucketPolicyKind::Scheduled => Ok(DomainBucketNamingPolicy::Scheduled(positive_usize(
+                "days", input.days,
+            )?)),
+            BucketPolicyKind::ScheduledRandomPool => {
+                Ok(DomainBucketNamingPolicy::ScheduledRandomPool {
+                    days: positive_usize("days", input.days)?,
+                    limit: positive_usize("limit", input.limit)?,
+                })
+            }
+        }
+    }
+}
+
 #[juniper::graphql_object(description = "Configuration of the application.")]
 impl entities::Configuration {
     /// Name of the computer on which this application is running.
@@ -739,6 +830,11 @@ impl entities::Configuration {
     /// Name of the bucket used for storing the database snapshots.
     fn computer_bucket(&self) -> String {
         self.computer_id.clone()
+    }
+
+    /// Selected policy for generating bucket names, if any.
+    fn bucket_naming(&self) -> Option<BucketNamingPolicy> {
+        self.bucket_naming.clone().map(BucketNamingPolicy::from)
     }
 }
 
@@ -1424,6 +1520,27 @@ impl Mutation {
         Ok(result)
     }
 
+    /// Set or clear the bucket naming policy on the configuration record.
+    ///
+    /// Pass `null` to clear any existing policy (reverts to default bucket
+    /// naming). Returns the updated configuration.
+    fn set_bucket_naming_policy(
+        #[graphql(ctx)] ctx: &GraphContext,
+        policy: Option<BucketNamingPolicyInput>,
+    ) -> FieldResult<entities::Configuration> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::update_configuration::{Params, UpdateConfiguration};
+        let bucket_naming = match policy {
+            Some(input) => Some(DomainBucketNamingPolicy::try_from(input)?),
+            None => None,
+        };
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = UpdateConfiguration::new(Box::new(repo));
+        let params = Params::new(bucket_naming);
+        let result = usecase.call(params)?;
+        Ok(result)
+    }
+
     /// Delete the dataset with the given identifier, returning the identifier.
     fn delete_dataset(#[graphql(ctx)] ctx: &GraphContext, id: String) -> FieldResult<String> {
         use crate::domain::usecases::UseCase;
@@ -1582,14 +1699,14 @@ pub type Schema = RootNode<Query, Mutation, EmptySubscription<GraphContext>>;
 
 /// Create the GraphQL schema.
 pub fn create_schema() -> Schema {
+    Schema::new(Query {}, Mutation {}, EmptySubscription::new())
+}
+
+/// Produce the schema definition and write it to the given path.
+pub fn write_schema<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
     let schema = Schema::new(Query {}, Mutation {}, EmptySubscription::new());
-    if let Ok(path) = std::env::var("GENERATE_SDL") {
-        let mut file = std::fs::File::create(&path).expect("create file");
-        file.write_all(b"#\n# GENERATED FILE, DO NOT EDIT\n#\n\n")
-            .expect("write_all header");
-        file.write_all(schema.as_sdl().as_bytes())
-            .expect("write_all schema");
-        println!("GraphQL schema written to {path}");
-    }
-    schema
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(b"#\n# GENERATED FILE, DO NOT EDIT\n#\n\n")?;
+    file.write_all(schema.as_sdl().as_bytes())?;
+    Ok(())
 }

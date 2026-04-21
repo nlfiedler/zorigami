@@ -508,3 +508,37 @@ fn test_database_backup_restore() -> Result<(), Error> {
     let _ = std::fs::remove_dir_all(backup_path);
     Ok(())
 }
+
+#[test]
+fn test_bucket_operations() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+
+    // empty-state assertions
+    assert_eq!(datasource.count_buckets()?, 0);
+    assert!(datasource.get_last_bucket()?.is_none());
+    assert!(datasource.get_random_bucket()?.is_none());
+
+    // 61-char ASCII names matching the production bucket name length, chosen
+    // so lexicographic order is predictable for get_last_bucket().
+    let name_a = "a".repeat(61);
+    let name_b = "b".repeat(61);
+    let name_c = "c".repeat(61);
+    datasource.add_bucket(&name_a)?;
+    datasource.add_bucket(&name_b)?;
+    datasource.add_bucket(&name_c)?;
+
+    assert_eq!(datasource.count_buckets()?, 3);
+    assert_eq!(datasource.get_last_bucket()?.as_deref(), Some(name_c.as_str()));
+
+    let picked = datasource.get_random_bucket()?.expect("should pick a bucket");
+    assert!([name_a.as_str(), name_b.as_str(), name_c.as_str()].contains(&picked.as_str()));
+
+    // add_bucket is idempotent for the same name — count stays the same
+    datasource.add_bucket(&name_b)?;
+    assert_eq!(datasource.count_buckets()?, 3);
+
+    Ok(())
+}

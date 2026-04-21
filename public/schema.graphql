@@ -16,6 +16,16 @@ enum BackupStatus {
   "Backup failed, see `errors` property for details." FAILED
 }
 
+"Kind of policy used to generate bucket names."
+enum BucketPolicyKind {
+  "Generate up to `limit` buckets, then select randomly thereafter." RANDOM_POOL
+  "Generate a new bucket every `days` days." SCHEDULED
+  """
+    Generate a new bucket every `days` days, up to `limit` buckets, then
+    select randomly thereafter.
+  """ SCHEDULED_RANDOM_POOL
+}
+
 enum DayOfWeek {
   SUN
   MON
@@ -66,6 +76,13 @@ enum WeekOfMonth {
   "Third such weekday of the month." THIRD
   "Fourth such weekday of the month." FOURTH
   "Fifth such weekday of the month." FIFTH
+}
+
+"Input for specifying a bucket naming policy."
+input BucketNamingPolicyInput {
+  "Kind of bucket naming policy to apply." policy: BucketPolicyKind!
+  "Age threshold in days (required for Scheduled and ScheduledRandomPool)." days: Int
+  "Maximum number of buckets (required for RandomPool and ScheduledRandomPool)." limit: Int
 }
 
 input DatasetInput {
@@ -170,6 +187,16 @@ type BackupState {
   bytesUploaded: BigInt!
 }
 
+"Policy controlling how bucket names are generated for pack file uploads."
+type BucketNamingPolicy {
+  "Kind of bucket naming policy in effect."
+  policy: BucketPolicyKind!
+  "Age threshold in days (set for Scheduled and ScheduledRandomPool)."
+  days: Int
+  "Maximum number of buckets (set for RandomPool and ScheduledRandomPool)."
+  limit: Int
+}
+
 "Configuration of the application."
 type Configuration {
   "Name of the computer on which this application is running."
@@ -180,6 +207,8 @@ type Configuration {
   computerId: String!
   "Name of the bucket used for storing the database snapshots."
   computerBucket: String!
+  "Selected policy for generating bucket names, if any."
+  bucketNaming: BucketNamingPolicy
 }
 
 "Location, schedule, and pack store for a backup data set."
@@ -242,6 +271,13 @@ type Mutation {
   newDataset: Dataset!
   "Update an existing dataset with the given configuration."
   updateDataset(dataset: DatasetInput!): Dataset!
+  """
+    Set or clear the bucket naming policy on the configuration record.
+
+    Pass `null` to clear any existing policy (reverts to default bucket
+    naming). Returns the updated configuration.
+  """
+  setBucketNamingPolicy(policy: BucketNamingPolicyInput): Configuration!
   "Delete the dataset with the given identifier, returning the identifier."
   deleteDataset(id: String!): String!
   "Begin the backup procedure for the dataset with the given identifier."
@@ -315,7 +351,7 @@ type PackFile {
 
 "Location within a store of a saved pack."
 type PackLocation {
-  "ULID of the pack store."
+  "Unique identifier of the pack store."
   store: String!
   "Remote bucket name."
   bucket: String!

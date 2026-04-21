@@ -8,6 +8,9 @@ use anyhow::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Result from a query that may not find a matching entry.
+pub type MaybeEntry = Option<(String, Box<[u8]>)>;
+
 pub trait Database {
     /// Return the path to the database files.
     fn get_path(&self) -> &Path;
@@ -46,4 +49,15 @@ pub trait Database {
     /// Fetch the key/value pairs for those keys that start with the given
     /// prefix. The prefix is stripped from the keys before being returned.
     fn fetch_prefix(&self, prefix: &str) -> Result<HashMap<String, Box<[u8]>>, Error>;
+
+    /// Fetch the key/value pair at the given zero-based offset within the set
+    /// of keys that start with the prefix. The prefix is stripped from the
+    /// returned key. Returns `None` when the offset is past the end of the
+    /// matching range.
+    fn fetch_prefix_single(&self, prefix: &str, offset: usize) -> Result<MaybeEntry, Error>;
+
+    /// Fetch the lexicographically greatest key/value pair whose key starts
+    /// with the given prefix. The prefix is stripped from the returned key.
+    /// Returns `None` when no keys match.
+    fn fetch_prefix_last(&self, prefix: &str) -> Result<MaybeEntry, Error>;
 }

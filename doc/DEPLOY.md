@@ -100,6 +100,8 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 
 ### Amazon S3 Setup
 
+Note that prior to 2024, AWS accounts were limited to 100 buckets. Since then, the limit has been raised to 10,000 buckets per account. As such, it is advisable to select the **random pool** _bucket naming policy_ with a number no larger than 10,000.
+
 1. Navigate to the **IAM** console
 1. Create user that will act on behalf of zorigami
 1. Choose _Attach policies directly_, do not assign to a group
@@ -113,6 +115,8 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 1. Copy the access key and secret key and save them in a safe place
 
 ### Azure Blob Storage
+
+Note that Azure seems to have little in the way of limits on the number of buckets or objects. As such, any bucket naming policy should be compatible.
 
 How to create a new storage account and get the access key.
 
@@ -132,6 +136,8 @@ How to create a new storage account and get the access key.
 1. Copy the _Storage account name_ and _Key_ value from **key1**
 
 ### Google Cloud Setup
+
+Note that Google seems to have little in the way of limits on the number of buckets or objects. As such, any bucket naming policy should be compatible.
 
 How to create a new project and get the service account credentials file.
 

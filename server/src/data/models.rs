@@ -35,6 +35,7 @@ use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, PackRetention,
     Snapshot, SnapshotRetention, Store, StoreType, Tree, TreeEntry, TreeReference,
 };
+use crate::domain::services::buckets::BucketNamingPolicy;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use std::collections::HashMap;
@@ -65,6 +66,9 @@ impl Model for Configuration {
         use ciborium::Value;
 
         let mut config: Configuration = Default::default();
+        let mut policy_kind: Option<String> = None;
+        let mut policy_days: Option<usize> = None;
+        let mut policy_limit: Option<usize> = None;
 
         let raw_value: Value =
             ciborium::de::from_reader(value).map_err(|err| anyhow!("cbor read error: {}", err))?;
@@ -92,16 +96,45 @@ impl Model for Configuration {
                         .into_text()
                         .map_err(|_| anyhow!("computer_id: cbor into_text() error"))?;
                     config.computer_id = computer_id;
+                } else if name == "policy" {
+                    let kind: String = value
+                        .into_text()
+                        .map_err(|_| anyhow!("policy: cbor into_text() error"))?;
+                    policy_kind = Some(kind);
+                } else if name == "days" {
+                    let iv = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("days: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    policy_days = Some(ii as usize);
+                } else if name == "limit" {
+                    let iv = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("limit: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    policy_limit = Some(ii as usize);
                 }
             }
         }
+
+        config.bucket_naming = match policy_kind.as_deref() {
+            Some("randompool") => policy_limit.map(BucketNamingPolicy::RandomPool),
+            Some("scheduled") => policy_days.map(BucketNamingPolicy::Scheduled),
+            Some("scheduledpool") => match (policy_days, policy_limit) {
+                (Some(days), Some(limit)) => {
+                    Some(BucketNamingPolicy::ScheduledRandomPool { days, limit })
+                }
+                _ => None,
+            },
+            _ => None,
+        };
 
         Ok(config)
     }
 
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         use ciborium::Value;
-        let fields: Vec<(Value, Value)> = vec![
+        let mut fields: Vec<(Value, Value)> = vec![
             (
                 Value::Text("hostname".into()),
                 Value::Text(self.hostname.clone()),
@@ -115,6 +148,45 @@ impl Model for Configuration {
                 Value::Text(self.computer_id.clone()),
             ),
         ];
+
+        if let Some(policy) = &self.bucket_naming {
+            match policy {
+                BucketNamingPolicy::RandomPool(limit) => {
+                    fields.push((
+                        Value::Text("policy".into()),
+                        Value::Text("randompool".into()),
+                    ));
+                    fields.push((
+                        Value::Text("limit".into()),
+                        Value::Integer((*limit as u64).into()),
+                    ));
+                }
+                BucketNamingPolicy::Scheduled(days) => {
+                    fields.push((
+                        Value::Text("policy".into()),
+                        Value::Text("scheduled".into()),
+                    ));
+                    fields.push((
+                        Value::Text("days".into()),
+                        Value::Integer((*days as u64).into()),
+                    ));
+                }
+                BucketNamingPolicy::ScheduledRandomPool { days, limit } => {
+                    fields.push((
+                        Value::Text("policy".into()),
+                        Value::Text("scheduledpool".into()),
+                    ));
+                    fields.push((
+                        Value::Text("days".into()),
+                        Value::Integer((*days as u64).into()),
+                    ));
+                    fields.push((
+                        Value::Text("limit".into()),
+                        Value::Integer((*limit as u64).into()),
+                    ));
+                }
+            }
+        }
 
         let doc = Value::Map(fields);
         let mut encoded: Vec<u8> = Vec::new();
@@ -1686,6 +1758,67 @@ mod tests {
         assert_eq!(actual.hostname, original.hostname);
         assert_eq!(actual.username, original.username);
         assert_eq!(actual.computer_id, original.computer_id);
+        assert_eq!(actual.bucket_naming, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_configuration_serde_random_pool() -> Result<(), Error> {
+        let original = Configuration {
+            bucket_naming: Some(BucketNamingPolicy::RandomPool(42)),
+            ..Default::default()
+        };
+        let as_bytes = original.to_bytes()?;
+        let unused_key: Vec<u8> = vec![];
+        let actual = Configuration::from_bytes(&unused_key, &as_bytes)?;
+        assert_eq!(actual.hostname, original.hostname);
+        assert_eq!(actual.username, original.username);
+        assert_eq!(actual.computer_id, original.computer_id);
+        assert_eq!(
+            actual.bucket_naming,
+            Some(BucketNamingPolicy::RandomPool(42))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_configuration_serde_scheduled() -> Result<(), Error> {
+        let original = Configuration {
+            bucket_naming: Some(BucketNamingPolicy::Scheduled(7)),
+            ..Default::default()
+        };
+        let as_bytes = original.to_bytes()?;
+        let unused_key: Vec<u8> = vec![];
+        let actual = Configuration::from_bytes(&unused_key, &as_bytes)?;
+        assert_eq!(actual.hostname, original.hostname);
+        assert_eq!(actual.username, original.username);
+        assert_eq!(actual.computer_id, original.computer_id);
+        assert_eq!(actual.bucket_naming, Some(BucketNamingPolicy::Scheduled(7)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_configuration_serde_scheduled_pool() -> Result<(), Error> {
+        let original = Configuration {
+            bucket_naming: Some(BucketNamingPolicy::ScheduledRandomPool {
+                days: 30,
+                limit: 12,
+            }),
+            ..Default::default()
+        };
+        let as_bytes = original.to_bytes()?;
+        let unused_key: Vec<u8> = vec![];
+        let actual = Configuration::from_bytes(&unused_key, &as_bytes)?;
+        assert_eq!(actual.hostname, original.hostname);
+        assert_eq!(actual.username, original.username);
+        assert_eq!(actual.computer_id, original.computer_id);
+        assert_eq!(
+            actual.bucket_naming,
+            Some(BucketNamingPolicy::ScheduledRandomPool {
+                days: 30,
+                limit: 12,
+            })
+        );
         Ok(())
     }
 

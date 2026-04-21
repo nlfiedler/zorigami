@@ -13,10 +13,6 @@ use actix_web::{
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
-use std::env;
-use std::io;
-use std::path::PathBuf;
-use std::sync::{Arc, LazyLock};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::repositories::RecordRepository;
@@ -25,6 +21,10 @@ use server::preso::graphql;
 use server::shared::state::{self, StateStore, StateStoreImpl};
 use server::tasks::leader::{RingLeader, RingLeaderImpl};
 use server::tasks::schedule::{Scheduler, SchedulerImpl};
+use std::env;
+use std::io;
+use std::path::PathBuf;
+use std::sync::{Arc, LazyLock};
 
 // When running in test mode, the cwd is the server directory.
 #[cfg(test)]
@@ -127,6 +127,14 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
 async fn main() -> io::Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
+
+    if let Ok(path) = std::env::var("GENERATE_SDL") {
+        // once the schema has been written, exit immediatly
+        graphql::write_schema(&path)?;
+        println!("GraphQL schema written to {path}");
+        return Ok(());
+    }
+
     STATE_STORE.subscribe("super-manager", manage_supervisors);
     STATE_STORE.scheduler_event(state::SchedulerAction::Start);
     STATE_STORE.leader_event(state::LeaderAction::Start);

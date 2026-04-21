@@ -1,4 +1,5 @@
 * Tasks
+** note: old zorigami backup on chihiro took 32 minutes
 ** TODO SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation
@@ -18,11 +19,13 @@
 - [ ] find the chunk and pack that contains the file
 - [ ] retrieve the pack(s), extract, verify file digests
 *** TODO add =restore_test()= to =Leader= and its supervisor to call restorer
+*** TODO add envar to set the frequency for the restore test
 *** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#A] Scheduler to perform a ~scrub~ of the database weekly
 *** like zfs scrub, make sure no records are missing
 *** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
 *** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
+*** use a hashset or bloom filter to track every tree that is visited to avoid looping
 *** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#B] Migrate to Vite 8.0
 *** https://vite.dev/blog/announcing-vite8
@@ -52,10 +55,12 @@
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
-** TODO [#C] Dynamic bucket allocation
-*** hard-coded value of 128 is pretty low for local pack stores
-*** cloud-based pack stores can accommodate many objects per bucket
-*** could consider how frequently new packs are created (1 per day vs hundreds)
+** cloud-based pack stores need to consider paging the results of listing buckets and objects
+** bucket/object/pack counts for desktop and server
+| host    | days | buckets | packs |  files | chunks | packs/bucket | packs first day |
+|---------+------+---------+-------+--------+--------+--------------+-----------------|
+| tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
+| chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
 ** TODO [#C] Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
@@ -83,10 +88,6 @@
 **** currently restore requests are queued in memory only, so a crash means everything is forgotten
 ** Improve backup reliability
 *** add some ~debug~ logging at regular intervals during the scan phase
-*** report status of the backup (e.g. ~scanning~, ~packing~, ~verifying~)
-**** should show the start time, not simply ~still running~
-**** show number of files packed, number of packs uploaded (what info logging shows now)
-**** capture actual time spent in each phase, accounting for ~pause~ times
 *** Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere
 ** AWS SDK for Rust now available
@@ -101,7 +102,7 @@
 ** Snapshot browsing
 *** ability to move through snapshots will staying within the selected path
 *** show differences between any two snapshots
-**** should be able to implement this in the client only
+**** should be able to implement this in the client w/o backend changes
 **** select two snapshots, get their roots, show the added/changed/removed/same as a directory listing
 **** ~added~ and ~changed~ entries can be clicked on to visit the child tree of each snapshot
 **** ~removed~ and ~same~ are not navigable (no reason to browse these)
@@ -110,8 +111,6 @@
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
 **** e.g. search for all =.avi= files
-** Store extended attributes (xattrs) in packs
-*** xattrs can be megabytes in size, they should be in the packs, not the database
 ** File changes during backup (point-in-time)
 *** Backup procedure is file-by-file, which may yield broken snapshots for database files
 *** if a file changes between snapshot and packing, it will get backed up again the next time
@@ -202,7 +201,7 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 **** e.g. Google ~coldline~ is slow but ~nearline~ is fast
 *** Add a new pack store to an existing dataset
 **** Could provide a means of copying packs between stores
-**** Would be like =Backuper= and =Restorer=, managed by supervised actor, processes in the background
+**** Would be like other tasks, managed by supervised actor, processes in the background
 **** Would travese each bucket in the source and ensure target has everything
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000

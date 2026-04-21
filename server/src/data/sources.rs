@@ -445,6 +445,50 @@ impl EntityDataSource for EntityDataSourceImpl {
             xattr: xattrs,
         })
     }
+
+    fn add_bucket(&self, name: &str) -> Result<(), Error> {
+        // Split the bucket name so the first 30 chars form the key (with a
+        // "bucket/" prefix) and the remainder is stored as the value. Real
+        // bucket names are 61-char ASCII strings, so byte-level split_at is
+        // safe.
+        let (key_tail, value_part) = name.split_at(30);
+        let key = format!("bucket/{}", key_tail);
+        let db = self.database.lock().unwrap();
+        db.insert_document(key.as_bytes(), value_part.as_bytes())
+    }
+
+    fn count_buckets(&self) -> Result<usize, Error> {
+        let db = self.database.lock().unwrap();
+        db.count_prefix("bucket/")
+    }
+
+    fn get_last_bucket(&self) -> Result<Option<String>, Error> {
+        let db = self.database.lock().unwrap();
+        match db.fetch_prefix_last("bucket/")? {
+            Some((key_tail, value)) => {
+                let value_str = std::str::from_utf8(&value)?;
+                Ok(Some(format!("{}{}", key_tail, value_str)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    fn get_random_bucket(&self) -> Result<Option<String>, Error> {
+        use rand::RngExt;
+        let db = self.database.lock().unwrap();
+        let count = db.count_prefix("bucket/")?;
+        if count == 0 {
+            return Ok(None);
+        }
+        let offset = rand::rng().random_range(0..count);
+        match db.fetch_prefix_single("bucket/", offset)? {
+            Some((key_tail, value)) => {
+                let value_str = std::str::from_utf8(&value)?;
+                Ok(Some(format!("{}{}", key_tail, value_str)))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 pub struct PackSourceBuilderImpl {}
