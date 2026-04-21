@@ -1,5 +1,11 @@
 * Tasks
 ** note: old zorigami backup on chihiro took 32 minutes
+*** with improved FastCDC implementation, maybe it will be faster
+** note: bucket/object/pack counts for desktop and server
+| host    | days | buckets | packs |  files | chunks | packs/bucket | packs first day |
+|---------+------+---------+-------+--------+--------+--------------+-----------------|
+| tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
+| chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
 ** TODO SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation
@@ -27,8 +33,6 @@
 *** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
 *** use a hashset or bloom filter to track every tree that is visited to avoid looping
 *** expose the result somewhere that the home page ~dashboard~ and display
-** TODO [#B] Migrate to Vite 8.0
-*** https://vite.dev/blog/announcing-vite8
 ** TODO [#B] Preventing mistakes
 *** deleting a pack store that is still being used by a data set
 **** return an error to the GraphQL client so it can report to the user
@@ -56,11 +60,6 @@
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** database backups to be removed according to pack store retention policy
 ** cloud-based pack stores need to consider paging the results of listing buckets and objects
-** bucket/object/pack counts for desktop and server
-| host    | days | buckets | packs |  files | chunks | packs/bucket | packs first day |
-|---------+------+---------+-------+--------+--------+--------------+-----------------|
-| tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
-| chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
 ** TODO [#C] Bucket collision and renaming
 *** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
 **** need to consider the buckets and objects that may have been renamed by the pack store
