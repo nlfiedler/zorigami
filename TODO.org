@@ -38,11 +38,6 @@
 **** return an error to the GraphQL client so it can report to the user
 **** update store form to show error message if delete fails
 *** changing the base path of the dataset after snapshots have been made
-** TODO [#B] Clean up
-*** TODO remove =FindMissingPacks= usecase and GraphQL query
-*** TODO remove =ScanPacks= usecase and GraphQL query
-*** TODO remove =ReassignPacks= usecase and GraphQL mutation
-*** TODO remove =InsertFile= usecase and GraphQL mutation
 ** TODO [#C] Pack file and database backup pruning
 *** use =upload_time= field of =Pack= record to determine age
 *** use =retention= field of =Store= to prune appropriately
@@ -58,11 +53,8 @@
 2) scan all file and chunk records
 3) remove reachable pack digests from hash set
 4) for each remaining pack, get locations, delete objects, delete pack record
+*** maybe make use of the =prune_extra()= in pack repository
 *** database backups to be removed according to pack store retention policy
-** cloud-based pack stores need to consider paging the results of listing buckets and objects
-** TODO [#C] Bucket collision and renaming
-*** ~prune extra~ and ~find missing~ will mistakenly remove objects from pack stores
-**** need to consider the buckets and objects that may have been renamed by the pack store
 ** Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files
@@ -196,20 +188,13 @@ pub fn name<T: Into<String>>(mut self, name: T) -> Self {
 *** Pack store input validation
 **** should validate Google Cloud service account key when defining pack
 ** Pack store management
+*** cloud-based pack stores need to consider paging the results of listing buckets and objects
 *** Store impl needs to consider chosen storage class when answering ~fast~ or ~slow~ question
 **** e.g. Google ~coldline~ is slow but ~nearline~ is fast
-*** Add a new pack store to an existing dataset
-**** Could provide a means of copying packs between stores
-**** Would be like other tasks, managed by supervised actor, processes in the background
-**** Would travese each bucket in the source and ensure target has everything
 *** Remote pack stores like Google Cloud have built-in limits for certain operations
 **** need to consider that GCS will limit the number of buckets listed to 1,000
 **** probably minio and S3 have similar default limits
 **** the API generally offers a means of paging to get everything in chunks
-*** Repair missing pack files in pack stores
-**** Like adding a new pack store, add function to ensure target has everything in source
-*** Permit moving from one store to another
-**** would mean downloading the packs and uploading them to the new store
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries
