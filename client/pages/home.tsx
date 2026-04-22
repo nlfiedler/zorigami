@@ -58,6 +58,15 @@ export function Home() {
     const { data } = await client.query({ query: ALL_DATASETS });
     return data;
   });
+  const sortedDatasets = () => {
+    // the datasets returned from the server are in no particular order
+    const sorted = [];
+    for (const dataset of datasetsQuery()?.datasets ?? []) {
+      sorted.push(dataset);
+    }
+    sorted.sort((a, b) => a.id.localeCompare(b.id));
+    return sorted;
+  };
 
   return (
     <>
@@ -71,13 +80,13 @@ export function Home() {
       <div class="container mt-4">
         <Suspense fallback={'...'}>
           <Switch>
-            <Match when={datasetsQuery()?.datasets.length === 0}>
+            <Match when={sortedDatasets().length === 0}>
               <NoDatasetsHelp />
             </Match>
-            <Match when={datasetsQuery()?.datasets}>
+            <Match when={sortedDatasets().length}>
               <div class="container">
                 <div class="grid is-col-min-20">
-                  <For each={datasetsQuery()?.datasets}>
+                  <For each={sortedDatasets()}>
                     {(item) => (
                       <div class="cell">
                         <DatasetCard dataset={item} />
