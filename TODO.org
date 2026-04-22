@@ -17,16 +17,6 @@
 - [X] show icons for small files and symbolic links
 - [X] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#A] Scheduler to test restoring a random file weekly
-*** every week, pick a random file from the =file/= set and try to restore it, compare checksum to actual file
-*** scheduler will send a new type of request to the ring leader
-*** TODO add a =restore_test()= to =Restorer= [0/3]
-- [ ] find a random =file/= record from the database (may need a new db fn for performance)
-- [ ] find the chunk and pack that contains the file
-- [ ] retrieve the pack(s), extract, verify file digests
-*** TODO add =restore_test()= to =Leader= and its supervisor to call restorer
-*** TODO add envar to set the frequency for the restore test
-*** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#A] Scheduler to perform a ~scrub~ of the database weekly
 *** like zfs scrub, make sure no records are missing
 *** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
@@ -34,6 +24,7 @@
 *** use a hashset or bloom filter to track every tree that is visited to avoid looping
 *** expose the result somewhere that the home page ~dashboard~ and display
 ** TODO [#B] Preventing mistakes
+*** validate that the dataset basepath exists and is readable
 *** deleting a pack store that is still being used by a data set
 **** return an error to the GraphQL client so it can report to the user
 **** update store form to show error message if delete fails
@@ -55,6 +46,16 @@
 4) for each remaining pack, get locations, delete objects, delete pack record
 *** maybe make use of the =prune_extra()= in pack repository
 *** database backups to be removed according to pack store retention policy
+** TODO [#C] Capture background tasks issues to database
+*** weekly restore test could have errors, currently only logged
+*** weekly database scrub only logs error, need to surface via GraphQL/web
+*** need to consider how this can be mocked and tested, log files are just kinda okay
+*** write errors to an ~errors~ log file in JSON format
+*** include date-time of event, the action performed (restore test, scrub, etc), error details
+*** rotate the logs each week(?), retain N with timestamped names
+*** GraphQL query to read contents of error logs
+*** ~Home~ page to query for any errors, show a button along the top to an ~errors~ page
+*** ~errors~ page is not in the navbar, only accessible from ~Home~ if there are errors
 ** Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files

@@ -59,6 +59,9 @@ pub trait RingLeader: Send + Sync {
 
     /// Restore the database from the most recent snapshot on the given store.
     fn restore_database(&self, store_id: String, passphrase: String) -> Result<(), Error>;
+
+    /// Run a self-test of the restore path on a random backed-up file.
+    fn restore_test(&self, passphrase: String) -> Result<(), Error>;
 }
 
 ///
@@ -355,6 +358,21 @@ impl RingLeader for RingLeaderImpl {
             Err(anyhow!("must call start() first"))
         }
     }
+
+    fn restore_test(&self, passphrase: String) -> Result<(), Error> {
+        info!("enqueue restore test");
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.as_ref() {
+            fn err_convert(err: SendError<RestoreTest>) -> Error {
+                anyhow!(format!("RingLeaderImpl::restore_test(): {:?}", err))
+            }
+            addr.try_send(RestoreTest { passphrase })
+                .map_err(err_convert)
+        } else {
+            error!("must call start() first");
+            Err(anyhow!("must call start() first"))
+        }
+    }
 }
 
 //
@@ -557,6 +575,32 @@ impl LeaderSupervisor {
         }
         Ok(())
     }
+
+    /// Run a restore self-test. Unlike `restore_database`, this does not clear
+    /// the other queues; the single-threaded arbiter serializes this handler
+    /// with the normal `Process` handling so user work is preserved.
+    fn restore_test(&self, passphrase: String) -> Result<(), Error> {
+        let mut stopper = self.context.restore_stopper.write().unwrap();
+        *stopper = false;
+        drop(stopper);
+        let restorer = if let Some(factory) = self.context.restorer_factory {
+            factory(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.restore_stopper.clone(),
+            )
+        } else {
+            Box::new(restore::RestorerImpl::new(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.restore_stopper.clone(),
+            ))
+        };
+        if let Err(err) = restorer.restore_test(&passphrase) {
+            error!("leader supervisor restore test error: {}", err);
+        }
+        Ok(())
+    }
 }
 
 impl Actor for LeaderSupervisor {
@@ -624,6 +668,23 @@ impl Handler<RestoreDatabase> for LeaderSupervisor {
         debug!("leader supervisor received RestoreDatabase message");
         if let Err(err) = self.restore_database(msg.store_id, msg.passphrase) {
             error!("RestoreDatabase error: {}", err);
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct RestoreTest {
+    passphrase: String,
+}
+
+impl Handler<RestoreTest> for LeaderSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, msg: RestoreTest, _ctx: &mut Context<LeaderSupervisor>) {
+        debug!("leader supervisor received RestoreTest message");
+        if let Err(err) = self.restore_test(msg.passphrase) {
+            error!("RestoreTest error: {}", err);
         }
     }
 }
@@ -1389,5 +1450,42 @@ mod tests {
         actix_rt::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // unsure how to confirm the database restore happened
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_ring_leader_restore_test_preserves_queues() {
+        // The RestoreTest handler MUST NOT clear the other queues (unlike
+        // RestoreDatabase). A pending backup enqueued before restore_test is
+        // called must still be present afterward.
+        fn r_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            _subscriber: Arc<dyn restore::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn restore::Restorer> {
+            let mut restorer = restore::MockRestorer::new();
+            restorer.expect_restore_test().return_once(|_| Ok(()));
+            Box::new(restorer)
+        }
+
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
+        let mock = MockRecordRepository::new();
+        assert!(sut.start(Arc::new(mock)).is_ok());
+
+        // manually stage a pending backup on the queue without triggering
+        // process_queues (no real backup factory is registered)
+        {
+            let mut queue = sut.context.incoming_backups.lock().unwrap();
+            queue.push_back(backup::Request::new("dataset-1".into(), "pw", None));
+        }
+
+        assert!(sut.restore_test("passphrase".into()).is_ok());
+
+        // give the handler a chance to run
+        actix_rt::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let queue = sut.context.incoming_backups.lock().unwrap();
+        assert_eq!(queue.len(), 1, "backup queue was cleared by restore_test");
     }
 }

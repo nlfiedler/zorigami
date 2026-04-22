@@ -1,7 +1,7 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
-use crate::domain::entities::{Checksum, TreeReference};
+use crate::domain::entities::{Checksum, Dataset, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use crate::shared::packs;
 use anyhow::{Error, anyhow};
@@ -134,6 +134,11 @@ pub trait Restorer: Send + Sync {
 
     /// Restore the most recent database snapshot from the given pack store.
     fn restore_database(&self, store_id: &str, passphrase: &str) -> Result<(), Error>;
+
+    /// Run a self-test of the restore path by selecting a random dataset and a
+    /// random small file within its latest snapshot, fetching it from its pack
+    /// store, verifying the BLAKE3 digest, and removing the temporary file.
+    fn restore_test(&self, passphrase: &str) -> Result<(), Error>;
 }
 
 ///
@@ -240,6 +245,65 @@ impl RestorerImpl {
         Ok(())
     }
 
+    /// Reservoir-sample a single eligible file from the given tree. "Eligible"
+    /// means a non-empty regular file whose length is at most `max_bytes`.
+    fn sample_eligible_file(
+        &self,
+        tree_digest: &Checksum,
+        max_bytes: u64,
+    ) -> Result<Option<(Checksum, PathBuf)>, Error> {
+        use rand::RngExt;
+        let mut pick: Option<(Checksum, PathBuf)> = None;
+        let mut seen: u64 = 0;
+        self.walk_tree_files(
+            tree_digest,
+            PathBuf::new(),
+            max_bytes,
+            &mut |digest, path| {
+                seen += 1;
+                if rand::rng().random_range(0..seen) == 0 {
+                    pick = Some((digest, path));
+                }
+            },
+        )?;
+        Ok(pick)
+    }
+
+    /// Recursively walk a tree, invoking `visit` for each FILE entry whose
+    /// length is between 1 and `max_bytes`, inclusive.
+    fn walk_tree_files<F: FnMut(Checksum, PathBuf)>(
+        &self,
+        tree_digest: &Checksum,
+        prefix: PathBuf,
+        max_bytes: u64,
+        visit: &mut F,
+    ) -> Result<(), Error> {
+        let tree = self
+            .dbase
+            .get_tree(tree_digest)?
+            .ok_or_else(|| anyhow!(format!("missing tree: {:?}", tree_digest)))?;
+        for entry in tree.entries.iter() {
+            let mut path = prefix.clone();
+            path.push(&entry.name);
+            match &entry.reference {
+                TreeReference::TREE(digest) => {
+                    self.walk_tree_files(digest, path, max_bytes, visit)?;
+                }
+                TreeReference::FILE(digest) =>
+                {
+                    #[allow(clippy::collapsible_if)]
+                    if let Some(file) = self.dbase.get_file(digest)? {
+                        if file.length > 0 && file.length <= max_bytes {
+                            visit(digest.clone(), path);
+                        }
+                    }
+                }
+                TreeReference::LINK(_) | TreeReference::SMALL(_) => {}
+            }
+        }
+        Ok(())
+    }
+
     fn process_tree(
         &self,
         request: &Request,
@@ -341,6 +405,91 @@ impl Restorer for RestorerImpl {
             info!("completed request {}/{}", request.tree, request.entry);
         }
         Ok(())
+    }
+
+    fn restore_test(&self, passphrase: &str) -> Result<(), Error> {
+        use rand::RngExt;
+        // pick a random dataset that has a latest snapshot
+        let datasets: Vec<Dataset> = self
+            .dbase
+            .get_datasets()?
+            .into_iter()
+            .filter(|d| d.snapshot.is_some())
+            .collect();
+        if datasets.is_empty() {
+            info!("restore test: no datasets with snapshots; skipping");
+            return Ok(());
+        }
+        let dataset = &datasets[rand::rng().random_range(0..datasets.len())];
+
+        // walk the dataset's latest snapshot tree and reservoir-sample one
+        // eligible file (non-empty, no larger than the configured maximum)
+        let max_bytes = std::env::var("RESTORE_TEST_MAX_FILE_MB")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(100)
+            * 1024
+            * 1024;
+        let snapshot_digest = dataset.snapshot.as_ref().unwrap();
+        let snapshot = self
+            .dbase
+            .get_snapshot(snapshot_digest)?
+            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", snapshot_digest)))?;
+        let picked = self.sample_eligible_file(&snapshot.tree, max_bytes)?;
+        let (file_digest, rel_filepath) = match picked {
+            Some(p) => p,
+            None => {
+                info!(
+                    "restore test: no eligible file in dataset {}; skipping",
+                    dataset.id
+                );
+                return Ok(());
+            }
+        };
+
+        // fetch the file to a hidden temporary name under the dataset basepath
+        let mut fetcher = (self.fetch_factory)(self.dbase.clone());
+        fetcher.load_dataset(&dataset.id)?;
+        let temp_rel = PathBuf::from(format!(".zorigami-restore-test-{}", xid::new()));
+        let fetch_result = fetcher.fetch_file(&file_digest, &temp_rel, passphrase);
+
+        // determine verification outcome before cleanup, then always remove
+        let mut absolute = dataset.basepath.clone();
+        absolute.push(&temp_rel);
+        let outcome: Result<(), Error> = match fetch_result {
+            Err(err) => Err(err),
+            Ok(()) => match Checksum::blake3_from_file(&absolute) {
+                Ok(actual) if actual == file_digest => Ok(()),
+                Ok(actual) => Err(anyhow!(format!(
+                    "digest mismatch: expected {}, got {}",
+                    file_digest, actual
+                ))),
+                Err(err) => Err(anyhow!(format!("hashing temp file failed: {}", err))),
+            },
+        };
+        let _ = fs::remove_file(&absolute);
+
+        match outcome {
+            Ok(()) => {
+                info!(
+                    "restore test OK: {} ({}) in dataset {}",
+                    file_digest,
+                    rel_filepath.display(),
+                    dataset.id
+                );
+                Ok(())
+            }
+            Err(err) => {
+                error!(
+                    "restore test FAILED for {} ({}) in dataset {}: {}",
+                    file_digest,
+                    rel_filepath.display(),
+                    dataset.id,
+                    err
+                );
+                Err(err)
+            }
+        }
     }
 
     fn restore_database(&self, store_id: &str, passphrase: &str) -> Result<(), Error> {
@@ -641,7 +790,8 @@ fn assemble_chunks(chunks: &[&Path], outfile: &Path) -> Result<(), Error> {
 mod tests {
     use super::*;
     use crate::domain::entities::{
-        Configuration, Dataset, PackRetention, Store, StoreType, Tree, TreeEntry,
+        Configuration, Dataset, File, FileCounts, PackRetention, Snapshot, Store, StoreType, Tree,
+        TreeEntry,
     };
     use crate::domain::repositories::{MockPackRepository, MockRecordRepository};
     use crate::shared::packs;
@@ -953,6 +1103,270 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("no database archives available"));
+    }
+
+    // Tests below cover `restore_test`. The mock FileRestorer needs to write
+    // bytes to an absolute path derived from the dataset basepath plus the
+    // relative filepath chosen by `restore_test`. Since factory functions are
+    // `fn` pointers (no captures), the basepath is communicated via a
+    // thread-local. Tests are serialized so the thread-local is safe.
+    use std::cell::RefCell;
+    thread_local! {
+        static TEST_BASEPATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+        static TEST_PAYLOAD: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn make_snapshot_with_file(tree_digest: Checksum) -> Snapshot {
+        let mut snap = Snapshot::new(None, tree_digest, FileCounts::default());
+        snap.set_end_time(Utc::now());
+        snap
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restore_test_no_datasets() -> io::Result<()> {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets().returning(|| Ok(vec![]));
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            // should never be constructed
+            Box::new(MockFileRestorer::new())
+        }
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let result = sut.restore_test("password");
+        assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restore_test_no_eligible_file() -> io::Result<()> {
+        // dataset has a snapshot whose tree contains only a small-file entry
+        let tmp = tempfile::tempdir()?;
+        let mut dataset = Dataset::new(tmp.path());
+        let tree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("tiny.txt"),
+                TreeReference::SMALL(vec![1, 2, 3]),
+            )],
+            1,
+        );
+        let tree_digest = tree.digest.clone();
+        let snapshot = make_snapshot_with_file(tree_digest.clone());
+        dataset.snapshot = Some(snapshot.digest.clone());
+
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(vec![dataset.clone()]));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        mock.expect_get_tree()
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            Box::new(MockFileRestorer::new())
+        }
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let result = sut.restore_test("password");
+        assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restore_test_happy_path() -> io::Result<()> {
+        // build a dataset pointing at a real tempdir basepath
+        let tmp = tempfile::tempdir()?;
+        TEST_BASEPATH.with(|b| *b.borrow_mut() = Some(tmp.path().to_path_buf()));
+        let payload = std::fs::read("../test/fixtures/lorem-ipsum.txt")?;
+        let file_digest = Checksum::BLAKE3(String::from(
+            "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
+        ));
+        TEST_PAYLOAD.with(|p| *p.borrow_mut() = payload.clone());
+
+        let mut dataset = Dataset::new(tmp.path());
+        let tree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("lorem-ipsum.txt"),
+                TreeReference::FILE(file_digest.clone()),
+            )],
+            1,
+        );
+        let tree_digest = tree.digest.clone();
+        let snapshot = make_snapshot_with_file(tree_digest.clone());
+        dataset.snapshot = Some(snapshot.digest.clone());
+
+        let file_entity = File::new(file_digest.clone(), payload.len() as u64, vec![]);
+
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(vec![dataset.clone()]));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        mock.expect_get_tree()
+            .returning(move |_| Ok(Some(tree.clone())));
+        mock.expect_get_file()
+            .returning(move |_| Ok(Some(file_entity.clone())));
+
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer.expect_load_dataset().returning(|_| Ok(()));
+            restorer.expect_fetch_file().returning(|_digest, rel, _pw| {
+                let base = TEST_BASEPATH
+                    .with(|b| b.borrow().clone())
+                    .expect("basepath unset");
+                let payload = TEST_PAYLOAD.with(|p| p.borrow().clone());
+                let mut abs = base;
+                abs.push(rel);
+                if let Some(parent) = abs.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&abs, &payload)?;
+                Ok(())
+            });
+            Box::new(restorer)
+        }
+
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let result = sut.restore_test("password");
+        assert!(result.is_ok(), "{:?}", result.err());
+
+        // confirm the temp file was cleaned up
+        let leftover: Vec<_> = fs::read_dir(tmp.path())?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(".zorigami-restore-test-")
+            })
+            .collect();
+        assert!(leftover.is_empty(), "temp file was not cleaned up");
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restore_test_digest_mismatch() -> io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        TEST_BASEPATH.with(|b| *b.borrow_mut() = Some(tmp.path().to_path_buf()));
+        // store DIFFERENT bytes than the digest implies
+        TEST_PAYLOAD.with(|p| *p.borrow_mut() = b"wrong bytes".to_vec());
+
+        let file_digest = Checksum::BLAKE3(String::from(
+            "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
+        ));
+        let mut dataset = Dataset::new(tmp.path());
+        let tree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("lorem-ipsum.txt"),
+                TreeReference::FILE(file_digest.clone()),
+            )],
+            1,
+        );
+        let snapshot = make_snapshot_with_file(tree.digest.clone());
+        dataset.snapshot = Some(snapshot.digest.clone());
+        let file_entity = File::new(file_digest.clone(), 3129, vec![]);
+
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(vec![dataset.clone()]));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        mock.expect_get_tree()
+            .returning(move |_| Ok(Some(tree.clone())));
+        mock.expect_get_file()
+            .returning(move |_| Ok(Some(file_entity.clone())));
+
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer.expect_load_dataset().returning(|_| Ok(()));
+            restorer.expect_fetch_file().returning(|_digest, rel, _pw| {
+                let base = TEST_BASEPATH
+                    .with(|b| b.borrow().clone())
+                    .expect("basepath unset");
+                let payload = TEST_PAYLOAD.with(|p| p.borrow().clone());
+                let mut abs = base;
+                abs.push(rel);
+                fs::write(&abs, &payload)?;
+                Ok(())
+            });
+            Box::new(restorer)
+        }
+
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let result = sut.restore_test("password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("digest mismatch"));
+
+        let leftover: Vec<_> = fs::read_dir(tmp.path())?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(".zorigami-restore-test-")
+            })
+            .collect();
+        assert!(leftover.is_empty(), "temp file was not cleaned up");
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_restore_test_fetch_error() -> io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let file_digest = Checksum::BLAKE3(String::from(
+            "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
+        ));
+        let mut dataset = Dataset::new(tmp.path());
+        let tree = Tree::new(
+            vec![TreeEntry::new(
+                Path::new("lorem-ipsum.txt"),
+                TreeReference::FILE(file_digest.clone()),
+            )],
+            1,
+        );
+        let snapshot = make_snapshot_with_file(tree.digest.clone());
+        dataset.snapshot = Some(snapshot.digest.clone());
+        let file_entity = File::new(file_digest.clone(), 3129, vec![]);
+
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .returning(move || Ok(vec![dataset.clone()]));
+        mock.expect_get_snapshot()
+            .returning(move |_| Ok(Some(snapshot.clone())));
+        mock.expect_get_tree()
+            .returning(move |_| Ok(Some(tree.clone())));
+        mock.expect_get_file()
+            .returning(move |_| Ok(Some(file_entity.clone())));
+
+        fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
+            let mut restorer = MockFileRestorer::new();
+            restorer.expect_load_dataset().returning(|_| Ok(()));
+            restorer
+                .expect_fetch_file()
+                .returning(|_, _, _| Err(anyhow!("network down")));
+            Box::new(restorer)
+        }
+
+        let repo = Arc::new(mock);
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
+        let result = sut.restore_test("password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("network down"));
+        Ok(())
     }
 
     // TODO: try to get this working with whatever solution is devised for stopping/starting the restore process

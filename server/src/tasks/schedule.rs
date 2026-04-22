@@ -186,6 +186,24 @@ impl Actor for ScheduleSupervisor {
                 error!("failed to prune datasets: {}", err);
             }
         });
+
+        // periodically exercise the restore path on a random file to catch
+        // store or encryption regressions before a user actually needs them
+        let restore_test_days = std::env::var("RESTORE_TEST_INTERVAL_DAYS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|n| n.clamp(1, 30))
+            .unwrap_or(7);
+        ctx.run_interval(
+            Duration::from_hours(restore_test_days * 24),
+            |this, _ctx| {
+                trace!("schedule restore-test interval fired");
+                let passphrase = packs::get_passphrase();
+                if let Err(err) = this.leader.restore_test(passphrase) {
+                    error!("failed to schedule restore test: {}", err);
+                }
+            },
+        );
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
