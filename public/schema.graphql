@@ -26,6 +26,14 @@ enum BucketPolicyKind {
   """ SCHEDULED_RANDOM_POOL
 }
 
+"The background operation that produced a captured error."
+enum CapturedErrorOperation {
+  "Error recorded while running a backup." BACKUP
+  "Error recorded while pruning snapshots." PRUNE
+  "Error recorded while running a restore self-test." RESTORE_TEST
+  "Error recorded while performing a database scrub." DATABASE_SCRUB
+}
+
 enum DayOfWeek {
   SUN
   MON
@@ -197,6 +205,20 @@ type BucketNamingPolicy {
   limit: Int
 }
 
+"A single error persisted from a background operation."
+type CapturedError {
+  "Stable identifier for this captured error."
+  id: BigInt!
+  "When the error was recorded, in UTC."
+  timestamp: DateTime!
+  "The kind of operation that produced this error."
+  operation: CapturedErrorOperation!
+  "Identifier of the dataset associated with the error, if any."
+  datasetId: String
+  "The error message."
+  message: String!
+}
+
 "Configuration of the application."
 type Configuration {
   "Name of the computer on which this application is running."
@@ -290,73 +312,10 @@ type Mutation {
   restoreFiles(tree: Checksum!, entry: String!, filepath: String!, dataset: String!): Boolean!
   "Cancel the pending restore request with the given identifier."
   cancelRestore(id: String!): Boolean!
-  """
-    Change the store from old to new for all matching pack records.
-
-    This is a dangerous action and should be used very carefully.
-  """
-  reassignPacks(sourceId: String!, targetId: String!): Int!
-  "Restore any missing packs, copying from the other pack store."
-  restorePacks(sourceId: String!, targetId: String!): [Pack!]!
-  "Remove extraneous packs from the given pack store."
-  pruneExtra(storeId: String!): Int!
-  """
-    Apply the retention policy to the named dataset, pruning snapshots and
-    everything that is no longer reachable (except for packs).
-  """
-  pruneSnapshots(id: String!): Boolean!
-  """
-    Create a missing file record from the given information.
-
-    This will fetch the given pack file to verify the chunk is contained
-    therein, as well as to get the file size. This only works for files
-    containing a single chunk.
-  """
-  insertFile(dataset: String!, chunkDigest: Checksum!, packDigest: Checksum!): Boolean!
-}
-
-"An archive containing saved files."
-type Pack {
-  "Unique checksum of the pack contents."
-  checksum: Checksum!
-  "List of store-specific coordinates where the pack is saved."
-  locations: [PackLocation!]!
-}
-
-"Entry within a saved pack file."
-type PackEntry {
-  "File name of the entry in the pack file."
-  name: String!
-  "Length of the content of the entry."
-  size: BigInt!
-}
-
-"Details about a pack file."
-type PackFile {
-  "Number of entries in the pack file."
-  count: Int!
-  "All entries in the pack file."
-  entries: [PackEntry!]!
-  "Length of the pack file in bytes."
-  length: BigInt!
-  "Total size of all pack entries."
-  contentLength: BigInt!
-  "Size of the smallest entry in the pack file."
-  smallest: BigInt!
-  "Size of the largest entry in the pack file."
-  largest: BigInt!
-  "Average size of all entries in the pack file."
-  average: BigInt!
-}
-
-"Location within a store of a saved pack."
-type PackLocation {
-  "Unique identifier of the pack store."
-  store: String!
-  "Remote bucket name."
-  bucket: String!
-  "Remote object name."
-  object: String!
+  "Delete a single captured error by identifier."
+  deleteCapturedError(id: BigInt!): Boolean!
+  "Delete every captured error. Returns the number of rows removed."
+  clearCapturedErrors: BigInt!
 }
 
 type PackRetention {
@@ -379,17 +338,6 @@ type Query {
   datasets: [Dataset!]!
   "Retrieve a specific dataset definition."
   dataset(id: String!): Dataset
-  "Find any packs that are missing from the given store."
-  missingPacks(storeId: String!): [Pack!]!
-  "Retrieve entry listing a specific pack."
-  pack(datasetId: String!, digest: Checksum!): PackFile!
-  """
-    Exhaustively search all pack file entries to the given chunk.
-
-    This is an expensive operation as it scans many records in the database
-    and downloads every single pack file to find the missing chunk.
-  """
-  scanPacks(datasetId: String!, digest: Checksum!): Checksum
   "Return the number of each type of database record."
   recordCounts: RecordCounts!
   "Query for any pending and recently completed file restore operations."
@@ -406,6 +354,10 @@ type Query {
   store(id: String!): Store
   "Retrieve a specific tree."
   tree(digest: Checksum!): Tree
+  "Return captured errors from background operations, most recent first."
+  capturedErrors(limit: Int): [CapturedError!]!
+  "Return the number of currently stored captured errors."
+  capturedErrorCount: BigInt!
 }
 
 "Number of database records for each entity type."

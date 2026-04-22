@@ -13,9 +13,10 @@ use actix_web::{
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
+use server::data::repositories::errors::ErrorRepositoryImpl;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
-use server::domain::repositories::RecordRepository;
+use server::domain::repositories::{ErrorRepository, RecordRepository};
 use server::domain::sources::EntityDataSource;
 use server::preso::graphql;
 use server::shared::state::{self, StateStore, StateStoreImpl};
@@ -38,6 +39,33 @@ static DEFAULT_DB_PATH: &str = "./tmp/database";
 static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
     let path = std::env::var("DB_PATH").unwrap_or_else(|_| DEFAULT_DB_PATH.to_owned());
     PathBuf::from(path)
+});
+
+// Path to the SQLite error-capture database. Can be overridden via
+// `ERROR_DB_PATH`.
+static ERROR_DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+    let path = std::env::var("ERROR_DB_PATH").unwrap_or_else(|_| "./tmp/errors.db".to_owned());
+    PathBuf::from(path)
+});
+
+// How long to keep captured errors before they are pruned.
+static ERROR_RETENTION_DAYS: LazyLock<u32> = LazyLock::new(|| {
+    std::env::var("ERROR_RETENTION_DAYS")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(90)
+});
+
+// Shared error repository, constructed once at startup. Opening a new SQLite
+// connection per request is wasteful; share a single connection guarded by a
+// mutex (see `ErrorRepositoryImpl`).
+static ERROR_REPO: LazyLock<Arc<dyn ErrorRepository>> = LazyLock::new(|| {
+    let repo = ErrorRepositoryImpl::new(ERROR_DB_PATH.as_path(), *ERROR_RETENTION_DAYS)
+        .expect("failed to open error database");
+    if let Err(err) = repo.prune_older_than(*ERROR_RETENTION_DAYS) {
+        error!("startup error-log prune failed: {}", err);
+    }
+    Arc::new(repo)
 });
 
 // Application state store.
@@ -75,7 +103,8 @@ async fn graphql(
         .map_err(|e| InternalError::new(e, http::StatusCode::INTERNAL_SERVER_ERROR))?;
     let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
     let leader = RING_LEADER.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(datasource, leader));
+    let errors = ERROR_REPO.clone();
+    let ctx = Arc::new(graphql::GraphContext::new(datasource, leader, errors));
     let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
@@ -114,7 +143,8 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
             Ok(datasource) => {
                 let repo = RecordRepositoryImpl::new(Arc::new(datasource));
                 let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-                if let Err(err) = RING_LEADER.start(dbase) {
+                let errors = ERROR_REPO.clone();
+                if let Err(err) = RING_LEADER.start(dbase, errors) {
                     error!("error starting file restorer: {}", err);
                 }
             }

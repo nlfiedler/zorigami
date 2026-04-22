@@ -52,12 +52,34 @@ const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
   }
 `;
 
+const CAPTURED_ERROR_COUNT: TypedDocumentNode<Query, Record<string, never>> =
+  gql`
+    query {
+      capturedErrorCount
+    }
+  `;
+
 export function Home() {
   const client = useApolloClient();
-  const [datasetsQuery, { refetch }] = createResource(async () => {
-    const { data } = await client.query({ query: ALL_DATASETS });
-    return data;
-  });
+  const [datasetsQuery, { refetch: refetchDatasets }] = createResource(
+    async () => {
+      const { data } = await client.query({ query: ALL_DATASETS });
+      return data;
+    }
+  );
+  const [errorCountQuery, { refetch: refetchErrorCount }] = createResource(
+    async () => {
+      const { data } = await client.query({
+        query: CAPTURED_ERROR_COUNT,
+        fetchPolicy: 'network-only'
+      });
+      return data;
+    }
+  );
+  const refetch = () => {
+    refetchDatasets();
+    refetchErrorCount();
+  };
   const sortedDatasets = () => {
     // the datasets returned from the server are in no particular order
     const sorted = [];
@@ -66,6 +88,10 @@ export function Home() {
     }
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
+  };
+  const errorCount = () => {
+    const n = errorCountQuery()?.capturedErrorCount;
+    return n ? Number(n) : 0;
   };
 
   return (
@@ -76,6 +102,18 @@ export function Home() {
             <AutoRefreshCheckbox refetch={refetch} />
           </div>
         </div>
+        <Show when={errorCount() > 0}>
+          <div class="level-right">
+            <div class="level-item">
+              <A class="button is-danger is-light" href="/errors">
+                <span class="icon">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                </span>
+                <span>Errors ({errorCount()})</span>
+              </A>
+            </div>
+          </div>
+        </Show>
       </nav>
       <div class="container mt-4">
         <Suspense fallback={'...'}>

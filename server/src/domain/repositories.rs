@@ -2,8 +2,8 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
-    Store, Tree,
+    CapturedError, Checksum, Chunk, Configuration, Dataset, ErrorOperation, File, Pack,
+    PackLocation, RecordCounts, Snapshot, Store, Tree,
 };
 use crate::domain::services::buckets::BucketNameGenerator;
 use anyhow::Error;
@@ -233,4 +233,40 @@ pub trait PackRepository: Send + Sync {
     ///
     /// Returns the number of objects removed by this operation.
     fn prune_extra(&self, store_id: &str, packs: &[Pack]) -> Result<u32, Error>;
+}
+
+///
+/// Repository for errors captured from background operations (prune, test
+/// restore, backup, future database scrub). Surfaces those failures to the
+/// user via the web interface so they are not limited to the log file.
+///
+#[cfg_attr(test, automock)]
+pub trait ErrorRepository: Send + Sync {
+    /// Persist an error. Must not fail loudly to the caller in a way that
+    /// masks the original error; record-site callers should log and continue
+    /// if this returns an error.
+    fn record_error(
+        &self,
+        operation: ErrorOperation,
+        dataset_id: Option<String>,
+        message: &str,
+    ) -> Result<(), Error>;
+
+    /// Return the captured errors, most recent first. `limit` caps the number
+    /// of rows returned; `None` returns all rows.
+    fn list_errors(&self, limit: Option<u32>) -> Result<Vec<CapturedError>, Error>;
+
+    /// Return the number of captured errors currently stored.
+    fn count_errors(&self) -> Result<u64, Error>;
+
+    /// Delete a single captured error by identifier. Returns true if a row
+    /// was deleted.
+    fn delete_error(&self, id: i64) -> Result<bool, Error>;
+
+    /// Delete every captured error. Returns the number of rows removed.
+    fn clear_all(&self) -> Result<u64, Error>;
+
+    /// Delete captured errors older than the given number of days. Returns the
+    /// number of rows removed.
+    fn prune_older_than(&self, days: u32) -> Result<u64, Error>;
 }

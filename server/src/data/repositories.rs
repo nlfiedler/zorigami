@@ -1,6 +1,8 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+pub mod errors;
+
 use crate::data::services::buckets::BucketNamingPolicyResolverImpl;
 use crate::data::sources::PackSourceBuilderImpl;
 use crate::domain::entities::{

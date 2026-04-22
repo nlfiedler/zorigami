@@ -6,7 +6,7 @@
 
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::domain::entities::{self, Checksum, TreeReference};
-use crate::domain::repositories::RecordRepository;
+use crate::domain::repositories::{ErrorRepository, RecordRepository};
 use crate::domain::services::buckets::BucketNamingPolicy as DomainBucketNamingPolicy;
 use crate::domain::sources::EntityDataSource;
 use crate::shared::packs;
@@ -28,11 +28,20 @@ use std::sync::Arc;
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     leader: Arc<dyn RingLeader>,
+    errors: Arc<dyn ErrorRepository>,
 }
 
 impl GraphContext {
-    pub fn new(datasource: Arc<dyn EntityDataSource>, leader: Arc<dyn RingLeader>) -> Self {
-        Self { datasource, leader }
+    pub fn new(
+        datasource: Arc<dyn EntityDataSource>,
+        leader: Arc<dyn RingLeader>,
+        errors: Arc<dyn ErrorRepository>,
+    ) -> Self {
+        Self {
+            datasource,
+            leader,
+            errors,
+        }
     }
 }
 
@@ -332,6 +341,57 @@ impl backup::Request {
     #[graphql(name = "bytesUploaded")]
     fn uploaded_bytes(&self) -> BigInt {
         BigInt(self.bytes_uploaded as i64)
+    }
+}
+
+/// The background operation that produced a captured error.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum CapturedErrorOperation {
+    /// Error recorded while running a backup.
+    Backup,
+    /// Error recorded while pruning snapshots.
+    Prune,
+    /// Error recorded while running a restore self-test.
+    RestoreTest,
+    /// Error recorded while performing a database scrub.
+    DatabaseScrub,
+}
+
+impl From<entities::ErrorOperation> for CapturedErrorOperation {
+    fn from(op: entities::ErrorOperation) -> Self {
+        match op {
+            entities::ErrorOperation::Backup => CapturedErrorOperation::Backup,
+            entities::ErrorOperation::Prune => CapturedErrorOperation::Prune,
+            entities::ErrorOperation::RestoreTest => CapturedErrorOperation::RestoreTest,
+            entities::ErrorOperation::DatabaseScrub => CapturedErrorOperation::DatabaseScrub,
+        }
+    }
+}
+
+/// A single error persisted from a background operation.
+#[derive(Clone, GraphQLObject)]
+struct CapturedError {
+    /// Stable identifier for this captured error.
+    id: BigInt,
+    /// When the error was recorded, in UTC.
+    timestamp: DateTime<Utc>,
+    /// The kind of operation that produced this error.
+    operation: CapturedErrorOperation,
+    /// Identifier of the dataset associated with the error, if any.
+    dataset_id: Option<String>,
+    /// The error message.
+    message: String,
+}
+
+impl From<entities::CapturedError> for CapturedError {
+    fn from(err: entities::CapturedError) -> Self {
+        Self {
+            id: BigInt(err.id),
+            timestamp: err.timestamp,
+            operation: err.operation.into(),
+            dataset_id: err.dataset_id,
+            message: err.message,
+        }
     }
 }
 
@@ -1176,6 +1236,22 @@ impl Query {
         let result: Option<entities::Tree> = usecase.call(params)?;
         Ok(result)
     }
+
+    /// Return captured errors from background operations, most recent first.
+    fn captured_errors(
+        #[graphql(ctx)] ctx: &GraphContext,
+        limit: Option<i32>,
+    ) -> FieldResult<Vec<CapturedError>> {
+        let limit = limit.and_then(|n| if n > 0 { Some(n as u32) } else { None });
+        let rows = ctx.errors.list_errors(limit)?;
+        Ok(rows.into_iter().map(CapturedError::from).collect())
+    }
+
+    /// Return the number of currently stored captured errors.
+    fn captured_error_count(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<BigInt> {
+        let count = ctx.errors.count_errors()?;
+        Ok(BigInt(count as i64))
+    }
 }
 
 /// Property defines a name/value pair.
@@ -1563,6 +1639,21 @@ impl Mutation {
         let params: Params = Params::new(id);
         let result = usecase.call(params)?;
         Ok(result)
+    }
+
+    /// Delete a single captured error by identifier.
+    fn delete_captured_error(
+        #[graphql(ctx)] ctx: &GraphContext,
+        id: BigInt,
+    ) -> FieldResult<bool> {
+        let removed = ctx.errors.delete_error(id.0)?;
+        Ok(removed)
+    }
+
+    /// Delete every captured error. Returns the number of rows removed.
+    fn clear_captured_errors(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<BigInt> {
+        let removed = ctx.errors.clear_all()?;
+        Ok(BigInt(removed as i64))
     }
 }
 

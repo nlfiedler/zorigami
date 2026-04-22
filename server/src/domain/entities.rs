@@ -1091,6 +1091,51 @@ impl fmt::Display for RecordCounts {
     }
 }
 
+/// Categorizes the background operation that produced a captured error.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ErrorOperation {
+    Backup,
+    Prune,
+    RestoreTest,
+    DatabaseScrub,
+}
+
+impl fmt::Display for ErrorOperation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            ErrorOperation::Backup => "Backup",
+            ErrorOperation::Prune => "Prune",
+            ErrorOperation::RestoreTest => "RestoreTest",
+            ErrorOperation::DatabaseScrub => "DatabaseScrub",
+        };
+        f.write_str(s)
+    }
+}
+
+impl FromStr for ErrorOperation {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Backup" => Ok(ErrorOperation::Backup),
+            "Prune" => Ok(ErrorOperation::Prune),
+            "RestoreTest" => Ok(ErrorOperation::RestoreTest),
+            "DatabaseScrub" => Ok(ErrorOperation::DatabaseScrub),
+            _ => Err(anyhow!(format!("unknown ErrorOperation: {}", s))),
+        }
+    }
+}
+
+/// A single error captured from a background operation.
+#[derive(Clone, Debug)]
+pub struct CapturedError {
+    pub id: i64,
+    pub timestamp: DateTime<Utc>,
+    pub operation: ErrorOperation,
+    pub dataset_id: Option<String>,
+    pub message: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

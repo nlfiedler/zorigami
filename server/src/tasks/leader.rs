@@ -1,7 +1,8 @@
 //
 // Copyright (c) 2026 Nathan Fiedler
 //
-use crate::domain::repositories::RecordRepository;
+use crate::domain::entities::ErrorOperation;
+use crate::domain::repositories::{ErrorRepository, RecordRepository};
 use crate::shared::state;
 use crate::tasks::backup;
 use crate::tasks::prune;
@@ -28,7 +29,11 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 #[cfg_attr(test, automock)]
 pub trait RingLeader: Send + Sync {
     /// Start a supervisor that will process all of the requests.
-    fn start(&self, dbase: Arc<dyn RecordRepository>) -> Result<(), Error>;
+    fn start(
+        &self,
+        dbase: Arc<dyn RecordRepository>,
+        errors: Arc<dyn ErrorRepository>,
+    ) -> Result<(), Error>;
 
     /// Signal the supervisor to stop.
     fn stop(&self) -> Result<(), Error>;
@@ -221,14 +226,18 @@ impl RingLeaderImpl {
 }
 
 impl RingLeader for RingLeaderImpl {
-    fn start(&self, dbase: Arc<dyn RecordRepository>) -> Result<(), Error> {
+    fn start(
+        &self,
+        dbase: Arc<dyn RecordRepository>,
+        errors: Arc<dyn ErrorRepository>,
+    ) -> Result<(), Error> {
         let mut su_addr = self.super_addr.lock().unwrap();
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
             let state = self.state.clone();
             let context = self.context.clone();
             let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                LeaderSupervisor::new(dbase, state, context)
+                LeaderSupervisor::new(dbase, errors, state, context)
             });
             *su_addr = Some(addr);
         }
@@ -390,9 +399,14 @@ struct LeaderSupervisor {
 impl LeaderSupervisor {
     fn new(
         dbase: Arc<dyn RecordRepository>,
+        errors: Arc<dyn ErrorRepository>,
         state: Arc<dyn state::StateStore>,
         context: Arc<LeaderContext>,
     ) -> Self {
+        // Expose the error repository to the context so `capture_error` and
+        // the Subscriber impls below can record errors without holding a
+        // direct handle to the supervisor.
+        context.set_error_repo(errors);
         Self {
             dbase,
             state,
@@ -523,9 +537,15 @@ impl LeaderSupervisor {
                     self.context.prune_stopper.clone(),
                 ))
             };
+            let dataset_id = request.dataset.clone();
             self.context.push_started_prune(request.clone());
             if let Err(err) = pruner.prune_snapshots(request) {
                 error!("leader supervisor prune error: {}", err);
+                self.context.capture_error(
+                    ErrorOperation::Prune,
+                    Some(dataset_id),
+                    &err.to_string(),
+                );
             }
             true
         } else {
@@ -598,6 +618,8 @@ impl LeaderSupervisor {
         };
         if let Err(err) = restorer.restore_test(&passphrase) {
             error!("leader supervisor restore test error: {}", err);
+            self.context
+                .capture_error(ErrorOperation::RestoreTest, None, &err.to_string());
         }
         Ok(())
     }
@@ -737,9 +759,37 @@ struct LeaderContext {
     backup_stopper: Arc<RwLock<bool>>,
     // Set to true to stop a prune from running.
     prune_stopper: Arc<RwLock<bool>>,
+    // Repository for persisting errors that occur during background tasks.
+    // Populated by the supervisor on start; empty during tests that bypass
+    // the supervisor construction.
+    error_repo: Arc<RwLock<Option<Arc<dyn ErrorRepository>>>>,
 }
 
 impl LeaderContext {
+    /// Install the error repository used by background tasks. Called once
+    /// when the supervisor starts.
+    fn set_error_repo(&self, repo: Arc<dyn ErrorRepository>) {
+        let mut guard = self.error_repo.write().unwrap();
+        *guard = Some(repo);
+    }
+
+    /// Record an error against the installed repository, if any. Never
+    /// propagates failures; a failed capture must not mask the original
+    /// error.
+    fn capture_error(
+        &self,
+        operation: ErrorOperation,
+        dataset_id: Option<String>,
+        message: &str,
+    ) {
+        let guard = self.error_repo.read().unwrap();
+        if let Some(repo) = guard.as_ref()
+            && let Err(err) = repo.record_error(operation, dataset_id, message)
+        {
+            warn!("failed to record captured error: {}", err);
+        }
+    }
+
     /// Put the restore request into the completed set, trim the set to size.
     fn push_completed_restore(&self, request: restore::Request) {
         let pair = self.completed.clone();
@@ -846,18 +896,23 @@ impl backup::Subscriber for LeaderContext {
     }
 
     fn error(&self, request_id: &str, error: String) -> bool {
+        let mut dataset_id: Option<String> = None;
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;
-        let mut map = lock.lock().unwrap();
-        for request in map.values_mut() {
-            if request.id == request_id {
-                request.status = backup::Status::FAILED;
-                request.errors.push(error);
-                break;
+        {
+            let mut map = lock.lock().unwrap();
+            for request in map.values_mut() {
+                if request.id == request_id {
+                    request.status = backup::Status::FAILED;
+                    request.errors.push(error.clone());
+                    dataset_id = Some(request.dataset.clone());
+                    break;
+                }
             }
+            // notify the waiting tests
+            cvar.notify_all();
         }
-        // notify the waiting tests
-        cvar.notify_all();
+        self.capture_error(ErrorOperation::Backup, dataset_id, &error);
         true
     }
 
@@ -982,9 +1037,18 @@ impl prune::Subscriber for LeaderContext {
 mod tests {
     use super::*;
     use crate::domain::entities::Checksum;
-    use crate::domain::repositories::MockRecordRepository;
+    use crate::domain::repositories::{MockErrorRepository, MockRecordRepository};
     use crate::shared::state::{StateStore, StateStoreImpl};
     use std::path::PathBuf;
+
+    /// Build a fresh `MockErrorRepository` wrapped as `Arc<dyn ErrorRepository>`,
+    /// permissive of any number of `record_error` calls so tests that trigger
+    /// failures don't have to over-specify expectations.
+    fn mock_error_repo() -> Arc<dyn ErrorRepository> {
+        let mut mock = MockErrorRepository::new();
+        mock.expect_record_error().returning(|_, _, _| Ok(()));
+        Arc::new(mock)
+    }
 
     #[actix_rt::test]
     #[serial_test::serial]
@@ -994,7 +1058,7 @@ mod tests {
         // start
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         let sut = RingLeaderImpl::new(state.clone());
-        let result = sut.start(repo.clone());
+        let result = sut.start(repo.clone(), mock_error_repo());
         assert!(result.is_ok());
         state.wait_for_leader(state::LeaderAction::Started);
         // stop
@@ -1002,7 +1066,7 @@ mod tests {
         assert!(result.is_ok());
         state.wait_for_leader(state::LeaderAction::Stopped);
         // restart
-        let result = sut.start(repo);
+        let result = sut.start(repo, mock_error_repo());
         assert!(result.is_ok());
         state.wait_for_leader(state::LeaderAction::Started);
         Ok(())
@@ -1040,7 +1104,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, None, Some(b_factory), None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         let dataset_1_id = xid::new().to_string();
         let input = backup::Request::new(dataset_1_id.clone(), "tiger", None);
@@ -1097,7 +1161,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, None, Some(b_factory), None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         let dataset_1_id = xid::new().to_string();
         let input = backup::Request::new(dataset_1_id.clone(), "tiger", None);
@@ -1137,7 +1201,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, None, Some(b_factory), None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         let dataset_1_id = xid::new().to_string();
         let input = backup::Request::new(dataset_1_id.clone(), "tiger", None);
@@ -1186,7 +1250,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, None, Some(b_factory), None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         let dataset_1_id = xid::new().to_string();
         let request_1 = backup::Request::new(dataset_1_id.clone(), "tiger", None);
@@ -1285,7 +1349,7 @@ mod tests {
             Some(p_factory),
         );
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         // submit a backup, prune, another backup, and then a restore all while
         // the first backup may still be processing; once the first backup
@@ -1362,7 +1426,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         // enqueue 4 restore requests and immediately cancel the last one
         let input = restore::Request::new(
@@ -1439,7 +1503,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         assert!(
             sut.restore_database("store_id".into(), "passphrase".into())
@@ -1471,7 +1535,7 @@ mod tests {
         let state = Arc::new(state::StateStoreImpl::new());
         let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
         let mock = MockRecordRepository::new();
-        assert!(sut.start(Arc::new(mock)).is_ok());
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
 
         // manually stage a pending backup on the queue without triggering
         // process_queues (no real backup factory is registered)
