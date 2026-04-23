@@ -5,7 +5,7 @@ use crate::domain::entities::{Checksum, Snapshot, SnapshotRetention, TreeReferen
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
-use log::info;
+use log::{info, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
 use std::cmp;
@@ -84,6 +84,15 @@ pub trait Subscriber: Send + Sync {
     fn finished(&self, request_id: &str) -> bool;
 }
 
+/// A single problem discovered during a database scrub.
+#[derive(Clone, Debug)]
+pub struct ScrubIssue {
+    /// Identifier of the dataset this issue relates to, if any.
+    pub dataset_id: Option<String>,
+    /// Human-readable description of the problem.
+    pub message: String,
+}
+
 ///
 /// `Pruner` processes requests to prune snapshots and packs for a data set.
 ///
@@ -93,6 +102,14 @@ pub trait Pruner: Send + Sync {
     ///
     /// Returns the number of snapshots that were pruned.
     fn prune_snapshots(&self, request: Request) -> Result<usize, Error>;
+
+    /// Verify that every referenced database record is reachable and readable.
+    ///
+    /// Walks datasets, snapshots, trees, files, chunks, packs, xattrs, and
+    /// stores. Records that are referenced but missing or unreadable yield a
+    /// `ScrubIssue`. Returns `Err` only for unrecoverable failures such as
+    /// being unable to load the dataset or store listings.
+    fn database_scrub(&self) -> Result<Vec<ScrubIssue>, Error>;
 }
 
 ///
@@ -102,8 +119,7 @@ pub struct PrunerImpl {
     repo: Arc<dyn RecordRepository>,
     // Events related to the backup are sent to the subscriber.
     subscriber: Arc<dyn Subscriber>,
-    // If the value is true, the backup process should stop.
-    #[allow(dead_code)]
+    // If the value is true, the background process should stop.
     stop_requested: Arc<RwLock<bool>>,
 }
 
@@ -405,6 +421,67 @@ impl PrunerImpl {
         }
         Ok(())
     }
+
+    // Recursively walk the tree rooted at `root`, queuing referenced file and
+    // xattr digests for later phases. Trees that fail to load produce a
+    // `ScrubIssue`; walking continues so that as much as possible is verified.
+    // `visited` is shared across calls so that a tree shared between datasets
+    // or snapshots is walked at most once.
+    fn scrub_tree(
+        &self,
+        root: Checksum,
+        dataset_id: &str,
+        visited: &mut HashSet<Checksum>,
+        file_queue: &mut HashMap<Checksum, String>,
+        xattr_queue: &mut HashMap<Checksum, String>,
+        issues: &mut Vec<ScrubIssue>,
+    ) {
+        let mut stack: Vec<Checksum> = vec![root];
+        while let Some(digest) = stack.pop() {
+            if *self.stop_requested.read().unwrap() {
+                return;
+            }
+            if !visited.insert(digest.clone()) {
+                continue;
+            }
+            match self.repo.get_tree(&digest) {
+                Ok(Some(tree)) => {
+                    for entry in &tree.entries {
+                        match &entry.reference {
+                            TreeReference::TREE(sub) => stack.push(sub.clone()),
+                            TreeReference::FILE(file_digest) => {
+                                file_queue
+                                    .entry(file_digest.clone())
+                                    .or_insert_with(|| dataset_id.to_string());
+                            }
+                            _ => {}
+                        }
+                        for xdigest in entry.xattrs.values() {
+                            xattr_queue
+                                .entry(xdigest.clone())
+                                .or_insert_with(|| dataset_id.to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    let msg = format!("missing tree record: {}", digest);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.to_string()),
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading tree {}: {}", digest, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.to_string()),
+                        message: msg,
+                    });
+                }
+            }
+        }
+    }
 }
 
 impl Pruner for PrunerImpl {
@@ -465,6 +542,271 @@ impl Pruner for PrunerImpl {
         }
         self.subscriber.finished(&request.id);
         Ok(pruned_count)
+    }
+
+    fn database_scrub(&self) -> Result<Vec<ScrubIssue>, Error> {
+        info!("database scrub starting");
+        let mut issues: Vec<ScrubIssue> = Vec::new();
+
+        // Load stores up front; both the datasets phase and the packs phase
+        // use this set to verify store references.
+        let stores = self.repo.get_stores()?;
+        let known_store_ids: HashSet<String> =
+            stores.iter().map(|s| s.id.clone()).collect();
+        let datasets = self.repo.get_datasets()?;
+
+        // Queues populated during traversal and drained in their own phases.
+        // Dedup by digest so each record is verified at most once. File and
+        // xattr queues carry the owning dataset id for issue attribution.
+        let mut visited_trees: HashSet<Checksum> = HashSet::new();
+        let mut file_queue: HashMap<Checksum, String> = HashMap::new();
+        let mut xattr_queue: HashMap<Checksum, String> = HashMap::new();
+        let mut chunk_queue: HashSet<Checksum> = HashSet::new();
+        let mut pack_queue: HashSet<Checksum> = HashSet::new();
+
+        // Phase: datasets — verify each referenced store id exists.
+        for dataset in &datasets {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            for store_id in &dataset.stores {
+                if !known_store_ids.contains(store_id) {
+                    let msg = format!(
+                        "dataset {} references unknown store {}",
+                        dataset.id, store_id
+                    );
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset.id.clone()),
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        // Phase: snapshots + trees — walk each dataset's parent chain,
+        // verifying snapshot records and walking the tree of each snapshot.
+        for dataset in &datasets {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            let mut maybe_digest = dataset.snapshot.clone();
+            while let Some(digest) = maybe_digest.take() {
+                if *self.stop_requested.read().unwrap() {
+                    info!("database scrub stopped");
+                    return Ok(issues);
+                }
+                match self.repo.get_snapshot(&digest) {
+                    Ok(Some(snapshot)) => {
+                        self.scrub_tree(
+                            snapshot.tree.clone(),
+                            &dataset.id,
+                            &mut visited_trees,
+                            &mut file_queue,
+                            &mut xattr_queue,
+                            &mut issues,
+                        );
+                        maybe_digest = snapshot.parent.clone();
+                    }
+                    Ok(None) => {
+                        let msg = format!("missing snapshot record: {}", digest);
+                        warn!("scrub: {}", msg);
+                        issues.push(ScrubIssue {
+                            dataset_id: Some(dataset.id.clone()),
+                            message: msg,
+                        });
+                        break;
+                    }
+                    Err(err) => {
+                        let msg = format!("error loading snapshot {}: {}", digest, err);
+                        warn!("scrub: {}", msg);
+                        issues.push(ScrubIssue {
+                            dataset_id: Some(dataset.id.clone()),
+                            message: msg,
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Phase: files — each queued file record must load; its chunks are
+        // queued for the chunk phase, except single-entry "chunk" lists which
+        // are really pack references (see File docs).
+        for (digest, dataset_id) in file_queue.iter() {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            match self.repo.get_file(digest) {
+                Ok(Some(file)) => {
+                    if file.chunks.len() == 1 {
+                        let (_, pack_digest) = &file.chunks[0];
+                        pack_queue.insert(pack_digest.clone());
+                    } else {
+                        for (_, chunk_digest) in &file.chunks {
+                            chunk_queue.insert(chunk_digest.clone());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    let msg = format!("missing file record: {}", digest);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.clone()),
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading file {}: {}", digest, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.clone()),
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        // Phase: chunks — each must load and reference a pack.
+        for digest in chunk_queue.iter() {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            match self.repo.get_chunk(digest) {
+                Ok(Some(chunk)) => {
+                    if let Some(packfile) = chunk.packfile {
+                        pack_queue.insert(packfile);
+                    } else {
+                        let msg =
+                            format!("chunk {} has no packfile reference", digest);
+                        warn!("scrub: {}", msg);
+                        issues.push(ScrubIssue {
+                            dataset_id: None,
+                            message: msg,
+                        });
+                    }
+                }
+                Ok(None) => {
+                    let msg = format!("missing chunk record: {}", digest);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading chunk {}: {}", digest, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        // Phase: packs — each must load and each location must name a known
+        // store.
+        for digest in pack_queue.iter() {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            match self.repo.get_pack(digest) {
+                Ok(Some(pack)) => {
+                    for location in &pack.locations {
+                        if !known_store_ids.contains(&location.store) {
+                            let msg = format!(
+                                "pack {} references unknown store {}",
+                                digest, location.store
+                            );
+                            warn!("scrub: {}", msg);
+                            issues.push(ScrubIssue {
+                                dataset_id: None,
+                                message: msg,
+                            });
+                        }
+                    }
+                }
+                Ok(None) => {
+                    let msg = format!("missing pack record: {}", digest);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading pack {}: {}", digest, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        // Phase: xattrs — each queued xattr digest must resolve.
+        for (digest, dataset_id) in xattr_queue.iter() {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            match self.repo.get_xattr(digest) {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    let msg = format!("missing xattr record: {}", digest);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.clone()),
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading xattr {}: {}", digest, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset_id.clone()),
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        // Phase: stores — re-load each to confirm readability.
+        for store in &stores {
+            if *self.stop_requested.read().unwrap() {
+                info!("database scrub stopped");
+                return Ok(issues);
+            }
+            match self.repo.get_store(&store.id) {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    let msg = format!("missing store record: {}", store.id);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("error loading store {}: {}", store.id, err);
+                    warn!("scrub: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: None,
+                        message: msg,
+                    });
+                }
+            }
+        }
+
+        info!("database scrub finished with {} issue(s)", issues.len());
+        Ok(issues)
     }
 }
 
@@ -541,7 +883,10 @@ fn auto_prune_snapshots(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::{Dataset, File, FileCounts, Snapshot, Tree, TreeEntry};
+    use crate::domain::entities::{
+        Chunk, Dataset, File, FileCounts, Pack, PackLocation, PackRetention, Snapshot, Store,
+        StoreType, Tree, TreeEntry,
+    };
     use crate::domain::repositories::MockRecordRepository;
     use chrono::Timelike;
     use hashed_array_tree::{HashedArrayTree, hat};
@@ -1347,5 +1692,466 @@ mod tests {
         assert!(result.is_ok());
         let count = result.unwrap();
         assert_eq!(count, 2);
+    }
+
+    // --- database_scrub tests ---------------------------------------------
+
+    fn scrub_store(id: &str) -> Store {
+        let mut properties = HashMap::new();
+        properties.insert("basepath".to_owned(), format!("/tmp/{}", id));
+        Store {
+            id: id.to_owned(),
+            store_type: StoreType::LOCAL,
+            label: id.to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        }
+    }
+
+    fn scrub_dataset(snapshot: Option<Checksum>, store_ids: Vec<String>) -> Dataset {
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.snapshot = snapshot;
+        dataset.stores = store_ids;
+        dataset
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_healthy() {
+        // Dataset → snapshot → tree (one FILE entry with one xattr) → file with
+        // one chunk which is really a pack reference; pack references a known
+        // store. Everything resolves, so zero issues are produced.
+        let mut mock = MockRecordRepository::new();
+
+        let store = scrub_store("store-1");
+        let store_clone = store.clone();
+        let store_clone2 = store.clone();
+        mock.expect_get_stores()
+            .once()
+            .returning(move || Ok(vec![store_clone.clone()]));
+        mock.expect_get_store()
+            .once()
+            .withf(|id| id == "store-1")
+            .returning(move |_| Ok(Some(store_clone2.clone())));
+
+        // pack (referenced via a single-chunk "file")
+        let pack_digest = Checksum::BLAKE3("pack-aaaa".to_owned());
+        let pack_digest_filter = pack_digest.clone();
+        let pack = Pack::new(
+            pack_digest.clone(),
+            vec![PackLocation::new("store-1", "bucket", "object")],
+        );
+        mock.expect_get_pack()
+            .once()
+            .withf(move |d| d == &pack_digest_filter)
+            .returning(move |_| Ok(Some(pack.clone())));
+
+        // file — single-entry chunk list → pack ref
+        let file_digest = Checksum::BLAKE3("file-aaaa".to_owned());
+        let file_digest_filter = file_digest.clone();
+        let file = File::new(file_digest.clone(), 1024, vec![(0, pack_digest)]);
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_digest_filter)
+            .returning(move |_| Ok(Some(file.clone())));
+
+        // xattr
+        let xattr_digest = Checksum::SHA1("xattr-aaaa".to_owned());
+        let xattr_digest_filter = xattr_digest.clone();
+        mock.expect_get_xattr()
+            .once()
+            .withf(move |d| d == &xattr_digest_filter)
+            .returning(move |_| Ok(Some(vec![1u8, 2, 3])));
+
+        // tree with a single FILE entry carrying the xattr
+        let entry_ref = TreeReference::FILE(file_digest);
+        let path = std::path::Path::new("../test/fixtures/lorem-ipsum.txt");
+        let mut entry = TreeEntry::new(path, entry_ref);
+        entry.xattrs.insert("kMDItemKeyphrase".into(), xattr_digest);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        // single snapshot with no parent
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec!["store-1".to_owned()]);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().expect("scrub should succeed");
+        assert!(
+            issues.is_empty(),
+            "expected no issues, got: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_missing_tree() {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let tree_digest = Checksum::SHA1("deadbeef".to_owned());
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(|_| Ok(None));
+
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec![]);
+        let dataset_id = dataset.id.clone();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
+        assert!(
+            issues[0].message.starts_with("missing tree record:"),
+            "got: {}",
+            issues[0].message
+        );
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_missing_file() {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let file_digest = Checksum::BLAKE3("file-missing".to_owned());
+        let file_digest_filter = file_digest.clone();
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_digest_filter)
+            .returning(|_| Ok(None));
+
+        let entry_ref = TreeReference::FILE(file_digest);
+        let path = std::path::Path::new("../test/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(path, entry_ref);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec![]);
+        let dataset_id = dataset.id.clone();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
+        assert!(issues[0].message.starts_with("missing file record:"));
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_missing_chunk() {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let chunk1 = Checksum::BLAKE3("chunk-1".to_owned());
+        let chunk2 = Checksum::BLAKE3("chunk-2".to_owned());
+        let chunk2_filter = chunk2.clone();
+
+        // Two chunks → multi-chunk file → chunks go through chunk phase.
+        let file_digest = Checksum::BLAKE3("file-x".to_owned());
+        let file_digest_filter = file_digest.clone();
+        let file = File::new(
+            file_digest.clone(),
+            2048,
+            vec![(0, chunk1.clone()), (1024, chunk2.clone())],
+        );
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_digest_filter)
+            .returning(move |_| Ok(Some(file.clone())));
+
+        let pack_digest = Checksum::BLAKE3("pack-ok".to_owned());
+        let pack_digest_filter = pack_digest.clone();
+        let chunk1_record = Chunk::new(chunk1.clone(), 0, 1024).packfile(pack_digest.clone());
+        let chunk1_filter = chunk1.clone();
+        mock.expect_get_chunk()
+            .once()
+            .withf(move |d| d == &chunk1_filter)
+            .returning(move |_| Ok(Some(chunk1_record.clone())));
+        mock.expect_get_chunk()
+            .once()
+            .withf(move |d| d == &chunk2_filter)
+            .returning(|_| Ok(None));
+
+        let pack = Pack::new(pack_digest.clone(), vec![]);
+        mock.expect_get_pack()
+            .once()
+            .withf(move |d| d == &pack_digest_filter)
+            .returning(move |_| Ok(Some(pack.clone())));
+
+        let entry_ref = TreeReference::FILE(file_digest);
+        let path = std::path::Path::new("../test/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(path, entry_ref);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec![]);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].dataset_id.is_none());
+        assert!(
+            issues[0].message.starts_with("missing chunk record:"),
+            "got: {}",
+            issues[0].message
+        );
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_missing_pack() {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let pack_digest = Checksum::BLAKE3("pack-missing".to_owned());
+        let pack_digest_filter = pack_digest.clone();
+        mock.expect_get_pack()
+            .once()
+            .withf(move |d| d == &pack_digest_filter)
+            .returning(|_| Ok(None));
+
+        // Single-chunk file → pack reference directly
+        let file_digest = Checksum::BLAKE3("file-1".to_owned());
+        let file_digest_filter = file_digest.clone();
+        let file = File::new(file_digest.clone(), 500, vec![(0, pack_digest)]);
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_digest_filter)
+            .returning(move |_| Ok(Some(file.clone())));
+
+        let entry_ref = TreeReference::FILE(file_digest);
+        let path = std::path::Path::new("../test/fixtures/lorem-ipsum.txt");
+        let entry = TreeEntry::new(path, entry_ref);
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec![]);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].dataset_id.is_none());
+        assert!(issues[0].message.starts_with("missing pack record:"));
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_missing_xattr() {
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let xattr_digest = Checksum::SHA1("xattr-gone".to_owned());
+        let xattr_digest_filter = xattr_digest.clone();
+        mock.expect_get_xattr()
+            .once()
+            .withf(move |d| d == &xattr_digest_filter)
+            .returning(|_| Ok(None));
+
+        // A tree with a SMALL entry (so no file lookup needed) carrying the
+        // xattr. SMALL short-circuits the file/chunk/pack phases entirely.
+        let path = std::path::Path::new("../test/fixtures/zero-length.txt");
+        let mut entry = TreeEntry::new(path, TreeReference::SMALL(vec![]));
+        entry.xattrs.insert("k".into(), xattr_digest);
+        let tree = Tree::new(vec![entry], 0);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let dataset = scrub_dataset(Some(snapshot_digest), vec![]);
+        let dataset_id = dataset.id.clone();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
+        assert!(issues[0].message.starts_with("missing xattr record:"));
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_unknown_store_ref() {
+        let mut mock = MockRecordRepository::new();
+        // No stores defined, but the dataset references one.
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let dataset = scrub_dataset(None, vec!["ghost-store".to_owned()]);
+        let dataset_id = dataset.id.clone();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
+        assert!(
+            issues[0].message.contains("unknown store ghost-store"),
+            "got: {}",
+            issues[0].message
+        );
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_visits_shared_tree_once() {
+        // Two snapshots in a parent chain, both pointing at the same tree.
+        // The tree should be loaded (get_tree) exactly once.
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let path = std::path::Path::new("../test/fixtures/zero-length.txt");
+        let entry = TreeEntry::new(path, TreeReference::SMALL(vec![]));
+        let tree = Tree::new(vec![entry], 0);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_filter = tree_digest.clone();
+        mock.expect_get_tree()
+            .times(1)
+            .withf(move |d| d == &tree_digest_filter)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let older = Snapshot::new(None, tree_digest.clone(), Default::default());
+        let older_digest = older.digest.clone();
+        let older_filter = older_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &older_filter)
+            .returning(move |_| Ok(Some(older.clone())));
+
+        let newer = Snapshot::new(Some(older_digest), tree_digest, Default::default());
+        let newer_digest = newer.digest.clone();
+        let newer_filter = newer_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &newer_filter)
+            .returning(move |_| Ok(Some(newer.clone())));
+
+        let dataset = scrub_dataset(Some(newer_digest), vec![]);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_pruner_database_scrub_respects_stop_flag() {
+        // With the stop flag set before calling, the scrub exits during the
+        // datasets phase — no snapshot/tree getters should be called.
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_stores().once().returning(|| Ok(vec![]));
+
+        let dataset = scrub_dataset(Some(Checksum::SHA1("does-not-matter".into())), vec![]);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+        // No other expectations — their absence asserts no other calls happen.
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(true));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.database_scrub().unwrap();
+        assert!(issues.is_empty());
     }
 }

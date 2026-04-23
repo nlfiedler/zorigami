@@ -204,6 +204,22 @@ impl Actor for ScheduleSupervisor {
                 }
             },
         );
+
+        // periodically scan the database for unreachable or unreadable records
+        let scrub_interval_days = std::env::var("DATABASE_SCRUB_INTERVAL_DAYS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|n| n.clamp(1, 30))
+            .unwrap_or(7);
+        ctx.run_interval(
+            Duration::from_hours(scrub_interval_days * 24),
+            |this, _ctx| {
+                trace!("schedule database-scrub interval fired");
+                if let Err(err) = this.leader.database_scrub() {
+                    error!("failed to schedule database scrub: {}", err);
+                }
+            },
+        );
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {

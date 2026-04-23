@@ -97,6 +97,7 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 | `DB_PATH` | Override RocksDB database path |
 | `HOST` / `PORT` | Server bind address/port |
 | `PRUNE_INTERVAL_HOURS` | Pruning check interval |
+| `DATABASE_SCRUB_INTERVAL_DAYS` | Interval between database integrity scrubs (default 7, clamped 1-30) |
 | `GENERATE_SDL` | Path to write GraphQL SDL file on startup |
 | `RESTORE_ALWAYS_PENDING` | Keep restores in pending state (testing) |
 | `RESTORE_ALWAYS_PROCESSING` | Keep restores in processing state (testing) |

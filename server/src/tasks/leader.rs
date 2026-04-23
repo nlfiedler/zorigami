@@ -67,6 +67,11 @@ pub trait RingLeader: Send + Sync {
 
     /// Run a self-test of the restore path on a random backed-up file.
     fn restore_test(&self, passphrase: String) -> Result<(), Error>;
+
+    /// Verify that every referenced database record is reachable and readable.
+    ///
+    /// Problems discovered during the scan are written to the error repository.
+    fn database_scrub(&self) -> Result<(), Error>;
 }
 
 ///
@@ -382,6 +387,20 @@ impl RingLeader for RingLeaderImpl {
             Err(anyhow!("must call start() first"))
         }
     }
+
+    fn database_scrub(&self) -> Result<(), Error> {
+        info!("enqueue database scrub");
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.as_ref() {
+            fn err_convert(err: SendError<DatabaseScrub>) -> Error {
+                anyhow!(format!("RingLeaderImpl::database_scrub(): {:?}", err))
+            }
+            addr.try_send(DatabaseScrub {}).map_err(err_convert)
+        } else {
+            error!("must call start() first");
+            Err(anyhow!("must call start() first"))
+        }
+    }
 }
 
 //
@@ -623,6 +642,45 @@ impl LeaderSupervisor {
         }
         Ok(())
     }
+
+    /// Run a database scrub. Reuses the prune factory so the scrub shares the
+    /// pruner's stop flag; the Actix arbiter serializes this handler with the
+    /// regular `Process` loop, so scrub runs without stepping on backups.
+    fn database_scrub(&self) -> Result<(), Error> {
+        let mut stopper = self.context.prune_stopper.write().unwrap();
+        *stopper = false;
+        drop(stopper);
+        let pruner = if let Some(factory) = self.context.pruner_factory {
+            factory(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            )
+        } else {
+            Box::new(prune::PrunerImpl::new(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            ))
+        };
+        match pruner.database_scrub() {
+            Ok(issues) => {
+                for issue in issues {
+                    self.context.capture_error(
+                        ErrorOperation::DatabaseScrub,
+                        issue.dataset_id,
+                        &issue.message,
+                    );
+                }
+            }
+            Err(err) => {
+                error!("leader supervisor database scrub error: {}", err);
+                self.context
+                    .capture_error(ErrorOperation::DatabaseScrub, None, &err.to_string());
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Actor for LeaderSupervisor {
@@ -707,6 +765,21 @@ impl Handler<RestoreTest> for LeaderSupervisor {
         debug!("leader supervisor received RestoreTest message");
         if let Err(err) = self.restore_test(msg.passphrase) {
             error!("RestoreTest error: {}", err);
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct DatabaseScrub {}
+
+impl Handler<DatabaseScrub> for LeaderSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, _msg: DatabaseScrub, _ctx: &mut Context<LeaderSupervisor>) {
+        debug!("leader supervisor received DatabaseScrub message");
+        if let Err(err) = self.database_scrub() {
+            error!("DatabaseScrub error: {}", err);
         }
     }
 }
