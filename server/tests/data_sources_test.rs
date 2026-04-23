@@ -102,41 +102,6 @@ fn test_insert_get_pack() -> Result<(), Error> {
     assert_eq!(actual.locations.len(), 1);
     assert_eq!(actual.locations[0], pack.locations[0]);
 
-    // insert a bunch more pack records to test get_packs()
-    let digest2 = Checksum::SHA1(String::from("4a285c30855fde0a195f3bdbd5e2663338f7510a"));
-    let coords = vec![
-        entities::PackLocation::new("store1", "bucket1", "object2"),
-        entities::PackLocation::new("store2", "bucket1", "object2"),
-    ];
-    let pack = entities::Pack::new(digest2.clone(), coords);
-    datasource.insert_pack(&pack).unwrap();
-
-    let digest3 = Checksum::SHA1(String::from("bf24db8ccd274daad5fe73a71b95cd00ffa56a37"));
-    let coords = vec![entities::PackLocation::new("store2", "bucket1", "object3")];
-    let pack = entities::Pack::new(digest3.clone(), coords);
-    datasource.insert_pack(&pack).unwrap();
-
-    let digest4 = Checksum::SHA1(String::from("ed841695851abdcfe6a50ce3d01d770eb053356b"));
-    let coords = vec![
-        entities::PackLocation::new("store2", "bucket1", "object4"),
-        entities::PackLocation::new("store3", "bucket1", "object4"),
-        entities::PackLocation::new("store11", "bucket1", "object4"),
-    ];
-    let pack = entities::Pack::new(digest4.clone(), coords);
-    datasource.insert_pack(&pack).unwrap();
-
-    let digest5 = Checksum::SHA1(String::from("1619f1be8e89c810fb213efa2f7b30ab788d3ada"));
-    let coords = vec![entities::PackLocation::new("store1", "bucket1", "object5")];
-    let pack = entities::Pack::new(digest5.clone(), coords);
-    datasource.insert_pack(&pack).unwrap();
-
-    // test get_packs()
-    let mut packs = datasource.get_packs("store1").unwrap();
-    assert_eq!(packs.len(), 3);
-    packs.sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
-    assert_eq!(packs[0].digest, digest5);
-    assert_eq!(packs[1].digest, digest2);
-    assert_eq!(packs[2].digest, digest1);
     Ok(())
 }
 

@@ -44,17 +44,8 @@ pub trait RecordRepository: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
-    /// Save the given pack to the repository, overwriting any existing entry.
-    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
-
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
-
-    /// Retrieve all pack records that should be in the given store.
-    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
-
-    /// Retrieve all pack records in the system regardless of store.
-    fn get_all_packs(&self) -> Result<HashedArrayTree<Pack>, Error>;
 
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are
@@ -222,17 +213,6 @@ pub trait PackRepository: Send + Sync {
     /// one pack store is defined at this point and the user has configured the
     /// most suitable pack store in order to retrieve the database.
     fn retrieve_latest_database(&self, computer_id: &str, outfile: &Path) -> Result<(), Error>;
-
-    /// Find any packs that are missing from the given pack store.
-    ///
-    /// Returns a new list of the pack digests for those packs that were not
-    /// found on the pack store.
-    fn find_missing(&self, store_id: &str, packs: &[Pack]) -> Result<Vec<Checksum>, Error>;
-
-    /// Remove any extraneous objects and empty buckets.
-    ///
-    /// Returns the number of objects removed by this operation.
-    fn prune_extra(&self, store_id: &str, packs: &[Pack]) -> Result<u32, Error>;
 }
 
 ///

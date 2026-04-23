@@ -38,17 +38,8 @@ pub trait EntityDataSource: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
-    /// Save the given pack to the data source, overwriting any existing entry.
-    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
-
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
-
-    /// Retrieve all pack records that should be in the given store.
-    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error>;
-
-    /// Retrieve all pack records in the system regardless of store.
-    fn get_all_packs(&self) -> Result<HashedArrayTree<Pack>, Error>;
 
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are

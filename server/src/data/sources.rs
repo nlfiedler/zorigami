@@ -110,13 +110,6 @@ impl EntityDataSource for EntityDataSourceImpl {
         db.insert_document(key.as_bytes(), &as_bytes)
     }
 
-    fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
-        let key = format!("pack/{}", pack.digest);
-        let as_bytes = pack.to_bytes()?;
-        let db = self.database.lock().unwrap();
-        db.put_document(key.as_bytes(), &as_bytes)
-    }
-
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         let key = format!("pack/{}", digest);
         let db = self.database.lock().unwrap();
@@ -128,32 +121,6 @@ impl EntityDataSource for EntityDataSourceImpl {
             }
             None => Ok(None),
         }
-    }
-
-    fn get_packs(&self, store_id: &str) -> Result<Vec<Pack>, Error> {
-        let db = self.database.lock().unwrap();
-        let packs = db.fetch_prefix("pack/")?;
-        let mut results: Vec<Pack> = Vec::new();
-        for (key, value) in packs {
-            let result = Pack::from_bytes(key.as_bytes(), &value)?;
-            // pack must have at least one pack location whose store identifier
-            // matches the one given
-            if result.locations.iter().any(|l| l.store == store_id) {
-                results.push(result);
-            }
-        }
-        Ok(results)
-    }
-
-    fn get_all_packs(&self) -> Result<HashedArrayTree<Pack>, Error> {
-        let db = self.database.lock().unwrap();
-        let packs = db.fetch_prefix("pack/")?;
-        let mut results: HashedArrayTree<Pack> = HashedArrayTree::new();
-        for (key, value) in packs {
-            let result = Pack::from_bytes(key.as_bytes(), &value)?;
-            results.push(result);
-        }
-        Ok(results)
     }
 
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
