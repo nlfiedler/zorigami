@@ -38,13 +38,27 @@ pub trait EntityDataSource: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
+    /// Write the given pack record to the data source, overwriting any
+    /// existing record with the same digest.
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
+
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Retrieve the digests of all pack records.
+    fn get_all_pack_digests(&self) -> Result<HashedArrayTree<String>, Error>;
+
+    /// Remove the pack record by the given identifier.
+    fn delete_pack(&self, id: &str) -> Result<(), Error>;
 
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are
     /// assumed to be identical.
     fn insert_database(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Write the given database pseudo-pack record to the data source,
+    /// overwriting any existing record with the same digest.
+    fn put_database(&self, pack: &Pack) -> Result<(), Error>;
 
     /// Retrieve the database pseudo-pack by the given digest, returning `None`
     /// if not found.
@@ -52,6 +66,9 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Retrieve all database pseudo-pack records.
     fn get_databases(&self) -> Result<Vec<Pack>, Error>;
+
+    /// Remove the database pseudo-pack record by the given identifier.
+    fn delete_database(&self, id: &str) -> Result<(), Error>;
 
     /// Insert the extended file attributes value into the data source, if one
     /// with the same digest does not already exist. Values with the same digest

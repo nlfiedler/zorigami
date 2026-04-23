@@ -355,6 +355,8 @@ enum CapturedErrorOperation {
     RestoreTest,
     /// Error recorded while performing a database scrub.
     DatabaseScrub,
+    /// Error recorded while pruning pack files and database archives.
+    PackPrune,
 }
 
 impl From<entities::ErrorOperation> for CapturedErrorOperation {
@@ -364,6 +366,7 @@ impl From<entities::ErrorOperation> for CapturedErrorOperation {
             entities::ErrorOperation::Prune => CapturedErrorOperation::Prune,
             entities::ErrorOperation::RestoreTest => CapturedErrorOperation::RestoreTest,
             entities::ErrorOperation::DatabaseScrub => CapturedErrorOperation::DatabaseScrub,
+            entities::ErrorOperation::PackPrune => CapturedErrorOperation::PackPrune,
         }
     }
 }

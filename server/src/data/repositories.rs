@@ -73,12 +73,28 @@ impl RecordRepository for RecordRepositoryImpl {
         self.datasource.insert_pack(pack)
     }
 
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
+        self.datasource.put_pack(pack)
+    }
+
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         self.datasource.get_pack(digest)
     }
 
+    fn get_all_pack_digests(&self) -> Result<HashedArrayTree<String>, Error> {
+        self.datasource.get_all_pack_digests()
+    }
+
+    fn delete_pack(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_pack(id)
+    }
+
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
         self.datasource.insert_database(pack)
+    }
+
+    fn put_database(&self, pack: &Pack) -> Result<(), Error> {
+        self.datasource.put_database(pack)
     }
 
     fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
@@ -87,6 +103,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_databases(&self) -> Result<Vec<Pack>, Error> {
         self.datasource.get_databases()
+    }
+
+    fn delete_database(&self, id: &str) -> Result<(), Error> {
+        self.datasource.delete_database(id)
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {
@@ -425,6 +445,15 @@ impl PackRepository for PackRepositoryImpl {
             }
         }
         Ok(())
+    }
+
+    fn delete_pack(&self, location: &PackLocation) -> Result<(), Error> {
+        for (store, source) in self.sources.iter() {
+            if location.store == store.id {
+                return source.delete_object(&location.bucket, &location.object);
+            }
+        }
+        Err(anyhow!("no matching store for id: {}", location.store))
     }
 
     fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error> {

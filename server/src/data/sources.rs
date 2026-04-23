@@ -110,6 +110,13 @@ impl EntityDataSource for EntityDataSourceImpl {
         db.insert_document(key.as_bytes(), &as_bytes)
     }
 
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error> {
+        let key = format!("pack/{}", pack.digest);
+        let as_bytes = pack.to_bytes()?;
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &as_bytes)
+    }
+
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
         let key = format!("pack/{}", digest);
         let db = self.database.lock().unwrap();
@@ -123,11 +130,34 @@ impl EntityDataSource for EntityDataSourceImpl {
         }
     }
 
+    fn get_all_pack_digests(&self) -> Result<HashedArrayTree<String>, Error> {
+        let db = self.database.lock().unwrap();
+        let packs = db.find_prefix("pack/")?;
+        let mut digests: HashedArrayTree<String> = HashedArrayTree::new();
+        for key in packs {
+            digests.push(key);
+        }
+        Ok(digests)
+    }
+
+    fn delete_pack(&self, id: &str) -> Result<(), Error> {
+        let key = format!("pack/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
+    }
+
     fn insert_database(&self, pack: &Pack) -> Result<(), Error> {
         let key = format!("dbase/{}", pack.digest);
         let as_bytes = pack.to_bytes()?;
         let db = self.database.lock().unwrap();
         db.insert_document(key.as_bytes(), &as_bytes)
+    }
+
+    fn put_database(&self, pack: &Pack) -> Result<(), Error> {
+        let key = format!("dbase/{}", pack.digest);
+        let as_bytes = pack.to_bytes()?;
+        let db = self.database.lock().unwrap();
+        db.put_document(key.as_bytes(), &as_bytes)
     }
 
     fn get_database(&self, digest: &Checksum) -> Result<Option<Pack>, Error> {
@@ -152,6 +182,12 @@ impl EntityDataSource for EntityDataSourceImpl {
             results.push(result);
         }
         Ok(results)
+    }
+
+    fn delete_database(&self, id: &str) -> Result<(), Error> {
+        let key = format!("dbase/{}", id);
+        let db = self.database.lock().unwrap();
+        db.delete_document(key.as_bytes())
     }
 
     fn insert_xattr(&self, digest: &Checksum, xattr: &[u8]) -> Result<(), Error> {

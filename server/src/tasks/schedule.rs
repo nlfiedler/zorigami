@@ -220,6 +220,22 @@ impl Actor for ScheduleSupervisor {
                 }
             },
         );
+
+        // periodically delete unreachable pack files and old database archives
+        let pack_prune_interval_days = std::env::var("PACK_PRUNE_INTERVAL_DAYS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|n| n.clamp(1, 180))
+            .unwrap_or(30);
+        ctx.run_interval(
+            Duration::from_hours(pack_prune_interval_days * 24),
+            |this, _ctx| {
+                trace!("schedule pack-prune interval fired");
+                if let Err(err) = this.leader.prune_packs() {
+                    error!("failed to schedule pack prune: {}", err);
+                }
+            },
+        );
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {

@@ -72,6 +72,12 @@ pub trait RingLeader: Send + Sync {
     ///
     /// Problems discovered during the scan are written to the error repository.
     fn database_scrub(&self) -> Result<(), Error>;
+
+    /// Delete unreachable pack files and aged-out database archives per each
+    /// pack store's retention policy.
+    ///
+    /// Problems encountered during the run are written to the error repository.
+    fn prune_packs(&self) -> Result<(), Error>;
 }
 
 ///
@@ -401,6 +407,20 @@ impl RingLeader for RingLeaderImpl {
             Err(anyhow!("must call start() first"))
         }
     }
+
+    fn prune_packs(&self) -> Result<(), Error> {
+        info!("enqueue pack prune");
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.as_ref() {
+            fn err_convert(err: SendError<PackPrune>) -> Error {
+                anyhow!(format!("RingLeaderImpl::prune_packs(): {:?}", err))
+            }
+            addr.try_send(PackPrune {}).map_err(err_convert)
+        } else {
+            error!("must call start() first");
+            Err(anyhow!("must call start() first"))
+        }
+    }
 }
 
 //
@@ -681,6 +701,45 @@ impl LeaderSupervisor {
         }
         Ok(())
     }
+
+    /// Run a pack prune. Reuses the prune factory so the run shares the
+    /// pruner's stop flag; the Actix arbiter serializes this handler with the
+    /// regular `Process` loop, so the prune runs without stepping on backups.
+    fn prune_packs(&self) -> Result<(), Error> {
+        let mut stopper = self.context.prune_stopper.write().unwrap();
+        *stopper = false;
+        drop(stopper);
+        let pruner = if let Some(factory) = self.context.pruner_factory {
+            factory(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            )
+        } else {
+            Box::new(prune::PrunerImpl::new(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            ))
+        };
+        match pruner.prune_packs() {
+            Ok(issues) => {
+                for issue in issues {
+                    self.context.capture_error(
+                        ErrorOperation::PackPrune,
+                        issue.dataset_id,
+                        &issue.message,
+                    );
+                }
+            }
+            Err(err) => {
+                error!("leader supervisor pack prune error: {}", err);
+                self.context
+                    .capture_error(ErrorOperation::PackPrune, None, &err.to_string());
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Actor for LeaderSupervisor {
@@ -780,6 +839,21 @@ impl Handler<DatabaseScrub> for LeaderSupervisor {
         debug!("leader supervisor received DatabaseScrub message");
         if let Err(err) = self.database_scrub() {
             error!("DatabaseScrub error: {}", err);
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct PackPrune {}
+
+impl Handler<PackPrune> for LeaderSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, _msg: PackPrune, _ctx: &mut Context<LeaderSupervisor>) {
+        debug!("leader supervisor received PackPrune message");
+        if let Err(err) = self.prune_packs() {
+            error!("PackPrune error: {}", err);
         }
     }
 }

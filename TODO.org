@@ -15,21 +15,6 @@
 **** return an error to the GraphQL client so it can report to the user
 **** update store form to show error message if delete fails
 *** changing the base path of the dataset after snapshots have been made
-** TODO [#B] Pack file and database backup pruning
-*** default to run once every 30 days
-*** use =upload_time= field of =Pack= record to determine age
-*** use =retention= field of =Store= to prune appropriately
-*** find unreferenced pack files and remove
-**** procedure
-1) collect all pack record digests
-2) scan all file and chunk records
-3) remove reachable pack digests from hash set
-4) for each remaining pack, get locations, delete objects, delete pack record
-*** database backups to be removed according to pack store retention policy
-**** look for =dbase/= records which are of type =Pack=
-**** same retention validation: if the database Pack upload_time is older than Store retention then delete it
-**** delete pack file from pack store
-**** delete =dbase/= record from database
 ** TODO [#C] SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation
@@ -41,16 +26,13 @@
 - [X] show icons for small files and symbolic links
 - [X] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** Log rotation (for macOS)
+** TODO [#C] Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files
 *** macOS/launchd does not have a good way of managing log file sizes
 *** should configure logging via envars (?) to write to files that are rotated
 *** https://github.com/estk/log4rs use envars and configuration file
 ** Test improvements
-*** sometimes =test_get_bucket_name()= fails
-*** sometimes =test_process_manager_async_store()= fails
-*** sometimes =test_restorer_fail_then_succeed()= fails
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Restore improvements
 *** restore can hang on pack retrieval for a long time

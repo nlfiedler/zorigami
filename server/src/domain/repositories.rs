@@ -44,13 +44,27 @@ pub trait RecordRepository: Send + Sync {
     /// identical.
     fn insert_pack(&self, pack: &Pack) -> Result<(), Error>;
 
+    /// Write the given pack record to the repository, overwriting any existing
+    /// record with the same digest.
+    fn put_pack(&self, pack: &Pack) -> Result<(), Error>;
+
     /// Retrieve the pack by the given digest, returning `None` if not found.
     fn get_pack(&self, digest: &Checksum) -> Result<Option<Pack>, Error>;
+
+    /// Retrieve the digests of all pack records.
+    fn get_all_pack_digests(&self) -> Result<HashedArrayTree<String>, Error>;
+
+    /// Remove the pack record by the given identifier.
+    fn delete_pack(&self, id: &str) -> Result<(), Error>;
 
     /// Insert the given psedo-pack for the database snapshot, if one with the
     /// same digest does not already exist. Packs with the same digest are
     /// assumed to be identical.
     fn insert_database(&self, pack: &Pack) -> Result<(), Error>;
+
+    /// Write the given database pseudo-pack record to the repository,
+    /// overwriting any existing record with the same digest.
+    fn put_database(&self, pack: &Pack) -> Result<(), Error>;
 
     /// Retrieve the database pseudo-pack by the given digest, returning `None`
     /// if not found.
@@ -58,6 +72,9 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve all database pseudo-pack records.
     fn get_databases(&self) -> Result<Vec<Pack>, Error>;
+
+    /// Remove the database pseudo-pack record by the given identifier.
+    fn delete_database(&self, id: &str) -> Result<(), Error>;
 
     /// Insert the extended file attributes value into the repository, if one
     /// with the same digest does not already exist. Values with the same digest
@@ -193,6 +210,13 @@ pub trait PackRepository: Send + Sync {
     /// The most suitable store will be utilized, preferring a local store over
     /// a remote one, and fast one over a slow one.
     fn retrieve_pack(&self, locations: &[PackLocation], outfile: &Path) -> Result<(), Error>;
+
+    /// Delete the object identified by the given pack location from whichever
+    /// store in this repository matches `location.store`.
+    ///
+    /// Used by the pack pruner for both pack files and database archives,
+    /// since both are stored as objects in the underlying pack store.
+    fn delete_pack(&self, location: &PackLocation) -> Result<(), Error>;
 
     /// Test the connection to the store with the given identifier.
     ///

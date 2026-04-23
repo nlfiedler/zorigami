@@ -1098,6 +1098,7 @@ pub enum ErrorOperation {
     Prune,
     RestoreTest,
     DatabaseScrub,
+    PackPrune,
 }
 
 impl fmt::Display for ErrorOperation {
@@ -1107,6 +1108,7 @@ impl fmt::Display for ErrorOperation {
             ErrorOperation::Prune => "Prune",
             ErrorOperation::RestoreTest => "RestoreTest",
             ErrorOperation::DatabaseScrub => "DatabaseScrub",
+            ErrorOperation::PackPrune => "PackPrune",
         };
         f.write_str(s)
     }
@@ -1121,6 +1123,7 @@ impl FromStr for ErrorOperation {
             "Prune" => Ok(ErrorOperation::Prune),
             "RestoreTest" => Ok(ErrorOperation::RestoreTest),
             "DatabaseScrub" => Ok(ErrorOperation::DatabaseScrub),
+            "PackPrune" => Ok(ErrorOperation::PackPrune),
             _ => Err(anyhow!(format!("unknown ErrorOperation: {}", s))),
         }
     }
