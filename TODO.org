@@ -6,7 +6,31 @@
 |---------+------+---------+-------+--------+--------+--------------+-----------------|
 | tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
 | chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
-** TODO SolidJS
+** TODO [#A] Preventing mistakes
+*** validate that the dataset basepath exists and is readable
+**** add a validate function to Dataset, returns Error if any problem
+**** GraphQL mutation to return an error message or something
+**** web interface to check the return value and display an error message
+*** deleting a pack store that is still being used by a data set
+**** return an error to the GraphQL client so it can report to the user
+**** update store form to show error message if delete fails
+*** changing the base path of the dataset after snapshots have been made
+** TODO [#B] Pack file and database backup pruning
+*** default to run once every 30 days
+*** use =upload_time= field of =Pack= record to determine age
+*** use =retention= field of =Store= to prune appropriately
+*** find unreferenced pack files and remove
+**** procedure
+1) collect all pack record digests
+2) scan all file and chunk records
+3) remove reachable pack digests from hash set
+4) for each remaining pack, get locations, delete objects, delete pack record
+*** database backups to be removed according to pack store retention policy
+**** look for =dbase/= records which are of type =Pack=
+**** same retention validation: if the database Pack upload_time is older than Store retention then delete it
+**** delete pack file from pack store
+**** delete =dbase/= record from database
+** TODO [#C] SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation
 *** TODO snapshots page [6/7]
@@ -17,37 +41,6 @@
 - [X] show icons for small files and symbolic links
 - [X] empty files should show something rather than nothing
 - [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO doc: environment variables
-*** document all of the environment variables (in DEPLOY.md?)
-** TODO [#A] Scheduler to perform a ~scrub~ of the database weekly
-*** like zfs scrub, make sure no records are missing
-*** add to ~pruner~ and use the same basic visitor pattern as for pruning, visiting _everything_
-*** start scanning from data sets > snapshots > trees > files > chunks > packs > xattrs
-*** use a hashset or bloom filter to track every tree that is visited to avoid looping
-*** expose the result somewhere that the home page ~dashboard~ and display
-** TODO [#B] Preventing mistakes
-*** validate that the dataset basepath exists and is readable
-*** deleting a pack store that is still being used by a data set
-**** return an error to the GraphQL client so it can report to the user
-**** update store form to show error message if delete fails
-*** changing the base path of the dataset after snapshots have been made
-** TODO [#C] Pack file and database backup pruning
-*** use =upload_time= field of =Pack= record to determine age
-*** use =retention= field of =Store= to prune appropriately
-**** either retain ~all~ or ~delete after N days~
-**** provide default value for ~N days~ for each cloud provider
-**** default value would also likely depend on the chosen storage class
-**** e.g. typically anything older than 90 days costs nothing to delete
-**** Google has different minimum storage durations for each storage class
-***** https://cloud.google.com/storage/docs/storage-classes
-*** find unreferenced pack files and remove
-**** procedure
-1) collect all pack record digests
-2) scan all file and chunk records
-3) remove reachable pack digests from hash set
-4) for each remaining pack, get locations, delete objects, delete pack record
-*** maybe make use of the =prune_extra()= in pack repository
-*** database backups to be removed according to pack store retention policy
 ** Log rotation (for macOS)
 *** deployment on mini produces 4000 lines in 10 months (457 kb)
 *** alternative to logging to stdout/stderr, write to log files

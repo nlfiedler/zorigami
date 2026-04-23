@@ -96,6 +96,23 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 </plist>
 ```
 
+## Configuration
+
+Configuration of the application is partly done via environment variables. Defining the data sets, pack stores, and bucket naming policy is done through the web interface (or GraphQL if you like).
+
+- **DB_PATH**
+  - Path for the RocksDB database files; defaults to `./tmp/database`
+- **ERROR_DB_PATH**
+  - Path for the SQLite database that records errors; defaults to `./tmp/errors.db`
+- **HOST**
+  - Host address on which to listen for incoming HTTP connections; defaults to `127.0.0.1`
+- **PORT**
+  - Port on which to bind for incoming connections; defaults to `3000`
+- **PASSPHRASE**
+  - Passphrase for encrypting the pack files and database snapshots; defaults to `keyboard cat`
+- **RUST_LOG**
+  - Logging level as defined by the [env_logger](https://crates.io/crates/env_logger) crate. For example, `RUST_LOG=info` logs everything at the `info`, `warn`, or `error` logging levels, while excluding anything that is `debug` or `trace` level.
+
 ## Cloud Storage
 
 ### Amazon S3 Setup
@@ -143,7 +160,7 @@ How to create a new project and get the service account credentials file.
 
 1. Create a new project in Google Cloud Platform
 1. Navigate to the **Firestore** page under _DATABASES_
-    * Do **not** select _Filestore_ under _STORAGE_, that is a different service
+   - Do **not** select _Filestore_ under _STORAGE_, that is a different service
 1. Create a _native_ Firestore database (there can be only one)
 1. Navigate to **APIs & Services**
 1. Open **Credentials** screen
@@ -154,11 +171,11 @@ How to create a new project and get the service account credentials file.
 1. Under the _Assign roles_ section of the dialog...
 1. Start typing the name of the service account and select the result
 1. Under the _Cloud Storage_ category and select _Storage Admin_
-    * The service account needs to be able to create buckets and objects.
+   - The service account needs to be able to create buckets and objects.
 1. Click **ADD ANOTHER ROLE** button
 1. Under the _Firebase_ category select _Firebase Admin_
-    * The service account needs to be able to create and update documents.
+   - The service account needs to be able to create and update documents.
 1. Click **SAVE** button
 1. Navigate to **IAM & Admin / Service Accounts**
 1. Click on the _Actions_ 3-dot button and select _Create key_
-1. Choose *JSON* and click **CREATE** button
+1. Choose _JSON_ and click **CREATE** button

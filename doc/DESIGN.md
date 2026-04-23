@@ -48,30 +48,23 @@ The computer UUID is a type 5 using the URL namespace comprised of the host name
 
 ### Bucket Names
 
-The packs are stored in buckets whose names are described below.
+The packs are stored in buckets whose names are a variation on ULID.
 
-* bucket name will be ULID + computer UUID (without dash separators)
-    - consists of lowercase letters and numbers only
-    - conforms to Google bucket name restrictions
-        + https://cloud.google.com/storage/docs/naming
-        + should be sufficiently unique despite global bucket namespace
-    - conforms to Amazon Glacier vault name restrictions
-        + https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html
-    - conforms to Amazon S3 bucket name restrictions
-        + https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
-    - conforms to Azure blob storage name restrictions
-        + https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata
-    - conforms to MinIO (S3 API) name restrictions
-        + https://github.com/minio/minio/blob/master/docs/minio-limits.md
-    - works for MinIO, SFTP, and modern file systems
-* ULID contains the date/time
-* UUID makes it easy to find buckets associated with a specific computer
-* UUID may change after (re)installation and this is okay
-    - Pack records contain the fully-qualified locations regardless of UUID
-* Database snapshots saved to bucket whose name is the computer UUID
-    - Cloud-based pack stores handle bucket collision using remote database
-        + Amazon pack store uses DynamoDB
-        + Google pack store uses Firestore
+* 48 bit UNIX-time in milliseconds
+* 256 bits of cryptographically secure randomness
+* Base32hex encoded to form a 61 character string
+
+The names are well suited to all supported cloud storage providers:
+
+- Consists of lowercase letters and numbers only
+- Meets minimum and maximum length limits
+- [Google](https://cloud.google.com/storage/docs/naming)
+- [Amazon Glacier](https://docs.aws.amazon.com/amazonglacier/latest/dev/creating-vaults.html)
+- [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html)
+- [Azure](https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata)
+- [MinIO](https://github.com/minio/minio/blob/master/docs/minio-limits.md)
+
+Database snapshots ared saved to the bucket whose name is the computer UUID, which also conforms to the requirements of all supported cloud-storage poviders. The cloud-based pack stores will handle any bucket collision using a remote database: Amazon pack store uses DynamoDB and Google pack store uses Firestore.
 
 ### Pack Files
 

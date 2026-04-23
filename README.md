@@ -22,7 +22,6 @@ This project has been a work-in-progress since 2014, originally started as [akas
 
 * This software is provided "as-is", WITHOUT WARRANTY OF ANY KIND, see the `LICENSE` for details.
 * The database schema and pack file formats have changed radically over the years. It may happen again.
-* Object-to-bucket allocation is very primitive and needs improvement.
 * Restoring to dissimilar hardware is not (yet) an easy task.
 * No readily available binaries, so you will need to build and deploy it yourself.
 * No QoS control on uploads over the network so a backup can slow everything else to a crawl.
