@@ -1048,7 +1048,11 @@ function SaveDatasetButton(props: SaveDatasetButtonProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('update dataset failed:', s.error);
-          props.setError(s.error);
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          props.setError(msg);
           setSuccess(false);
         } else {
           props.setError('');
@@ -1107,7 +1111,11 @@ function DeleteDatasetButton(props: DeleteDatasetButtonProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('delete dataset failed:', s.error);
-          props.setError(s.error);
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          props.setError(msg);
         } else {
           props.setError('');
           props.deleted();

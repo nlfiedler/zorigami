@@ -130,6 +130,7 @@ const DELETE_STORE: TypedDocumentNode<Mutation, MutationDeleteStoreArgs> = gql`
 
 interface DeleteStoreButtonProps {
   storeId: string;
+  setError: Setter<string>;
   deleted: () => void;
 }
 
@@ -150,7 +151,13 @@ function DeleteStoreButton(props: DeleteStoreButtonProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('delete store failed:', s.error);
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          props.setError(msg);
         } else {
+          props.setError('');
           props.deleted();
         }
       }
@@ -203,7 +210,11 @@ function TestStoreButton(props: TestStoreButtonProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('test store failed:', s.error);
-          props.setError(s.error);
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          props.setError(msg);
           setSuccess(false);
         } else if (s.result === 'OK') {
           props.setError('');
@@ -269,7 +280,11 @@ function SaveStoreButton(props: SaveStoreButtonProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('update store failed:', s.error);
-          props.setError(s.error);
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          props.setError(msg);
           setSuccess(false);
         } else {
           props.setError('');
@@ -311,6 +326,7 @@ interface StoreActionsProps {
 function StoreActions(props: StoreActionsProps) {
   const [testErrorMsg, setTestErrorMsg] = createSignal('');
   const [saveErrorMsg, setSaveErrorMsg] = createSignal('');
+  const [deleteErrorMsg, setDeleteErrorMsg] = createSignal('');
 
   return (
     <>
@@ -319,6 +335,7 @@ function StoreActions(props: StoreActionsProps) {
           <div class="level-item">
             <DeleteStoreButton
               storeId={props.storeId}
+              setError={setDeleteErrorMsg}
               deleted={props.deleted}
             />
           </div>
@@ -337,6 +354,12 @@ function StoreActions(props: StoreActionsProps) {
           </div>
         </div>
       </nav>
+      <Show when={deleteErrorMsg().length > 0}>
+        <div class="notification is-warning">
+          <button class="delete" on:click={() => setDeleteErrorMsg('')}></button>
+          {deleteErrorMsg()}
+        </div>
+      </Show>
       <Show when={testErrorMsg().length > 0}>
         <div class="notification is-warning">
           <button class="delete" on:click={() => setTestErrorMsg('')}></button>

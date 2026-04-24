@@ -344,7 +344,11 @@ function ConfirmDialog(props: ConfirmDialogProps) {
       onComplete: (s: Submission<any, any>) => {
         if (s.error) {
           console.error('database restore failed:', s.error);
-          setErrorMsg(s.error.toString());
+          const msg =
+            s.error?.graphQLErrors?.[0]?.message ??
+            s.error?.message ??
+            String(s.error);
+          setErrorMsg(msg);
         } else {
           navigate('/');
         }

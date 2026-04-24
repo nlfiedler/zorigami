@@ -6,15 +6,6 @@
 |---------+------+---------+-------+--------+--------+--------------+-----------------|
 | tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
 | chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
-** TODO [#A] Preventing mistakes
-*** validate that the dataset basepath exists and is readable
-**** add a validate function to Dataset, returns Error if any problem
-**** GraphQL mutation to return an error message or something
-**** web interface to check the return value and display an error message
-*** deleting a pack store that is still being used by a data set
-**** return an error to the GraphQL client so it can report to the user
-**** update store form to show error message if delete fails
-*** changing the base path of the dataset after snapshots have been made
 ** TODO [#C] SolidJS
 *** TODO update =Dockerfile= based on tanuki
 *** TODO update =DEPLOY.txt= regarding macOS installation

@@ -22,12 +22,31 @@ impl UpdateDataset {
 
 impl super::UseCase<Dataset, Params> for UpdateDataset {
     fn call(&self, params: Params) -> Result<Dataset, Error> {
+        let meta = std::fs::metadata(&params.basepath).map_err(|e| {
+            anyhow!(
+                "basepath not accessible: {}: {}",
+                params.basepath.display(),
+                e
+            )
+        })?;
+        if !meta.is_dir() {
+            return Err(anyhow!(
+                "basepath is not a directory: {}",
+                params.basepath.display()
+            ));
+        }
         // read the existing dataset and overwrite certain properties, retaining
         // hidden values like the latest snapshot
         let mut dataset = self
             .repo
             .get_dataset(&params.id)?
             .ok_or_else(|| anyhow!("no such dataset: {}", params.id))?;
+        if dataset.basepath != params.basepath && dataset.snapshot.is_some() {
+            return Err(anyhow!(
+                "cannot change basepath of dataset {} after snapshots have been created",
+                params.id
+            ));
+        }
         dataset.basepath = params.basepath;
         dataset.pack_size = params.pack_size;
         dataset.excludes = params
@@ -125,16 +144,15 @@ impl cmp::Eq for Params {}
 mod tests {
     use super::super::UseCase;
     use super::*;
+    use crate::domain::entities::Checksum;
     use crate::domain::repositories::MockRecordRepository;
     use anyhow::anyhow;
 
     #[test]
     fn test_update_dataset_ok() {
         // arrange
-        #[cfg(target_family = "unix")]
-        let basepath = PathBuf::from("/home/planet");
-        #[cfg(target_family = "windows")]
-        let basepath = PathBuf::from("C:\\home\\planet");
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
         let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
@@ -157,30 +175,21 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath, basepath);
-        #[cfg(target_family = "unix")]
-        let expected_workspace = "/home/planet/.tmp";
-        #[cfg(target_family = "windows")]
-        let expected_workspace = "C:\\home\\planet\\.tmp";
-        assert_eq!(actual.workspace.to_string_lossy(), expected_workspace);
+        assert_eq!(actual.workspace, basepath.join(".tmp"));
     }
 
     #[test]
     fn test_update_dataset_workspace() {
         // arrange
-        #[cfg(target_family = "unix")]
-        let basepath = PathBuf::from("/home/planet");
-        #[cfg(target_family = "windows")]
-        let basepath = PathBuf::from("C:\\home\\planet");
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
         let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
             .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
         mock.expect_put_dataset().returning(|_| Ok(()));
         // act
-        #[cfg(target_family = "unix")]
-        let workspace = PathBuf::from("/home/planet/tmpdir");
-        #[cfg(target_family = "windows")]
-        let workspace = PathBuf::from("C:\\home\\planet\\tmpdir");
+        let workspace = basepath.join("tmpdir");
         let usecase = UpdateDataset::new(Box::new(mock));
         let params = Params {
             id: "cafebabe".to_owned(),
@@ -203,10 +212,8 @@ mod tests {
     #[test]
     fn test_update_dataset_empty_excludes() {
         // arrange
-        #[cfg(target_family = "unix")]
-        let basepath = PathBuf::from("/home/planet");
-        #[cfg(target_family = "windows")]
-        let basepath = PathBuf::from("C:\\home\\planet");
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
         let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
@@ -229,11 +236,7 @@ mod tests {
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath, basepath);
-        #[cfg(target_family = "unix")]
-        let expected_workspace = PathBuf::from("/home/planet/.tmp");
-        #[cfg(target_family = "windows")]
-        let expected_workspace = PathBuf::from("C:\\home\\planet\\.tmp");
-        assert_eq!(actual.workspace, expected_workspace);
+        assert_eq!(actual.workspace, basepath.join(".tmp"));
         assert_eq!(actual.pack_size, 33_554_432);
         assert_eq!(actual.stores.len(), 1);
         assert_eq!(actual.stores[0], "cafebabe");
@@ -243,10 +246,8 @@ mod tests {
     #[test]
     fn test_update_dataset_err() {
         // arrange
-        #[cfg(target_family = "unix")]
-        let basepath = PathBuf::from("/home/planet");
-        #[cfg(target_family = "windows")]
-        let basepath = PathBuf::from("C:\\home\\planet");
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
         let basepath_copy = basepath.clone();
         let mut mock = MockRecordRepository::new();
         mock.expect_get_dataset()
@@ -268,5 +269,119 @@ mod tests {
         let result = usecase.call(params);
         // assert
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_dataset_basepath_missing() {
+        // arrange
+        let mock = MockRecordRepository::new();
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: PathBuf::from("/definitely/does/not/exist/zorigami-test"),
+            schedules: vec![],
+            workspace: None,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+        };
+        let result = usecase.call(params);
+        // assert
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("basepath"));
+    }
+
+    #[test]
+    fn test_update_dataset_basepath_change_with_snapshot() {
+        // arrange
+        let old_tmp = tempfile::tempdir().unwrap();
+        let old_basepath = old_tmp.path().to_path_buf();
+        let new_tmp = tempfile::tempdir().unwrap();
+        let new_basepath = new_tmp.path().to_path_buf();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset().returning(move |_| {
+            let mut ds = Dataset::new(&old_basepath);
+            ds.snapshot = Some(Checksum::SHA1("abc123".to_owned()));
+            Ok(Some(ds))
+        });
+        mock.expect_put_dataset().never();
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: new_basepath,
+            schedules: vec![],
+            workspace: None,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+        };
+        let result = usecase.call(params);
+        // assert
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("snapshots"));
+    }
+
+    #[test]
+    fn test_update_dataset_basepath_same_with_snapshot() {
+        // arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let basepath_copy = basepath.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset().returning(move |_| {
+            let mut ds = Dataset::new(&basepath_copy);
+            ds.snapshot = Some(Checksum::SHA1("abc123".to_owned()));
+            Ok(Some(ds))
+        });
+        mock.expect_put_dataset().returning(|_| Ok(()));
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+        };
+        let result = usecase.call(params);
+        // assert
+        assert!(result.is_ok());
+        let actual = result.unwrap();
+        assert_eq!(actual.basepath, basepath);
+    }
+
+    #[test]
+    fn test_update_dataset_basepath_not_directory() {
+        // arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let file_path = tmp.path().join("a_file");
+        std::fs::write(&file_path, b"not a directory").unwrap();
+        let mock = MockRecordRepository::new();
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: file_path,
+            schedules: vec![],
+            workspace: None,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+        };
+        let result = usecase.call(params);
+        // assert
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("not a directory"));
     }
 }
