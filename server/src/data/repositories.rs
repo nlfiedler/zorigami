@@ -493,7 +493,6 @@ impl PackRepository for PackRepositoryImpl {
         }
         Err(anyhow!("no matching store found"))
     }
-
 }
 
 /// Return the unique bucket name for this computer and user.

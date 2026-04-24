@@ -142,11 +142,7 @@ impl ErrorRepository for ErrorRepositoryImpl {
                 })?
                 .with_timezone(&Utc);
             let operation = ErrorOperation::from_str(&operation).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    2,
-                    rusqlite::types::Type::Text,
-                    e.into(),
-                )
+                rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, e.into())
             })?;
             Ok(CapturedError {
                 id,
@@ -157,7 +153,9 @@ impl ErrorRepository for ErrorRepositoryImpl {
             })
         };
         let rows: Vec<CapturedError> = match limit {
-            Some(n) => stmt.query_map(params![n as i64], map_row)?.collect::<Result<_, _>>()?,
+            Some(n) => stmt
+                .query_map(params![n as i64], map_row)?
+                .collect::<Result<_, _>>()?,
             None => stmt.query_map([], map_row)?.collect::<Result<_, _>>()?,
         };
         Ok(rows)
@@ -225,8 +223,12 @@ mod tests {
     fn test_list_limit() {
         let repo = ErrorRepositoryImpl::in_memory(90).unwrap();
         for i in 0..5 {
-            repo.record_error(ErrorOperation::Backup, Some("ds".into()), &format!("err {}", i))
-                .unwrap();
+            repo.record_error(
+                ErrorOperation::Backup,
+                Some("ds".into()),
+                &format!("err {}", i),
+            )
+            .unwrap();
         }
         let limited = repo.list_errors(Some(2)).unwrap();
         assert_eq!(limited.len(), 2);

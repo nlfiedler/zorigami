@@ -2,16 +2,16 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::Error;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::repositories::RecordRepository;
 use server::tasks::backup::{self, Backuper, BackuperImpl};
 use server::tasks::restore::{self, Restorer, RestorerImpl};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Debug, Default)]
 struct TestBackupSubscriber {

@@ -2,12 +2,12 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::sources::EntityDataSource;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[test]
 fn test_insert_get_chunk() -> Result<(), Error> {
@@ -496,9 +496,14 @@ fn test_bucket_operations() -> Result<(), Error> {
     datasource.add_bucket(&name_c)?;
 
     assert_eq!(datasource.count_buckets()?, 3);
-    assert_eq!(datasource.get_last_bucket()?.as_deref(), Some(name_c.as_str()));
+    assert_eq!(
+        datasource.get_last_bucket()?.as_deref(),
+        Some(name_c.as_str())
+    );
 
-    let picked = datasource.get_random_bucket()?.expect("should pick a bucket");
+    let picked = datasource
+        .get_random_bucket()?
+        .expect("should pick a bucket");
     assert!([name_a.as_str(), name_b.as_str(), name_c.as_str()].contains(&picked.as_str()));
 
     // add_bucket is idempotent for the same name — count stays the same

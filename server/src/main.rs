@@ -13,8 +13,8 @@ use actix_web::{
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
-use server::data::repositories::errors::ErrorRepositoryImpl;
 use server::data::repositories::RecordRepositoryImpl;
+use server::data::repositories::errors::ErrorRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::repositories::{ErrorRepository, RecordRepository};
 use server::domain::sources::EntityDataSource;

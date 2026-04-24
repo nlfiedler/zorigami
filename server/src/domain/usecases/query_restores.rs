@@ -1,9 +1,9 @@
 //
 // Copyright (c) 2020 Nathan Fiedler
 //
+use crate::domain::usecases::NoParams;
 use crate::tasks::leader::RingLeader;
 use crate::tasks::restore::Request;
-use crate::domain::usecases::NoParams;
 use anyhow::Error;
 use std::sync::Arc;
 

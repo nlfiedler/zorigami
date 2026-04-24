@@ -923,12 +923,7 @@ impl LeaderContext {
     /// Record an error against the installed repository, if any. Never
     /// propagates failures; a failed capture must not mask the original
     /// error.
-    fn capture_error(
-        &self,
-        operation: ErrorOperation,
-        dataset_id: Option<String>,
-        message: &str,
-    ) {
+    fn capture_error(&self, operation: ErrorOperation, dataset_id: Option<String>, message: &str) {
         let guard = self.error_repo.read().unwrap();
         if let Some(repo) = guard.as_ref()
             && let Err(err) = repo.record_error(operation, dataset_id, message)

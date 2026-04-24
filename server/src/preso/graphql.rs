@@ -1645,10 +1645,7 @@ impl Mutation {
     }
 
     /// Delete a single captured error by identifier.
-    fn delete_captured_error(
-        #[graphql(ctx)] ctx: &GraphContext,
-        id: BigInt,
-    ) -> FieldResult<bool> {
+    fn delete_captured_error(#[graphql(ctx)] ctx: &GraphContext, id: BigInt) -> FieldResult<bool> {
         let removed = ctx.errors.delete_error(id.0)?;
         Ok(removed)
     }

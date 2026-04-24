@@ -52,12 +52,14 @@ const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
   }
 `;
 
-const CAPTURED_ERROR_COUNT: TypedDocumentNode<Query, Record<string, never>> =
-  gql`
-    query {
-      capturedErrorCount
-    }
-  `;
+const CAPTURED_ERROR_COUNT: TypedDocumentNode<
+  Query,
+  Record<string, never>
+> = gql`
+  query {
+    capturedErrorCount
+  }
+`;
 
 export function Home() {
   const client = useApolloClient();

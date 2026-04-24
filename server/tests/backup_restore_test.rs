@@ -3,13 +3,8 @@
 //
 use anyhow::Error;
 use dotenvy::dotenv;
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use server::data::repositories::errors::ErrorRepositoryImpl;
 use server::data::repositories::RecordRepositoryImpl;
+use server::data::repositories::errors::ErrorRepositoryImpl;
 use server::data::sources::EntityDataSourceImpl;
 use server::domain::entities::schedule::Schedule;
 use server::domain::entities::{self, Checksum, PackRetention};
@@ -18,6 +13,11 @@ use server::shared::state::{StateStore, StateStoreImpl};
 use server::tasks::backup;
 use server::tasks::leader::{RingLeader, RingLeaderImpl};
 use server::tasks::restore;
+use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 //
 // Test the full backup and partial restore with a pack store that uses async
@@ -93,7 +93,11 @@ async fn test_backup_restore_async_store() -> Result<(), Error> {
     // request a second backup in which nothing has changed, status should
     // show "completed" even though not happened
     leader.reset_backups();
-    leader.backup(backup::Request::new(dataset_id.clone(), "keyboard cat", None))?;
+    leader.backup(backup::Request::new(
+        dataset_id.clone(),
+        "keyboard cat",
+        None,
+    ))?;
     println!("waiting for backup...");
     leader.wait_for_backup();
     println!("backup finished");

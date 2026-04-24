@@ -356,7 +356,10 @@ function StoreActions(props: StoreActionsProps) {
       </nav>
       <Show when={deleteErrorMsg().length > 0}>
         <div class="notification is-warning">
-          <button class="delete" on:click={() => setDeleteErrorMsg('')}></button>
+          <button
+            class="delete"
+            on:click={() => setDeleteErrorMsg('')}
+          ></button>
           {deleteErrorMsg()}
         </div>
       </Show>

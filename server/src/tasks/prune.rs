@@ -550,8 +550,7 @@ impl PrunerImpl {
                             Ok(Some(f)) => f,
                             Ok(None) => {
                                 *tainted = true;
-                                let msg =
-                                    format!("missing file record: {}", file_digest);
+                                let msg = format!("missing file record: {}", file_digest);
                                 warn!("pack-prune: {}", msg);
                                 issues.push(ScrubIssue {
                                     dataset_id: dataset_id.map(str::to_owned),
@@ -561,10 +560,7 @@ impl PrunerImpl {
                             }
                             Err(err) => {
                                 *tainted = true;
-                                let msg = format!(
-                                    "error loading file {}: {}",
-                                    file_digest, err
-                                );
+                                let msg = format!("error loading file {}: {}", file_digest, err);
                                 warn!("pack-prune: {}", msg);
                                 issues.push(ScrubIssue {
                                     dataset_id: dataset_id.map(str::to_owned),
@@ -598,10 +594,7 @@ impl PrunerImpl {
                                     }
                                     Ok(None) => {
                                         *tainted = true;
-                                        let msg = format!(
-                                            "missing chunk record: {}",
-                                            chunk_digest
-                                        );
+                                        let msg = format!("missing chunk record: {}", chunk_digest);
                                         warn!("pack-prune: {}", msg);
                                         issues.push(ScrubIssue {
                                             dataset_id: dataset_id.map(str::to_owned),
@@ -668,9 +661,7 @@ impl PrunerImpl {
             };
             let eligible = match store.retention {
                 PackRetention::ALL => false,
-                PackRetention::DAYS(days) => {
-                    now - pack.upload_time >= TimeDelta::days(days as i64)
-                }
+                PackRetention::DAYS(days) => now - pack.upload_time >= TimeDelta::days(days as i64),
             };
             if !eligible {
                 retained.push(location);
@@ -770,8 +761,7 @@ impl Pruner for PrunerImpl {
         // Load stores up front; both the datasets phase and the packs phase
         // use this set to verify store references.
         let stores = self.repo.get_stores()?;
-        let known_store_ids: HashSet<String> =
-            stores.iter().map(|s| s.id.clone()).collect();
+        let known_store_ids: HashSet<String> = stores.iter().map(|s| s.id.clone()).collect();
         let datasets = self.repo.get_datasets()?;
 
         // Queues populated during traversal and drained in their own phases.
@@ -900,8 +890,7 @@ impl Pruner for PrunerImpl {
                     if let Some(packfile) = chunk.packfile {
                         pack_queue.insert(packfile);
                     } else {
-                        let msg =
-                            format!("chunk {} has no packfile reference", digest);
+                        let msg = format!("chunk {} has no packfile reference", digest);
                         warn!("scrub: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: None,
@@ -1043,8 +1032,7 @@ impl Pruner for PrunerImpl {
                     store_map.insert(store_id, (store, repo));
                 }
                 Err(err) => {
-                    let msg =
-                        format!("failed to build pack repo for store {}: {}", store_id, err);
+                    let msg = format!("failed to build pack repo for store {}: {}", store_id, err);
                     warn!("pack-prune: {}", msg);
                     issues.push(ScrubIssue {
                         dataset_id: None,
@@ -1098,8 +1086,7 @@ impl Pruner for PrunerImpl {
                     }
                     Err(err) => {
                         reachability_tainted = true;
-                        let msg =
-                            format!("error loading snapshot {}: {}", digest, err);
+                        let msg = format!("error loading snapshot {}: {}", digest, err);
                         warn!("pack-prune: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: Some(dataset.id.clone()),
@@ -1134,10 +1121,7 @@ impl Pruner for PrunerImpl {
                 let checksum: Checksum = match digest_str.parse() {
                     Ok(c) => c,
                     Err(err) => {
-                        let msg = format!(
-                            "unparseable pack digest {}: {}",
-                            digest_str, err
-                        );
+                        let msg = format!("unparseable pack digest {}: {}", digest_str, err);
                         warn!("pack-prune: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: None,
@@ -1167,10 +1151,7 @@ impl Pruner for PrunerImpl {
                 );
                 if pack.locations.is_empty() {
                     if let Err(err) = self.repo.delete_pack(&digest_str) {
-                        let msg = format!(
-                            "failed to delete pack record {}: {}",
-                            digest_str, err
-                        );
+                        let msg = format!("failed to delete pack record {}: {}", digest_str, err);
                         warn!("pack-prune: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: None,
@@ -1178,11 +1159,9 @@ impl Pruner for PrunerImpl {
                         });
                     }
                 } else if changed {
+                    #[allow(clippy::collapsible_if)]
                     if let Err(err) = self.repo.put_pack(&pack) {
-                        let msg = format!(
-                            "failed to update pack record {}: {}",
-                            digest_str, err
-                        );
+                        let msg = format!("failed to update pack record {}: {}", digest_str, err);
                         warn!("pack-prune: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: None,
@@ -1230,6 +1209,7 @@ impl Pruner for PrunerImpl {
                     });
                 }
             } else if changed {
+                #[allow(clippy::collapsible_if)]
                 if let Err(err) = self.repo.put_database(&pack) {
                     let msg = format!(
                         "failed to update database archive record {}: {}",
@@ -2232,11 +2212,7 @@ mod tests {
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
         let issues = pruner.database_scrub().expect("scrub should succeed");
-        assert!(
-            issues.is_empty(),
-            "expected no issues, got: {:?}",
-            issues
-        );
+        assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
     }
 
     #[test]
@@ -2654,9 +2630,8 @@ mod tests {
         mock.expect_get_stores()
             .once()
             .returning(move || Ok(vec![store_clone.clone()]));
-        mock.expect_build_pack_repo().returning(|_| {
-            Ok(Box::new(MockPackRepository::new()))
-        });
+        mock.expect_build_pack_repo()
+            .returning(|_| Ok(Box::new(MockPackRepository::new())));
 
         let pack_digest = Checksum::BLAKE3("pack-reach".to_owned());
         let snapshot_digest = build_reachability_fixture(&mut mock, pack_digest.clone());
@@ -2734,9 +2709,7 @@ mod tests {
         // Record is updated (put_pack) with the ALL location retained.
         mock.expect_put_pack()
             .once()
-            .withf(|p| {
-                p.locations.len() == 1 && p.locations[0].store == "store-all"
-            })
+            .withf(|p| p.locations.len() == 1 && p.locations[0].store == "store-all")
             .returning(|_| Ok(()));
         // delete_pack (record) must never be called.
 
@@ -2764,10 +2737,7 @@ mod tests {
 
         mock.expect_build_pack_repo().returning(|_store| {
             let mut pack_repo = MockPackRepository::new();
-            pack_repo
-                .expect_delete_pack()
-                .once()
-                .returning(|_| Ok(()));
+            pack_repo.expect_delete_pack().once().returning(|_| Ok(()));
             Ok(Box::new(pack_repo))
         });
 
@@ -2982,10 +2952,7 @@ mod tests {
         mock.expect_build_pack_repo().returning(|_| {
             let mut pack_repo = MockPackRepository::new();
             // Only the old database archive should be deleted from the store.
-            pack_repo
-                .expect_delete_pack()
-                .once()
-                .returning(|_| Ok(()));
+            pack_repo.expect_delete_pack().once().returning(|_| Ok(()));
             Ok(Box::new(pack_repo))
         });
 
