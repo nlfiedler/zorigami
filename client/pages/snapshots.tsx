@@ -168,7 +168,6 @@ const ALL_SNAPSHOTS: TypedDocumentNode<Query, QuerySnapshotsArgs> = gql`
   query Snapshots($id: String!) {
     snapshots(id: $id) {
       checksum
-      parent
       startTime
       endTime
       fileCount
@@ -236,7 +235,11 @@ export function Snapshots() {
                     }}
                   >
                     <td>{new Date(item.startTime).toLocaleString()}</td>
-                    <td>{new Date(item.endTime).toLocaleString()}</td>
+                    <td>
+                      {item.endTime
+                        ? new Date(item.endTime).toLocaleString()
+                        : 'running...'}
+                    </td>
                     <td>{item.fileCount}</td>
                     <td>
                       <code>{item.checksum}</code>
@@ -394,7 +397,9 @@ function SnapshotSummary(props: SnapshotSummaryProps) {
         <strong>Started:</strong>{' '}
         {new Date(props.snapshot.startTime).toLocaleString()},{' '}
         <strong>Finished:</strong>{' '}
-        {new Date(props.snapshot.endTime).toLocaleString()}
+        {props.snapshot.endTime
+          ? new Date(props.snapshot.endTime).toLocaleString()
+          : 'running...'}
       </p>
     </div>
   );
