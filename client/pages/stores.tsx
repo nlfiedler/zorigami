@@ -168,6 +168,7 @@ function DeleteStoreButton(props: DeleteStoreButtonProps) {
 
   return (
     <button
+      type="button"
       class="button is-danger"
       disabled={deleteSubmission.pending}
       on:click={() => startDelete()}
@@ -232,6 +233,7 @@ function TestStoreButton(props: TestStoreButtonProps) {
 
   return (
     <button
+      type="button"
       class="button"
       class:is-loading={testSubmission.pending}
       class:is-success={success()}
@@ -258,12 +260,12 @@ interface SaveStoreButtonProps {
   disabled: Accessor<boolean>;
   build: () => StoreInput;
   setError: Setter<string>;
-  saved: () => void;
 }
 
 function SaveStoreButton(props: SaveStoreButtonProps) {
   const client = useApolloClient();
   const [success, setSuccess] = createSignal(false);
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
   const updateAction = action(
     async (): Promise<{ ok: boolean }> => {
       const input = props.build();
@@ -289,7 +291,10 @@ function SaveStoreButton(props: SaveStoreButtonProps) {
         } else {
           props.setError('');
           setSuccess(true);
-          props.saved();
+          // refresh the sidebar list so any changed label shows up there
+          client.refetchQueries({ include: [ALL_STORES] });
+          if (resetTimer) clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => setSuccess(false), 1500);
         }
       }
     }
@@ -299,6 +304,7 @@ function SaveStoreButton(props: SaveStoreButtonProps) {
 
   return (
     <button
+      type="button"
       class="button is-primary"
       class:is-loading={updateSubmission.pending}
       class:is-success={success()}
@@ -318,7 +324,6 @@ interface StoreActionsProps {
   invalid: Accessor<boolean>;
   build: () => StoreInput;
   deleted: () => void;
-  changed: () => void;
 }
 
 // Row of buttons for taking action on the store, with status messages to
@@ -349,7 +354,6 @@ function StoreActions(props: StoreActionsProps) {
               disabled={props.invalid}
               build={props.build}
               setError={setSaveErrorMsg}
-              saved={props.changed}
             />
           </div>
         </div>
@@ -589,12 +593,6 @@ export function StoreDetails() {
     navigate('/stores');
   });
   const startDeleted = useAction(deletedAction);
-  const changedAction = action(async () => {
-    // force the window to reload to show the changes to the pack store, not
-    // just in this details pane, but in the list on the side
-    window.location.reload();
-  });
-  const startChanged = useAction(changedAction);
 
   // use Show vs Suspense since our form needs the data in order to build out
   // the various elements that depend on whatever data is available; the keyed
@@ -613,42 +611,36 @@ export function StoreDetails() {
           <AmazonStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
         <Match when={storeQuery()?.store!.storeType === 'azure'}>
           <AzureStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
         <Match when={storeQuery()?.store!.storeType === 'google'}>
           <GoogleStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
         <Match when={storeQuery()?.store!.storeType === 'local'}>
           <LocalStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
         <Match when={storeQuery()?.store!.storeType === 'minio'}>
           <MinioStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
         <Match when={storeQuery()?.store!.storeType === 'sftp'}>
           <SftpStoreForm
             store={storeQuery()?.store!}
             deleted={() => startDeleted()}
-            changed={() => startChanged()}
           />
         </Match>
       </Switch>
@@ -751,7 +743,6 @@ function PackRetentionForm(props: PackRetentionFormProps) {
 interface LocalStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function LocalStoreForm(props: LocalStoreFormProps) {
@@ -783,7 +774,6 @@ function LocalStoreForm(props: LocalStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -812,7 +802,6 @@ function LocalStoreForm(props: LocalStoreFormProps) {
 interface AmazonStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function AmazonStoreForm(props: AmazonStoreFormProps) {
@@ -863,7 +852,6 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -944,7 +932,6 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
 interface AzureStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function AzureStoreForm(props: AzureStoreFormProps) {
@@ -992,7 +979,6 @@ function AzureStoreForm(props: AzureStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -1068,7 +1054,6 @@ function AzureStoreForm(props: AzureStoreFormProps) {
 interface GoogleStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function GoogleStoreForm(props: GoogleStoreFormProps) {
@@ -1119,7 +1104,6 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -1198,7 +1182,6 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
 interface MinioStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function MinioStoreForm(props: MinioStoreFormProps) {
@@ -1250,7 +1233,6 @@ function MinioStoreForm(props: MinioStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -1304,7 +1286,6 @@ function MinioStoreForm(props: MinioStoreFormProps) {
 interface SftpStoreFormProps {
   store: Store;
   deleted: () => void;
-  changed: () => void;
 }
 
 function SftpStoreForm(props: SftpStoreFormProps) {
@@ -1356,7 +1337,6 @@ function SftpStoreForm(props: SftpStoreFormProps) {
           invalid={invalid}
           build={buildStore}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">

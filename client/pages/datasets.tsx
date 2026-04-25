@@ -258,12 +258,6 @@ export function DatasetDetails() {
     navigate('/datasets');
   });
   const startDeleted = useAction(deletedAction);
-  const changedAction = action(async () => {
-    // force the window to reload to show the changes to the dataset, not just
-    // in this details pane, but in the list on the side
-    window.location.reload();
-  });
-  const startChanged = useAction(changedAction);
 
   // use Show vs Suspense since our form needs the data in order to build out
   // the various elements that depend on whatever data is available; the keyed
@@ -273,7 +267,6 @@ export function DatasetDetails() {
       <DatasetForm
         dataset={datasetQuery()?.dataset!}
         deleted={() => startDeleted()}
-        changed={() => startChanged()}
       />
     </Show>
   );
@@ -292,7 +285,6 @@ const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
 interface DatasetFormProps {
   dataset: Dataset;
   deleted: () => void;
-  changed: () => void;
 }
 
 function DatasetForm(props: DatasetFormProps) {
@@ -389,7 +381,6 @@ function DatasetForm(props: DatasetFormProps) {
           invalid={invalid}
           build={buildDataset}
           deleted={props.deleted}
-          changed={props.changed}
         />
       </div>
       <div class="m-4">
@@ -968,7 +959,6 @@ interface DatasetActionsProps {
   invalid: Accessor<boolean>;
   build: () => DatasetInput;
   deleted: () => void;
-  changed: () => void;
 }
 
 // Row of buttons for taking action on the data set, with status messages to
@@ -995,7 +985,6 @@ function DatasetActions(props: DatasetActionsProps) {
               disabled={props.invalid}
               build={props.build}
               setError={setSaveErrorMsg}
-              saved={props.changed}
             />
           </div>
         </div>
@@ -1032,12 +1021,12 @@ interface SaveDatasetButtonProps {
   disabled: Accessor<boolean>;
   build: () => DatasetInput;
   setError: Setter<string>;
-  saved: () => void;
 }
 
 function SaveDatasetButton(props: SaveDatasetButtonProps) {
   const client = useApolloClient();
   const [success, setSuccess] = createSignal(false);
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
   const updateAction = action(
     async (): Promise<{ ok: boolean }> => {
       const input = props.build();
@@ -1063,7 +1052,10 @@ function SaveDatasetButton(props: SaveDatasetButtonProps) {
         } else {
           props.setError('');
           setSuccess(true);
-          props.saved();
+          // refresh the sidebar list so any changed basepath shows up there
+          client.refetchQueries({ include: [ALL_DATASETS] });
+          if (resetTimer) clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => setSuccess(false), 1500);
         }
       }
     }
