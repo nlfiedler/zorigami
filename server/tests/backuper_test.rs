@@ -238,6 +238,81 @@ fn test_backup_empty_file() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+fn test_backup_empty_directory() -> Result<(), Error> {
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+    let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+    fs::create_dir_all(&pack_base)?;
+    let pack_path = tempfile::tempdir_in(&pack_base)?;
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert(
+        "basepath".to_owned(),
+        pack_path.keep().to_string_lossy().into(),
+    );
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+        retention: PackRetention::ALL,
+    };
+    dbase.put_store(&store)?;
+
+    // create a dataset
+    let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+    fs::create_dir_all(&fixture_base)?;
+    let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+    let mut dataset = entities::Dataset::new(fixture_path.path());
+    dataset.add_store("local123");
+    dataset.chunk_size = 32768;
+    dataset.pack_size = 131072;
+    let dataset_id = dataset.id.clone();
+    dbase.put_dataset(&dataset)?;
+
+    // perform the first backup with a single file
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(DummySubscriber());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
+    let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
+    assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
+    let passphrase = String::from("keyboard cat");
+    let request = Request::new(dataset_id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?;
+    assert!(first_backup.is_some());
+    let first_sha1 = first_backup.unwrap();
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 0);
+    let first_tree_count = counts.tree;
+    assert_eq!(first_tree_count, 1);
+
+    // create an empty directory and perform the second backup; it should
+    // produce a new snapshot even though no new file content was added
+    let empty_dir = fixture_path.path().join("empty-dir");
+    fs::create_dir(&empty_dir)?;
+    let request = Request::new(dataset_id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?;
+    assert!(second_backup.is_some());
+    let second_sha1 = second_backup.unwrap();
+    assert_ne!(first_sha1, second_sha1);
+
+    // file content is unchanged: same number of packs/files/chunks, but the
+    // tree count has grown to reflect the new directory structure
+    let counts = dbase.get_entity_counts().unwrap();
+    assert_eq!(counts.pack, 1);
+    assert_eq!(counts.file, 1);
+    assert_eq!(counts.chunk, 0);
+    assert!(counts.tree > first_tree_count);
+    Ok(())
+}
+
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_backup_no_changes() -> Result<(), Error> {
