@@ -14,6 +14,7 @@ A backup and restore application written in [Rust](https://www.rust-lang.org) an
 * Backups can be run manually, hourly, or daily at a set time of day
 * Snapshots can be pruned automatically by count, by days, or Time Machine style
   - Time Machine-like retention policy keeps all (hourly) snapshots for the last 24 hours, the oldest snapshot from each day for the last 30 days, the oldest snapshot from each week for the last 52 weeks, and the oldest snapshot from each year for the last 10 years.
+* Background tasks that prune snapshots, test restoring a random file, scrub the database to find problems, and prune unused pack files.
 * Cross Platform: Linux, macOS, Windows
 
 ## Shortcomings

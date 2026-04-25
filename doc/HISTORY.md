@@ -62,4 +62,10 @@ Significant refactoring of the supervised actors and application state that mana
 
 The web interface was rewritten using [SolidJS](https://www.solidjs.com) and [TypeScript](https://www.typescriptlang.org) which proved to be a splendid decision for the [tanuki](https://github.com/nlfiedler/tanuki) project. To support this, the GraphQL API received updates to support all of the functionality.
 
+Chunk size is now part of the dataset definition and can be configured in the web interface, along with the pack size.
+
 Implemented a snapshot retention policy similar to that of macOS Time Machine: all (hourly) snapshots for the last 24 hours, the oldest snapshot from each day for the last 30 days, the oldest snapshot from each week for the last 52 weeks, and the oldest snapshot from each year for the last 10 years.
+
+Added configurable bucket naming policy, supporting _random pool_ of size N, _scheduled_ every N days, or a combination of the two (creates a bucket every N days up to M buckets, random after that).
+
+Daily task to prune all datasets according to their snapshot retention policy. Weekly task to select a random file and try restoring it (to a temporary location). Weekly task to scrub the database to check for missing or unreadable records. Montly task to prune unused packs from pack stores, according to their policy. For all of these tasks, any errors are captured and logged to an SQLite database; the home page of the web interface will surface these errors to the user.
