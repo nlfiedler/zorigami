@@ -6,23 +6,6 @@
 |---------+------+---------+-------+--------+--------+--------------+-----------------|
 | tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
 | chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
-** TODO [#C] SolidJS
-*** TODO update =Dockerfile= based on tanuki
-*** TODO update =DEPLOY.txt= regarding macOS installation
-*** TODO snapshots page [6/7]
-- [X] add =snapshots= GraphQL query to return all snapshots for a dataset (in order)
-- [X] show list of snapshots
-- [X] add =/tree= route to show tree by its digest
-- [X] show breadcrumbs of the path leading up to this tree
-- [X] show icons for small files and symbolic links
-- [X] empty files should show something rather than nothing
-- [ ] show status of running snapshot (no end time); add envar to keep backups running
-** TODO [#C] Log rotation (for macOS)
-*** deployment on mini produces 4000 lines in 10 months (457 kb)
-*** alternative to logging to stdout/stderr, write to log files
-*** macOS/launchd does not have a good way of managing log file sizes
-*** should configure logging via envars (?) to write to files that are rotated
-*** https://github.com/estk/log4rs use envars and configuration file
 ** Test improvements
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Restore improvements
@@ -40,8 +23,6 @@
 *** add some ~debug~ logging at regular intervals during the scan phase
 *** Detect and prune stale snapshots that never completely uploaded
 **** Stale snapshots exist in the database but are not referenced elsewhere
-** AWS SDK for Rust now available
-*** c.f. https://aws.amazon.com/blogs/developer/announcing-general-availability-of-the-aws-sdk-for-rust/
 ** Efficient restore
 *** if restore finds an existing workspace, scan contents to build a ~have~ list of chunks vs starting over
 *** if restoring a file over an existing target, skip if checksum of target matches records

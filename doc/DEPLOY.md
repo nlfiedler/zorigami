@@ -27,14 +27,12 @@ This assumes that you are building on the Mac computer in question, hence `local
 ### Build
 
 ```shell
-fvm flutter clean
-fvm flutter pub get
-env BASE_URL=http://localhost:8000 fvm flutter pub run environment_config:generate
-fvm flutter build web
 cargo build --release
+bun run codegen
+bunx vite build
 ```
 
-Server binary is `target/release/server` and web contents are in `build/web`
+Server binary is `target/release/zorigami` and web contents are in `dist`
 
 ### Install / Update
 
@@ -46,7 +44,7 @@ launchctl kill SIGTERM "gui/$(id -u)/zorigami"
 ps -ef | grep -i zorigami
 mkdir -p ~/Applications/Zorigami
 mv target/release/zorigami ~/Applications/Zorigami
-rsync -vcr build/web ~/Applications/Zorigami/
+rsync -vcr dist ~/Applications/Zorigami/
 launchctl enable "gui/$(id -u)/zorigami"
 launchctl kickstart -p "gui/$(id -u)/zorigami"
 ps -ef | grep -i zorigami
@@ -81,6 +79,8 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
         <dict>
             <key>DB_PATH</key>
             <string>/Users/USERNAME/Library/Application Support/Zorigami/dbase</string>
+            <key>ERROR_DB_PATH</key>
+            <string>/Users/USERNAME/Library/Application Support/Zorigami/errors.db</string>
             <key>HOST</key>
             <string>0.0.0.0</string>
             <key>PORT</key>
@@ -161,21 +161,18 @@ How to create a new project and get the service account credentials file.
 1. Create a new project in Google Cloud Platform
 1. Navigate to the **Firestore** page under _DATABASES_
    - Do **not** select _Filestore_ under _STORAGE_, that is a different service
-1. Create a _native_ Firestore database (there can be only one)
-1. Navigate to **APIs & Services**
-1. Open **Credentials** screen
-1. Click _CREATE CREDENTIALS_ and select _Service_ account
+1. Create a _Standard Edition_ with _Native mode_ Firestore database (there can be only one)
+1. Navigate to the **Credentials** page under _APIs & Services_
+1. Click _CREATE CREDENTIALS_ and select **Service account**
 1. Enter an account name and optional description
-1. Click **CREATE** button
-1. Navigate to **IAM & Admin / IAM** and click the **GRANT ACCESS** button
-1. Under the _Assign roles_ section of the dialog...
-1. Start typing the name of the service account and select the result
-1. Under the _Cloud Storage_ category and select _Storage Admin_
+1. Click **Create and continue** button
+1. In the _Permissions_ section find _Cloud Storage_ category and select _Storage Admin_
    - The service account needs to be able to create buckets and objects.
-1. Click **ADD ANOTHER ROLE** button
-1. Under the _Firebase_ category select _Firebase Admin_
+1. Click **Add another role** button
+1. This time find the _Firebase_ category and select _Firebase Admin_
    - The service account needs to be able to create and update documents.
-1. Click **SAVE** button
+1. Click **Done** button
 1. Navigate to **IAM & Admin / Service Accounts**
-1. Click on the _Actions_ 3-dot button and select _Create key_
-1. Choose _JSON_ and click **CREATE** button
+1. Click on the _Actions_ 3-dot button (next to the new account) and select _Manage keys_
+1. Open the **Add key** dropdown and choose _Create new key_
+1. Choose _JSON_ and click **Create** button
