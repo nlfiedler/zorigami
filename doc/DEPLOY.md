@@ -163,7 +163,7 @@ How to create a new project and get the service account credentials file.
    - Do **not** select _Filestore_ under _STORAGE_, that is a different service
 1. Create a _Standard Edition_ with _Native mode_ Firestore database (there can be only one)
 1. Navigate to the **Credentials** page under _APIs & Services_
-1. Click _CREATE CREDENTIALS_ and select **Service account**
+1. Click _Create credentials_ and select **Service account**
 1. Enter an account name and optional description
 1. Click **Create and continue** button
 1. In the _Permissions_ section find _Cloud Storage_ category and select _Storage Admin_
