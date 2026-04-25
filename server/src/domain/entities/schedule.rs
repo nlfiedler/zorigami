@@ -2,6 +2,7 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use chrono::prelude::*;
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -18,9 +19,11 @@ pub enum DayOfWeek {
 }
 
 impl DayOfWeek {
-    /// Return true if the given time is the same weekday as this.
-    pub fn same_day(self, datetime: DateTime<Utc>) -> bool {
-        let weekday = datetime.weekday();
+    /// Return true if the given time is the same weekday as this, after
+    /// converting the time to the given timezone.
+    pub fn same_day(self, datetime: DateTime<Utc>, tz: Tz) -> bool {
+        let local = datetime.with_timezone(&tz);
+        let weekday = local.weekday();
         self.number_from_sunday() == weekday.number_from_sunday()
     }
 
@@ -122,9 +125,10 @@ impl TimeRange {
         NaiveTime::parse_from_str(value, fmt).unwrap_or(NaiveTime::MIN)
     }
 
-    /// Return true if the given time falls within the defined range.
-    pub fn is_within(&self, datetime: DateTime<Utc>) -> bool {
-        let the_time = datetime.num_seconds_from_midnight();
+    /// Return true if the given time falls within the defined range, after
+    /// converting the time to the given timezone.
+    pub fn is_within(&self, datetime: DateTime<Utc>, tz: Tz) -> bool {
+        let the_time = datetime.with_timezone(&tz).num_seconds_from_midnight();
         if self.stop < self.start {
             self.start <= the_time || the_time < self.stop
         } else {
@@ -132,9 +136,10 @@ impl TimeRange {
         }
     }
 
-    /// Compute the time at which to stop, according to this time range.
-    pub fn compute_stop_time(&self, datetime: DateTime<Utc>) -> DateTime<Utc> {
-        let the_time = datetime.num_seconds_from_midnight();
+    /// Compute the time at which to stop, according to this time range. The
+    /// stop time is interpreted as wall-clock in the given timezone.
+    pub fn compute_stop_time(&self, datetime: DateTime<Utc>, tz: Tz) -> DateTime<Utc> {
+        let the_time = datetime.with_timezone(&tz).num_seconds_from_midnight();
         if self.stop < the_time {
             let delta = 86_400 - (the_time - self.stop);
             datetime + chrono::Duration::seconds(delta as i64)
@@ -188,16 +193,18 @@ impl fmt::Display for DayOfMonth {
 }
 
 impl DayOfMonth {
-    /// Return true if the given time is the same day of the month as this.
-    pub fn same_day(self, datetime: DateTime<Utc>) -> bool {
-        let day = datetime.day();
+    /// Return true if the given time is the same day of the month as this,
+    /// after converting the time to the given timezone.
+    pub fn same_day(self, datetime: DateTime<Utc>, tz: Tz) -> bool {
+        let local = datetime.with_timezone(&tz);
+        let day = local.day();
         match self {
             DayOfMonth::Day(d) => day == d as u32,
-            DayOfMonth::First(ref dow) => day < 8 && dow.same_day(datetime),
-            DayOfMonth::Second(ref dow) => day > 7 && day < 15 && dow.same_day(datetime),
-            DayOfMonth::Third(ref dow) => day > 14 && day < 22 && dow.same_day(datetime),
-            DayOfMonth::Fourth(ref dow) => day > 21 && day < 29 && dow.same_day(datetime),
-            DayOfMonth::Fifth(ref dow) => day > 28 && dow.same_day(datetime),
+            DayOfMonth::First(ref dow) => day < 8 && dow.same_day(datetime, tz),
+            DayOfMonth::Second(ref dow) => day > 7 && day < 15 && dow.same_day(datetime, tz),
+            DayOfMonth::Third(ref dow) => day > 14 && day < 22 && dow.same_day(datetime, tz),
+            DayOfMonth::Fourth(ref dow) => day > 21 && day < 29 && dow.same_day(datetime, tz),
+            DayOfMonth::Fifth(ref dow) => day > 28 && dow.same_day(datetime, tz),
         }
     }
 
@@ -276,47 +283,53 @@ impl Schedule {
     }
 
     /// Return true if the given time falls within the range specified by this
-    /// schedule, if any. The time should be the current time ("now").
-    pub fn within_range(&self, time: DateTime<Utc>) -> bool {
+    /// schedule, if any. The time should be the current time ("now"). The
+    /// time range, day of week, and day of month are interpreted in the given
+    /// timezone.
+    pub fn within_range(&self, time: DateTime<Utc>, tz: Tz) -> bool {
         match *self {
             Schedule::Hourly => true,
             Schedule::Daily(None) => true,
-            Schedule::Daily(Some(ref range)) => range.is_within(time),
+            Schedule::Daily(Some(ref range)) => range.is_within(time, tz),
             Schedule::Weekly(None) => true,
-            Schedule::Weekly(Some((ref dow, None))) => dow.same_day(time),
+            Schedule::Weekly(Some((ref dow, None))) => dow.same_day(time, tz),
             Schedule::Weekly(Some((ref dow, Some(ref range)))) => {
-                dow.same_day(time) && range.is_within(time)
+                dow.same_day(time, tz) && range.is_within(time, tz)
             }
             Schedule::Monthly(None) => true,
-            Schedule::Monthly(Some((ref dom, None))) => dom.same_day(time),
+            Schedule::Monthly(Some((ref dom, None))) => dom.same_day(time, tz),
             Schedule::Monthly(Some((ref dom, Some(ref range)))) => {
-                dom.same_day(time) && range.is_within(time)
+                dom.same_day(time, tz) && range.is_within(time, tz)
             }
         }
     }
 
     /// Return true if the given time is past due and the current time falls
-    /// within the specified range, if any.
-    pub fn is_ready(&self, then: DateTime<Utc>) -> bool {
-        self.past_due(then) && self.within_range(Utc::now())
+    /// within the specified range, if any. The range is interpreted in the
+    /// given timezone.
+    pub fn is_ready(&self, then: DateTime<Utc>, tz: Tz) -> bool {
+        self.past_due(then) && self.within_range(Utc::now(), tz)
     }
 
     /// Return the time at which the backup should stop.
     ///
     /// Will return `None` if there is no stop time (i.e. no time range).
     ///
-    /// The time should be the current time ("now").
-    pub fn stop_time(&self, time: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    /// The time should be the current time ("now"); the stop time is
+    /// interpreted as wall-clock in the given timezone.
+    pub fn stop_time(&self, time: DateTime<Utc>, tz: Tz) -> Option<DateTime<Utc>> {
         match *self {
             Schedule::Hourly => None,
             Schedule::Daily(None) => None,
-            Schedule::Daily(Some(ref range)) => Some(range.compute_stop_time(time)),
+            Schedule::Daily(Some(ref range)) => Some(range.compute_stop_time(time, tz)),
             Schedule::Weekly(None) => None,
             Schedule::Weekly(Some((_, None))) => None,
-            Schedule::Weekly(Some((_, Some(ref range)))) => Some(range.compute_stop_time(time)),
+            Schedule::Weekly(Some((_, Some(ref range)))) => Some(range.compute_stop_time(time, tz)),
             Schedule::Monthly(None) => None,
             Schedule::Monthly(Some((_, None))) => None,
-            Schedule::Monthly(Some((_, Some(ref range)))) => Some(range.compute_stop_time(time)),
+            Schedule::Monthly(Some((_, Some(ref range)))) => {
+                Some(range.compute_stop_time(time, tz))
+            }
         }
     }
 }
@@ -427,7 +440,7 @@ mod tests {
             let then = Utc
                 .with_ymd_and_hms(2003, 8, 30, values.4, values.5, 0)
                 .unwrap();
-            assert_eq!(range.is_within(then), values.6, "index: {}", idx);
+            assert_eq!(range.is_within(then, Tz::UTC), values.6, "index: {}", idx);
         }
     }
 
@@ -463,11 +476,11 @@ mod tests {
         let duration = Duration::seconds(3700);
         let then = Utc::now() - duration;
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         let then = Utc::now() + duration;
         assert!(!sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
     }
 
     #[test]
@@ -477,24 +490,24 @@ mod tests {
         let duration = Duration::hours(25);
         let then = Utc::now() - duration;
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // overdue but not within the given range
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Daily(Some(range));
         let then = Utc.with_ymd_and_hms(2018, 10, 14, 9, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
 
         // overdue and within the given range
         let then = Utc.with_ymd_and_hms(2018, 4, 26, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // overdue but not within the given range
         let then = Utc.with_ymd_and_hms(2018, 4, 26, 20, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
     }
 
     #[test]
@@ -507,7 +520,7 @@ mod tests {
         let range = TimeRange::new((now.hour() + 22) % 24, 0, (now.hour() + 2) % 24, 0);
         let sched = Schedule::Daily(Some(range));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(now));
+        assert!(sched.within_range(now, Tz::UTC));
     }
 
     #[test]
@@ -516,31 +529,31 @@ mod tests {
         let sched = Schedule::Weekly(None);
         let then = Utc.with_ymd_and_hms(2018, 5, 8, 9, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // right day of week, no time range
         let sched = Schedule::Weekly(Some((DayOfWeek::Tue, None)));
         let then = Utc.with_ymd_and_hms(2018, 5, 8, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // wrong day of the week
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Weekly(Some((DayOfWeek::Thu, Some(range))));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
 
         // right day of the week, wrong time
         let range = TimeRange::new(10, 0, 12, 0);
         let sched = Schedule::Weekly(Some((DayOfWeek::Tue, Some(range))));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
 
         // right day of the week, within time range
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Weekly(Some((DayOfWeek::Tue, Some(range))));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
     }
 
     #[test]
@@ -554,7 +567,7 @@ mod tests {
         let dow = DayOfWeek::from(now.weekday().number_from_sunday());
         let sched = Schedule::Weekly(Some((dow, Some(range))));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(now));
+        assert!(sched.within_range(now, Tz::UTC));
     }
 
     #[test]
@@ -563,34 +576,34 @@ mod tests {
         let sched = Schedule::Monthly(None);
         let then = Utc.with_ymd_and_hms(2018, 5, 8, 14, 10, 11).unwrap();
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // with a specific date, but too early
         let sched = Schedule::Monthly(Some((DayOfMonth::Day(7), None)));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
 
         // with a specific date, too late
         let sched = Schedule::Monthly(Some((DayOfMonth::Day(9), None)));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
 
         // with a specific date, right on time
         let sched = Schedule::Monthly(Some((DayOfMonth::Day(8), None)));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // with a specific date and time range
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Monthly(Some((DayOfMonth::Day(8), Some(range))));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // with a specific date but not within time range
         let range = TimeRange::new(10, 0, 12, 0);
         let sched = Schedule::Monthly(Some((DayOfMonth::Day(8), Some(range))));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
     }
 
     #[test]
@@ -640,7 +653,7 @@ mod tests {
         for (idx, values) in test_data.iter().enumerate() {
             let sched = Schedule::Monthly(Some((values.1, None)));
             assert!(sched.past_due(values.0));
-            assert_eq!(sched.within_range(values.0), values.2, "index: {}", idx);
+            assert_eq!(sched.within_range(values.0, Tz::UTC), values.2, "index: {}", idx);
         }
     }
 
@@ -651,13 +664,13 @@ mod tests {
         let range = TimeRange::new(12, 0, 18, 0);
         let sched = Schedule::Monthly(Some((DayOfMonth::Fifth(DayOfWeek::Thu), Some(range))));
         assert!(sched.past_due(then));
-        assert!(sched.within_range(then));
+        assert!(sched.within_range(then, Tz::UTC));
 
         // not within time range
         let range = TimeRange::new(10, 0, 12, 0);
         let sched = Schedule::Monthly(Some((DayOfMonth::Fifth(DayOfWeek::Thu), Some(range))));
         assert!(sched.past_due(then));
-        assert!(!sched.within_range(then));
+        assert!(!sched.within_range(then, Tz::UTC));
     }
 
     #[test]
@@ -675,7 +688,7 @@ mod tests {
             let dom = DayOfMonth::from(now.day());
             let sched = Schedule::Monthly(Some((dom, Some(range))));
             assert!(sched.past_due(then));
-            assert!(sched.within_range(now));
+            assert!(sched.within_range(now, Tz::UTC));
         }
     }
 
@@ -685,36 +698,36 @@ mod tests {
 
         // schedules without a range have no stop time
         let sched = Schedule::Hourly;
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
         let sched = Schedule::Daily(None);
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
         let sched = Schedule::Weekly(None);
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
         let sched = Schedule::Weekly(Some((DayOfWeek::Thu, None)));
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
         let sched = Schedule::Monthly(None);
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
         let sched = Schedule::Monthly(Some((DayOfMonth::Fifth(DayOfWeek::Thu), None)));
-        assert!(sched.stop_time(then).is_none());
+        assert!(sched.stop_time(then, Tz::UTC).is_none());
 
         // daily
         let range = TimeRange::new(12, 0, 18, 30);
         let sched = Schedule::Daily(Some(range));
-        let stop_time = sched.stop_time(then).unwrap();
+        let stop_time = sched.stop_time(then, Tz::UTC).unwrap();
         assert_eq!(stop_time.hour(), 18);
         assert_eq!(stop_time.minute(), 30);
 
         // weekly
         let range = TimeRange::new(12, 0, 18, 30);
         let sched = Schedule::Weekly(Some((DayOfWeek::Thu, Some(range))));
-        let stop_time = sched.stop_time(then).unwrap();
+        let stop_time = sched.stop_time(then, Tz::UTC).unwrap();
         assert_eq!(stop_time.hour(), 18);
         assert_eq!(stop_time.minute(), 30);
 
         // monthly
         let range = TimeRange::new(12, 0, 18, 30);
         let sched = Schedule::Monthly(Some((DayOfMonth::Fifth(DayOfWeek::Thu), Some(range))));
-        let stop_time = sched.stop_time(then).unwrap();
+        let stop_time = sched.stop_time(then, Tz::UTC).unwrap();
         assert_eq!(stop_time.hour(), 18);
         assert_eq!(stop_time.minute(), 30);
     }
@@ -724,7 +737,7 @@ mod tests {
         let then = Utc.with_ymd_and_hms(2018, 5, 31, 21, 10, 11).unwrap();
         let range = TimeRange::new(20, 0, 4, 0);
         let sched = Schedule::Daily(Some(range));
-        let stop_time = sched.stop_time(then).unwrap();
+        let stop_time = sched.stop_time(then, Tz::UTC).unwrap();
         assert_eq!(stop_time.year(), 2018);
         assert_eq!(stop_time.month(), 6);
         assert_eq!(stop_time.day(), 1);
@@ -737,9 +750,9 @@ mod tests {
         let schedule = Schedule::Hourly;
         let hour_ago = chrono::Duration::hours(2);
         let end_time = Utc::now() - hour_ago;
-        assert!(schedule.is_ready(end_time));
+        assert!(schedule.is_ready(end_time, Tz::UTC));
         let end_time = Utc::now();
-        assert!(!schedule.is_ready(end_time));
+        assert!(!schedule.is_ready(end_time, Tz::UTC));
     }
 
     #[test]
@@ -747,8 +760,39 @@ mod tests {
         let schedule = Schedule::Daily(None);
         let day_ago = chrono::Duration::hours(25);
         let end_time = Utc::now() - day_ago;
-        assert!(schedule.is_ready(end_time));
+        assert!(schedule.is_ready(end_time, Tz::UTC));
         let end_time = Utc::now();
-        assert!(!schedule.is_ready(end_time));
+        assert!(!schedule.is_ready(end_time, Tz::UTC));
+    }
+
+    #[test]
+    fn test_within_range_non_utc_tz() {
+        // 22:00–02:00 in America/Los_Angeles (PST = UTC-8 in January).
+        let pacific: Tz = "America/Los_Angeles".parse().unwrap();
+        let range = TimeRange::new(22, 0, 2, 0);
+        let sched = Schedule::Daily(Some(range));
+
+        // 2018-01-09 23:00 PST == 2018-01-10 07:00 UTC -- should be in range
+        let in_pst = Utc.with_ymd_and_hms(2018, 1, 10, 7, 0, 0).unwrap();
+        assert!(sched.within_range(in_pst, pacific));
+        // ...but not in range when interpreted as UTC (07:00 UTC is outside 22:00-02:00)
+        assert!(!sched.within_range(in_pst, Tz::UTC));
+
+        // 2018-01-10 12:00 PST == 2018-01-10 20:00 UTC -- not in range either way
+        let outside = Utc.with_ymd_and_hms(2018, 1, 10, 20, 0, 0).unwrap();
+        assert!(!sched.within_range(outside, pacific));
+    }
+
+    #[test]
+    fn test_weekly_tz_day_crossing() {
+        // 23:00 Tuesday PST == 07:00 Wednesday UTC. A Tue-only schedule should
+        // still match when evaluated in Pacific time.
+        let pacific: Tz = "America/Los_Angeles".parse().unwrap();
+        let sched = Schedule::Weekly(Some((DayOfWeek::Tue, None)));
+        // 2018-01-10 07:00 UTC = 2018-01-09 23:00 PST (Tuesday in PST)
+        let crossing = Utc.with_ymd_and_hms(2018, 1, 10, 7, 0, 0).unwrap();
+        assert!(sched.within_range(crossing, pacific));
+        // In UTC, that timestamp is Wednesday -- should not match Tue.
+        assert!(!sched.within_range(crossing, Tz::UTC));
     }
 }

@@ -232,6 +232,11 @@ type Configuration {
   computerBucket: String!
   "Selected policy for generating bucket names, if any."
   bucketNaming: BucketNamingPolicy
+  """
+    IANA timezone name used to interpret dataset schedule times. When
+    `None`, schedules are interpreted as UTC.
+  """
+  timezone: String
 }
 
 "Location, schedule, and pack store for a backup data set."
@@ -301,6 +306,12 @@ type Mutation {
     naming). Returns the updated configuration.
   """
   setBucketNamingPolicy(policy: BucketNamingPolicyInput): Configuration!
+  """
+    Set or clear the IANA timezone used to interpret dataset schedule
+    times. Pass `null` to clear (schedules then interpret as UTC).
+    Returns the updated configuration.
+  """
+  setTimezone(timezone: String): Configuration!
   "Delete the dataset with the given identifier, returning the identifier."
   deleteDataset(id: String!): String!
   "Begin the backup procedure for the dataset with the given identifier."

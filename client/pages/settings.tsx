@@ -15,6 +15,7 @@ import {
   BucketPolicyKind,
   type Mutation,
   type MutationSetBucketNamingPolicyArgs,
+  type MutationSetTimezoneArgs,
   type Query
 } from 'zorigami/generated/graphql.ts';
 
@@ -25,6 +26,7 @@ const CONFIGURATION: TypedDocumentNode<Query, Record<string, never>> = gql`
       username
       computerId
       computerBucket
+      timezone
       bucketNaming {
         policy
         days
@@ -45,6 +47,14 @@ const SET_BUCKET_NAMING_POLICY: TypedDocumentNode<
         days
         limit
       }
+    }
+  }
+`;
+
+const SET_TIMEZONE: TypedDocumentNode<Mutation, MutationSetTimezoneArgs> = gql`
+  mutation SetTimezone($timezone: String) {
+    setTimezone(timezone: $timezone) {
+      timezone
     }
   }
 `;
@@ -78,10 +88,145 @@ export function Settings() {
       </div>
       <Show when={confQuery()}>
         {(conf) => (
-          <BucketNamingForm bucketNaming={conf().configuration.bucketNaming} />
+          <>
+            <TimezoneForm timezone={conf().configuration.timezone} />
+            <BucketNamingForm
+              bucketNaming={conf().configuration.bucketNaming}
+            />
+          </>
         )}
       </Show>
     </Suspense>
+  );
+}
+
+interface TimezoneFormProps {
+  timezone: string | null | undefined;
+}
+
+function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function TimezoneForm(props: TimezoneFormProps) {
+  const detected = browserTimezone();
+  const [value, setValue] = createSignal<string>(props.timezone ?? detected);
+  const [errorMsg, setErrorMsg] = createSignal('');
+  const [success, setSuccess] = createSignal(false);
+
+  const client = useApolloClient();
+  const saveAction = action(
+    async (): Promise<{ ok: boolean }> => {
+      const trimmed = value().trim();
+      await client.mutate({
+        mutation: SET_TIMEZONE,
+        variables: { timezone: trimmed.length === 0 ? null : trimmed }
+      });
+      return { ok: true };
+    },
+    {
+      name: 'setTimezone',
+      onComplete: (s: Submission<any, any>) => {
+        if (s.error) {
+          console.error('set timezone failed:', s.error);
+          setErrorMsg(String(s.error.message ?? s.error));
+          setSuccess(false);
+        } else {
+          setErrorMsg('');
+          setSuccess(true);
+        }
+      }
+    }
+  );
+  const startSave = useAction(saveAction);
+  const saveSubmission = useSubmission(saveAction);
+
+  return (
+    <div class="section">
+      <div class="container">
+        <form on:submit={(ev) => ev.preventDefault()}>
+          <h2 class="title mt-4">Timezone</h2>
+          <nav class="mb-4 level">
+            <div class="level-right">
+              <div class="level-item">
+                <button
+                  type="button"
+                  class="button is-primary"
+                  classList={{
+                    'is-loading': saveSubmission.pending,
+                    'is-success': success()
+                  }}
+                  on:click={() => startSave()}
+                >
+                  <span class="icon">
+                    <i
+                      class={
+                        success() ? 'fas fa-check' : 'fa-solid fa-floppy-disk'
+                      }
+                    ></i>
+                  </span>
+                  <span>Save</span>
+                </button>
+              </div>
+            </div>
+          </nav>
+          <Show when={errorMsg().length > 0}>
+            <div class="notification is-warning">
+              <button class="delete" on:click={() => setErrorMsg('')}></button>
+              {errorMsg()}
+            </div>
+          </Show>
+          <div class="mb-2 field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label" for="timezone-input">
+                IANA Timezone
+              </label>
+            </div>
+            <div class="field-body">
+              <div class="field is-narrow has-addons">
+                <div class="control is-expanded">
+                  <input
+                    id="timezone-input"
+                    class="input"
+                    type="text"
+                    placeholder="UTC"
+                    value={value()}
+                    on:input={(ev) => setValue(ev.target.value)}
+                  />
+                </div>
+                <div class="control">
+                  <button
+                    type="button"
+                    class="button is-light"
+                    title={`Reset to browser timezone (${detected})`}
+                    on:click={() => setValue(detected)}
+                  >
+                    <span class="icon">
+                      <i class="fa-solid fa-globe"></i>
+                    </span>
+                    <span>Use browser timezone</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2 field is-horizontal">
+            <div class="field-label" />
+            <div class="field-body">
+              <p class="help">
+                IANA name (e.g. <code>America/Los_Angeles</code>) used to
+                interpret dataset schedule start/stop times. Leave blank for
+                UTC.
+              </p>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

@@ -899,6 +899,12 @@ impl entities::Configuration {
     fn bucket_naming(&self) -> Option<BucketNamingPolicy> {
         self.bucket_naming.clone().map(BucketNamingPolicy::from)
     }
+
+    /// IANA timezone name used to interpret dataset schedule times. When
+    /// `None`, schedules are interpreted as UTC.
+    fn timezone(&self) -> Option<String> {
+        self.timezone.clone()
+    }
 }
 
 #[juniper::graphql_object(description = "Entry within a saved pack file.")]
@@ -1567,6 +1573,22 @@ impl Mutation {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = UpdateConfiguration::new(Box::new(repo));
         let params = Params::new(bucket_naming);
+        let result = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Set or clear the IANA timezone used to interpret dataset schedule
+    /// times. Pass `null` to clear (schedules then interpret as UTC).
+    /// Returns the updated configuration.
+    fn set_timezone(
+        #[graphql(ctx)] ctx: &GraphContext,
+        timezone: Option<String>,
+    ) -> FieldResult<entities::Configuration> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::update_configuration::{Params, UpdateConfiguration};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = UpdateConfiguration::new(Box::new(repo));
+        let params = Params::with_timezone(timezone);
         let result = usecase.call(params)?;
         Ok(result)
     }

@@ -12,6 +12,7 @@ use crate::tasks::prune;
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
+use chrono_tz::Tz;
 use log::{debug, error, trace, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -138,11 +139,12 @@ impl ScheduleSupervisor {
 
     /// Begin the backup process for all datasets that are ready to run.
     fn start_due_datasets(&self) -> Result<(), Error> {
+        let tz = self.dbase.get_configuration()?.resolved_tz();
         let datasets = self.dbase.get_datasets()?;
         for set in datasets {
-            if let Some(schedule) = should_run(&self.dbase, self.leader.clone(), &set)? {
+            if let Some(schedule) = should_run(&self.dbase, self.leader.clone(), &set, tz)? {
                 let passphrase = packs::get_passphrase();
-                let stop_time = schedule.stop_time(Utc::now());
+                let stop_time = schedule.stop_time(Utc::now(), tz);
                 let request = backup::Request::new(set.id, passphrase, stop_time);
                 self.leader.backup(request)?;
             }
@@ -273,6 +275,7 @@ fn should_run(
     dbase: &Arc<dyn RecordRepository>,
     leader: Arc<dyn RingLeader>,
     dataset: &Dataset,
+    tz: Tz,
 ) -> Result<Option<Schedule>, Error> {
     if !dataset.schedules.is_empty() {
         let end_time: Option<DateTime<Utc>> = if let Some(ref checksum) = dataset.snapshot {
@@ -291,9 +294,9 @@ fn should_run(
         for schedule in dataset.schedules.iter() {
             // consider if backup is overdue based on snapshot
             let mut maybe_run = if let Some(et) = end_time {
-                schedule.is_ready(et)
+                schedule.is_ready(et, tz)
             } else {
-                schedule.within_range(Utc::now())
+                schedule.within_range(Utc::now(), tz)
             };
             // consider how the backup state may affect the decision
             if backup.started.is_some() {
@@ -301,7 +304,7 @@ fn should_run(
                 if backup.errors.is_empty() {
                     if let Some(et) = backup.finished {
                         // a backup ran but there were no changes found
-                        if !schedule.is_ready(et) {
+                        if !schedule.is_ready(et, tz) {
                             maybe_run = false;
                         }
                     } else if backup.status != backup::Status::PAUSED {
@@ -367,6 +370,8 @@ mod tests {
         dataset.add_schedule(Schedule::Hourly);
         let datasets = vec![dataset];
         let mut mock = MockRecordRepository::new();
+        mock.expect_get_configuration()
+            .returning(|| Ok(crate::domain::entities::Configuration::default()));
         mock.expect_get_datasets()
             .returning(move || Ok(datasets.clone()));
         let repo = Arc::new(mock);
@@ -403,7 +408,7 @@ mod tests {
             .returning(|_| None);
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -426,7 +431,7 @@ mod tests {
             .returning(|_| None);
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -455,7 +460,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -486,7 +491,7 @@ mod tests {
             .returning(|_| None);
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -519,7 +524,7 @@ mod tests {
             .returning(|_| None);
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -560,7 +565,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -591,7 +596,7 @@ mod tests {
             .returning(|_| None);
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -630,7 +635,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -667,7 +672,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_some());
@@ -714,7 +719,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -761,7 +766,7 @@ mod tests {
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
         // act
-        let result = should_run(&repo, leader, &dataset_clone);
+        let result = should_run(&repo, leader, &dataset_clone, Tz::UTC);
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

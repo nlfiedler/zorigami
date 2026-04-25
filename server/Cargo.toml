@@ -17,6 +17,7 @@ anyhow = "1.0.55"
 data-encoding = "2.10.0"
 blake3 = "1.5.1"
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 ciborium = "0.2.2"
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }

@@ -113,6 +113,11 @@ impl Model for Configuration {
                         .map_err(|_| anyhow!("limit: cbor into_integer() error"))?;
                     let ii: i128 = ciborium::value::Integer::into(iv);
                     policy_limit = Some(ii as usize);
+                } else if name == "timezone" {
+                    let tz: String = value
+                        .into_text()
+                        .map_err(|_| anyhow!("timezone: cbor into_text() error"))?;
+                    config.timezone = Some(tz);
                 }
             }
         }
@@ -148,6 +153,10 @@ impl Model for Configuration {
                 Value::Text(self.computer_id.clone()),
             ),
         ];
+
+        if let Some(tz) = &self.timezone {
+            fields.push((Value::Text("timezone".into()), Value::Text(tz.clone())));
+        }
 
         if let Some(policy) = &self.bucket_naming {
             match policy {
@@ -1819,6 +1828,26 @@ mod tests {
                 limit: 12,
             })
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_configuration_serde_timezone() -> Result<(), Error> {
+        // default has no timezone
+        let original: Configuration = Default::default();
+        let as_bytes = original.to_bytes()?;
+        let unused_key: Vec<u8> = vec![];
+        let actual = Configuration::from_bytes(&unused_key, &as_bytes)?;
+        assert_eq!(actual.timezone, None);
+
+        // round-trip a populated timezone
+        let original = Configuration {
+            timezone: Some("America/Los_Angeles".to_string()),
+            ..Default::default()
+        };
+        let as_bytes = original.to_bytes()?;
+        let actual = Configuration::from_bytes(&unused_key, &as_bytes)?;
+        assert_eq!(actual.timezone, Some("America/Los_Angeles".to_string()));
         Ok(())
     }
 

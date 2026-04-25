@@ -751,7 +751,10 @@ function ScheduleForm(props: ScheduleFormProps) {
                 <i class="fa-solid fa-hourglass-start"></i>
               </span>
             </p>
-            <p class="help">Start time for daily backups.</p>
+            <p class="help">
+              Start time for daily backups (in the timezone configured in
+              Settings).
+            </p>
           </div>
           <div class="field">
             <p class="control has-icons-left">
@@ -773,7 +776,10 @@ function ScheduleForm(props: ScheduleFormProps) {
                 <i class="fa-solid fa-hourglass-end"></i>
               </span>
             </p>
-            <p class="help">Stop time for daily backups.</p>
+            <p class="help">
+              Stop time for daily backups (in the timezone configured in
+              Settings).
+            </p>
           </div>
           <div class="field">
             <div class="control">

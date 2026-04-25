@@ -1025,6 +1025,9 @@ pub struct Configuration {
     pub computer_id: String,
     /// Selected policy for generating bucket names, if any.
     pub bucket_naming: Option<BucketNamingPolicy>,
+    /// IANA timezone name (e.g. "America/Los_Angeles") used to interpret
+    /// dataset schedule times. `None` means treat schedules as UTC.
+    pub timezone: Option<String>,
 }
 
 impl Configuration {
@@ -1036,6 +1039,15 @@ impl Configuration {
         name.push_str(hostname);
         let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes());
         uuid.to_string()
+    }
+
+    /// Resolve the configured timezone to a `chrono_tz::Tz`, falling back to
+    /// `Tz::UTC` if the timezone is unset or fails to parse.
+    pub fn resolved_tz(&self) -> chrono_tz::Tz {
+        self.timezone
+            .as_deref()
+            .and_then(|name| name.parse::<chrono_tz::Tz>().ok())
+            .unwrap_or(chrono_tz::Tz::UTC)
     }
 }
 
@@ -1049,6 +1061,7 @@ impl Default for Configuration {
             username,
             computer_id,
             bucket_naming: None,
+            timezone: None,
         }
     }
 }
