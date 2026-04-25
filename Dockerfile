@@ -2,7 +2,7 @@
 # build the application binaries
 #
 FROM rust:latest AS builder
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get -q update && \
     apt-get -q -y install clang
 WORKDIR /build
@@ -60,12 +60,12 @@ COPY --from=solidjs /build/dist dist/
 VOLUME /database
 VOLUME /datasets
 VOLUME /packstore
-ENV DB_PATH "/database/dbase"
-ENV ERROR_DB_PATH "/database/errors.db"
+ENV DB_PATH="/database/dbase"
+ENV ERROR_DB_PATH="/database/errors.db"
 ENV HEALTHCHECK_PATH="/liveness"
-ENV HOST "0.0.0.0"
-ENV PORT 8080
-ENV RUST_LOG info
+ENV HOST="0.0.0.0"
+ENV PORT="8080"
+ENV RUST_LOG="info"
 EXPOSE ${PORT}
 HEALTHCHECK CMD ./healthcheck
 ENTRYPOINT ["./zorigami"]
