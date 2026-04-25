@@ -98,10 +98,12 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 
 ## Configuration
 
-Configuration of the application is partly done via environment variables. Defining the data sets, pack stores, and bucket naming policy is done through the web interface (or GraphQL if you like).
+Configuration of the application is partly accomplished using environment variables. Defining the data sets, pack stores, local time zone, and bucket naming policy is done through the web interface (or GraphQL if you like).
 
+- **DATABASE_TYPE**
+  - Either `rocksdb` (the default) or `sqlite` to choose between RocksDB and SQLite
 - **DB_PATH**
-  - Path for the RocksDB database files; defaults to `./tmp/database`
+  - Path for the database files; defaults to `./tmp/database`
 - **ERROR_DB_PATH**
   - Path for the SQLite database that records errors; defaults to `./tmp/errors.db`
 - **HOST**

@@ -6,7 +6,6 @@
 |---------+------+---------+-------+--------+--------+--------------+-----------------|
 | tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
 | chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
-** TODO try adding support for SQLite
 ** Test improvements
 *** make sure a test exists for which only the tree has changed (a file reverted to a previous version)
 ** Restore improvements

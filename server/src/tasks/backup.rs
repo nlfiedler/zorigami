@@ -1444,7 +1444,7 @@ fn pretty_print_duration(duration: Result<Duration, SystemTimeError>) -> String 
 mod tests {
     use super::*;
     use crate::data::repositories::RecordRepositoryImpl;
-    use crate::data::sources::EntityDataSourceImpl;
+    use crate::data::sources::RocksDBEntityDataSource;
     use crate::domain::entities::{self, Checksum, PackRetention};
     use crate::domain::repositories::MockRecordRepository;
     use crate::domain::repositories::RecordRepository;
@@ -1622,7 +1622,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1681,7 +1681,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1729,7 +1729,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1767,7 +1767,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1813,7 +1813,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1859,7 +1859,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1932,7 +1932,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -1977,7 +1977,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -2034,7 +2034,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -2175,7 +2175,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -2357,7 +2357,7 @@ mod tests {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
         fs::create_dir_all(&db_base)?;
         let db_path = tempfile::tempdir_in(&db_base)?;
-        let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
         let repo = RecordRepositoryImpl::new(Arc::new(datasource));
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 

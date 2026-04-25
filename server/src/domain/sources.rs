@@ -170,6 +170,13 @@ pub trait EntityDataSource: Send + Sync {
     /// Return the most recently generated bucket name (lexicographically
     /// greatest), or `None` if no buckets exist.
     fn get_last_bucket(&self) -> Result<Option<String>, Error>;
+
+    /// Return the schema version recorded in the data source, or 0 if no
+    /// version has been recorded yet (e.g. a freshly initialized database).
+    fn get_schema_version(&self) -> Result<u32, Error>;
+
+    /// Record the schema version in the data source.
+    fn set_schema_version(&self, version: u32) -> Result<(), Error>;
 }
 
 ///

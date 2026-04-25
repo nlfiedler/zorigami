@@ -1,6 +1,6 @@
 # zorigami
 
-A backup and restore application written in [Rust](https://www.rust-lang.org) and [SolidJS](https://www.solidjs.com) with a [GraphQL](https://graphql.org) wire protocol. Metadata is stored in [RocksDB](https://rocksdb.org) and file content is stored in encrypted packs using the [EXAF](https://github.com/nlfiedler/exaf-rs) archive file format.
+A backup and restore application written in [Rust](https://www.rust-lang.org) and [SolidJS](https://www.solidjs.com) with a [GraphQL](https://graphql.org) wire protocol. Metadata is stored in [RocksDB](https://rocksdb.org) or [SQLite](https://sqlite.org) and file content is stored in encrypted packs using the [EXAF](https://github.com/nlfiedler/exaf-rs) archive file format.
 
 ## Features
 

@@ -2,20 +2,37 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::Error;
-use server::data::sources::EntityDataSourceImpl;
+use server::data::sources::{RocksDBEntityDataSource, SQLiteEntityDataSource};
 use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::sources::EntityDataSource;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tempfile::TempDir;
 
-#[test]
-fn test_insert_get_chunk() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+// Each test is parameterized over both RocksDB and SQLite implementations of
+// `EntityDataSource`. The test bodies live in helper functions taking
+// `&dyn EntityDataSource`; the per-backend `#[test]` wrappers handle setup.
 
+fn db_base() -> PathBuf {
+    let base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&base).expect("create tmp database dir");
+    base
+}
+
+fn setup_rocksdb() -> Result<(TempDir, Box<dyn EntityDataSource>), Error> {
+    let tmp = tempfile::tempdir_in(db_base())?;
+    let ds = RocksDBEntityDataSource::new(tmp.path())?;
+    Ok((tmp, Box::new(ds)))
+}
+
+fn setup_sqlite() -> Result<(TempDir, Box<dyn EntityDataSource>), Error> {
+    let tmp = tempfile::tempdir_in(db_base())?;
+    let ds = SQLiteEntityDataSource::new(tmp.path())?;
+    Ok((tmp, Box::new(ds)))
+}
+
+fn run_insert_get_chunk(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     // missing Chunk returns None
     let missingsum = Checksum::SHA1("cafebabedeadbeef".to_owned());
     let result = datasource.get_chunk(&missingsum);
@@ -69,7 +86,6 @@ fn test_insert_get_chunk() -> Result<(), Error> {
         actual.digest.to_string(),
         "blake3-ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1"
     );
-    // skipped offset is always zero
     assert_eq!(actual.offset, 0);
     assert_eq!(actual.length, 0);
     assert!(actual.filepath.is_none());
@@ -82,12 +98,18 @@ fn test_insert_get_chunk() -> Result<(), Error> {
 }
 
 #[test]
-fn test_insert_get_pack() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_insert_get_chunk_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_insert_get_chunk(ds.as_ref())
+}
 
+#[test]
+fn test_insert_get_chunk_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_insert_get_chunk(ds.as_ref())
+}
+
+fn run_insert_get_pack(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
     let pack = entities::Pack::new(digest1.clone(), coords);
@@ -101,17 +123,22 @@ fn test_insert_get_pack() -> Result<(), Error> {
     assert_eq!(actual.locations.len(), pack.locations.len());
     assert_eq!(actual.locations.len(), 1);
     assert_eq!(actual.locations[0], pack.locations[0]);
-
     Ok(())
 }
 
 #[test]
-fn test_insert_get_database() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_insert_get_pack_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_insert_get_pack(ds.as_ref())
+}
 
+#[test]
+fn test_insert_get_pack_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_insert_get_pack(ds.as_ref())
+}
+
+fn run_insert_get_database(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let digest1 = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
     let pack = entities::Pack::new(digest1.clone(), coords);
@@ -137,7 +164,6 @@ fn test_insert_get_database() -> Result<(), Error> {
     let pack = entities::Pack::new(digest3.clone(), coords);
     datasource.insert_database(&pack).unwrap();
 
-    // test get_databases()
     let mut packs = datasource.get_databases().unwrap();
     assert_eq!(packs.len(), 3);
     packs.sort_unstable_by(|a, b| a.digest.partial_cmp(&b.digest).unwrap());
@@ -148,13 +174,18 @@ fn test_insert_get_database() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_delete_store() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_insert_get_database_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_insert_get_database(ds.as_ref())
+}
 
-    // populate the data source with stores
+#[test]
+fn test_insert_get_database_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_insert_get_database(ds.as_ref())
+}
+
+fn run_put_get_delete_store(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let mut properties: HashMap<String, String> = HashMap::new();
     properties.insert("basepath".to_owned(), "/home/planet".to_owned());
     let store = entities::Store {
@@ -176,7 +207,6 @@ fn test_put_get_delete_store() -> Result<(), Error> {
     };
     datasource.put_store(&store).unwrap();
 
-    // retrieve all known pack stores
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 2);
     assert!(!stores[0].id.starts_with("store/"));
@@ -193,7 +223,6 @@ fn test_put_get_delete_store() -> Result<(), Error> {
     assert!(result.is_ok());
     assert!(result.unwrap().is_none());
 
-    // delete one of the stores
     datasource.delete_store("deadbeef").unwrap();
     let stores = datasource.get_stores().unwrap();
     assert_eq!(stores.len(), 1);
@@ -202,19 +231,23 @@ fn test_put_get_delete_store() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_delete_datasets() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_delete_store_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_delete_store(ds.as_ref())
+}
 
-    // populate the data source with datasets
+#[test]
+fn test_put_get_delete_store_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_delete_store(ds.as_ref())
+}
+
+fn run_put_get_delete_datasets(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let dataset = entities::Dataset::new(Path::new("/home/planet"));
     datasource.put_dataset(&dataset).unwrap();
     let dataset = entities::Dataset::new(Path::new("/home/town"));
     datasource.put_dataset(&dataset).unwrap();
 
-    // retrieve all known datasets
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);
     assert!(!datasets[0].id.starts_with("dataset/"));
@@ -232,7 +265,6 @@ fn test_put_get_delete_datasets() -> Result<(), Error> {
     let actual = datasource.get_dataset(&datasets[0].id).unwrap();
     assert!(actual.is_some());
 
-    // delete one of the datasets
     datasource.delete_dataset(&datasets[0].id).unwrap();
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 1);
@@ -240,12 +272,18 @@ fn test_put_get_delete_datasets() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_configuration() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_delete_datasets_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_delete_datasets(ds.as_ref())
+}
 
+#[test]
+fn test_put_get_delete_datasets_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_delete_datasets(ds.as_ref())
+}
+
+fn run_put_get_configuration(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let expected: entities::Configuration = Default::default();
     datasource.put_configuration(&expected).unwrap();
     let option = datasource.get_configuration().unwrap();
@@ -258,12 +296,18 @@ fn test_put_get_configuration() -> Result<(), Error> {
 }
 
 #[test]
-fn test_insert_get_file() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_configuration_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_configuration(ds.as_ref())
+}
 
+#[test]
+fn test_put_get_configuration_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_configuration(ds.as_ref())
+}
+
+fn run_insert_get_file(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
     let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let chunks = vec![(0, file_digest.clone())];
@@ -283,12 +327,18 @@ fn test_insert_get_file() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_tree() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_insert_get_file_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_insert_get_file(ds.as_ref())
+}
 
+#[test]
+fn test_insert_get_file_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_insert_get_file(ds.as_ref())
+}
+
+fn run_put_get_tree(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
     let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let reference = entities::TreeReference::FILE(file_digest);
@@ -308,12 +358,18 @@ fn test_put_get_tree() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_xattr() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_tree_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_tree(ds.as_ref())
+}
 
+#[test]
+fn test_put_get_tree_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_tree(ds.as_ref())
+}
+
+fn run_put_get_xattr(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let raw_xattr: Vec<u8> = vec![
         0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30, 0xA0, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
@@ -332,12 +388,18 @@ fn test_put_get_xattr() -> Result<(), Error> {
 }
 
 #[test]
-fn test_put_get_snapshot() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_xattr_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_xattr(ds.as_ref())
+}
 
+#[test]
+fn test_put_get_xattr_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_xattr(ds.as_ref())
+}
+
+fn run_put_get_snapshot(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
     let file_counts = entities::FileCounts {
@@ -368,13 +430,18 @@ fn test_put_get_snapshot() -> Result<(), Error> {
 }
 
 #[test]
-fn test_record_counts() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_put_get_snapshot_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_put_get_snapshot(ds.as_ref())
+}
 
-    // file(s)
+#[test]
+fn test_put_get_snapshot_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_put_get_snapshot(ds.as_ref())
+}
+
+fn run_record_counts(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
     let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let chunks = vec![(0, file_digest.clone())];
@@ -386,7 +453,6 @@ fn test_record_counts() -> Result<(), Error> {
     let file = entities::File::new(file_digest.clone(), 4096, chunks);
     datasource.insert_file(&file).unwrap();
 
-    // tree(s)
     let blake3sum = "659d4eb27ed9e20095964d07f3e821cd5160c53385562df727e98eb815bb371f";
     let file_digest = Checksum::BLAKE3(String::from(blake3sum));
     let reference = entities::TreeReference::FILE(file_digest);
@@ -395,7 +461,6 @@ fn test_record_counts() -> Result<(), Error> {
     let tree = entities::Tree::new(vec![entry], 1);
     datasource.insert_tree(&tree).unwrap();
 
-    // chunk(s)
     let digest1 = Checksum::BLAKE3(
         "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
     );
@@ -413,13 +478,11 @@ fn test_record_counts() -> Result<(), Error> {
     let chunk3 = entities::Chunk::new(digest3, 64000, 99999).packfile(packsum1);
     assert!(datasource.insert_chunk(&chunk3).is_ok());
 
-    // pack(s)
     let digest1 = Checksum::SHA1(String::from("bc1a3198db79036e56b30f0ab307cee55e845907"));
     let coords = vec![entities::PackLocation::new("store1", "bucket1", "object1")];
     let pack = entities::Pack::new(digest1.clone(), coords);
     datasource.insert_pack(&pack).unwrap();
 
-    // snapshot(s)
     let parent = Checksum::SHA1(String::from("65ace06cc7f835c497811ea7199968a119eeba4b"));
     let tree = Checksum::SHA1(String::from("811ea7199968a119eeba4b65ace06cc7f835c497"));
     let snapshot = entities::Snapshot::new(Some(parent), tree, Default::default());
@@ -438,11 +501,18 @@ fn test_record_counts() -> Result<(), Error> {
 }
 
 #[test]
-fn test_database_backup_restore() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_record_counts_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_record_counts(ds.as_ref())
+}
+
+#[test]
+fn test_record_counts_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_record_counts(ds.as_ref())
+}
+
+fn run_database_backup_restore(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let mut config = entities::Configuration {
         hostname: "localhost".into(),
         username: "charlie".into(),
@@ -450,22 +520,18 @@ fn test_database_backup_restore() -> Result<(), Error> {
     };
     datasource.put_configuration(&config)?;
 
-    // backup the database
-    let backup_path = tempfile::tempdir_in(&db_base)?;
+    let backup_path = tempfile::tempdir_in(db_base())?;
     datasource
         .create_backup(Some(backup_path.path().to_path_buf()))
         .unwrap();
 
-    // modify the database
     config.hostname = "remotehost".into();
     datasource.put_configuration(&config)?;
 
-    // restore from backup
     datasource
         .restore_from_backup(Some(backup_path.path().to_path_buf()))
         .unwrap();
 
-    // verify contents of restored database
     let actual = datasource.get_configuration()?;
     assert!(actual.is_some());
     let config = actual.unwrap();
@@ -475,19 +541,22 @@ fn test_database_backup_restore() -> Result<(), Error> {
 }
 
 #[test]
-fn test_bucket_operations() -> Result<(), Error> {
-    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-    fs::create_dir_all(&db_base)?;
-    let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+fn test_database_backup_restore_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_database_backup_restore(ds.as_ref())
+}
 
-    // empty-state assertions
+#[test]
+fn test_database_backup_restore_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_database_backup_restore(ds.as_ref())
+}
+
+fn run_bucket_operations(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     assert_eq!(datasource.count_buckets()?, 0);
     assert!(datasource.get_last_bucket()?.is_none());
     assert!(datasource.get_random_bucket()?.is_none());
 
-    // 61-char ASCII names matching the production bucket name length, chosen
-    // so lexicographic order is predictable for get_last_bucket().
     let name_a = "a".repeat(61);
     let name_b = "b".repeat(61);
     let name_c = "c".repeat(61);
@@ -506,9 +575,41 @@ fn test_bucket_operations() -> Result<(), Error> {
         .expect("should pick a bucket");
     assert!([name_a.as_str(), name_b.as_str(), name_c.as_str()].contains(&picked.as_str()));
 
-    // add_bucket is idempotent for the same name — count stays the same
     datasource.add_bucket(&name_b)?;
     assert_eq!(datasource.count_buckets()?, 3);
-
     Ok(())
+}
+
+#[test]
+fn test_bucket_operations_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_bucket_operations(ds.as_ref())
+}
+
+#[test]
+fn test_bucket_operations_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_bucket_operations(ds.as_ref())
+}
+
+fn run_schema_version_roundtrip(datasource: &dyn EntityDataSource) -> Result<(), Error> {
+    // freshly created database reports 0 (unset)
+    assert_eq!(datasource.get_schema_version()?, 0);
+    datasource.set_schema_version(1)?;
+    assert_eq!(datasource.get_schema_version()?, 1);
+    datasource.set_schema_version(7)?;
+    assert_eq!(datasource.get_schema_version()?, 7);
+    Ok(())
+}
+
+#[test]
+fn test_schema_version_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    run_schema_version_roundtrip(ds.as_ref())
+}
+
+#[test]
+fn test_schema_version_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    run_schema_version_roundtrip(ds.as_ref())
 }

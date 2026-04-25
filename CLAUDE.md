@@ -49,7 +49,7 @@ The backend follows clean architecture with three layers:
 
 - **`server/src/preso/`** — Presentation layer. GraphQL schema and resolvers (Juniper + Actix-web). This is the entry point for all client interactions.
 - **`server/src/domain/`** — Business logic. Entities, repository traits, use cases, and domain services. No I/O here—only interfaces.
-- **`server/src/data/`** — Data access. RocksDB-backed implementations of the domain repository/source traits.
+- **`server/src/data/`** — Data access. Two `EntityDataSource` implementations live under `server/src/data/sources/`: `RocksDBEntityDataSource` (CBOR blobs over `database_rocks`) and `SQLiteEntityDataSource` (normalized columns via `rusqlite`). Selected at startup via the `DATABASE_TYPE` env var.
 
 ### Background Tasks (`server/src/tasks/`)
 
@@ -94,7 +94,8 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 | Variable | Purpose |
 |---|---|
 | `RUST_LOG` | Log level (e.g., `info`, `debug`) |
-| `DB_PATH` | Override RocksDB database path |
+| `DB_PATH` | Override entity database path |
+| `DATABASE_TYPE` | Selects entity-store backend: `rocksdb` (default) or `sqlite` |
 | `HOST` / `PORT` | Server bind address/port |
 | `PRUNE_INTERVAL_HOURS` | Pruning check interval |
 | `DATABASE_SCRUB_INTERVAL_DAYS` | Interval between database integrity scrubs (default 7, clamped 1-30) |

@@ -7,15 +7,13 @@
 
 use actix_cors::Cors;
 use actix_files::{Files, NamedFile};
-use actix_web::{
-    App, HttpResponse, HttpServer, Result, error::InternalError, http, middleware, web,
-};
+use actix_web::{App, HttpResponse, HttpServer, Result, http, middleware, web};
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::repositories::errors::ErrorRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
+use server::data::sources::{build_entity_data_source, verify_schema_version};
 use server::domain::repositories::{ErrorRepository, RecordRepository};
 use server::domain::sources::EntityDataSource;
 use server::preso::graphql;
@@ -68,6 +66,15 @@ static ERROR_REPO: LazyLock<Arc<dyn ErrorRepository>> = LazyLock::new(|| {
     Arc::new(repo)
 });
 
+// Shared entity data source, constructed once at startup. Opening a new
+// backend (RocksDB or SQLite) per GraphQL request and per supervisor start is
+// wasteful, and for the SQLite backend each open is a fresh connection plus
+// WAL handshake. Share a single instance whose internal locking serializes
+// access as appropriate.
+static ENTITY_DATA_SOURCE: LazyLock<Arc<dyn EntityDataSource>> = LazyLock::new(|| {
+    build_entity_data_source(DB_PATH.as_path()).expect("failed to open entity database")
+});
+
 // Application state store.
 static STATE_STORE: LazyLock<Arc<dyn StateStore>> =
     LazyLock::new(|| Arc::new(StateStoreImpl::new()));
@@ -99,9 +106,7 @@ async fn graphql(
     st: web::Data<Arc<graphql::Schema>>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
-    let source = EntityDataSourceImpl::new(DB_PATH.as_path())
-        .map_err(|e| InternalError::new(e, http::StatusCode::INTERNAL_SERVER_ERROR))?;
-    let datasource: Arc<dyn EntityDataSource> = Arc::new(source);
+    let datasource = ENTITY_DATA_SOURCE.clone();
     let leader = RING_LEADER.clone();
     let errors = ERROR_REPO.clone();
     let ctx = Arc::new(graphql::GraphContext::new(datasource, leader, errors));
@@ -123,15 +128,10 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
             error!("error stopping supervisor: {}", err);
         }
     } else if state.scheduler == state::SchedulerState::Starting {
-        match EntityDataSourceImpl::new(DB_PATH.as_path()) {
-            Ok(datasource) => {
-                let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-                let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-                if let Err(err) = SCHEDULER.start(dbase) {
-                    error!("error starting supervisor: {}", err);
-                }
-            }
-            Err(err) => error!("error opening database: {}", err),
+        let repo = RecordRepositoryImpl::new(ENTITY_DATA_SOURCE.clone());
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+        if let Err(err) = SCHEDULER.start(dbase) {
+            error!("error starting supervisor: {}", err);
         }
     }
     if state.leader == state::LeaderState::Stopping {
@@ -139,16 +139,11 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
             error!("error stopping restorer: {}", err);
         }
     } else if state.leader == state::LeaderState::Starting {
-        match EntityDataSourceImpl::new(DB_PATH.as_path()) {
-            Ok(datasource) => {
-                let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-                let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-                let errors = ERROR_REPO.clone();
-                if let Err(err) = RING_LEADER.start(dbase, errors) {
-                    error!("error starting file restorer: {}", err);
-                }
-            }
-            Err(err) => error!("error opening database: {}", err),
+        let repo = RecordRepositoryImpl::new(ENTITY_DATA_SOURCE.clone());
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+        let errors = ERROR_REPO.clone();
+        if let Err(err) = RING_LEADER.start(dbase, errors) {
+            error!("error starting file restorer: {}", err);
         }
     }
 }
@@ -170,6 +165,13 @@ async fn main() -> io::Result<()> {
         graphql::write_schema(&path)?;
         println!("GraphQL schema written to {path}");
         return Ok(());
+    }
+
+    // Verify the on-disk schema version matches what this build expects. A
+    // mismatch is fatal: the user must wipe DB_PATH and recreate.
+    if let Err(err) = verify_schema_version(ENTITY_DATA_SOURCE.as_ref()) {
+        error!("{}", err);
+        return Err(io::Error::other(err.to_string()));
     }
 
     STATE_STORE.subscribe("super-manager", manage_supervisors);

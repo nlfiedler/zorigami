@@ -3,7 +3,7 @@
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
+use server::data::sources::RocksDBEntityDataSource;
 use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::repositories::RecordRepository;
 use server::tasks::backup::{self, Backuper, BackuperImpl};
@@ -155,7 +155,7 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path())?;
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -390,7 +390,7 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path()).unwrap();
+    let datasource = RocksDBEntityDataSource::new(db_path.path()).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -521,7 +521,7 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
 //     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
 //     fs::create_dir_all(&db_base)?;
 //     let db_path = tempfile::tempdir_in(&db_base)?;
-//     let datasource = EntityDataSourceImpl::new(db_path.path()).unwrap();
+//     let datasource = RocksDBEntityDataSource::new(db_path.path()).unwrap();
 //     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
 //     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -628,7 +628,7 @@ fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path())?;
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -768,7 +768,7 @@ fn test_restorer_backup_restore_small() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path())?;
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 

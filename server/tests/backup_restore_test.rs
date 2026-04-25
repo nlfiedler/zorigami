@@ -5,7 +5,7 @@ use anyhow::Error;
 use dotenvy::dotenv;
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::repositories::errors::ErrorRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
+use server::data::sources::RocksDBEntityDataSource;
 use server::domain::entities::schedule::Schedule;
 use server::domain::entities::{self, Checksum, PackRetention};
 use server::domain::repositories::{ErrorRepository, RecordRepository};
@@ -41,7 +41,7 @@ async fn test_backup_restore_async_store() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path())?;
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 

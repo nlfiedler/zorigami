@@ -3,7 +3,7 @@
 //
 use anyhow::Error;
 use server::data::repositories::RecordRepositoryImpl;
-use server::data::sources::EntityDataSourceImpl;
+use server::data::sources::RocksDBEntityDataSource;
 use server::domain::entities::{self, PackRetention};
 use server::domain::repositories::RecordRepository;
 use server::tasks::backup::{Backuper, BackuperImpl, OutOfTimeFailure, Request, Subscriber};
@@ -57,7 +57,7 @@ fn test_continue_backup() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -135,7 +135,7 @@ fn test_backup_out_of_time() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -188,7 +188,7 @@ fn test_backup_empty_file() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(&db_path).unwrap();
+    let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
@@ -244,7 +244,7 @@ async fn test_backup_no_changes() -> Result<(), Error> {
     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
     fs::create_dir_all(&db_base)?;
     let db_path = tempfile::tempdir_in(&db_base)?;
-    let datasource = EntityDataSourceImpl::new(db_path.path())?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path())?;
     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
