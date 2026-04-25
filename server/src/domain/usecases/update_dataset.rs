@@ -48,6 +48,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
             ));
         }
         dataset.basepath = params.basepath;
+        dataset.chunk_size = params.chunk_size;
         dataset.pack_size = params.pack_size;
         dataset.excludes = params
             .excludes
@@ -76,6 +77,8 @@ pub struct Params {
     schedules: Vec<Schedule>,
     /// Path for temporary pack building.
     workspace: Option<PathBuf>,
+    /// Target size in bytes for content-defined chunks.
+    chunk_size: usize,
     /// Target size in bytes for pack files.
     pack_size: u64,
     /// Identifiers of the stores to contain pack files.
@@ -93,6 +96,7 @@ impl Params {
         basepath: PathBuf,
         schedules: Vec<Schedule>,
         workspace: Option<PathBuf>,
+        chunk_size: usize,
         pack_size: u64,
         stores: Vec<String>,
         excludes: Vec<String>,
@@ -103,6 +107,7 @@ impl Params {
             basepath,
             schedules,
             workspace,
+            chunk_size,
             pack_size,
             stores,
             excludes,
@@ -118,6 +123,7 @@ impl From<Dataset> for Params {
             val.basepath,
             val.schedules,
             Some(val.workspace),
+            val.chunk_size,
             val.pack_size,
             val.stores,
             val.excludes,
@@ -165,6 +171,7 @@ mod tests {
             basepath: basepath.clone(),
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -196,6 +203,7 @@ mod tests {
             basepath: basepath.clone(),
             schedules: vec![],
             workspace: Some(workspace.clone()),
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -226,6 +234,7 @@ mod tests {
             basepath: basepath.clone(),
             workspace: None,
             schedules: vec![],
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec!["".to_owned()],
@@ -261,6 +270,7 @@ mod tests {
             basepath,
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -282,6 +292,7 @@ mod tests {
             basepath: PathBuf::from("/definitely/does/not/exist/zorigami-test"),
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -315,6 +326,7 @@ mod tests {
             basepath: new_basepath,
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -347,6 +359,7 @@ mod tests {
             basepath: basepath.clone(),
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
@@ -373,6 +386,7 @@ mod tests {
             basepath: file_path,
             schedules: vec![],
             workspace: None,
+            chunk_size: 1_048_576,
             pack_size: 33_554_432,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
