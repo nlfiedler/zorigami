@@ -158,6 +158,13 @@ async fn main() -> io::Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
 
+    // Both `aws-lc-rs` and `ring` are pulled in by transitive deps, so rustls
+    // 0.23 cannot auto-select a CryptoProvider. Install one explicitly before
+    // any TLS connection is opened (e.g. by the Google Cloud Storage client).
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls CryptoProvider");
+
     if let Ok(path) = std::env::var("GENERATE_SDL") {
         // once the schema has been written, exit immediatly
         graphql::write_schema(&path)?;
