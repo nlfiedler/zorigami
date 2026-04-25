@@ -1,14 +1,13 @@
 //
-// Copyright (c) 2023 Nathan Fiedler
+// Copyright (c) 2025 Nathan Fiedler
 //
 use anyhow::{Error, anyhow};
-use bytes::Bytes;
-use futures::{FutureExt, TryStreamExt};
-use rusoto_core::{Region, RusotoError};
-use rusoto_s3::{
-    CreateBucketError, CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest,
-    GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3, S3Client, StreamingBody,
-};
+use aws_config::{BehaviorVersion, Region};
+use aws_credential_types::Credentials;
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::operation::create_bucket::CreateBucketError;
+use aws_sdk_s3::primitives::ByteStream;
 use std::collections::HashMap;
 use std::path::Path;
 use store_core::{CollisionError, Coordinates};
@@ -20,10 +19,7 @@ use store_core::{CollisionError, Coordinates};
 #[derive(Clone, Debug)]
 pub struct MinioStore {
     store_id: String,
-    region: String,
-    endpoint: String,
-    access_key: String,
-    secret_key: String,
+    s3: aws_sdk_s3::Client,
 }
 
 impl MinioStore {
@@ -41,32 +37,46 @@ impl MinioStore {
         let secret_key = props
             .get("secret_key")
             .ok_or_else(|| anyhow!("missing secret_key property"))?;
+
+        // aws-sdk requires a full URL (scheme + host). Historically we accepted
+        // bare host[:port] forms; preserve that for clearly local endpoints
+        // (where http is the obvious intent) but require an explicit scheme
+        // for anything else, so we don't silently downgrade production traffic
+        // to cleartext.
+        let endpoint_url = if endpoint.starts_with("http://") || endpoint.starts_with("https://") {
+            endpoint.clone()
+        } else {
+            let host = endpoint.split(':').next().unwrap_or("");
+            if host == "localhost" || host == "127.0.0.1" || host == "[::1]" {
+                format!("http://{}", endpoint)
+            } else {
+                return Err(anyhow!(
+                    "endpoint must include scheme (http:// or https://): {}",
+                    endpoint
+                ));
+            }
+        };
+
+        let creds = Credentials::new(
+            access_key.clone(),
+            secret_key.clone(),
+            None,
+            None,
+            "zorigami-static",
+        );
+        let s3_config = aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .credentials_provider(SharedCredentialsProvider::new(creds))
+            .region(Region::new(region.clone()))
+            .endpoint_url(endpoint_url)
+            .force_path_style(true)
+            .build();
+        let s3 = aws_sdk_s3::Client::from_conf(s3_config);
+
         Ok(Self {
             store_id: store_id.to_owned(),
-            region: region.to_owned(),
-            endpoint: endpoint.to_owned(),
-            access_key: access_key.to_owned(),
-            secret_key: secret_key.to_owned(),
+            s3,
         })
-    }
-
-    fn connect(&self) -> S3Client {
-        //
-        // Credentials are picked up in a variety of ways, see the rusoto docs:
-        // https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
-        //
-        let region = Region::Custom {
-            name: self.region.clone(),
-            endpoint: self.endpoint.clone(),
-        };
-        let client = rusoto_core::request::HttpClient::new().unwrap();
-        let creds = rusoto_credential::StaticProvider::new(
-            self.access_key.clone(),
-            self.secret_key.clone(),
-            None,
-            None,
-        );
-        S3Client::new_with(client, creds, region)
     }
 
     pub fn store_pack_sync(
@@ -85,28 +95,21 @@ impl MinioStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        let client = self.connect();
         // the bucket must exist before receiving objects; the bucket may be
         // renamed if the chosen name collides with an existing bucket
-        let bucket = try_create_bucket(&client, bucket).await?;
-        //
-        // An alternative to streaming the entire file is to use a multi-part
-        // upload and upload the large file in chunks.
-        //
-        let meta = std::fs::metadata(packfile)?;
-        let read_stream = tokio::fs::read(packfile.to_owned())
-            .into_stream()
-            .map_ok(Bytes::from);
-        let req = PutObjectRequest {
-            bucket: bucket.to_owned(),
-            key: object.to_owned(),
-            content_length: Some(meta.len() as i64),
-            body: Some(StreamingBody::new(read_stream)),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        let result = client.put_object(req).await?;
-        if let Some(ref etag) = result.e_tag {
+        let bucket = try_create_bucket(&self.s3, bucket).await?;
+        let body = ByteStream::from_path(packfile)
+            .await
+            .map_err(anyhow::Error::new)?;
+        let result = self
+            .s3
+            .put_object()
+            .bucket(&bucket)
+            .key(object)
+            .body(body)
+            .send()
+            .await?;
+        if let Some(etag) = result.e_tag() {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
             // AWS S3 quotes the etag values for some reason
@@ -124,28 +127,20 @@ impl MinioStore {
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        let client = self.connect();
-        let request = GetObjectRequest {
-            bucket: location.bucket.clone(),
-            key: location.object.clone(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        let result = client.get_object(request).await?;
-        let stream = result.body.ok_or_else(|| {
-            anyhow!(format!(
-                "failed to retrieve object {} from bucket {}",
-                location.object.clone(),
-                location.bucket.clone()
-            ))
-        })?;
+        let result = self
+            .s3
+            .get_object()
+            .bucket(&location.bucket)
+            .key(&location.object)
+            .send()
+            .await?;
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(outfile)
             .await?;
-        let mut body = stream.into_async_read();
+        let mut body = result.body.into_async_read();
         tokio::io::copy(&mut body, &mut file).await?;
         Ok(())
     }
@@ -155,17 +150,12 @@ impl MinioStore {
     }
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // wait for the future(s) to complete
-        let result = client.list_buckets().await?;
-        let mut results = Vec::new();
-        if let Some(buckets) = result.buckets {
-            for bucket in buckets {
-                if let Some(name) = bucket.name {
-                    results.push(name);
-                }
-            }
-        }
+        let result = self.s3.list_buckets().send().await?;
+        let results: Vec<String> = result
+            .buckets()
+            .iter()
+            .filter_map(|b| b.name().map(|s| s.to_string()))
+            .collect();
         Ok(results)
     }
 
@@ -174,29 +164,20 @@ impl MinioStore {
     }
 
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // default AWS S3 max-keys is 1,000
-        let mut request = ListObjectsV2Request {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        };
+        let mut paginator = self
+            .s3
+            .list_objects_v2()
+            .bucket(bucket)
+            .into_paginator()
+            .send();
         let mut results = Vec::new();
-        loop {
-            // we will be re-using the request, so clone it each time
-            // wait for the future(s) to complete
-            let result = client.list_objects_v2(request.clone()).await?;
-            if let Some(contents) = result.contents {
-                for entry in contents {
-                    if let Some(key) = entry.key {
-                        results.push(key);
-                    }
+        while let Some(page) = paginator.next().await {
+            let page = page?;
+            for entry in page.contents() {
+                if let Some(key) = entry.key() {
+                    results.push(key.to_string());
                 }
             }
-            // check if there are more results to be fetched
-            if result.next_continuation_token.is_none() {
-                break;
-            }
-            request.continuation_token = result.next_continuation_token;
         }
         Ok(results)
     }
@@ -206,14 +187,12 @@ impl MinioStore {
     }
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteObjectRequest {
-            bucket: bucket.to_owned(),
-            key: object.to_owned(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        client.delete_object(request).await?;
+        self.s3
+            .delete_object()
+            .bucket(bucket)
+            .key(object)
+            .send()
+            .await?;
         Ok(())
     }
 
@@ -222,20 +201,17 @@ impl MinioStore {
     }
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteBucketRequest {
-            bucket: bucket.to_owned(),
-            expected_bucket_owner: None,
-        };
-        // wait for the future(s) to complete
-        let result = client.delete_bucket(request).await;
-        // certain error conditions are okay
-        match result {
-            Err(e) => match e {
-                RusotoError::Unknown(_) => Ok(()),
-                _ => Err(anyhow!(format!("{}", e))),
-            },
+        match self.s3.delete_bucket().bucket(bucket).send().await {
             Ok(_) => Ok(()),
+            Err(e) => {
+                // NoSuchBucket is benign during cleanup; everything else
+                // (auth, network, BucketNotEmpty, AccessDenied) should surface.
+                if e.code() == Some("NoSuchBucket") {
+                    Ok(())
+                } else {
+                    Err(anyhow::Error::new(e.into_service_error()))
+                }
+            }
         }
     }
 
@@ -247,15 +223,6 @@ impl MinioStore {
     ) -> Result<Coordinates, Error> {
         self.store_pack_sync(packfile, bucket, object)
     }
-
-    // pub async fn store_database(
-    //     &self,
-    //     packfile: &Path,
-    //     bucket: &str,
-    //     object: &str,
-    // ) -> Result<Coordinates, Error> {
-    //     self.store_pack(packfile, bucket, object)
-    // }
 
     pub fn retrieve_database_sync(
         &self,
@@ -275,7 +242,7 @@ impl MinioStore {
 /// If the given bucket name already exists and belongs to a different account,
 /// generate a new random bucket name and retry. Returns the name of the bucket
 /// that was successfully created or already owned by this account.
-async fn try_create_bucket(client: &S3Client, bucket: &str) -> Result<String, Error> {
+async fn try_create_bucket(client: &aws_sdk_s3::Client, bucket: &str) -> Result<String, Error> {
     let mut bucket_name = bucket.to_owned();
     loop {
         match create_bucket(client, &bucket_name).await {
@@ -291,23 +258,14 @@ async fn try_create_bucket(client: &S3Client, bucket: &str) -> Result<String, Er
 }
 
 /// Ensure the named bucket exists.
-async fn create_bucket(client: &S3Client, bucket: &str) -> Result<(), Error> {
-    let request = CreateBucketRequest {
-        bucket: bucket.to_owned(),
-        ..Default::default()
-    };
-    // wait for the future(s) to complete
-    let result = client.create_bucket(request).await;
-    // certain error conditions are okay
-    match result {
-        Err(e) => match e {
-            RusotoError::Service(se) => match se {
-                CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
-                CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
-            },
-            _ => Err(anyhow!(format!("{}", e))),
-        },
+async fn create_bucket(client: &aws_sdk_s3::Client, bucket: &str) -> Result<(), Error> {
+    match client.create_bucket().bucket(bucket).send().await {
         Ok(_) => Ok(()),
+        Err(e) => match e.into_service_error() {
+            CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
+            CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            other => Err(anyhow::Error::new(other)),
+        },
     }
 }
 
@@ -378,7 +336,9 @@ mod tests {
         let result = source.list_buckets_sync();
         // assert
         assert!(result.is_err());
-        let err_string = result.err().unwrap().to_string();
+        // aws-sdk wraps the original error code in the cause chain rather than
+        // the top-level Display, so use the Debug formatter to inspect it.
+        let err_string = format!("{:?}", result.err().unwrap());
         // MinIO and RustFS give slightly different error messages
         assert!(
             err_string.contains("InvalidAccessKeyId") || err_string.contains("UnauthorizedAccess")

@@ -6,23 +6,22 @@
 #![allow(clippy::await_holding_lock)]
 
 use anyhow::{Error, anyhow};
-use bytes::Bytes;
-use futures::{FutureExt, TryStreamExt};
-use rusoto_core::{Region, RusotoError};
-use rusoto_dynamodb::{
-    AttributeDefinition, AttributeValue, CreateTableError, CreateTableInput, DeleteItemInput,
-    DescribeTableInput, DynamoDb, DynamoDbClient, GetItemError, GetItemInput, KeySchemaElement,
-    ProvisionedThroughput, PutItemInput,
+use aws_config::{BehaviorVersion, Region, SdkConfig};
+use aws_credential_types::Credentials;
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_dynamodb::operation::create_table::CreateTableError;
+use aws_sdk_dynamodb::operation::get_item::GetItemError;
+use aws_sdk_dynamodb::types::{
+    AttributeDefinition, AttributeValue, KeySchemaElement, KeyType, ProvisionedThroughput,
+    ScalarAttributeType, TableStatus,
 };
-use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketError, CreateBucketRequest, DeleteBucketRequest,
-    DeleteObjectRequest, GetObjectRequest, ListObjectsV2Request, PutObjectRequest, S3, S3Client,
-    StreamingBody,
-};
+use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::operation::create_bucket::CreateBucketError;
+use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::types::{BucketLocationConstraint, CreateBucketConfiguration, StorageClass};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::{LazyLock, Mutex};
 use store_core::{CollisionError, Coordinates};
 
@@ -53,8 +52,8 @@ pub struct AmazonStore {
     store_id: String,
     region: String,
     storage: String,
-    access_key: String,
-    secret_key: String,
+    s3: aws_sdk_s3::Client,
+    ddb: aws_sdk_dynamodb::Client,
 }
 
 impl AmazonStore {
@@ -72,37 +71,29 @@ impl AmazonStore {
         let secret_key = props
             .get("secret_key")
             .ok_or_else(|| anyhow!("missing secret_key property"))?;
+
+        let creds = Credentials::new(
+            access_key.clone(),
+            secret_key.clone(),
+            None,
+            None,
+            "zorigami-static",
+        );
+        let shared = SdkConfig::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .credentials_provider(SharedCredentialsProvider::new(creds))
+            .region(Region::new(region.clone()))
+            .build();
+        let s3 = aws_sdk_s3::Client::new(&shared);
+        let ddb = aws_sdk_dynamodb::Client::new(&shared);
+
         Ok(Self {
             store_id: store_id.to_owned(),
             region: region.to_owned(),
             storage: storage.to_owned(),
-            access_key: access_key.to_owned(),
-            secret_key: secret_key.to_owned(),
+            s3,
+            ddb,
         })
-    }
-
-    fn connect(&self) -> S3Client {
-        let region = Region::from_str(&self.region).unwrap_or(Region::default());
-        let client = rusoto_core::request::HttpClient::new().unwrap();
-        let creds = rusoto_credential::StaticProvider::new(
-            self.access_key.clone(),
-            self.secret_key.clone(),
-            None,
-            None,
-        );
-        S3Client::new_with(client, creds, region)
-    }
-
-    fn connect_dynamo(&self) -> DynamoDbClient {
-        let region = Region::from_str(&self.region).unwrap_or(Region::default());
-        let client = rusoto_core::request::HttpClient::new().unwrap();
-        let creds = rusoto_credential::StaticProvider::new(
-            self.access_key.clone(),
-            self.secret_key.clone(),
-            None,
-            None,
-        );
-        DynamoDbClient::new_with(client, creds, region)
     }
 
     pub fn store_pack_sync(
@@ -123,10 +114,10 @@ impl AmazonStore {
     // existing buckets at random and use that instead.
     //
     // Returns the name of the bucket that was created or selected.
-    async fn try_create_bucket(&self, client: &S3Client, bucket: &str) -> Result<String, Error> {
+    async fn try_create_bucket(&self, bucket: &str) -> Result<String, Error> {
         let mut bucket_name = bucket.to_owned();
         loop {
-            match create_bucket(client, &bucket_name, &self.region).await {
+            match create_bucket(&self.s3, &bucket_name, &self.region).await {
                 Ok(()) => return Ok(bucket_name),
                 Err(err) => match err.downcast::<CollisionError>() {
                     Ok(_) => {
@@ -161,29 +152,22 @@ impl AmazonStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        let client = self.connect();
         // a bucket must exist before receiving objects; note that the bucket
         // may be renamed if there are too many buckets already
-        let bucket_name = self.try_create_bucket(&client, bucket).await?;
-        //
-        // An alternative to streaming the entire file is to use a multi-part
-        // upload and upload the large file in chunks.
-        //
-        let meta = std::fs::metadata(packfile)?;
-        let read_stream = tokio::fs::read(packfile.to_owned())
-            .into_stream()
-            .map_ok(Bytes::from);
-        let req = PutObjectRequest {
-            bucket: bucket_name.clone(),
-            storage_class: Some(self.storage.clone()),
-            key: object.to_owned(),
-            content_length: Some(meta.len() as i64),
-            body: Some(StreamingBody::new(read_stream)),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        let result = client.put_object(req).await?;
-        if let Some(ref etag) = result.e_tag {
+        let bucket_name = self.try_create_bucket(bucket).await?;
+        let body = ByteStream::from_path(packfile)
+            .await
+            .map_err(anyhow::Error::new)?;
+        let result = self
+            .s3
+            .put_object()
+            .bucket(&bucket_name)
+            .key(object)
+            .storage_class(StorageClass::from(self.storage.as_str()))
+            .body(body)
+            .send()
+            .await?;
+        if let Some(etag) = result.e_tag() {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
             // AWS S3 quotes the etag values for some reason
@@ -200,28 +184,20 @@ impl AmazonStore {
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        let client = self.connect();
-        let request = GetObjectRequest {
-            bucket: location.bucket.clone(),
-            key: location.object.clone(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        let result = client.get_object(request).await?;
-        let stream = result.body.ok_or_else(|| {
-            anyhow!(format!(
-                "failed to retrieve object {} from bucket {}",
-                location.object.clone(),
-                location.bucket.clone()
-            ))
-        })?;
+        let result = self
+            .s3
+            .get_object()
+            .bucket(&location.bucket)
+            .key(&location.object)
+            .send()
+            .await?;
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(outfile)
             .await?;
-        let mut body = stream.into_async_read();
+        let mut body = result.body.into_async_read();
         tokio::io::copy(&mut body, &mut file).await?;
         Ok(())
     }
@@ -231,17 +207,12 @@ impl AmazonStore {
     }
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // wait for the future(s) to complete
-        let result = client.list_buckets().await?;
-        let mut results = Vec::new();
-        if let Some(buckets) = result.buckets {
-            for bucket in buckets {
-                if let Some(name) = bucket.name {
-                    results.push(name);
-                }
-            }
-        }
+        let result = self.s3.list_buckets().send().await?;
+        let results: Vec<String> = result
+            .buckets()
+            .iter()
+            .filter_map(|b| b.name().map(|s| s.to_string()))
+            .collect();
         Ok(results)
     }
 
@@ -250,29 +221,20 @@ impl AmazonStore {
     }
 
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        let client = self.connect();
-        // default AWS S3 max-keys is 1,000
-        let mut request = ListObjectsV2Request {
-            bucket: bucket.to_owned(),
-            ..Default::default()
-        };
+        let mut paginator = self
+            .s3
+            .list_objects_v2()
+            .bucket(bucket)
+            .into_paginator()
+            .send();
         let mut results = Vec::new();
-        loop {
-            // we will be re-using the request, so clone it each time
-            // wait for the future(s) to complete
-            let result = client.list_objects_v2(request.clone()).await?;
-            if let Some(contents) = result.contents {
-                for entry in contents {
-                    if let Some(key) = entry.key {
-                        results.push(key);
-                    }
+        while let Some(page) = paginator.next().await {
+            let page = page?;
+            for entry in page.contents() {
+                if let Some(key) = entry.key() {
+                    results.push(key.to_string());
                 }
             }
-            // check if there are more results to be fetched
-            if result.next_continuation_token.is_none() {
-                break;
-            }
-            request.continuation_token = result.next_continuation_token;
         }
         Ok(results)
     }
@@ -282,14 +244,12 @@ impl AmazonStore {
     }
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteObjectRequest {
-            bucket: bucket.to_owned(),
-            key: object.to_owned(),
-            ..Default::default()
-        };
-        // wait for the future(s) to complete
-        client.delete_object(request).await?;
+        self.s3
+            .delete_object()
+            .bucket(bucket)
+            .key(object)
+            .send()
+            .await?;
         Ok(())
     }
 
@@ -298,51 +258,50 @@ impl AmazonStore {
     }
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let client = self.connect();
-        let request = DeleteBucketRequest {
-            bucket: bucket.to_owned(),
-            expected_bucket_owner: None,
-        };
-        // wait for the future(s) to complete
-        let result = client.delete_bucket(request).await;
-        // certain error conditions are okay
-        match result {
-            Err(e) => match e {
-                RusotoError::Unknown(_) => Ok(()),
-                _ => Err(anyhow!(format!("{}", e))),
-            },
+        match self.s3.delete_bucket().bucket(bucket).send().await {
             Ok(_) => Ok(()),
+            Err(e) => {
+                // NoSuchBucket is benign during cleanup; everything else
+                // (auth, network, BucketNotEmpty, AccessDenied) should surface.
+                if e.code() == Some("NoSuchBucket") {
+                    Ok(())
+                } else {
+                    Err(anyhow::Error::new(e.into_service_error()))
+                }
+            }
         }
     }
 
     /// Record the new name of the bucket.
     async fn save_bucket_name(&self, original: &str, renamed: &str) -> Result<(), Error> {
-        let client = self.connect_dynamo();
         // ensure the renames table exists
-        let create_input = CreateTableInput {
-            table_name: RENAMES_TABLE.into(),
-            attribute_definitions: vec![AttributeDefinition {
-                attribute_name: "original".into(),
-                attribute_type: "S".into(),
-            }],
-            key_schema: vec![KeySchemaElement {
-                attribute_name: "original".into(),
-                key_type: "HASH".into(),
-            }],
-            provisioned_throughput: Some(ProvisionedThroughput {
-                read_capacity_units: 5,
-                write_capacity_units: 5,
-            }),
-            ..Default::default()
-        };
-        let result = client.create_table(create_input).await;
-        let created_result: Result<bool, Error> = if let Err(err) = result {
-            match err {
-                RusotoError::Service(CreateTableError::ResourceInUse(_)) => Ok(false),
-                _ => Err(err.into()),
-            }
-        } else {
-            Ok(true)
+        let attr_def = AttributeDefinition::builder()
+            .attribute_name("original")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+        let key_schema = KeySchemaElement::builder()
+            .attribute_name("original")
+            .key_type(KeyType::Hash)
+            .build()?;
+        let throughput = ProvisionedThroughput::builder()
+            .read_capacity_units(5)
+            .write_capacity_units(5)
+            .build()?;
+        let result = self
+            .ddb
+            .create_table()
+            .table_name(RENAMES_TABLE)
+            .attribute_definitions(attr_def)
+            .key_schema(key_schema)
+            .provisioned_throughput(throughput)
+            .send()
+            .await;
+        let created_result: Result<bool, Error> = match result {
+            Ok(_) => Ok(true),
+            Err(err) => match err.into_service_error() {
+                CreateTableError::ResourceInUseException(_) => Ok(false),
+                other => Err(anyhow::Error::new(other)),
+            },
         };
 
         // Wait for the new table to become ACTIVE, allowing for errors as the
@@ -352,76 +311,71 @@ impl AmazonStore {
             let mut retries = 10;
             let delay = std::time::Duration::from_millis(1000);
             loop {
-                let describe_input = DescribeTableInput {
-                    table_name: RENAMES_TABLE.into(),
-                };
-                match client.describe_table(describe_input).await {
+                match self
+                    .ddb
+                    .describe_table()
+                    .table_name(RENAMES_TABLE)
+                    .send()
+                    .await
+                {
                     Ok(output) => {
-                        if let Some(table) = output.table
-                            && let Some(status) = table.table_status
-                            && status == "ACTIVE"
+                        if let Some(table) = output.table()
+                            && table.table_status() == Some(&TableStatus::Active)
                         {
                             break;
                         }
+                        retries -= 1;
+                        if retries == 0 {
+                            return Err(anyhow!(
+                                "table {} did not become ACTIVE in time",
+                                RENAMES_TABLE
+                            ));
+                        }
+                        tokio::time::sleep(delay).await;
                     }
                     Err(err) => {
                         retries -= 1;
                         if retries == 0 {
-                            return Err(err.into());
+                            return Err(anyhow::Error::new(err));
                         }
-                        std::thread::sleep(delay);
+                        tokio::time::sleep(delay).await;
                     }
                 }
             }
         }
 
         // insert table entry that maps `original` to `renamed`
-        let mut put_input = PutItemInput {
-            table_name: RENAMES_TABLE.into(),
-            ..Default::default()
-        };
-        let mut item: HashMap<String, AttributeValue> = HashMap::new();
-        let value = AttributeValue {
-            s: Some(original.into()),
-            ..Default::default()
-        };
-        item.insert("original".into(), value);
-        let value = AttributeValue {
-            s: Some(renamed.into()),
-            ..Default::default()
-        };
-        item.insert("renamed".into(), value);
-        put_input.item = item;
-        client.put_item(put_input).await?;
+        self.ddb
+            .put_item()
+            .table_name(RENAMES_TABLE)
+            .item("original", AttributeValue::S(original.to_owned()))
+            .item("renamed", AttributeValue::S(renamed.to_owned()))
+            .send()
+            .await?;
         Ok(())
     }
 
     /// Retrieve the renamed value for the original bucket.
     async fn get_bucket_name(&self, original: &str) -> Result<Option<String>, Error> {
-        let client = self.connect_dynamo();
-        let mut get_input = GetItemInput {
-            table_name: RENAMES_TABLE.into(),
-            ..Default::default()
-        };
-        let mut key: HashMap<String, AttributeValue> = HashMap::new();
-        let value = AttributeValue {
-            s: Some(original.into()),
-            ..Default::default()
-        };
-        key.insert("original".into(), value);
-        get_input.key = key;
-        match client.get_item(get_input).await {
+        match self
+            .ddb
+            .get_item()
+            .table_name(RENAMES_TABLE)
+            .key("original", AttributeValue::S(original.to_owned()))
+            .send()
+            .await
+        {
             Ok(output) => {
                 if let Some(items) = output.item
-                    && let Some(value) = items.get("renamed")
+                    && let Some(AttributeValue::S(s)) = items.get("renamed")
                 {
-                    return Ok(value.s.to_owned());
+                    return Ok(Some(s.clone()));
                 }
                 Ok(None)
             }
-            Err(err) => match err {
-                RusotoError::Service(GetItemError::ResourceNotFound(_)) => Ok(None),
-                _ => Err(err.into()),
+            Err(err) => match err.into_service_error() {
+                GetItemError::ResourceNotFoundException(_) => Ok(None),
+                other => Err(anyhow::Error::new(other)),
             },
         }
     }
@@ -430,19 +384,12 @@ impl AmazonStore {
     #[allow(dead_code)]
     fn delete_bucket_name(&self, original: &str) -> Result<(), Error> {
         block_on(async {
-            let client = self.connect_dynamo();
-            let mut delete_input = DeleteItemInput {
-                table_name: RENAMES_TABLE.into(),
-                ..Default::default()
-            };
-            let mut key: HashMap<String, AttributeValue> = HashMap::new();
-            let value = AttributeValue {
-                s: Some(original.into()),
-                ..Default::default()
-            };
-            key.insert("original".into(), value);
-            delete_input.key = key;
-            client.delete_item(delete_input).await?;
+            self.ddb
+                .delete_item()
+                .table_name(RENAMES_TABLE)
+                .key("original", AttributeValue::S(original.to_owned()))
+                .send()
+                .await?;
             Ok(())
         })
         .and_then(std::convert::identity)
@@ -515,36 +462,35 @@ impl AmazonStore {
 }
 
 /// Ensure the named bucket exists.
-async fn create_bucket(client: &S3Client, bucket: &str, region: &str) -> Result<(), Error> {
-    let config = CreateBucketConfiguration {
-        location_constraint: Some(region.to_owned()),
-    };
-    let request = CreateBucketRequest {
-        bucket: bucket.to_owned(),
-        create_bucket_configuration: Some(config),
-        ..Default::default()
-    };
-    // wait for the future(s) to complete
-    let result = client.create_bucket(request).await;
-    // certain error conditions are okay while others need to be detected and
-    // converted to discrete error types
-    match result {
-        Err(e) => match e {
-            RusotoError::Service(ref se) => match se {
-                CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
-                CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
-            },
-            RusotoError::Unknown(ref bhr) => {
-                // rusoto_s3 does not recognize many errors very well
-                if bhr.status.as_u16() == 400 && bhr.body_as_str().contains("TooManyBuckets") {
+async fn create_bucket(
+    client: &aws_sdk_s3::Client,
+    bucket: &str,
+    region: &str,
+) -> Result<(), Error> {
+    let mut req = client.create_bucket().bucket(bucket);
+    // us-east-1 rejects an explicit LocationConstraint; all other regions
+    // require it.
+    if region != "us-east-1" {
+        let cfg = CreateBucketConfiguration::builder()
+            .location_constraint(BucketLocationConstraint::from(region))
+            .build();
+        req = req.create_bucket_configuration(cfg);
+    }
+    match req.send().await {
+        Ok(_) => Ok(()),
+        Err(e) => match e.into_service_error() {
+            CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
+            CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            other => {
+                // TooManyBuckets is not a modeled variant; pull the code from
+                // the error metadata.
+                if other.code() == Some("TooManyBuckets") {
                     Err(Error::from(TooManyBucketsError {}))
                 } else {
-                    Err(e.into())
+                    Err(anyhow::Error::new(other))
                 }
             }
-            _ => Err(e.into()),
         },
-        Ok(_) => Ok(()),
     }
 }
 
@@ -608,7 +554,9 @@ mod tests {
         let result = source.list_buckets_sync();
         // assert
         assert!(result.is_err());
-        let err_string = result.err().unwrap().to_string();
+        // aws-sdk wraps the original error code in the cause chain rather than
+        // the top-level Display, so use the Debug formatter to inspect it.
+        let err_string = format!("{:?}", result.err().unwrap());
         assert!(err_string.contains("InvalidAccessKeyId"));
         Ok(())
     }
@@ -657,7 +605,7 @@ mod tests {
     #[serial]
     fn test_amazon_store_roundtrip() -> Result<(), Error> {
         //
-        // N.B. the rusoto crate will pick up environment variables, such as
+        // N.B. the AWS SDK will pick up environment variables, such as
         // AWS_REGION, which can lead to false successes when running the tests
         //
         // set up the environment and remote connection
