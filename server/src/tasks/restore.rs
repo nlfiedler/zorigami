@@ -238,10 +238,12 @@ impl RestorerImpl {
         filepath: &Path,
         fetcher: &mut Box<dyn FileRestorer>,
     ) -> Result<(), Error> {
-        // fetch the packs for the file and assemble the chunks
-        fetcher.fetch_file(&digest, filepath, &request.passphrase)?;
-        // update the count of files restored so far
-        self.subscriber.restored(&request.id, 1);
+        // fetch the packs for the file and assemble the chunks; the fetcher
+        // returns false if the destination already matched the expected digest
+        // and the restore was therefore skipped
+        if fetcher.fetch_file(&digest, filepath, &request.passphrase)? {
+            self.subscriber.restored(&request.id, 1);
+        }
         Ok(())
     }
 
@@ -458,7 +460,7 @@ impl Restorer for RestorerImpl {
         absolute.push(&temp_rel);
         let outcome: Result<(), Error> = match fetch_result {
             Err(err) => Err(err),
-            Ok(()) => match Checksum::blake3_from_file(&absolute) {
+            Ok(_) => match Checksum::blake3_from_file(&absolute) {
                 Ok(actual) if actual == file_digest => Ok(()),
                 Ok(actual) => Err(anyhow!(format!(
                     "digest mismatch: expected {}, got {}",
@@ -525,13 +527,15 @@ pub trait FileRestorer: Send + Sync {
     /// Prepare for restoring files by loading the given dataset.
     fn load_dataset(&mut self, dataset_id: &str) -> Result<(), Error>;
 
-    /// Fetch the necessary packs and restore the given file.
+    /// Fetch the necessary packs and restore the given file. Returns true if
+    /// the file was actually restored, or false if the destination already
+    /// existed with the same digest and the restore was skipped.
     fn fetch_file(
         &mut self,
         checksum: &Checksum,
         filepath: &Path,
         passphrase: &str,
-    ) -> Result<(), Error>;
+    ) -> Result<bool, Error>;
 
     /// Restore the named symbolic link given its contents.
     fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error>;
@@ -629,9 +633,23 @@ impl FileRestorer for FileRestorerImpl {
         checksum: &Checksum,
         filepath: &Path,
         passphrase: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         use anyhow::Context;
         info!("restoring file from {} to {}", checksum, filepath.display());
+        // if the destination file already has the expected digest, there is
+        // nothing to restore -- skip the fetch entirely
+        let mut outfile = self.basepath.clone().unwrap();
+        outfile.push(filepath);
+        if outfile.is_file()
+            && let Ok(actual) = Checksum::blake3_from_file(&outfile)
+            && &actual == checksum
+        {
+            info!(
+                "skipping restore of {}: destination already matches digest",
+                outfile.display()
+            );
+            return Ok(false);
+        }
         let workspace = self.packpath.as_ref().unwrap().path().to_path_buf();
         fs::create_dir_all(&workspace)
             .with_context(|| format!("fetch_file fs::create_dir_all({})", workspace.display()))?;
@@ -648,8 +666,6 @@ impl FileRestorer for FileRestorerImpl {
             let mut cpath = PathBuf::from(&workspace);
             let filename = &saved_file.digest.to_string();
             cpath.push(filename);
-            let mut outfile = self.basepath.clone().unwrap();
-            outfile.push(filepath);
             let chunk_paths: Vec<&Path> = vec![&cpath];
             debug!(
                 "assembling 1-chunk file {} from {:?}",
@@ -688,12 +704,10 @@ impl FileRestorer for FileRestorerImpl {
                 })
                 .collect();
             let chunk_paths: Vec<&Path> = chunk_bufs.iter().map(|b| b.as_path()).collect();
-            let mut outfile = self.basepath.clone().unwrap();
-            outfile.push(filepath);
             debug!("assembling N-chunk file {}", outfile.display());
             assemble_chunks(&chunk_paths, &outfile)?;
         }
-        Ok(())
+        Ok(true)
     }
 
     fn restore_link(&self, contents: &[u8], filepath: &Path) -> Result<(), Error> {
@@ -912,7 +926,7 @@ mod tests {
         fn factory_pass(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
             let mut restorer = MockFileRestorer::new();
             restorer.expect_load_dataset().returning(|_| Ok(()));
-            restorer.expect_fetch_file().returning(|_, _, _| Ok(()));
+            restorer.expect_fetch_file().returning(|_, _, _| Ok(true));
             Box::new(restorer)
         }
         let mut submock = MockSubscriber::new();
@@ -998,7 +1012,7 @@ mod tests {
         fn factory(_dbase: Arc<dyn RecordRepository>) -> Box<dyn FileRestorer> {
             let mut restorer = MockFileRestorer::new();
             restorer.expect_load_dataset().returning(|_| Ok(()));
-            restorer.expect_fetch_file().returning(|_, _, _| Ok(()));
+            restorer.expect_fetch_file().returning(|_, _, _| Ok(true));
             Box::new(restorer)
         }
 
@@ -1227,7 +1241,7 @@ mod tests {
                     fs::create_dir_all(parent)?;
                 }
                 fs::write(&abs, &payload)?;
-                Ok(())
+                Ok(true)
             });
             Box::new(restorer)
         }
@@ -1296,7 +1310,7 @@ mod tests {
                 let mut abs = base;
                 abs.push(rel);
                 fs::write(&abs, &payload)?;
-                Ok(())
+                Ok(true)
             });
             Box::new(restorer)
         }

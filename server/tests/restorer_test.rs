@@ -130,22 +130,69 @@ impl backup::Subscriber for TestBackupSubscriber {
     }
 }
 
-struct DummyRestoreSubscriber();
+#[derive(Debug, Default)]
+struct TestRestoreSubscriber {
+    has_started: Arc<Mutex<bool>>,
+    files_restored: Arc<Mutex<u64>>,
+    had_error: Arc<Mutex<bool>>,
+    has_finished: Arc<Mutex<bool>>,
+}
 
-impl restore::Subscriber for DummyRestoreSubscriber {
+impl TestRestoreSubscriber {
+    fn get_started(&self) -> bool {
+        let guard = self.has_started.lock().unwrap();
+        *guard
+    }
+
+    fn get_files_restored(&self) -> u64 {
+        let guard = self.files_restored.lock().unwrap();
+        *guard
+    }
+
+    fn get_had_error(&self) -> bool {
+        let guard = self.had_error.lock().unwrap();
+        *guard
+    }
+
+    fn get_finished(&self) -> bool {
+        let guard = self.has_finished.lock().unwrap();
+        *guard
+    }
+
+    fn reset(&self) {
+        let mut guard = self.has_started.lock().unwrap();
+        *guard = false;
+        let mut guard = self.files_restored.lock().unwrap();
+        *guard = 0;
+        let mut guard = self.had_error.lock().unwrap();
+        *guard = false;
+        let mut guard = self.has_finished.lock().unwrap();
+        *guard = false;
+    }
+}
+
+impl restore::Subscriber for TestRestoreSubscriber {
     fn started(&self, _request_id: &str) -> bool {
+        let mut guard = self.has_started.lock().unwrap();
+        *guard = true;
         false
     }
 
-    fn restored(&self, _request_id: &str, _addend: u64) -> bool {
+    fn restored(&self, _request_id: &str, addend: u64) -> bool {
+        let mut guard = self.files_restored.lock().unwrap();
+        *guard += addend;
         false
     }
 
     fn error(&self, _request_id: &str, _error: String) -> bool {
+        let mut guard = self.had_error.lock().unwrap();
+        *guard = true;
         false
     }
 
     fn finished(&self, _request_id: &str) -> bool {
+        let mut guard = self.has_finished.lock().unwrap();
+        *guard = true;
         false
     }
 }
@@ -271,7 +318,7 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
 
     // set up the restorer to perform restores
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let subscriber = Arc::new(TestRestoreSubscriber::default());
     let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
 
     // restore the file from the first snapshot
@@ -463,7 +510,7 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
 
     // set up the restorer to perform restores
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let subscriber = Arc::new(TestRestoreSubscriber::default());
     let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
 
     // try to restore the file, it will quietly fail since it was not backed up
@@ -510,118 +557,112 @@ fn test_restorer_backup_recover_errorred_files() -> Result<(), Error> {
     Ok(())
 }
 
-//
-// TODO: this would be testing the efficient restore of a file that already exists
-//       at the target location and its checksum matches the one being restored
-//
-// #[actix_rt::test]
-// #[serial_test::serial]
-// async fn test_restorer_backup_restore_over_existing() -> Result<(), Error> {
-//     // create the database
-//     let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
-//     fs::create_dir_all(&db_base)?;
-//     let db_path = tempfile::tempdir_in(&db_base)?;
-//     let datasource = RocksDBEntityDataSource::new(db_path.path()).unwrap();
-//     let repo = RecordRepositoryImpl::new(Arc::new(datasource));
-//     let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_restorer_backup_restore_over_existing() -> Result<(), Error> {
+    // create the database
+    let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+    fs::create_dir_all(&db_base)?;
+    let db_path = tempfile::tempdir_in(&db_base)?;
+    let datasource = RocksDBEntityDataSource::new(db_path.path()).unwrap();
+    let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+    let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
 
-//     // create a local pack store
-//     let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
-//     fs::create_dir_all(&pack_base)?;
-//     let pack_path = tempfile::tempdir_in(&pack_base)?;
-//     let mut local_props: HashMap<String, String> = HashMap::new();
-//     local_props.insert(
-//         "basepath".to_owned(),
-//         pack_path.into_path().to_string_lossy().into(),
-//     );
-//     let store = entities::Store {
-//         id: "local123".to_owned(),
-//         store_type: entities::StoreType::LOCAL,
-//         label: "my local".to_owned(),
-//         properties: local_props,
-//     };
-//     dbase.put_store(&store)?;
+    // create a local pack store
+    let pack_base: PathBuf = ["tmp", "test", "packs"].iter().collect();
+    fs::create_dir_all(&pack_base)?;
+    let pack_path = tempfile::tempdir_in(&pack_base)?;
+    let mut local_props: HashMap<String, String> = HashMap::new();
+    local_props.insert(
+        "basepath".to_owned(),
+        pack_path.keep().to_string_lossy().into(),
+    );
+    let store = entities::Store {
+        id: "local123".to_owned(),
+        store_type: entities::StoreType::LOCAL,
+        label: "my local".to_owned(),
+        properties: local_props,
+        retention: PackRetention::ALL,
+    };
+    dbase.put_store(&store)?;
 
-//     // create a dataset
-//     let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
-//     fs::create_dir_all(&fixture_base)?;
-//     let fixture_path = tempfile::tempdir_in(&fixture_base)?;
-//     let mut dataset = entities::Dataset::new(fixture_path.path());
-//     dataset = dataset.add_store("local123");
-//     dbase.put_dataset(&dataset)?;
-//     let computer_id = entities::Configuration::generate_unique_id("charlie", "hal9000");
-//     dbase.put_computer_id(&dataset.id, &computer_id)?;
+    // create a dataset
+    let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+    fs::create_dir_all(&fixture_base)?;
+    let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+    let mut dataset = entities::Dataset::new(fixture_path.path());
+    dataset.add_store("local123");
+    dbase.put_dataset(&dataset)?;
 
-//     // perform the first backup
-//     let backuper = BackuperImpl::new();
-//     let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
-//     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-//     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
-//     let passphrase = String::from("keyboard cat");
-//     let request = backup::Request::new(
-//         dataset.clone(),
-//         dbase.clone(),
-//         state.clone(),
-//         &passphrase,
-//         None,
-//     );
-//     let first_backup = backuper.backup(request)?;
-//     assert!(first_backup.is_some());
-//     let first_backup_sum = first_backup.unwrap();
+    // perform the first backup
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(TestBackupSubscriber::default());
+    let backuper = BackuperImpl::new(dbase.clone(), subscriber, stopper);
+    let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
+    assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", &dest).is_ok());
+    let mtime = fs::metadata(&dest).and_then(|m| m.modified())?;
+    let passphrase = String::from("keyboard cat");
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let first_backup = backuper.backup(request)?;
+    assert!(first_backup.is_some());
+    let first_backup_sum = first_backup.unwrap();
 
-//     // try to restore the file, it should do nothing since it already exists
-//     let sut = RestorerImpl::new(state.clone(), file_restorer_factory);
-//     let result = sut.start(dbase.clone());
-//     assert!(result.is_ok());
-//     let snapshot = dbase.get_snapshot(&first_backup_sum)?.unwrap();
-//     let result = sut.enqueue(restore::Request::new(
-//         snapshot.tree,
-//         String::from("lorem-ipsum.txt"),
-//         PathBuf::from("lorem-ipsum.txt"),
-//         dataset.id.to_owned(),
-//         "keyboard cat".into(),
-//     ));
-//     assert!(result.is_ok());
-//     sut.wait_for_restores();
-//     let requests = sut.requests();
-//     assert_eq!(requests.len(), 1);
-//     let request = &requests[0];
-//     assert!(request.error_msg.is_none());
-//     assert_eq!(request.files_restored, 0);
+    // try to restore the file, it should do nothing since the same file with
+    // the same checksum already exists
+    let stopper = Arc::new(RwLock::new(false));
+    let subscriber = Arc::new(TestRestoreSubscriber::default());
+    let restorer = RestorerImpl::new(dbase.clone(), subscriber.clone(), stopper);
+    let snapshot = dbase.get_snapshot(&first_backup_sum)?.unwrap();
+    let result = restorer.restore_files(restore::Request::new(
+        snapshot.tree.clone(),
+        String::from("lorem-ipsum.txt"),
+        PathBuf::from("lorem-ipsum.txt"),
+        dataset.id.to_owned(),
+        "keyboard cat".into(),
+    ));
+    assert!(result.is_ok());
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_restored(), 0);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
+    let mtime2 = fs::metadata(&dest).and_then(|m| m.modified())?;
+    assert_eq!(mtime, mtime2);
 
-//     // TODO: modify the target file
-//     // fix the file permissions and perform the third backup
-//     // fs::set_permissions(&dest, Permissions::from_mode(0o644))?;
-//     // let request = backup::Request::new(
-//     //     dataset.clone(),
-//     //     dbase.clone(),
-//     //     state.clone(),
-//     //     &passphrase,
-//     //     None,
-//     // );
-//     // let third_backup = backuper.backup(request)?;
-//     // assert!(third_backup.is_some());
+    // modify the target file and perform another backup
+    let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
+    assert!(fs::copy("../test/fixtures/washington-journal.txt", &dest).is_ok());
+    let request = backup::Request::new(dataset.id.clone(), &passphrase, None);
+    let second_backup = backuper.backup(request)?;
+    assert!(second_backup.is_some());
 
-//     // TODO: restore the file from the first snapshot, should overwrite modified target
-//     // sut.reset_restores();
-//     // let snapshot = dbase.get_snapshot(&third_backup.unwrap())?.unwrap();
-//     // let result = sut.enqueue(restore::Request::new(
-//     //     snapshot.tree,
-//     //     String::from("washington-journal.txt"),
-//     //     PathBuf::from("washington-journal.txt"),
-//     //     dataset.id.to_owned(),
-//     //     "keyboard cat".into(),
-//     // ));
-//     // assert!(result.is_ok());
-//     // // assert success
-//     // sut.wait_for_restores();
-//     // let requests = sut.requests();
-//     // assert_eq!(requests.len(), 1);
-//     // let request = &requests[0];
-//     // assert!(request.error_msg.is_none());
-//     // assert_eq!(request.files_restored, 1);
-//     Ok(())
-// }
+    // restore the file from the first snapshot, should overwrite modified target
+    subscriber.reset();
+    let result = restorer.restore_files(restore::Request::new(
+        snapshot.tree,
+        String::from("lorem-ipsum.txt"),
+        PathBuf::from("lorem-ipsum.txt"),
+        dataset.id.to_owned(),
+        "keyboard cat".into(),
+    ));
+    assert!(result.is_ok());
+    assert!(subscriber.get_started());
+    assert_eq!(subscriber.get_files_restored(), 1);
+    assert!(!subscriber.get_had_error());
+    assert!(subscriber.get_finished());
+    // assert that lorem-ipsum.txt has the original checksum value
+    #[cfg(target_family = "unix")]
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
+    ));
+    #[cfg(target_family = "windows")]
+    let digest_expected = Checksum::BLAKE3(String::from(
+        "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
+    ));
+    let digest_actual = Checksum::blake3_from_file(&dest)?;
+    assert_eq!(digest_expected, digest_actual);
+
+    Ok(())
+}
 
 #[test]
 fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
@@ -721,7 +762,7 @@ fn test_restorer_backup_restore_symlink() -> Result<(), Error> {
 
     // set up the restorer to perform restores
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let subscriber = Arc::new(TestRestoreSubscriber::default());
     let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
 
     // restore the normal symlink from the first snapshot
@@ -837,7 +878,7 @@ fn test_restorer_backup_restore_small() -> Result<(), Error> {
 
     // set up the restorer to perform restores
     let stopper = Arc::new(RwLock::new(false));
-    let subscriber = Arc::new(DummyRestoreSubscriber());
+    let subscriber = Arc::new(TestRestoreSubscriber::default());
     let restorer = RestorerImpl::new(dbase.clone(), subscriber, stopper);
 
     // restore the small file from the first snapshot
