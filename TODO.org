@@ -1,11 +1,6 @@
 * Tasks
 ** note: old zorigami backup on chihiro took 32 minutes
 *** with improved FastCDC implementation, maybe it will be faster
-** note: bucket/object/pack counts for desktop and server
-| host    | days | buckets | packs |  files | chunks | packs/bucket | packs first day |
-|---------+------+---------+-------+--------+--------+--------------+-----------------|
-| tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
-| chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
 ** TODO [#A] Snapshot browsing
 *** ability to move through snapshots will staying within the selected path
 *** show differences between any two snapshots
@@ -43,91 +38,11 @@ open /tmp/snapshot
 $ tmutil deletelocalsnapshots 2021-04-05-162416
 Deleted local snapshot '2021-04-05-162416'
 #+end_src
-** Pack store management
-*** Store impl needs to consider chosen storage class when answering ~fast~ or ~slow~ question
-**** e.g. Google ~coldline~ is slow but ~nearline~ is fast
-** Remove files/folders from backup
-*** Allow removing files from existing backups
-**** e.g. accidentally saved large binaries
-** Advanced Scheduling
-*** frontend changes
-**** Support ~weekly~ with day-of-week
-**** Support ~monthly~ with day-of-month
-**** Support ~monthly~ with week-of-month
 ** Filters for excluding files by size
 *** allow adding rules on a dataset to ignore files that are too small/large
 ** Support ~archive~ storage classes
 *** Azure, Amazon, and Google all support very slow response time storage
 *** requires subscribing to notifications (?) to facilitate file retrieval
-** Support SeaweedFS pack store
-*** https://github.com/seaweedfs/seaweedfs
-** Architecture Review
-*** Evaluate alternative databases, serde formats
-**** CBOR is not well supported, crates starved of love
-**** JSON may be good enough
-**** RocksDB is very good, but is it the best available now?
-*** Evaluate =async-graphql= vs =juniper= some day
-**** so far juniper is working
-**** https://crates.io/crates/async-graphql
-**** TODO structure the code into smaller files
-**** TODO action items [0/6]
-- [ ] detach from juniper
-- [ ] cargo add async-graphql
-- [ ] add =chrono= feature
-- [ ] add https://crates.io/crates/async-graphql-actix-web
-- [ ] try using Apollo GraphQL to generate schema from =/graphql=
-- [ ] try =graphiql= feature
-- [ ] try =playground= feature
-- [ ] set up the context to provide things to resolvers
-- [ ] try =string_number= feature to use =StringNumber= instead of =BigInt=
-** Full Restore
-*** Procedure for full restore
-**** User installs and configures application
-**** User invokes "full restore" function
-**** User provides a temporary pack store configuration
-**** Query pack store to get candidate computer UUID values
-**** User chooses database to restore
-***** if current UUID matches one in the available set, select it by default
-**** Fetch the most recent database files
-***** Restore to a different directory, then copy over records
-***** Copy every record except for =configuration= (and maybe others?)
-***** Copy records for datasets, stores, snapshots, packs, etc
-**** User can now browse datasets and restore as usual
-**** Restoring an entire dataset is simply the "tree restore" case
-** More Better
-*** Ransomware protection
-**** descriptions of what this means
-***** CloudBerry
-: CloudBerry Backup detects encryption changes in files and prevents existing
-: backups from being overwritten until an administrator confirms if there is an
-: issue.
-***** Arq:
-: Ransomware protection - point-in-time recovery of files
-***** https://ruderich.org/simon/notes/append-only-backups-with-restic-and-rclone
-: One issue with most backup solutions is that an attacker controlling the local
-: system can also wipe its old backups. To prevent this the backup must permit
-: append-only backups (also called add-only backups).
-****** They change the SSH config to run the backup command with "append only" flag.
-*** Permit scheduling upload hours for each day of the week
-**** e.g. from 11pm to 6am Mon-Fri, none on Sat/Sun
-**** simply combine more than one schedule per dataset
-*** GraphQL mutation to dump/load database to json
-*** Support deduplication across multiple computers
-**** Place the chunks and packs in a seperate "database" for syncing
-***** For RocksDB, use a column family if it helps with =GetUpdatesSince()=
-**** RocksDB replication story as of 2019-02-20:
-: Q: Does RocksDB support replication?
-: A: No, RocksDB does not directly support replication. However, it offers
-: some APIs that can be used as building blocks to support replication.
-: For instance, GetUpdatesSince() allows developers to iterate though all
-: updates since a specific point in time.
-***** see =GetUpdatesSince()= and =PutLogData()= functions
-**** User configures the host name of the ~peer~ installation
-***** Use that to form the URL with which to =sync=
-**** Share the chunks and packs documents with a ~peer~ installation
-**** At the start of backup, sync with the ~peer~ to get latest chunks/packs
-*** Consider how to deal with partial uploads
-**** e.g. Minio/S3 has a means of handling these
 * Documentation
 ** Automatic snapshot pruning
 *** Retention policy applies to the snapshots for a dataset
@@ -136,23 +51,3 @@ Deleted local snapshot '2021-04-05-162416'
 ** Duplicati has a fun description of how the backup works
 *** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
 *** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/
-* Technical Information
-** Most files are under 1mb in size, a good default chunk size
-*** 98% of files in typical Mac home directory
-*** 60% of files on server with mostly images and videos
-*** sum of files over 1mb divided by 1mb results in a few thousand chunks
-** Error Handling
-*** what happens to file errors during scanning?
-**** any errors during scan result in the entry being completely ignored
-**** they will be processed again on the next scan
-*** what happens to file errors during packing?
-**** if metadata or opening file fails, recorded as having zero length
-**** if packing file fails, overall backup will fail
-*** what happens when file contents change between scanning and packing?
-**** changed file is stored using the original checksum
-**** file will subsequently be (needlessly) backed up again next time
-** Possible corner cases
-*** Database backup, then restore, then pack prune
-Because the database snapshot is recorded in the database after the snapshot
-has already been uploaded, if the user were to restore the database and then
-perform a pack pruning, the most recent database snapshot would be removed.

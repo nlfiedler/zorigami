@@ -1023,12 +1023,14 @@ impl LeaderContext {
     }
 
     /// Insert the backup request into the collection to allow the subscriber to
-    /// update the progress of the request.
+    /// update the progress of the request. If a request for this dataset is
+    /// already present (e.g. a paused backup being restarted by the scheduler),
+    /// preserve the existing entry so its accumulated metrics are not lost.
     fn insert_started_backup(&self, request: backup::Request) {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
-        map.insert(request.dataset.clone(), request);
+        map.entry(request.dataset.clone()).or_insert(request);
     }
 
     /// Put the prune request into the collection, trim the set to size.
