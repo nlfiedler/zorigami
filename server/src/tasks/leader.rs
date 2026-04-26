@@ -78,6 +78,11 @@ pub trait RingLeader: Send + Sync {
     ///
     /// Problems encountered during the run are written to the error repository.
     fn prune_packs(&self) -> Result<(), Error>;
+
+    /// Remove leftover temporary pack files from every dataset workspace.
+    ///
+    /// Problems encountered during the run are written to the error repository.
+    fn cleanup_workspaces(&self) -> Result<(), Error>;
 }
 
 ///
@@ -421,6 +426,20 @@ impl RingLeader for RingLeaderImpl {
             Err(anyhow!("must call start() first"))
         }
     }
+
+    fn cleanup_workspaces(&self) -> Result<(), Error> {
+        info!("enqueue workspace cleanup");
+        let su_addr = self.super_addr.lock().unwrap();
+        if let Some(addr) = su_addr.as_ref() {
+            fn err_convert(err: SendError<CleanupWorkspaces>) -> Error {
+                anyhow!(format!("RingLeaderImpl::cleanup_workspaces(): {:?}", err))
+            }
+            addr.try_send(CleanupWorkspaces {}).map_err(err_convert)
+        } else {
+            error!("must call start() first");
+            Err(anyhow!("must call start() first"))
+        }
+    }
 }
 
 //
@@ -740,6 +759,49 @@ impl LeaderSupervisor {
         }
         Ok(())
     }
+
+    /// Run a workspace cleanup. Reuses the prune factory so the run shares the
+    /// pruner's stop flag; the Actix arbiter serializes this handler with the
+    /// regular `Process` loop, so the cleanup runs without stepping on backups
+    /// or restores that might still be using the workspace.
+    fn cleanup_workspaces(&self) -> Result<(), Error> {
+        let mut stopper = self.context.prune_stopper.write().unwrap();
+        *stopper = false;
+        drop(stopper);
+        let pruner = if let Some(factory) = self.context.pruner_factory {
+            factory(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            )
+        } else {
+            Box::new(prune::PrunerImpl::new(
+                self.dbase.clone(),
+                self.context.clone(),
+                self.context.prune_stopper.clone(),
+            ))
+        };
+        match pruner.cleanup_workspaces() {
+            Ok(issues) => {
+                for issue in issues {
+                    self.context.capture_error(
+                        ErrorOperation::WorkspaceCleanup,
+                        issue.dataset_id,
+                        &issue.message,
+                    );
+                }
+            }
+            Err(err) => {
+                error!("leader supervisor workspace cleanup error: {}", err);
+                self.context.capture_error(
+                    ErrorOperation::WorkspaceCleanup,
+                    None,
+                    &err.to_string(),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Actor for LeaderSupervisor {
@@ -854,6 +916,21 @@ impl Handler<PackPrune> for LeaderSupervisor {
         debug!("leader supervisor received PackPrune message");
         if let Err(err) = self.prune_packs() {
             error!("PackPrune error: {}", err);
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct CleanupWorkspaces {}
+
+impl Handler<CleanupWorkspaces> for LeaderSupervisor {
+    type Result = ();
+
+    fn handle(&mut self, _msg: CleanupWorkspaces, _ctx: &mut Context<LeaderSupervisor>) {
+        debug!("leader supervisor received CleanupWorkspaces message");
+        if let Err(err) = self.cleanup_workspaces() {
+            error!("CleanupWorkspaces error: {}", err);
         }
     }
 }

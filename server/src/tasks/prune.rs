@@ -123,6 +123,16 @@ pub trait Pruner: Send + Sync {
     /// returned as `ScrubIssue`s so the run continues; `Err` is returned only
     /// for unrecoverable failures such as being unable to enumerate stores.
     fn prune_packs(&self) -> Result<Vec<ScrubIssue>, Error>;
+
+    /// Remove leftover temporary pack files from every dataset workspace.
+    ///
+    /// Backups and restores write into `dataset.workspace`; if a process is
+    /// killed mid-flight the temp files can linger indefinitely. This routine
+    /// deletes every entry under each workspace. Per-entry I/O failures are
+    /// returned as `ScrubIssue`s so the run continues; `Err` is returned only
+    /// for unrecoverable failures such as being unable to load the dataset
+    /// list. A workspace that does not yet exist is treated as success.
+    fn cleanup_workspaces(&self) -> Result<Vec<ScrubIssue>, Error>;
 }
 
 ///
@@ -1225,6 +1235,116 @@ impl Pruner for PrunerImpl {
         }
 
         info!("pack prune finished with {} issue(s)", issues.len());
+        Ok(issues)
+    }
+
+    fn cleanup_workspaces(&self) -> Result<Vec<ScrubIssue>, Error> {
+        info!("workspace cleanup starting");
+        let mut issues: Vec<ScrubIssue> = Vec::new();
+        let datasets = self.repo.get_datasets()?;
+        for dataset in &datasets {
+            if *self.stop_requested.read().unwrap() {
+                info!("workspace cleanup stopped");
+                return Ok(issues);
+            }
+            let workspace = &dataset.workspace;
+            let entries = match std::fs::read_dir(workspace) {
+                Ok(entries) => entries,
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(err) => {
+                    let msg = format!(
+                        "failed to read workspace {}: {}",
+                        workspace.display(),
+                        err
+                    );
+                    warn!("cleanup: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset.id.clone()),
+                        message: msg,
+                    });
+                    continue;
+                }
+            };
+            for entry in entries {
+                if *self.stop_requested.read().unwrap() {
+                    info!("workspace cleanup stopped");
+                    return Ok(issues);
+                }
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(err) => {
+                        let msg = format!(
+                            "failed to read workspace entry under {}: {}",
+                            workspace.display(),
+                            err
+                        );
+                        warn!("cleanup: {}", msg);
+                        issues.push(ScrubIssue {
+                            dataset_id: Some(dataset.id.clone()),
+                            message: msg,
+                        });
+                        continue;
+                    }
+                };
+                let path = entry.path();
+                let file_type = match entry.file_type() {
+                    Ok(ft) => ft,
+                    Err(err) => {
+                        let msg = format!(
+                            "failed to stat workspace entry {}: {}",
+                            path.display(),
+                            err
+                        );
+                        warn!("cleanup: {}", msg);
+                        issues.push(ScrubIssue {
+                            dataset_id: Some(dataset.id.clone()),
+                            message: msg,
+                        });
+                        continue;
+                    }
+                };
+                // Only remove entries whose names match what backup/restore
+                // actually create in the workspace: backup writes `.tmp*.pack`
+                // files via `tempfile::Builder::suffix(".pack").tempfile_in`,
+                // and restore creates `.tmp*` directories via
+                // `tempfile::TempDir::new_in`. Anything else is reported as an
+                // issue and left in place so we don't trash user data if the
+                // workspace was misconfigured.
+                let file_name = entry.file_name();
+                let name = file_name.to_string_lossy();
+                let is_backup_tempfile = file_type.is_file()
+                    && name.starts_with(".tmp")
+                    && name.ends_with(".pack");
+                let is_restore_tempdir = file_type.is_dir() && name.starts_with(".tmp");
+                if !is_backup_tempfile && !is_restore_tempdir {
+                    let msg = format!(
+                        "skipping unrecognized workspace entry {}",
+                        path.display()
+                    );
+                    warn!("cleanup: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset.id.clone()),
+                        message: msg,
+                    });
+                    continue;
+                }
+                let removed = if file_type.is_dir() {
+                    std::fs::remove_dir_all(&path)
+                } else {
+                    std::fs::remove_file(&path)
+                };
+                if let Err(err) = removed {
+                    let msg =
+                        format!("failed to remove workspace entry {}: {}", path.display(), err);
+                    warn!("cleanup: {}", msg);
+                    issues.push(ScrubIssue {
+                        dataset_id: Some(dataset.id.clone()),
+                        message: msg,
+                    });
+                }
+            }
+        }
+        info!("workspace cleanup finished with {} issue(s)", issues.len());
         Ok(issues)
     }
 }
@@ -3099,5 +3219,129 @@ mod tests {
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
         let issues = pruner.prune_packs().expect("prune_packs should succeed");
         assert!(issues.is_empty());
+    }
+
+    // --- cleanup_workspaces tests -----------------------------------------
+
+    fn cleanup_dataset(workspace: std::path::PathBuf) -> Dataset {
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.workspace = workspace;
+        dataset
+    }
+
+    #[test]
+    fn test_cleanup_workspaces_removes_files_and_dirs() {
+        // Populate a workspace with names matching what backup/restore create:
+        // a `.tmp*.pack` file (backup tempfile) and a `.tmp*` directory with
+        // contents (restore TempDir). Both must be removed while the workspace
+        // dir itself is preserved.
+        let tmpdir = tempfile::tempdir().expect("tempdir");
+        let workspace = tmpdir.path().to_path_buf();
+        std::fs::write(workspace.join(".tmpAbCdEf.pack"), b"junk").unwrap();
+        let nested = workspace.join(".tmpXyZ123");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(nested.join("inner.tmp"), b"inner").unwrap();
+
+        let dataset = cleanup_dataset(workspace.clone());
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed");
+        assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
+        assert!(workspace.exists(), "workspace itself should remain");
+        let remaining: Vec<_> = std::fs::read_dir(&workspace).unwrap().collect();
+        assert!(
+            remaining.is_empty(),
+            "workspace should be empty after cleanup"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_workspaces_preserves_unrecognized_entries() {
+        // Entries that do not look like a backup tempfile (`.tmp*.pack`) or a
+        // restore TempDir (`.tmp*` directory) must be left alone and reported
+        // as issues, so that a misconfigured workspace does not destroy data.
+        let tmpdir = tempfile::tempdir().expect("tempdir");
+        let workspace = tmpdir.path().to_path_buf();
+        // Plain file with no `.tmp` prefix.
+        std::fs::write(workspace.join("important.txt"), b"keep me").unwrap();
+        // `.tmp` prefix but wrong suffix - still not ours.
+        std::fs::write(workspace.join(".tmpAbCdEf.log"), b"keep me").unwrap();
+        // Directory with no `.tmp` prefix.
+        let user_dir = workspace.join("user-data");
+        std::fs::create_dir(&user_dir).unwrap();
+        std::fs::write(user_dir.join("file"), b"keep me").unwrap();
+        // A real backup-style tempfile that should still be removed.
+        std::fs::write(workspace.join(".tmpAbCdEf.pack"), b"junk").unwrap();
+
+        let dataset = cleanup_dataset(workspace.clone());
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed");
+        assert_eq!(issues.len(), 3, "expected 3 issues, got: {:?}", issues);
+        assert!(workspace.join("important.txt").exists());
+        assert!(workspace.join(".tmpAbCdEf.log").exists());
+        assert!(user_dir.join("file").exists());
+        assert!(!workspace.join(".tmpAbCdEf.pack").exists());
+    }
+
+    #[test]
+    fn test_cleanup_workspaces_missing_workspace_ok() {
+        // Workspace path does not exist on disk: cleanup treats it as success
+        // with no issues reported.
+        let tmpdir = tempfile::tempdir().expect("tempdir");
+        let missing = tmpdir.path().join("does-not-exist");
+        let dataset = cleanup_dataset(missing);
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed");
+        assert!(issues.is_empty(), "got: {:?}", issues);
+    }
+
+    #[test]
+    fn test_cleanup_workspaces_respects_stop_flag() {
+        // Stop flag set before the run: cleanup returns immediately and the
+        // workspace contents remain untouched.
+        let tmpdir = tempfile::tempdir().expect("tempdir");
+        let workspace = tmpdir.path().to_path_buf();
+        std::fs::write(workspace.join(".tmpAbCdEf.pack"), b"junk").unwrap();
+
+        let dataset = cleanup_dataset(workspace.clone());
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(true));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed");
+        assert!(issues.is_empty());
+        assert!(workspace.join(".tmpAbCdEf.pack").exists());
     }
 }

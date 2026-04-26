@@ -100,6 +100,7 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 | `PRUNE_INTERVAL_HOURS` | Pruning check interval |
 | `DATABASE_SCRUB_INTERVAL_DAYS` | Interval between database integrity scrubs (default 7, clamped 1-30) |
 | `PACK_PRUNE_INTERVAL_DAYS` | Interval between pack pruning runs that delete unreachable packs and old database archives (default 30, clamped 1-180) |
+| `WORKSPACE_CLEANUP_INTERVAL_HOURS` | Interval between workspace cleanup runs that wipe leftover temporary pack files from each dataset's workspace (default 24, clamped 1-720) |
 | `GENERATE_SDL` | Path to write GraphQL SDL file on startup |
 | `RESTORE_ALWAYS_PENDING` | Keep restores in pending state (testing) |
 | `RESTORE_ALWAYS_PROCESSING` | Keep restores in processing state (testing) |

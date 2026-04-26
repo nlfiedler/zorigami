@@ -6,29 +6,7 @@
 |---------+------+---------+-------+--------+--------+--------------+-----------------|
 | tampopo |  694 |      61 |  3922 | 275652 |  15094 |           64 |             104 |
 | chihiro |  692 |     104 |  5116 |  70071 |  55195 |           49 |            3532 |
-** Restore improvements
-*** restore can hang on pack retrieval for a long time
-**** log output
-#+begin_src
-[2023-08-08T15:34:54Z DEBUG server::domain::managers::restore] fetching pack sha256-9624d9d7cb9dfc37740c121fdbe15f456b6b2153d5b46b3e43feea1cd8db5cbf
-[... 15 minutes later ...]
-[2023-08-08T15:51:20Z WARN  server::data::repositories] pack retrieval failed, will try another source: Err(Token retrieval failed: error trying to connect: Connection timed out (os error 110))
-#+end_src
-**** should try to set a timeout to something reasonble (1-2 minutes)
-*** store restore requests in database to tolerate application restart
-**** currently restore requests are queued in memory only, so a crash means everything is forgotten
-** Improve backup reliability
-*** add some ~debug~ logging at regular intervals during the scan phase
-*** Detect and prune stale snapshots that never completely uploaded
-**** Stale snapshots exist in the database but are not referenced elsewhere
-** Efficient restore
-*** if restore finds an existing workspace, scan contents to build a ~have~ list of chunks vs starting over
-*** if restoring a file over an existing target, skip if checksum of target matches records
-**** an integration test exists in =restore_manager_test.rs= that is commented out
-** Partial restore
-*** using latest snapshot, examine current data set and restore all missing/modified data
-*** provide lots of logging and frequent webui status updates
-** Snapshot browsing
+** TODO [#A] Snapshot browsing
 *** ability to move through snapshots will staying within the selected path
 *** show differences between any two snapshots
 **** should be able to implement this in the client w/o backend changes
@@ -65,74 +43,9 @@ open /tmp/snapshot
 $ tmutil deletelocalsnapshots 2021-04-05-162416
 Deleted local snapshot '2021-04-05-162416'
 #+end_src
-** Loose backend issues
-*** maybe use a thread pool for bridging async barrier in data sources
-**** currently the data sources all spawn a new thread every time
-*** neat way to getting filenames in a streamlined manner
-**** c.f. https://fettblog.eu/refactoring-rust-abstraction-newtype/
-*** should clean up dataset workspaces on startup and periodically
-**** need to be sure no backup or restore is running, then delete everything in =.tmp=
-**** =State= could have a =is_quiet()= check or an event that be be subscribed to when everything is quiet
-*** refine use of =&str= and =String= arguments by using =Into<String>=
-**** c.f. https://jwilm.io/blog/from-str-to-cow/ for explanation
-**** note that using =Cow= helps to minimize copying
-#+BEGIN_SRC rust
-pub fn name<T: Into<String>>(mut self, name: T) -> Self {
-    self.name = Cow::Owned(name.into());
-    self
-}
-#+END_SRC
-*** Too many open files (in RocksDB)
-**** need to set =set_max_open_files()= on database options
-**** default ulimit on macOS is 256, so something less would be ideal
-**** ran out of files in tanuki when rocksdb directory contained 217 files
-**** maybe consider a means of countering this error at runtime
-** Loose WebUI tasks
-*** test with a smaller browser window to surface sizing issues
-*** local store basepath could offer button to use file picker
-*** improve (server) error handling
-**** when a temporary server error occurs, offer a "Retry" button
-*** tree entries of =ERROR= type should be displayed as such
-**** error message from =TreeEntry.new()= could be stored as a new type of =TreeReference=
-***** e.g. =TreeReference.ERROR(String)= where the string is the error message
-** Improved error handling
-*** webui: database restore fails to get archive, should display a sensible error
-**** cause 1: include mismatching instance identifier
-**** cause 2: wrong user owns the files
-**** response from backend looks like:
-#+begin_src javascript
-{
-  "data": null,
-  "errors": [
-    {
-      "message": "database archive retrieval",
-      "locations": [
-        {
-          "line": 2,
-          "column": 3
-        }
-      ],
-      "path": [
-        "restoreDatabase"
-      ]
-    }
-  ]
-}
-#+end_src
-*** Detect cloud credential issues and display friendly message
-**** errors from cloud providers can be cryptic, need to detect and decipher for the user
-*** Data set input validation
-**** Ask backend to verify the entered basepath before trying to save
-*** Pack store input validation
-**** should validate Google Cloud service account key when defining pack
 ** Pack store management
-*** cloud-based pack stores need to consider paging the results of listing buckets and objects
 *** Store impl needs to consider chosen storage class when answering ~fast~ or ~slow~ question
 **** e.g. Google ~coldline~ is slow but ~nearline~ is fast
-*** Remote pack stores like Google Cloud have built-in limits for certain operations
-**** need to consider that GCS will limit the number of buckets listed to 1,000
-**** probably minio and S3 have similar default limits
-**** the API generally offers a means of paging to get everything in chunks
 ** Remove files/folders from backup
 *** Allow removing files from existing backups
 **** e.g. accidentally saved large binaries

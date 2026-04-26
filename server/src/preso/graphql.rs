@@ -357,6 +357,8 @@ enum CapturedErrorOperation {
     DatabaseScrub,
     /// Error recorded while pruning pack files and database archives.
     PackPrune,
+    /// Error recorded while cleaning up dataset workspace directories.
+    WorkspaceCleanup,
 }
 
 impl From<entities::ErrorOperation> for CapturedErrorOperation {
@@ -367,6 +369,9 @@ impl From<entities::ErrorOperation> for CapturedErrorOperation {
             entities::ErrorOperation::RestoreTest => CapturedErrorOperation::RestoreTest,
             entities::ErrorOperation::DatabaseScrub => CapturedErrorOperation::DatabaseScrub,
             entities::ErrorOperation::PackPrune => CapturedErrorOperation::PackPrune,
+            entities::ErrorOperation::WorkspaceCleanup => {
+                CapturedErrorOperation::WorkspaceCleanup
+            }
         }
     }
 }

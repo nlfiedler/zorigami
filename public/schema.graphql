@@ -33,6 +33,7 @@ enum CapturedErrorOperation {
   "Error recorded while running a restore self-test." RESTORE_TEST
   "Error recorded while performing a database scrub." DATABASE_SCRUB
   "Error recorded while pruning pack files and database archives." PACK_PRUNE
+  "Error recorded while cleaning up dataset workspace directories." WORKSPACE_CLEANUP
 }
 
 enum DayOfWeek {

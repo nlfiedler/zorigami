@@ -238,6 +238,23 @@ impl Actor for ScheduleSupervisor {
                 }
             },
         );
+
+        // periodically wipe leftover temporary pack files from each dataset's
+        // workspace; killed backups/restores can leave files behind otherwise
+        let workspace_cleanup_hours = std::env::var("WORKSPACE_CLEANUP_INTERVAL_HOURS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|n| n.clamp(1, 720))
+            .unwrap_or(24);
+        ctx.run_interval(
+            Duration::from_hours(workspace_cleanup_hours),
+            |this, _ctx| {
+                trace!("schedule workspace-cleanup interval fired");
+                if let Err(err) = this.leader.cleanup_workspaces() {
+                    error!("failed to schedule workspace cleanup: {}", err);
+                }
+            },
+        );
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
