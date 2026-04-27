@@ -7,6 +7,7 @@ import {
   createSignal,
   For,
   Match,
+  on,
   Show,
   Suspense,
   Switch
@@ -285,12 +286,42 @@ export function SnapshotBrowse() {
       return data;
     }
   );
+  const [snapshotsQuery, { refetch: refetchSnapshots }] = createResource(
+    () => params.id,
+    async (id: string) => {
+      const { data } = await client.query({
+        query: ALL_SNAPSHOTS,
+        variables: { id }
+      });
+      return data;
+    }
+  );
   const location = useLocation();
   // the pathname is not actually used, just listening for route changes
   createEffect(() => refetch(location.pathname));
+  createEffect(() => refetchSnapshots(location.pathname));
+
+  const orderedSnapshots = () => {
+    const snaps = snapshotsQuery()?.snapshots ?? [];
+    return [...snaps].sort(
+      (a, b) =>
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    );
+  };
+  const currentIndex = () =>
+    orderedSnapshots().findIndex((s) => s.checksum === params.sid);
+  const olderSnapshot = () => {
+    const idx = currentIndex();
+    return idx > 0 ? orderedSnapshots()[idx - 1] : null;
+  };
+  const newerSnapshot = () => {
+    const idx = currentIndex();
+    const arr = orderedSnapshots();
+    return idx >= 0 && idx < arr.length - 1 ? arr[idx + 1] : null;
+  };
 
   return (
-    <Show when={snapshotQuery()} fallback="..." keyed>
+    <Show when={snapshotQuery()} fallback="...">
       <nav class="level">
         <div class="level-left">
           <div class="level-item">
@@ -300,6 +331,40 @@ export function SnapshotBrowse() {
                 navigate(`/snapshots/${params.id}/browse/${id}`)
               }
             />
+          </div>
+          <div class="level-item">
+            <div class="buttons has-addons">
+              <button
+                class="button"
+                title="Previous (older) snapshot"
+                disabled={!olderSnapshot()}
+                on:click={() => {
+                  const s = olderSnapshot();
+                  if (s)
+                    navigate(`/snapshots/${params.id}/browse/${s.checksum}`);
+                }}
+              >
+                <span class="icon">
+                  <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                </span>
+                <span>Previous</span>
+              </button>
+              <button
+                class="button"
+                title="Next (newer) snapshot"
+                disabled={!newerSnapshot()}
+                on:click={() => {
+                  const s = newerSnapshot();
+                  if (s)
+                    navigate(`/snapshots/${params.id}/browse/${s.checksum}`);
+                }}
+              >
+                <span>Next</span>
+                <span class="icon">
+                  <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="level-right">
@@ -455,6 +520,36 @@ function TreeViewer(props: TreeViewerProps) {
       });
       return data;
     }
+  );
+  let walkGen = 0;
+  createEffect(
+    on(
+      () => props.digest,
+      async (rootDigest) => {
+        const gen = ++walkGen;
+        const names = store.paths.slice(1).map(([name]) => name);
+        const resolved: [string, string][] = [['/', rootDigest]];
+        let cursor = rootDigest;
+        for (const name of names) {
+          const { data } = await client.query({
+            query: GET_TREE,
+            variables: { digest: cursor }
+          });
+          if (gen !== walkGen) return;
+          const entry = data?.tree?.entries.find(
+            (e) => e.name === name && e.reference.startsWith('tree-')
+          );
+          if (!entry) break;
+          cursor = entry.reference.slice(5);
+          resolved.push([name!, cursor]);
+        }
+        if (gen === walkGen) {
+          setStore('paths', resolved);
+          setStore('selections', []);
+        }
+      },
+      { defer: true }
+    )
   );
   const restoreAction = action(
     async (): Promise<{ ok: boolean }> => {

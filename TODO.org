@@ -2,7 +2,6 @@
 ** note: old zorigami backup on chihiro took 32 minutes
 *** with improved FastCDC implementation, maybe it will be faster
 ** TODO [#A] Snapshot browsing
-*** ability to move through snapshots will staying within the selected path
 *** show differences between any two snapshots
 **** should be able to implement this in the client w/o backend changes
 **** select two snapshots, get their roots, show the added/changed/removed/same as a directory listing

@@ -10,4 +10,9 @@ export default defineConfig({
   build: {
     target: 'esnext',
   },
+  server: {
+    proxy: {
+      '/graphql': 'http://localhost:3000',
+    },
+  },
 });

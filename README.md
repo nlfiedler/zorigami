@@ -45,7 +45,7 @@ cargo build
 cargo test
 ```
 
-To build or run tests for a single package, use the `-p` option, like so:
+To build a single package or run its tests, use the `-p` option, like so:
 
 ```shell
 cargo build -p store_minio
@@ -60,7 +60,23 @@ bunx vite build
 RUST_LOG=info cargo run
 ```
 
-By default the server will be running on port `3000` on localhost.
+By default the web interface will be accessible at [http://localhost:3000](http://localhost:3000)
+
+### Web Development Process
+
+In a terminal window, start the backend:
+
+```shell
+RUST_LOG=info cargo run
+```
+
+In another terminal, start the Vite HMR server:
+
+```shell
+bun run dev
+```
+
+The web frontend will be accessible at [http://localhost:5173](http://localhost:5173) and any changes made to the TSX files will appear immediately.
 
 ### Docker
 
