@@ -14,6 +14,7 @@ import {
   Snapshots,
   SnapshotBrowse
 } from './pages/snapshots.tsx';
+import { SnapshotCompare } from './pages/diffs.tsx';
 import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
 import { Restore } from './pages/restore.tsx';
@@ -46,6 +47,10 @@ render(
           <Route path="/" component={SnapshotHelp} />
           <Route path="/:id" component={Snapshots} />
           <Route path="/:id/browse/:sid" component={SnapshotBrowse} />
+          <Route
+            path="/:id/compare/:digestA/:digestB"
+            component={SnapshotCompare}
+          />
         </Route>
         <Route path="/restore" component={Restore} />
         <Route path="/settings" component={Settings} />

@@ -1,12 +1,7 @@
 * Tasks
 ** note: old zorigami backup on chihiro took 32 minutes
 *** with improved FastCDC implementation, maybe it will be faster
-** TODO [#A] Snapshot browsing
-*** show differences between any two snapshots
-**** should be able to implement this in the client w/o backend changes
-**** select two snapshots, get their roots, show the added/changed/removed/same as a directory listing
-**** ~added~ and ~changed~ entries can be clicked on to visit the child tree of each snapshot
-**** ~removed~ and ~same~ are not navigable (no reason to browse these)
+** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it

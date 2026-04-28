@@ -199,6 +199,42 @@ export function Snapshots() {
   // the pathname is not actually used, just listening for route changes
   createEffect(() => refetch(location.pathname));
 
+  const [selected, setSelected] = createSignal<string[]>([]);
+  // reset selections when switching datasets
+  createEffect(
+    on(
+      () => params.id,
+      () => setSelected([])
+    )
+  );
+  const toggleSelected = (checksum: string) => {
+    setSelected((prev) => {
+      if (prev.includes(checksum)) {
+        return prev.filter((c) => c !== checksum);
+      }
+      if (prev.length >= 2) {
+        return prev;
+      }
+      return [...prev, checksum];
+    });
+  };
+  const compare = () => {
+    const picks = selected();
+    if (picks.length !== 2) return;
+    const snaps = snapshotsQuery()?.snapshots ?? [];
+    const byChecksum = new Map(snaps.map((s) => [s.checksum, s]));
+    const a = byChecksum.get(picks[0]);
+    const b = byChecksum.get(picks[1]);
+    if (!a || !b) return;
+    const [older, newer] =
+      new Date(a.startTime).getTime() <= new Date(b.startTime).getTime()
+        ? [a, b]
+        : [b, a];
+    navigate(
+      `/snapshots/${params.id}/compare/${older.checksum}/${newer.checksum}`
+    );
+  };
+
   return (
     <Suspense fallback={'...'}>
       <Switch>
@@ -215,9 +251,29 @@ export function Snapshots() {
           </article>
         </Match>
         <Match when={snapshotsQuery()}>
+          <nav class="level">
+            <div class="level-left">
+              <div class="level-item">
+                <button
+                  class="button"
+                  disabled={selected().length !== 2}
+                  on:click={compare}
+                >
+                  <span class="icon">
+                    <i
+                      class="fa-solid fa-code-compare"
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  <span>Compare</span>
+                </button>
+              </div>
+            </div>
+          </nav>
           <table class="table is-striped is-hoverable is-fullwidth has-text-left">
             <thead>
               <tr>
+                <th></th>
                 <th>Start</th>
                 <th>End</th>
                 <th>Files</th>
@@ -235,6 +291,20 @@ export function Snapshots() {
                       );
                     }}
                   >
+                    <td on:click={(ev) => ev.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected().includes(item.checksum)}
+                        disabled={
+                          selected().length >= 2 &&
+                          !selected().includes(item.checksum)
+                        }
+                        on:change={(ev) => {
+                          ev.preventDefault();
+                          toggleSelected(item.checksum);
+                        }}
+                      />
+                    </td>
                     <td>{new Date(item.startTime).toLocaleString()}</td>
                     <td>
                       {item.endTime
