@@ -77,3 +77,9 @@ Added `chunk_size` to `dataset` records, defaults to 1mb.
 Bucket names no longer include the computer identifier (a type 5 UUID) suffix. Instead, the value is akin to a ULID with 256 bits of randomness instead of only 80. This results in a name that is 61 characters long, which conforms to all supported cloud storage providers. This greatly improves the entropy value of the generated names without losing the lexicographical sorting that is a hallmark of ULID.
 
 Bucket naming policy is now a part of the `configuration` record.
+
+Added a `schema_version` entry in RocksDB that is a monotonically increasing number that indicates the current database schema.
+
+Added support for [SQLite](https://sqlite.org) as an alternative to RocksDB.
+
+Error encountered in background tasks are written to an SQLite database named `errors.db`.
