@@ -1,6 +1,4 @@
 * Tasks
-** note: old zorigami backup on chihiro took 32 minutes
-*** with improved FastCDC implementation, maybe it will be faster
 ** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern

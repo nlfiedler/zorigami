@@ -1024,13 +1024,26 @@ impl LeaderContext {
 
     /// Insert the backup request into the collection to allow the subscriber to
     /// update the progress of the request. If a request for this dataset is
-    /// already present (e.g. a paused backup being restarted by the scheduler),
-    /// preserve the existing entry so its accumulated metrics are not lost.
+    /// already present in the PAUSED state (e.g. a paused backup being
+    /// restarted by the scheduler), keep its accumulated upload counters but
+    /// adopt the identifiers of the new request so subsequent subscriber
+    /// callbacks (which look up by request id) update the same entry.
     fn insert_started_backup(&self, request: backup::Request) {
         let pair = self.backups.clone();
         let (lock, _cvar) = &*pair;
         let mut map = lock.lock().unwrap();
-        map.entry(request.dataset.clone()).or_insert(request);
+        match map.get_mut(&request.dataset) {
+            Some(existing) if existing.status == backup::Status::PAUSED => {
+                existing.id = request.id;
+                existing.passphrase = request.passphrase;
+                existing.stop_time = request.stop_time;
+                existing.finished = None;
+                existing.errors.clear();
+            }
+            _ => {
+                map.insert(request.dataset.clone(), request);
+            }
+        }
     }
 
     /// Put the prune request into the collection, trim the set to size.
@@ -1054,7 +1067,9 @@ impl backup::Subscriber for LeaderContext {
         let mut map = lock.lock().unwrap();
         for request in map.values_mut() {
             if request.id == request_id {
-                request.started = Some(Utc::now());
+                if request.started.is_none() {
+                    request.started = Some(Utc::now());
+                }
                 request.status = backup::Status::RUNNING;
                 break;
             }
@@ -1395,6 +1410,69 @@ mod tests {
         assert_eq!(request_1.files_uploaded, 21);
         assert_eq!(request_1.bytes_uploaded, 524288);
         assert_eq!(request_1.packs_uploaded, 1);
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_ring_leader_backup_paused_then_resumed() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+        CALL_COUNT.store(0, Ordering::SeqCst);
+
+        fn b_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            subscriber: Arc<dyn backup::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn backup::Backuper> {
+            let subscriber = subscriber.clone();
+            let mut backuper = backup::MockBackuper::new();
+            let call = CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+            backuper.expect_backup().return_once(move |request| {
+                subscriber.started(&request.id);
+                subscriber.files_changed(&request.id, 42);
+                subscriber.files_uploaded(&request.id, 21);
+                subscriber.bytes_uploaded(&request.id, 524288);
+                subscriber.pack_uploaded(&request.id);
+                if call == 0 {
+                    subscriber.paused(&request.id);
+                    Err(Error::from(backup::OutOfTimeFailure))
+                } else {
+                    subscriber.finished(&request.id);
+                    Ok(None)
+                }
+            });
+            Box::new(backuper)
+        }
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, None, Some(b_factory), None);
+        let mock = MockRecordRepository::new();
+        assert!(sut.start(Arc::new(mock), mock_error_repo()).is_ok());
+
+        let dataset_1_id = xid::new().to_string();
+        let first = backup::Request::new(dataset_1_id.clone(), "tiger", None);
+        assert!(sut.backup(first).is_ok());
+        sut.wait_for_paused_backup();
+        let original_started = sut
+            .get_backup_by_dataset(&dataset_1_id)
+            .unwrap()
+            .started
+            .expect("first run should record a started time");
+
+        // scheduler submits a fresh request with a new id; counters from the
+        // paused run must persist and continue to accumulate
+        let second = backup::Request::new(dataset_1_id.clone(), "tiger", None);
+        let second_id = second.id.clone();
+        assert!(sut.backup(second).is_ok());
+        sut.wait_for_backup();
+
+        let request = sut.get_backup_by_dataset(&dataset_1_id).unwrap();
+        assert_eq!(request.status, backup::Status::COMPLETED);
+        assert_eq!(request.id, second_id);
+        assert_eq!(request.started, Some(original_started));
+        assert_eq!(request.changed_files, 42);
+        assert_eq!(request.files_uploaded, 42);
+        assert_eq!(request.bytes_uploaded, 1048576);
+        assert_eq!(request.packs_uploaded, 2);
     }
 
     #[actix_rt::test]
