@@ -33,7 +33,3 @@ generated
 # environment configuration
 .env
 .env.*
-
-# temporary data
-tmp
-.tmp
