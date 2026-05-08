@@ -20,6 +20,8 @@ use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 // Use an `Arc` to hold the data source to make cloning easy for the caller. If
 // using a `Box` instead, cloning it would involve adding fake clone operations
@@ -339,7 +341,9 @@ impl PackRepositoryImpl {
         Ok(Self { sources })
     }
 
-    // Try to store the pack file up to three times before giving up. Bucket
+    // Try to store the pack file up to ten times before giving up, waiting
+    // between attempts with exponential backoff (1s, 2s, 4s, ... capped at
+    // 60s) to give transient remote-store failures time to clear. Bucket
     // collisions are handled inside each pack store implementation.
     fn store_pack_retry(
         &self,
@@ -348,19 +352,22 @@ impl PackRepositoryImpl {
         bucket: &str,
         object: &str,
     ) -> anyhow::Result<PackLocation, Error> {
-        let mut retries = 3;
-        loop {
-            match source.store_pack(packfile, bucket, object) {
-                Ok(coords) => return Ok(coords),
-                Err(err) => {
-                    retries -= 1;
-                    if retries == 0 {
-                        return Err(err);
-                    }
-                    warn!("pack store failed, will retry: {:?}", err);
-                }
+        const MAX_ATTEMPTS: u32 = 10;
+        const BASE_DELAY_SECS: u64 = 1;
+        const MAX_DELAY_SECS: u64 = 60;
+        for attempt in 0..MAX_ATTEMPTS {
+            let result = source.store_pack(packfile, bucket, object);
+            if result.is_ok() {
+                return result;
             }
+            if attempt + 1 == MAX_ATTEMPTS {
+                return result;
+            }
+            let delay = (BASE_DELAY_SECS << attempt).min(MAX_DELAY_SECS);
+            warn!("pack store failed, retrying in {}s: {:?}", delay, result);
+            sleep(Duration::from_secs(delay));
         }
+        unreachable!()
     }
 }
 
@@ -465,7 +472,7 @@ impl PackRepository for PackRepositoryImpl {
         let mut results: Vec<PackLocation> = Vec::new();
         for (store, source) in self.sources.iter() {
             let ctx = format!(
-                "database store {} ({}) failed for {}/{}",
+                "database store {} ({}) failed for {} / {}",
                 store.id, store.label, bucket, object
             );
             let loc =
@@ -505,25 +512,34 @@ fn computer_bucket_name(unique_id: &str) -> Result<String, Error> {
         .map(|uuid| uuid.simple().to_string())
 }
 
-// Try to store the database archive up to three times before giving up.
+// Try to store the database archive up to ten times before giving up, waiting
+// between attempts with exponential backoff (1s, 2s, 4s, ... capped at 60s) to
+// give transient remote-store failures (e.g. GCS 408) time to clear.
 fn store_database_retry(
     source: &dyn PackDataSource,
     packfile: &Path,
     bucket: &str,
     object: &str,
 ) -> anyhow::Result<PackLocation, Error> {
-    let mut retries = 3;
-    loop {
+    const MAX_ATTEMPTS: u32 = 10;
+    const BASE_DELAY_SECS: u64 = 1;
+    const MAX_DELAY_SECS: u64 = 60;
+    for attempt in 0..MAX_ATTEMPTS {
         let result = source.store_database(packfile, bucket, object);
         if result.is_ok() {
             return result;
         }
-        retries -= 1;
-        if retries == 0 {
+        if attempt + 1 == MAX_ATTEMPTS {
             return result;
         }
-        warn!("database store failed, will retry: {:?}", result);
+        let delay = (BASE_DELAY_SECS << attempt).min(MAX_DELAY_SECS);
+        warn!(
+            "database store failed, retrying in {}s: {:?}",
+            delay, result
+        );
+        sleep(Duration::from_secs(delay));
     }
+    unreachable!()
 }
 
 #[cfg(test)]
