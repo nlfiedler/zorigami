@@ -228,7 +228,7 @@ impl Actor for ScheduleSupervisor {
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .map(|n| n.clamp(1, 180))
-            .unwrap_or(30);
+            .unwrap_or(7);
         ctx.run_interval(
             Duration::from_hours(pack_prune_interval_days * 24),
             |this, _ctx| {
