@@ -39,7 +39,6 @@ Server binary is `target/release/zorigami` and web contents are in `dist`
 Create the plist file as shown below then run the following commands.
 
 ```shell
-ps -ef | grep -i zorigami
 launchctl kill SIGTERM "gui/$(id -u)/zorigami"
 ps -ef | grep -i zorigami
 mkdir -p ~/Applications/Zorigami
