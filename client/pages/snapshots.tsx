@@ -88,7 +88,7 @@ export function SnapshotsPage(props: any) {
                         }}
                       >
                         <div class="list-item-content">
-                          <div class="list-item-title ellipsize-left">
+                          <div class="list-item-title">
                             {dataset.basepath}
                           </div>
                           <div class="list-item-description">
