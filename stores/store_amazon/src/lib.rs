@@ -7,6 +7,8 @@
 
 use anyhow::{Error, anyhow};
 use aws_config::{BehaviorVersion, Region, SdkConfig};
+use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
+use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_dynamodb::operation::create_table::CreateTableError;
@@ -23,7 +25,24 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 use store_core::{CollisionError, Coordinates};
+
+// Per-attempt ceiling for a single S3/DynamoDB request (excluding SDK
+// retry attempts). Generous enough that a multi-hundred-MB database
+// archive can complete over a slow uplink, but bounded so a wedged
+// operation eventually surfaces as an error. Stalled-stream protection
+// (configured below) is the primary defense against half-open sockets
+// during a transfer; this constant is the hard upper bound.
+const OPERATION_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+// Time the SDK waits for the first byte of the response after a request
+// has been sent. This bounds the "request issued, server never started
+// replying" case (e.g. S3 dropping the request silently). It is NOT a
+// per-read inactivity timeout on a streaming body — that case is handled
+// by stalled-stream protection.
+const READ_TIMEOUT: Duration = Duration::from_secs(120);
+// TCP connect deadline.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 // Names of all existing S3 buckets. Populated and used only when too many
 // buckets have been created.
@@ -79,10 +98,29 @@ impl AmazonStore {
             None,
             "zorigami-static",
         );
+        // Bound each request so a stalled HTTP stream (e.g. transient 408
+        // followed by a half-open socket) surfaces as an error and the outer
+        // retry loop in `data::repositories` can try again, rather than
+        // hanging the backup task forever. Note: `put_object` issues a
+        // single-shot upload (we do not invoke the higher-level
+        // `TransferManager`), so the entire pack/database transfer counts
+        // against one `operation_attempt_timeout` — hence the generous cap.
+        let timeouts = TimeoutConfig::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .operation_attempt_timeout(OPERATION_ATTEMPT_TIMEOUT)
+            .build();
+        // Detect stalled body streams in both directions (uploads and
+        // downloads). Without this, a TCP socket that goes half-open mid
+        // transfer would only be caught by `operation_attempt_timeout`,
+        // which can be a long wait for a large transfer.
+        let stalled = StalledStreamProtectionConfig::enabled().build();
         let shared = SdkConfig::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(SharedCredentialsProvider::new(creds))
             .region(Region::new(region.clone()))
+            .timeout_config(timeouts)
+            .stalled_stream_protection(stalled)
             .build();
         let s3 = aws_sdk_s3::Client::new(&shared);
         let ddb = aws_sdk_dynamodb::Client::new(&shared);

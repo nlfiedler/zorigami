@@ -12,8 +12,52 @@ use firestore1::{Firestore, hyper_util};
 use std::collections::HashMap;
 use std::default::Default;
 use std::path::Path;
+use std::time::Duration;
 use storage1::{Storage, yup_oauth2};
 use store_core::{CollisionError, Coordinates};
+use tokio::time::timeout;
+
+// TCP connect deadline; any longer almost certainly indicates a network issue
+// rather than a slow handshake.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+// TCP keepalive so half-open sockets surface as errors rather than hanging the
+// upload/download future indefinitely.
+const TCP_KEEPALIVE: Duration = Duration::from_secs(60);
+// Drop idle pooled connections fairly aggressively so the next request opens a
+// fresh connection if the previous one went stale.
+const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+// Per-call deadline for short metadata operations (list/get/delete/create).
+const METADATA_TIMEOUT: Duration = Duration::from_secs(120);
+// Per-attempt deadline for bulk transfers (pack uploads/downloads, database
+// archive uploads/downloads). The retry loop in `data::repositories` will try
+// again on timeout, so this only needs to be long enough for a healthy
+// transfer of one pack/database archive.
+const TRANSFER_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+// Per-call deadline for OAuth token + Storage/Firestore hub construction.
+const CONNECT_HUB_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Wrap a future with a deadline, converting an elapsed timer into an
+/// `anyhow::Error` so the surrounding `?` propagation continues to work.
+async fn with_deadline<F, T>(label: &str, deadline: Duration, fut: F) -> Result<T, Error>
+where
+    F: std::future::Future<Output = Result<T, Error>>,
+{
+    match timeout(deadline, fut).await {
+        Ok(inner) => inner,
+        Err(_) => Err(anyhow!("{} timed out after {:?}", label, deadline)),
+    }
+}
+
+/// Build an HttpConnector configured with a connect timeout and TCP
+/// keepalive so that stalled or half-open sockets surface as errors instead
+/// of hanging the calling future indefinitely.
+fn build_http_connector() -> HttpConnector {
+    let mut http = HttpConnector::new();
+    http.enforce_http(false);
+    http.set_connect_timeout(Some(CONNECT_TIMEOUT));
+    http.set_keepalive(Some(TCP_KEEPALIVE));
+    http
+}
 
 #[derive(Clone, Debug)]
 pub struct GoogleStore {
@@ -49,8 +93,10 @@ impl GoogleStore {
             .with_native_roots()?
             .https_or_http()
             .enable_http1()
-            .build();
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(conn);
+            .wrap_connector(build_http_connector());
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new())
+            .pool_idle_timeout(POOL_IDLE_TIMEOUT)
+            .build(conn);
         let account_key = yup_oauth2::read_service_account_key(&self.credentials).await?;
         //
         // Would prefer to use with_client() instead of builder() in order to
@@ -58,9 +104,17 @@ impl GoogleStore {
         // the correct types or gain access to CustomHyperClientBuilder in
         // yup_oauth2.
         //
-        let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
-            .build()
-            .await?;
+        let authenticator = with_deadline(
+            "ServiceAccountAuthenticator::build (storage)",
+            CONNECT_HUB_TIMEOUT,
+            async {
+                yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
+                    .build()
+                    .await
+                    .map_err(Error::from)
+            },
+        )
+        .await?;
         Ok(Storage::new(client, authenticator))
     }
 
@@ -69,12 +123,22 @@ impl GoogleStore {
             .with_native_roots()?
             .https_or_http()
             .enable_http1()
-            .build();
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(conn);
+            .wrap_connector(build_http_connector());
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new())
+            .pool_idle_timeout(POOL_IDLE_TIMEOUT)
+            .build(conn);
         let account_key = yup_oauth2::read_service_account_key(&self.credentials).await?;
-        let authenticator = yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
-            .build()
-            .await?;
+        let authenticator = with_deadline(
+            "ServiceAccountAuthenticator::build (firestore)",
+            CONNECT_HUB_TIMEOUT,
+            async {
+                yup_oauth2::ServiceAccountAuthenticator::builder(account_key)
+                    .build()
+                    .await
+                    .map_err(Error::from)
+            },
+        )
+        .await?;
         Ok(Firestore::new(client, authenticator))
     }
 
@@ -122,14 +186,41 @@ impl GoogleStore {
         let mimetype = "application/octet-stream"
             .parse()
             .map_err(|e| anyhow!(format!("{:?}", e)))?;
-        // storing the same object twice is not treated as an error
-        match hub
-            .objects()
-            .insert(req, bucket)
-            .name(object)
-            .upload_resumable(infile, mimetype)
-            .await
+        // Storing the same object twice is not treated as an error.
+        //
+        // Wrap the upload in a tokio timeout so a stalled HTTP stream (e.g.
+        // following a transient 408 from GCS, or a half-open TCP socket) is
+        // surfaced as an error and the outer retry loop in
+        // `data::repositories` can try again, rather than hanging forever.
+        // Raw `timeout(...)` is used here (rather than `with_deadline`)
+        // because the inner match needs to inspect the typed `storage1::Error`
+        // to detect a 403 bucket-collision case below.
+        //
+        // Caveat: cancelling `upload_resumable` mid-flight orphans the GCS
+        // resumable session URL on the server. GCS auto-expires abandoned
+        // sessions after ~7 days, so this is a quota-cleanup nuisance rather
+        // than a correctness concern, and the next retry establishes a fresh
+        // session.
+        let upload_result = match timeout(
+            TRANSFER_TIMEOUT,
+            hub.objects()
+                .insert(req, bucket)
+                .name(object)
+                .upload_resumable(infile, mimetype),
+        )
+        .await
         {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(anyhow!(
+                    "upload_resumable timed out after {:?} for {}/{}",
+                    TRANSFER_TIMEOUT,
+                    bucket,
+                    object
+                ));
+            }
+        };
+        match upload_result {
             Ok((_response, objdata)) => {
                 // ensure uploaded file matches local contents
                 if let Some(hash) = objdata.md5_hash.as_ref() {
@@ -169,20 +260,26 @@ impl GoogleStore {
         use http_body_util::BodyExt;
         use std::io::Write;
         let hub = self.connect().await?;
-        let (mut response, _object) = hub
-            .objects()
-            .get(&location.bucket, &location.object)
-            .param("alt", "media")
-            .doit()
-            .await?;
-        let mut local = std::fs::File::create(outfile)?;
-        while let Some(next) = response.frame().await {
-            let frame = next?;
-            if let Some(chunk) = frame.data_ref() {
-                local.write_all(chunk)?;
+        // Bound the overall download (initial request + body streaming) so a
+        // stalled HTTP stream surfaces as an error rather than hanging the
+        // calling thread indefinitely.
+        let download = async {
+            let (mut response, _object) = hub
+                .objects()
+                .get(&location.bucket, &location.object)
+                .param("alt", "media")
+                .doit()
+                .await?;
+            let mut local = std::fs::File::create(outfile)?;
+            while let Some(next) = response.frame().await {
+                let frame = next?;
+                if let Some(chunk) = frame.data_ref() {
+                    local.write_all(chunk)?;
+                }
             }
-        }
-        Ok(())
+            Ok::<_, Error>(())
+        };
+        with_deadline("retrieve_pack", TRANSFER_TIMEOUT, download).await
     }
 
     pub fn list_buckets_sync(&self) -> Result<Vec<String>, Error> {
@@ -200,30 +297,29 @@ impl GoogleStore {
             } else {
                 methods.list(&self.project)
             };
-            match call.doit().await {
-                Ok((_response, buckets)) => {
-                    if let Some(bucks) = buckets.items.as_ref() {
-                        // Only consider named buckets; there is no guarantee
-                        // that they have one, despite the API requiring that
-                        // names be provided when creating them.
-                        for bucket in bucks.iter() {
-                            if let Some(name) = bucket.name.as_ref() {
-                                // ignore the Firestore buckets, which we do not
-                                // want to accidentally delete and thus lose the
-                                // bucket collision database
-                                if !name.ends_with(".appspot.com") {
-                                    results.push(name.to_owned());
-                                }
-                            }
+            let (_response, buckets) = with_deadline("list_buckets", METADATA_TIMEOUT, async {
+                call.doit().await.map_err(|e| anyhow!(format!("{:?}", e)))
+            })
+            .await?;
+            if let Some(bucks) = buckets.items.as_ref() {
+                // Only consider named buckets; there is no guarantee that they
+                // have one, despite the API requiring that names be provided
+                // when creating them.
+                for bucket in bucks.iter() {
+                    if let Some(name) = bucket.name.as_ref() {
+                        // ignore the Firestore buckets, which we do not want
+                        // to accidentally delete and thus lose the bucket
+                        // collision database
+                        if !name.ends_with(".appspot.com") {
+                            results.push(name.to_owned());
                         }
                     }
-                    if buckets.next_page_token.is_none() {
-                        break;
-                    }
-                    page_token = buckets.next_page_token;
                 }
-                Err(err) => return Err(anyhow!(format!("{:?}", err))),
             }
+            if buckets.next_page_token.is_none() {
+                break;
+            }
+            page_token = buckets.next_page_token;
         }
         Ok(results)
     }
@@ -243,25 +339,24 @@ impl GoogleStore {
             } else {
                 methods.list(bucket)
             };
-            match call.doit().await {
-                Ok((_response, objects)) => {
-                    if let Some(objs) = objects.items.as_ref() {
-                        // Only consider named objects; there is no guarantee
-                        // that they have one, despite the API requiring that
-                        // names be provided when uploading them.
-                        for object in objs.iter() {
-                            if let Some(name) = object.name.as_ref() {
-                                results.push(name.to_owned());
-                            }
-                        }
+            let (_response, objects) = with_deadline("list_objects", METADATA_TIMEOUT, async {
+                call.doit().await.map_err(|e| anyhow!(format!("{:?}", e)))
+            })
+            .await?;
+            if let Some(objs) = objects.items.as_ref() {
+                // Only consider named objects; there is no guarantee that they
+                // have one, despite the API requiring that names be provided
+                // when uploading them.
+                for object in objs.iter() {
+                    if let Some(name) = object.name.as_ref() {
+                        results.push(name.to_owned());
                     }
-                    if objects.next_page_token.is_none() {
-                        break;
-                    }
-                    page_token = objects.next_page_token;
                 }
-                Err(err) => return Err(anyhow!(format!("{:?}", err))),
             }
+            if objects.next_page_token.is_none() {
+                break;
+            }
+            page_token = objects.next_page_token;
         }
         Ok(results)
     }
@@ -272,8 +367,15 @@ impl GoogleStore {
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
         let hub = self.connect().await?;
-        hub.objects().delete(bucket, object).doit().await?;
-        Ok(())
+        with_deadline("delete_object", METADATA_TIMEOUT, async {
+            hub.objects()
+                .delete(bucket, object)
+                .doit()
+                .await
+                .map_err(|e| anyhow!(format!("{:?}", e)))?;
+            Ok(())
+        })
+        .await
     }
 
     pub fn delete_bucket_sync(&self, bucket: &str) -> Result<(), Error> {
@@ -282,8 +384,15 @@ impl GoogleStore {
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         let hub = self.connect().await?;
-        hub.buckets().delete(bucket).doit().await?;
-        Ok(())
+        with_deadline("delete_bucket", METADATA_TIMEOUT, async {
+            hub.buckets()
+                .delete(bucket)
+                .doit()
+                .await
+                .map_err(|e| anyhow!(format!("{:?}", e)))?;
+            Ok(())
+        })
+        .await
     }
 
     /// Record the new name of the bucket.
@@ -304,32 +413,47 @@ impl GoogleStore {
             ..Default::default()
         };
         // databases_documents_patch() will either insert or update
-        let (_response, _document) = hub
-            .projects()
-            .databases_documents_patch(document, &name)
-            .doit()
-            .await?;
-        Ok(())
+        with_deadline("save_bucket_name", METADATA_TIMEOUT, async {
+            hub.projects()
+                .databases_documents_patch(document, &name)
+                .doit()
+                .await
+                .map_err(|e| anyhow!(format!("{:?}", e)))?;
+            Ok(())
+        })
+        .await
     }
 
     /// Retrieve the renamed value for the original bucket.
+    ///
+    /// A timeout here is propagated as an error rather than swallowed: if
+    /// Firestore is slow but a rename mapping exists, treating the result as
+    /// "no rename" would cause the caller to write to the wrong bucket (or
+    /// create a duplicate mapping after a 403 collision). Other errors —
+    /// notably the 404 returned for a missing document — are still treated
+    /// as "no rename", preserving the prior contract.
     async fn get_bucket_name(&self, original: &str) -> Result<Option<String>, Error> {
         let hub = self.connect_fire().await?;
         let name = format!(
             "projects/{}/databases/{}/documents/renames/{}",
             &self.project, "(default)", original
         );
-        // If the document is missing a 404 error is returned, and if the
-        // document is returned and has missing values, still return none.
-        #[allow(clippy::collapsible_if)]
-        if let Ok((_response, document)) =
-            hub.projects().databases_documents_get(&name).doit().await
-        {
-            if let Some(fields) = document.fields {
-                if let Some(renamed_field) = fields.get("renamed") {
-                    return Ok(renamed_field.string_value.to_owned());
-                }
+        let fetch = hub.projects().databases_documents_get(&name).doit();
+        let result = match timeout(METADATA_TIMEOUT, fetch).await {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(anyhow!(
+                    "get_bucket_name timed out after {:?} for {}",
+                    METADATA_TIMEOUT,
+                    original
+                ));
             }
+        };
+        if let Ok((_response, document)) = result
+            && let Some(fields) = document.fields
+            && let Some(renamed_field) = fields.get("renamed")
+        {
+            return Ok(renamed_field.string_value.to_owned());
         }
         Ok(None)
     }
@@ -465,8 +589,21 @@ async fn create_bucket(
         ..Default::default()
     };
     // If bucket creation results in a 409, it means the bucket already exists,
-    // but may possibly be owned by some other project.
-    if let Err(error) = hub.buckets().insert(req, project_id).doit().await {
+    // but may possibly be owned by some other project. Raw `timeout(...)` is
+    // used here (rather than `with_deadline`) because the inner match needs
+    // to inspect the typed `storage1::Error` to detect that 409 case below.
+    let insert_fut = hub.buckets().insert(req, project_id).doit();
+    let insert_result = match timeout(METADATA_TIMEOUT, insert_fut).await {
+        Ok(r) => r,
+        Err(_) => {
+            return Err(anyhow!(
+                "create_bucket timed out after {:?} for {}",
+                METADATA_TIMEOUT,
+                name
+            ));
+        }
+    };
+    if let Err(error) = insert_result {
         match &error {
             storage1::Error::BadRequest(value) => {
                 if let Some(object) = value.as_object()
@@ -519,7 +656,23 @@ mod tests {
     use dotenvy::dotenv;
     use serial_test::serial;
     use std::env;
+    use std::sync::Once;
     use tempfile::tempdir;
+
+    /// Install a rustls `CryptoProvider` exactly once per process.
+    ///
+    /// `cargo test -p A -p B` unifies workspace features, which means this
+    /// crate's test binary can end up linked against rustls 0.23 with both
+    /// the `ring` and `aws-lc-rs` providers active (pulled in by other
+    /// workspace crates that depend on aws-config). Rustls then refuses to
+    /// auto-select a default and panics on first use. The production binary
+    /// installs a provider in `server/src/main.rs`; tests must do the same.
+    fn ensure_crypto_provider() {
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+    }
 
     #[test]
     fn test_new_google_store_region() {
@@ -544,6 +697,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_google_store_roundtrip() -> Result<(), Error> {
+        ensure_crypto_provider();
         // set up the environment and remote connection
         dotenv().ok();
         let creds_var = env::var("GOOGLE_CREDENTIALS");
@@ -616,6 +770,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_google_collision_error() -> Result<(), Error> {
+        ensure_crypto_provider();
         // set up the environment and remote connection
         dotenv().ok();
         let creds_var = env::var("GOOGLE_CREDENTIALS");
@@ -658,6 +813,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_google_database_bucket_collision() -> Result<(), Error> {
+        ensure_crypto_provider();
         // set up the environment and remote connection
         dotenv().ok();
         let creds_var = env::var("GOOGLE_CREDENTIALS");

@@ -3,6 +3,8 @@
 //
 use anyhow::{Error, anyhow};
 use aws_config::{BehaviorVersion, Region};
+use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
+use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::error::ProvideErrorMetadata;
@@ -10,7 +12,22 @@ use aws_sdk_s3::operation::create_bucket::CreateBucketError;
 use aws_sdk_s3::primitives::ByteStream;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
 use store_core::{CollisionError, Coordinates};
+
+// Per-attempt ceiling for a single S3 request (excluding SDK retry
+// attempts). Generous enough that a multi-hundred-MB database archive
+// can complete over a slow uplink, but bounded so a wedged operation
+// eventually surfaces as an error. Stalled-stream protection (configured
+// below) is the primary defense against half-open sockets during a
+// transfer; this constant is the hard upper bound.
+const OPERATION_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+// Time the SDK waits for the first byte of the response after a request
+// has been sent. NOT a per-read inactivity timeout on a streaming body —
+// that case is handled by stalled-stream protection.
+const READ_TIMEOUT: Duration = Duration::from_secs(120);
+// TCP connect deadline.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 ///
 /// A pack store implementation that uses the Amazon S3 protocol to connect to a
@@ -64,12 +81,30 @@ impl MinioStore {
             None,
             "zorigami-static",
         );
+        // Bound each request so a stalled HTTP stream surfaces as an error
+        // and the outer retry loop in `data::repositories` can try again,
+        // rather than hanging the backup task forever. Note: `put_object`
+        // issues a single-shot upload (we do not invoke the higher-level
+        // `TransferManager`), so the entire pack/database transfer counts
+        // against one `operation_attempt_timeout` — hence the generous cap.
+        let timeouts = TimeoutConfig::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .operation_attempt_timeout(OPERATION_ATTEMPT_TIMEOUT)
+            .build();
+        // Detect stalled body streams in both directions (uploads and
+        // downloads). Without this, a TCP socket that goes half-open mid
+        // transfer would only be caught by `operation_attempt_timeout`,
+        // which can be a long wait for a large transfer.
+        let stalled = StalledStreamProtectionConfig::enabled().build();
         let s3_config = aws_sdk_s3::Config::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(SharedCredentialsProvider::new(creds))
             .region(Region::new(region.clone()))
             .endpoint_url(endpoint_url)
             .force_path_style(true)
+            .timeout_config(timeouts)
+            .stalled_stream_protection(stalled)
             .build();
         let s3 = aws_sdk_s3::Client::from_conf(s3_config);
 

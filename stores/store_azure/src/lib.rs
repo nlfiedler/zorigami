@@ -12,7 +12,32 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::time::Duration;
 use store_core::Coordinates;
+use tokio::time::timeout;
+
+// Per-call deadline for short metadata operations (delete blob/container,
+// create container, single page of a list operation).
+const METADATA_TIMEOUT: Duration = Duration::from_secs(120);
+// Per-await deadline for individual transfer operations (a single 8 MB
+// put_block, a single 1 MB get chunk, a single list page during retrieval
+// or pagination, or the final put_block_list commit). Bounds each
+// individual network exchange so a stalled HTTP stream surfaces as an
+// error and the outer retry loop in `data::repositories` can try again,
+// rather than hanging the backup task forever.
+const TRANSFER_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Wrap a future with a deadline, converting an elapsed timer into an
+/// `anyhow::Error` so the surrounding `?` propagation continues to work.
+async fn with_deadline<F, T>(label: &str, deadline: Duration, fut: F) -> Result<T, Error>
+where
+    F: std::future::Future<Output = Result<T, Error>>,
+{
+    match timeout(deadline, fut).await {
+        Ok(inner) => inner,
+        Err(_) => Err(anyhow!("{} timed out after {:?}", label, deadline)),
+    }
+}
 
 ///
 /// A pack store implementation that uses Azure blob storage.
@@ -135,10 +160,18 @@ impl AzureStore {
             let data_ref: &[u8] = data.as_ref();
             let md5 = md5sum_blob(data_ref)?;
             let hash = azure_storage_blobs::prelude::Hash::MD5(md5);
-            let response = blob_client
-                .put_block(block_id.clone(), data)
-                .hash(hash)
-                .await?;
+            let response = with_deadline(
+                &format!("put_block {}/{}", bucket, object),
+                TRANSFER_TIMEOUT,
+                async {
+                    blob_client
+                        .put_block(block_id.clone(), data)
+                        .hash(hash)
+                        .await
+                        .map_err(Error::from)
+                },
+            )
+            .await?;
             if let Some(content_md5) = response.content_md5
                 && content_md5.as_slice() != &md5
             {
@@ -150,7 +183,12 @@ impl AzureStore {
         if let Some(tier) = &self.access_tier {
             builder = builder.access_tier(*tier);
         }
-        builder.await?;
+        with_deadline(
+            &format!("put_block_list {}/{}", bucket, object),
+            TRANSFER_TIMEOUT,
+            async { builder.await.map(|_| ()).map_err(Error::from) },
+        )
+        .await?;
         let loc = Coordinates::new(&self.store_id, bucket, object);
         Ok(loc)
     }
@@ -167,9 +205,27 @@ impl AzureStore {
         // pipeline to handle intermittent connection failures with retry,
         // rather than restarting the whole blob on a failure.
         let mut stream = client.get().into_stream();
-        while let Some(value) = stream.next().await {
-            let data = value?.data.collect().await?;
-            file_handle.write_all(&data)?;
+        let label = format!("retrieve_pack {}/{}", location.bucket, location.object);
+        loop {
+            let next = match timeout(TRANSFER_TIMEOUT, stream.next()).await {
+                Ok(n) => n,
+                Err(_) => {
+                    return Err(anyhow!(
+                        "{} chunk fetch timed out after {:?}",
+                        label,
+                        TRANSFER_TIMEOUT
+                    ));
+                }
+            };
+            let value = match next {
+                Some(v) => v,
+                None => break,
+            };
+            let chunk = with_deadline(&label, TRANSFER_TIMEOUT, async move {
+                value?.data.collect().await.map_err(Error::from)
+            })
+            .await?;
+            file_handle.write_all(&chunk)?;
         }
         Ok(())
     }
@@ -183,14 +239,24 @@ impl AzureStore {
         let builder = self.connect();
         let blob_service = builder.blob_service_client();
         let mut pageable = blob_service.list_containers().into_stream();
-        while let Some(result) = pageable.next().await {
-            match result {
-                Ok(response) => {
+        loop {
+            let next = match timeout(TRANSFER_TIMEOUT, pageable.next()).await {
+                Ok(n) => n,
+                Err(_) => {
+                    return Err(anyhow!(
+                        "list_buckets page fetch timed out after {:?}",
+                        TRANSFER_TIMEOUT
+                    ));
+                }
+            };
+            match next {
+                Some(Ok(response)) => {
                     for container in response.containers {
                         results.push(container.name);
                     }
                 }
-                Err(err) => return Err(err.into()),
+                Some(Err(err)) => return Err(err.into()),
+                None => break,
             }
         }
         Ok(results)
@@ -206,16 +272,26 @@ impl AzureStore {
         let client = builder.container_client(bucket);
         let mut results = Vec::new();
         let mut pageable = client.list_blobs().into_stream();
-        while let Some(result) = pageable.next().await {
-            match result {
-                Ok(response) => {
+        loop {
+            let next = match timeout(TRANSFER_TIMEOUT, pageable.next()).await {
+                Ok(n) => n,
+                Err(_) => {
+                    return Err(anyhow!(
+                        "list_objects page fetch timed out after {:?}",
+                        TRANSFER_TIMEOUT
+                    ));
+                }
+            };
+            match next {
+                Some(Ok(response)) => {
                     for blob_item in response.blobs.items {
                         if let Blob(blob) = blob_item {
                             results.push(blob.name);
                         }
                     }
                 }
-                Err(err) => return Err(err.into()),
+                Some(Err(err)) => return Err(err.into()),
+                None => break,
             }
         }
         Ok(results)
@@ -228,8 +304,10 @@ impl AzureStore {
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
         let builder = self.connect();
         let client = builder.blob_client(bucket, object);
-        client.delete().await?;
-        Ok(())
+        with_deadline("delete_object", METADATA_TIMEOUT, async {
+            client.delete().await.map(|_| ()).map_err(Error::from)
+        })
+        .await
     }
 
     pub fn delete_bucket_sync(&self, bucket: &str) -> Result<(), Error> {
@@ -239,8 +317,10 @@ impl AzureStore {
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
         let builder = self.connect();
         let client = builder.container_client(bucket);
-        client.delete().await?;
-        Ok(())
+        with_deadline("delete_bucket", METADATA_TIMEOUT, async {
+            client.delete().await.map(|_| ()).map_err(Error::from)
+        })
+        .await
     }
 
     pub fn store_database_sync(
@@ -275,10 +355,29 @@ impl AzureStore {
 }
 
 /// Ensure the named container exists.
+///
+/// Raw `timeout(...)` is used here (rather than `with_deadline`) because the
+/// inner match needs to inspect the typed `azure_core::Error` to detect the
+/// "already exists" 409 case below.
 async fn create_container(builder: ClientBuilder, container: &str) -> Result<(), Error> {
     let client = builder.container_client(container);
+    let result = match timeout(
+        METADATA_TIMEOUT,
+        client.create().public_access(PublicAccess::None),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(_) => {
+            return Err(anyhow!(
+                "create_container timed out after {:?} for {}",
+                METADATA_TIMEOUT,
+                container
+            ));
+        }
+    };
     // certain error conditions are okay
-    match client.create().public_access(PublicAccess::None).await {
+    match result {
         Err(e) => match e.kind() {
             #[allow(unused_variables)]
             ErrorKind::HttpResponse { status, error_code } => {

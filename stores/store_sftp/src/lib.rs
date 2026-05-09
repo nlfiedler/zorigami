@@ -6,9 +6,32 @@ use ssh2::{FileStat, Session};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use store_core::Coordinates;
+
+// TCP connect deadline so a blackholed remote (e.g. firewall drop) fails
+// fast rather than hanging the backup task. Note: this does not cover DNS
+// resolution by `to_socket_addrs()`, which uses the OS resolver and
+// inherits its timeout (typically 5–30s per nameserver). A misconfigured
+// /etc/resolv.conf can still stall `connect()` for that period before this
+// constant takes effect.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+// Per-syscall read/write deadline on the underlying TCP socket. Any single
+// blocking read/write that makes no progress within this window aborts and
+// surfaces as an error. This is the *primary* defense against a half-open
+// connection silently stalling `io::copy` during a pack transfer: it is
+// applied at the libc socket layer and so is honored by every blocking
+// recv/send libssh2 issues internally.
+const TCP_IO_TIMEOUT: Duration = Duration::from_secs(120);
+// Upper bound passed to `Session::set_timeout` (milliseconds). libssh2's
+// session timeout primarily affects non-blocking I/O paths; with the
+// blocking `TcpStream` we hand it via `set_tcp_stream`, this is largely
+// cosmetic — the TCP_IO_TIMEOUT above does the real work. Kept as a
+// belt-and-suspenders value in case libssh2 ever waits internally without
+// dispatching a blocking syscall.
+const SSH_SESSION_TIMEOUT_MS: u32 = 5 * 60 * 1000;
 
 ///
 /// A `PackDataSource` implementation that operates over SSH2/SFTP to store pack
@@ -51,9 +74,22 @@ impl SftpStore {
         // Simply build a new session and connection every time. Trying to reuse
         // the session though a combination of Rc and RefCell does not improve
         // the run time in the slightest.
-        let tcp = TcpStream::connect(&self.address)?;
+        //
+        // Resolve the address and apply a connect deadline so a blackholed
+        // remote does not block forever; then apply read/write timeouts on
+        // the underlying socket so any subsequent stalled SFTP operation
+        // fails rather than hanging.
+        let addr = self
+            .address
+            .to_socket_addrs()?
+            .next()
+            .ok_or_else(|| anyhow!("could not resolve address: {}", self.address))?;
+        let tcp = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
+        tcp.set_read_timeout(Some(TCP_IO_TIMEOUT))?;
+        tcp.set_write_timeout(Some(TCP_IO_TIMEOUT))?;
         let mut sess = Session::new()?;
         sess.set_tcp_stream(tcp);
+        sess.set_timeout(SSH_SESSION_TIMEOUT_MS);
         sess.handshake()?;
         sess.userauth_password(&self.username, self.password.as_ref().unwrap())?;
         Ok(sess)
