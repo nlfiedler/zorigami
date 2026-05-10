@@ -20,5 +20,5 @@ LICENSE
 node_modules
 out
 README.md
-target
-tmp
+**/target
+**/tmp
