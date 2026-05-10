@@ -225,7 +225,7 @@ async fn main() -> io::Result<()> {
     .await
 }
 
-#[actix_web::get("favicon.ico")]
+#[actix_web::get("favicon.svg")]
 async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
-    Ok(actix_files::NamedFile::open("./dist/favicon.ico")?)
+    Ok(actix_files::NamedFile::open("./dist/favicon.svg")?)
 }
