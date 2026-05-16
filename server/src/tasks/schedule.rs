@@ -317,8 +317,10 @@ fn should_run(
             };
             // consider how the backup state may affect the decision
             if backup.started.is_some() {
-                // ignore failed backups, they do not override the schedule
-                if backup.errors.is_empty() {
+                // ignore failed backups, they do not override the schedule;
+                // non-fatal warnings collected in `errors` do not count as
+                // failure here — only the FAILED status does
+                if backup.status != backup::Status::FAILED {
                     if let Some(et) = backup.finished {
                         // a backup ran but there were no changes found
                         if !schedule.is_ready(et, tz) {
@@ -685,6 +687,7 @@ mod tests {
                 let mut req = backup::Request::new(dataset_id.clone(), "tiger", None);
                 req.started = Some(Utc::now());
                 req.errors.push("oh no".into());
+                req.status = backup::Status::FAILED;
                 Some(req)
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);
@@ -779,6 +782,7 @@ mod tests {
                 let mut req = backup::Request::new(dataset_id.clone(), "tiger", None);
                 req.started = Some(Utc::now());
                 req.errors.push("oh no".into());
+                req.status = backup::Status::FAILED;
                 Some(req)
             });
         let leader: Arc<dyn RingLeader> = Arc::new(mock_leader);

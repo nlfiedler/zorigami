@@ -115,6 +115,10 @@ impl backup::Subscriber for TestBackupSubscriber {
         false
     }
 
+    fn warning(&self, _request_id: &str, _message: String) -> bool {
+        false
+    }
+
     fn paused(&self, _request_id: &str) -> bool {
         false
     }

@@ -1152,6 +1152,29 @@ impl backup::Subscriber for LeaderContext {
         true
     }
 
+    fn warning(&self, request_id: &str, message: String) -> bool {
+        let mut dataset_id: Option<String> = None;
+        let pair = self.backups.clone();
+        let (lock, cvar) = &*pair;
+        {
+            let mut map = lock.lock().unwrap();
+            for request in map.values_mut() {
+                if request.id == request_id {
+                    // cap the per-request collection so a misbehaving dataset
+                    // cannot exhaust memory with warnings
+                    if request.errors.len() < 100 {
+                        request.errors.push(message.clone());
+                    }
+                    dataset_id = Some(request.dataset.clone());
+                    break;
+                }
+            }
+            cvar.notify_all();
+        }
+        self.capture_error(ErrorOperation::Backup, dataset_id, &message);
+        true
+    }
+
     fn paused(&self, request_id: &str) -> bool {
         let pair = self.backups.clone();
         let (lock, cvar) = &*pair;

@@ -142,6 +142,12 @@ pub trait Subscriber: Send + Sync {
     /// Returns a value for mockall tests.
     fn error(&self, request_id: &str, error: String) -> bool;
 
+    /// A non-fatal error occurred during the backup (e.g. a single path was
+    /// unreadable). The backup continues, but the message should be recorded.
+    ///
+    /// Returns a value for mockall tests.
+    fn warning(&self, request_id: &str, message: String) -> bool;
+
     /// The backup process has paused due to the schedule for the dataset.
     ///
     /// Returns a value for mockall tests.
@@ -244,11 +250,13 @@ impl BackuperImpl {
         // Take a snapshot and record it as the new most recent snapshot for this
         // dataset, to allow detecting a running backup, and thus recover from a
         // crash or forced shutdown.
+        let warn_sink = make_warn_sink(self.subscriber.clone(), request.id.clone());
         let snap_opt = take_snapshot(
             &dataset.basepath,
             latest_snapshot.clone(),
             &self.dbase,
             excludes,
+            &warn_sink,
         )?;
         match snap_opt {
             None => {
@@ -377,6 +385,25 @@ impl Backuper for BackuperImpl {
     }
 }
 
+/// A sink for non-fatal warnings emitted while scanning the filesystem.
+///
+/// Holds enough context to forward each message to the backup `Subscriber`
+/// without threading the subscriber and request id through every helper.
+pub type WarnSink = Arc<dyn Fn(String) + Send + Sync>;
+
+/// Build a `WarnSink` that forwards messages to `subscriber.warning(request_id, ...)`.
+fn make_warn_sink(subscriber: Arc<dyn Subscriber>, request_id: String) -> WarnSink {
+    Arc::new(move |msg: String| {
+        subscriber.warning(&request_id, msg);
+    })
+}
+
+/// A no-op `WarnSink` used by tests that do not care about warnings.
+#[cfg(test)]
+fn null_warn_sink() -> WarnSink {
+    Arc::new(|_msg: String| {})
+}
+
 ///
 /// Raised when the backup has run out of time and must stop temporarily,
 /// resuming at a later time.
@@ -400,6 +427,7 @@ fn take_snapshot(
     parent: Option<entities::Checksum>,
     dbase: &Arc<dyn RecordRepository>,
     excludes: Vec<PathBuf>,
+    warn_sink: &WarnSink,
 ) -> Result<Option<entities::Checksum>, Error> {
     let start_time = SystemTime::now();
     let actual_start_time = Utc::now();
@@ -408,7 +436,7 @@ fn take_snapshot(
     let cpu_count = std::thread::available_parallelism()?.get();
     let pool = ThreadPool::new(cpu_count);
     debug!("take_snapshot: creating pool of {cpu_count} threads");
-    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool)?;
+    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool, warn_sink)?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
@@ -827,6 +855,7 @@ fn scan_tree(
     excludes: &GlobSet,
     file_counts: &mut entities::FileCounts,
     pool: &ThreadPool,
+    warn_sink: &WarnSink,
 ) -> Result<entities::Tree, Error> {
     let mut entries: Vec<entities::TreeEntry> = Vec::new();
     let mut file_count = 0;
@@ -845,8 +874,14 @@ fn scan_tree(
                             Ok(metadata) => {
                                 count_files(&metadata, file_counts);
                                 if metadata.is_dir() {
-                                    let scan =
-                                        scan_tree(&path, dbase, excludes, file_counts, pool)?;
+                                    let scan = scan_tree(
+                                        &path,
+                                        dbase,
+                                        excludes,
+                                        file_counts,
+                                        pool,
+                                        warn_sink,
+                                    )?;
                                     file_count += scan.file_count;
                                     let digest = scan.digest.clone();
                                     let tref = entities::TreeReference::TREE(digest);
@@ -858,7 +893,10 @@ fn scan_tree(
                                             entries.push(process_path(&path, tref, dbase));
                                         }
                                         Err(err) => {
-                                            error!("could not read link: {:?}: {}", path, err)
+                                            let msg =
+                                                format!("could not read link: {:?}: {}", path, err);
+                                            error!("{}", msg);
+                                            (warn_sink)(msg);
                                         }
                                     }
                                 } else if metadata.is_file() {
@@ -869,7 +907,12 @@ fn scan_tree(
                                                 entries.push(process_path(&path, tref, dbase));
                                             }
                                             Err(err) => {
-                                                error!("could not read file: {:?}: {}", path, err)
+                                                let msg = format!(
+                                                    "could not read file: {:?}: {}",
+                                                    path, err
+                                                );
+                                                error!("{}", msg);
+                                                (warn_sink)(msg);
                                             }
                                         }
                                     } else {
@@ -877,17 +920,30 @@ fn scan_tree(
                                     }
                                 }
                             }
-                            Err(err) => error!("metadata error for {:?}: {}", path, err),
+                            Err(err) => {
+                                let msg = format!("metadata error for {:?}: {}", path, err);
+                                error!("{}", msg);
+                                (warn_sink)(msg);
+                            }
                         }
                     }
-                    Err(err) => error!("read_dir error for an entry in {:?}: {}", basepath, err),
+                    Err(err) => {
+                        let msg =
+                            format!("read_dir error for an entry in {:?}: {}", basepath, err);
+                        error!("{}", msg);
+                        (warn_sink)(msg);
+                    }
                 }
             }
         }
-        Err(err) => error!("read_dir error for {:?}: {}", basepath, err),
+        Err(err) => {
+            let msg = format!("read_dir error for {:?}: {}", basepath, err);
+            error!("{}", msg);
+            (warn_sink)(msg);
+        }
     }
     // Process all of the files found in this directory.
-    let mut file_entries = process_files(pending_files, dbase, pool);
+    let mut file_entries = process_files(pending_files, dbase, pool, warn_sink);
     file_count += file_entries.len() as u32;
     for entry in file_entries.drain(..) {
         entries.push(entry);
@@ -903,6 +959,7 @@ fn process_files(
     paths: Vec<PathBuf>,
     dbase: &Arc<dyn RecordRepository>,
     pool: &ThreadPool,
+    warn_sink: &WarnSink,
 ) -> Vec<entities::TreeEntry> {
     // list of results that are either successful (Some(TreeEntry)) or resulted
     // in an error (None), paired with a condvar so the main thread can wait
@@ -912,6 +969,7 @@ fn process_files(
         let path = path.to_owned();
         let dbase = dbase.clone();
         let entries = entries.clone();
+        let warn_sink = warn_sink.clone();
         pool.execute(move || {
             let entry = match entities::Checksum::blake3_from_file(&path) {
                 Ok(digest) => {
@@ -919,7 +977,9 @@ fn process_files(
                     Some(process_path(&path, tref, &dbase))
                 }
                 Err(err) => {
-                    error!("could not read file: {:?}: {}", path, err);
+                    let msg = format!("could not read file: {:?}: {}", path, err);
+                    error!("{}", msg);
+                    (warn_sink)(msg);
                     None
                 }
             };
@@ -1070,7 +1130,9 @@ impl BackupDriver {
                 // file disappeared out from under us, record it as
                 // having zero length; file restore will handle it
                 // without any problem
-                error!("file {} went missing during backup", changed.path.display());
+                let msg = format!("file {} went missing during backup", changed.path.display());
+                error!("{}", msg);
+                self.subscriber.warning(&self.request.id, msg);
                 let file = entities::File::new(changed.digest, 0, vec![]);
                 self.dbase.insert_file(&file)?;
             }
@@ -1212,7 +1274,7 @@ impl BackupDriver {
         Ok(())
     }
 
-    /// Upload a single pack to the pack store and record the results.
+    /// Upload the pack, record the results, and reset the record keeper.
     fn upload_record_reset(&mut self, pack_path: &Path) -> Result<(), Error> {
         trace!("upload_record_reset {}", pack_path.display());
         // verify that the pack contents match the record; this is not perfect
@@ -1239,6 +1301,7 @@ impl BackupDriver {
             let locations = self
                 .stores
                 .store_pack(pack_path, &bucket_name, &object_name)?;
+            info!("pack {} uploaded: {:?}", pack_digest, locations);
             self.record
                 .record_completed_pack(&self.dbase, &pack_digest, locations)?;
             self.subscriber.pack_uploaded(&self.request.id);
@@ -1520,7 +1583,7 @@ mod tests {
         let dbase: Arc<dyn crate::domain::repositories::RecordRepository + 'static> =
             Arc::new(mock);
         let pool = ThreadPool::new(1);
-        let entries = process_files(paths, &dbase, &pool);
+        let entries = process_files(paths, &dbase, &pool, &null_warn_sink());
         // assert
         assert_eq!(entries.len(), 4);
         assert!(entries.iter().any(|e| e.name == "lorem-ipsum.txt"));
@@ -1634,7 +1697,7 @@ mod tests {
         // take a snapshot of the dataset
         let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
         assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 1);
@@ -1643,7 +1706,7 @@ mod tests {
         let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
         assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
         let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
         assert!(snapshot2.parent.is_some());
         assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
@@ -1671,7 +1734,7 @@ mod tests {
         );
 
         // take yet another snapshot, should find no changes
-        let snap3_opt = take_snapshot(fixture_path.path(), Some(snap2_sha), &dbase, vec![])?;
+        let snap3_opt = take_snapshot(fixture_path.path(), Some(snap2_sha), &dbase, vec![], &null_warn_sink())?;
         assert!(snap3_opt.is_none());
         Ok(())
     }
@@ -1690,7 +1753,7 @@ mod tests {
         workspace.push(".tmp");
         let excludes = vec![workspace];
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
+        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 6);
@@ -1745,7 +1808,7 @@ mod tests {
         ];
         let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes)?.unwrap();
+        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 3);
@@ -1785,7 +1848,7 @@ mod tests {
                 && xattr::set(&dest, "me.fiedlers.test", b"foobar").is_ok();
         }
 
-        let snapshot_digest = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snapshot_digest = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot = dbase.get_snapshot(&snapshot_digest)?.unwrap();
         assert!(snapshot.parent.is_none());
         assert_eq!(snapshot.file_counts.total_files(), 1);
@@ -1835,7 +1898,7 @@ mod tests {
         }
 
         // take a snapshot
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 0);
@@ -1876,7 +1939,7 @@ mod tests {
         fs::write(&mmm, b"morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins")?;
         fs::write(&yyy, b"yellow yak yodeling, yellow yak yodeling, yellow yak yodeling, yellow yak yodeling, yellow yak yodeling")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 3);
         // add new files, change one file
@@ -1891,7 +1954,7 @@ mod tests {
         fs::write(&nnn, b"neat newts gnawing noodles, neat newts gnawing noodles, neat newts gnawing noodles, neat newts gnawing noodles")?;
         fs::write(&zzz, b"zebras riding on a zephyr, zebras riding on a zephyr, zebras riding on a zephyr, zebras riding on a zephyr")?;
         let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -1913,7 +1976,7 @@ mod tests {
         fs::remove_file(&yyy)?;
         fs::write(&zzz, b"zippy zip ties zooming, zippy zip ties zooming, zippy zip ties zooming, zippy zip ties zooming")?;
         let snap3_sha =
-            take_snapshot(fixture_path.path(), Some(snap2_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap2_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -1945,7 +2008,7 @@ mod tests {
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
         fs::write(&mmm, b"morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 2);
         // change files to dirs and vice versa
@@ -1957,7 +2020,7 @@ mod tests {
         fs::write(&ccc, b"catastrophic catastrophes, catastrophic catastrophes, catastrophic catastrophes, catastrophic catastrophes")?;
         fs::write(&mmm, b"many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight")?;
         let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -1990,7 +2053,7 @@ mod tests {
         fs::write(&bbb, b"bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing")?;
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 2);
         // replace the files and directories with links
@@ -2015,7 +2078,7 @@ mod tests {
             fs::symlink_file("mmm.txt", &ccc)?;
         }
         let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -2061,7 +2124,7 @@ mod tests {
             fs::symlink_file("mmm.txt", &ccc)?;
         }
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![])?.unwrap();
+        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 1);
         // replace the links with files and directories
@@ -2072,7 +2135,7 @@ mod tests {
         fs::create_dir(ccc.parent().unwrap())?;
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
         let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![])?.unwrap();
+            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
