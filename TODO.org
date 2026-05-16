@@ -1,5 +1,4 @@
 * Tasks
-** TODO perms on local blobs are too restrictive (0o600, should be 0o644)
 ** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern

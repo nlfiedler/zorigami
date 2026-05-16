@@ -48,6 +48,15 @@ impl LocalStore {
             .with_context(|| format!("store_pack fs::create_dir_all({})", path.display()))?;
         path.push(object);
         fs::copy(packfile, &path)?;
+        // fs::copy preserves the source file's permission bits on Unix, and
+        // the source is a tempfile crate output which is always 0o600. Reset
+        // to 0o644 so the stored pack is readable by group/other, matching
+        // what a typical umask of 0o022 would produce for a fresh file.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o644))?;
+        }
         let loc = Coordinates::new(&self.store_id, bucket, object);
         Ok(loc)
     }
