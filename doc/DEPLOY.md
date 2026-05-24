@@ -54,7 +54,7 @@ May need to run the `enable` and `kickstart` commands twice due to code signing 
 Recommended set of excludes that ignores a bunch of Mac stuff and directories that tend to have large binary files:
 
 ```
-.Trash, .bun, .cache, .cargo, .npm, .rustup, .tmp, .vscode, Library, **/Downloads, **/node_modules, **/target, fvm
+.Trash, .bun, .cache, .cargo, .npm, .rustup, .tmp, .vscode, Library, **/Downloads, **/node_modules, **/target
 ```
 
 ### plist file

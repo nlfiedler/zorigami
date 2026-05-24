@@ -82,4 +82,4 @@ Added a `schema_version` entry in RocksDB that is a monotonically increasing num
 
 Added support for [SQLite](https://sqlite.org) as an alternative to RocksDB.
 
-Error encountered in background tasks are written to an SQLite database named `errors.db`.
+Errors encountered in background tasks are written to an SQLite database named `errors.db`.
