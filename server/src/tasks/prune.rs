@@ -317,7 +317,54 @@ impl PrunerImpl {
     // Find all records that are no longer reachable from the configured
     // datasets, removing them from the database. This ignores pack records as
     // this function does not handle pack pruning.
+    //
+    // If any dataset has an incomplete snapshot (`end_time.is_none()`) at its
+    // head, this returns `Ok(())` without deleting anything: an incomplete
+    // backup may have inserted some files/chunks/xattrs and still be missing
+    // others, so any record we deemed "unreachable" could in fact be live
+    // state for a backup that has not yet finished. A clean run requires every
+    // dataset head to be a completed snapshot.
+    //
+    // INVARIANT: only a dataset's head snapshot can be incomplete. A snapshot
+    // record is persisted with `end_time = None` and only updated to `Some`
+    // after `BackupDriver::update_snapshot` has finished committing every
+    // file/chunk (see `server/src/tasks/backup.rs`). A new backup either
+    // resumes an existing incomplete head (`start_backup`, backup.rs:222-236)
+    // or, after the head has been finalized, becomes the new head — so a
+    // non-head snapshot with `end_time.is_none()` cannot arise from normal
+    // operation. The head-only check below relies on that invariant; if it
+    // ever changes, this guard must be widened to scan the entire chain.
     fn prune_unreachable_records(&self) -> Result<(), Error> {
+        let datasets = self.repo.get_datasets()?;
+
+        //
+        // Refuse to run when a backup is partway through. An incomplete head
+        // can leave the database in a state where a tree references files
+        // that have not yet been inserted; treating those files as unreachable
+        // would delete chunks/xattrs that the resumed backup still needs.
+        //
+        // The loaded head snapshots are kept and reused below to avoid a
+        // second `get_snapshot` round-trip for each dataset.
+        //
+        let mut heads: Vec<Snapshot> = Vec::with_capacity(datasets.len());
+        for dataset in &datasets {
+            if let Some(ref latest) = dataset.snapshot {
+                let snapshot = self
+                    .repo
+                    .get_snapshot(latest)?
+                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", latest)))?;
+                if snapshot.end_time.is_none() {
+                    warn!(
+                        "prune-unreachable: dataset {} has an incomplete snapshot at its head; \
+                         skipping unreachable-record pruning until the backup completes",
+                        dataset.id
+                    );
+                    return Ok(());
+                }
+                heads.push(snapshot);
+            }
+        }
+
         //
         // get the digests of all tree, file, chunk, and xattr records; after
         // visiting every reachable record, the remainder can be safely removed
@@ -332,60 +379,80 @@ impl PrunerImpl {
         let mut xattrs: HashSet<String> = xattr_digests.into_iter().collect();
 
         //
-        // tree visitor recursively walks a given tree structure, removing any
-        // tree digests found in the process, along with files, xattrs, and
-        // chunks that are referenced by files
+        // Walk every snapshot tree reachable from a dataset head. `visited_*`
+        // sets are separate from the `trees`/`files` candidate sets so that a
+        // record already visited via another path is distinguished from a
+        // reachable record that is missing from the database. The candidate
+        // sets are drained as records are marked reachable; whatever remains
+        // is genuinely unreachable.
         //
+        let mut visited_trees: HashSet<String> = HashSet::new();
+        let mut visited_files: HashSet<String> = HashSet::new();
         let mut visit_tree = |tree_sum: Checksum| -> Result<(), Error> {
             // Rust does not know how to compile recursive closures, so use a
             // function within the closure to get around the types issue.
             fn rec(
                 repo: &Arc<dyn RecordRepository>,
                 tree_sum: Checksum,
+                visited_trees: &mut HashSet<String>,
                 trees: &mut HashSet<String>,
+                visited_files: &mut HashSet<String>,
                 files: &mut HashSet<String>,
                 chunks: &mut HashSet<String>,
                 xattrs: &mut HashSet<String>,
             ) -> Result<(), Error> {
                 let tree_digest_str = tree_sum.to_string();
-                if trees.contains(&tree_digest_str) {
-                    // tree is reachable, consider its entries
-                    trees.remove(&tree_digest_str);
-                    let tree = repo
-                        .get_tree(&tree_sum)?
-                        .ok_or_else(|| anyhow!(format!("missing tree: {:?}", &tree_digest_str)))?;
-                    for entry in tree.entries {
-                        // consider only trees and files, ignore links and very
-                        // short files which do not have database records
-                        match entry.reference {
-                            TreeReference::TREE(tree_sum) => {
-                                rec(repo, tree_sum, trees, files, chunks, xattrs)?
-                            }
-                            TreeReference::FILE(file_sum) => {
-                                let file_digest_str = file_sum.to_string();
-                                if files.contains(&file_digest_str) {
-                                    // file is reachable, along with any chunks
-                                    files.remove(&file_digest_str);
-                                    let file = repo.get_file(&file_sum)?.ok_or_else(|| {
-                                        anyhow!(format!("missing file: {:?}", &file_sum))
-                                    })?;
-                                    // if only one "chunk" then it is a pack,
-                                    // and packs are ignored by this usecase
-                                    if file.chunks.len() > 1 {
-                                        for (_, cd) in file.chunks.iter() {
-                                            let cds = cd.to_string();
-                                            chunks.remove(&cds);
-                                        }
+                if !visited_trees.insert(tree_digest_str.clone()) {
+                    // already walked this tree via another path
+                    return Ok(());
+                }
+                // mark this tree as reachable (no-op if not a candidate)
+                trees.remove(&tree_digest_str);
+                let tree = repo.get_tree(&tree_sum)?.ok_or_else(|| {
+                    anyhow!(format!(
+                        "reachable tree missing from database: {}",
+                        tree_digest_str
+                    ))
+                })?;
+                for entry in tree.entries {
+                    // consider only trees and files, ignore links and very
+                    // short files which do not have database records
+                    match entry.reference {
+                        TreeReference::TREE(sub) => rec(
+                            repo,
+                            sub,
+                            visited_trees,
+                            trees,
+                            visited_files,
+                            files,
+                            chunks,
+                            xattrs,
+                        )?,
+                        TreeReference::FILE(file_sum) => {
+                            let file_digest_str = file_sum.to_string();
+                            if visited_files.insert(file_digest_str.clone()) {
+                                // first visit: mark file and its chunks
+                                files.remove(&file_digest_str);
+                                let file = repo.get_file(&file_sum)?.ok_or_else(|| {
+                                    anyhow!(format!(
+                                        "reachable file missing from database: {}",
+                                        file_digest_str
+                                    ))
+                                })?;
+                                // if only one "chunk" then it is a pack,
+                                // and packs are ignored by this usecase
+                                if file.chunks.len() > 1 {
+                                    for (_, cd) in file.chunks.iter() {
+                                        chunks.remove(&cd.to_string());
                                     }
                                 }
                             }
-                            _ => (),
                         }
-                        // xattrs of this entry are all reachable
-                        for (_, xd) in entry.xattrs.iter() {
-                            let xds = xd.to_string();
-                            xattrs.remove(&xds);
-                        }
+                        _ => (),
+                    }
+                    // xattrs of this entry are all reachable
+                    for (_, xd) in entry.xattrs.iter() {
+                        xattrs.remove(&xd.to_string());
                     }
                 }
                 Ok(())
@@ -393,7 +460,9 @@ impl PrunerImpl {
             rec(
                 &self.repo,
                 tree_sum,
+                &mut visited_trees,
                 &mut trees,
+                &mut visited_files,
                 &mut files,
                 &mut chunks,
                 &mut xattrs,
@@ -401,25 +470,33 @@ impl PrunerImpl {
         };
 
         //
-        // visit snapshots of all datasets, recursively visiting their trees
+        // visit snapshots of all datasets, recursively visiting their trees.
+        // The head of each chain was already loaded by the pre-check above;
+        // walk it first and then follow parent pointers from there.
         //
-        let datasets = self.repo.get_datasets()?;
-        for dataset in datasets {
-            if let Some(latest) = dataset.snapshot.clone() {
-                let mut digest = latest;
-                loop {
-                    let snapshot = self
-                        .repo
-                        .get_snapshot(&digest)?
-                        .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
-                    visit_tree(snapshot.tree)?;
-                    if let Some(parent) = snapshot.parent {
-                        digest = parent;
-                    } else {
-                        break;
+        for head in heads {
+            let mut snapshot = head;
+            loop {
+                if *self.stop_requested.read().unwrap() {
+                    info!("prune-unreachable: stop requested, aborting before deletion");
+                    return Ok(());
+                }
+                let parent = snapshot.parent.clone();
+                visit_tree(snapshot.tree)?;
+                match parent {
+                    Some(parent_digest) => {
+                        snapshot = self.repo.get_snapshot(&parent_digest)?.ok_or_else(|| {
+                            anyhow!(format!("missing snapshot: {:?}", &parent_digest))
+                        })?;
                     }
+                    None => break,
                 }
             }
+        }
+
+        if *self.stop_requested.read().unwrap() {
+            info!("prune-unreachable: stop requested, aborting before deletion");
+            return Ok(());
         }
 
         //
@@ -2164,7 +2241,10 @@ mod tests {
             .withf(move |d| d == &snap_a_tree_sum1)
             .returning(move |_| Ok(Some(snap_a_tree.clone())));
 
-        let snapshot_a = Snapshot::new(Some(snapshot_b2), snap_a_tree_sum2, Default::default());
+        let mut snapshot_a = Snapshot::new(Some(snapshot_b2), snap_a_tree_sum2, Default::default());
+        // head snapshot is complete; prune_unreachable_records refuses to run
+        // when the head is incomplete
+        snapshot_a.set_end_time(Utc::now());
         let snapshot_a1 = snapshot_a.digest.clone();
         let snapshot_a2 = snapshot_a.digest.clone();
         mock.expect_get_snapshot()
@@ -2231,6 +2311,266 @@ mod tests {
         assert!(result.is_ok());
         let count = result.unwrap();
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_prune_unreachable_skips_when_head_incomplete() {
+        // An incomplete backup may have inserted some files/chunks/xattrs and
+        // still be missing others; treating those as unreachable would delete
+        // records the resumed backup still needs. The function must bail out
+        // before reading any candidate sets or issuing any deletes.
+        let mut mock = MockRecordRepository::new();
+
+        // dataset head points at a snapshot whose end_time is still None
+        let tree_digest = Checksum::SHA1("cafef00d".to_owned());
+        let snapshot = Snapshot::new(None, tree_digest, Default::default());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.snapshot = Some(snapshot_digest);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        // No candidate-set reads, no get_tree/get_file, no delete_* expectations.
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        pruner
+            .prune_unreachable_records()
+            .expect("should bail out cleanly when head is incomplete");
+    }
+
+    #[test]
+    fn test_prune_unreachable_errors_on_missing_reachable_tree() {
+        // A reachable tree that is absent from the database is a real
+        // inconsistency and must surface as an error rather than letting the
+        // deletion phase proceed against a partial reachability map.
+        let mut mock = MockRecordRepository::new();
+
+        let tree_digest = Checksum::SHA1("aaaabbbb".to_owned());
+        let tree_digest_clone = tree_digest.clone();
+        let tree_digest_str = tree_digest.to_string();
+        let mut snapshot = Snapshot::new(None, tree_digest, Default::default());
+        snapshot.set_end_time(Utc::now());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.snapshot = Some(snapshot_digest);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        // tree_digests contains the reachable digest, but get_tree returns None
+        mock.expect_get_all_tree_digests()
+            .once()
+            .returning(move || Ok(hat![tree_digest_str.clone()]));
+        mock.expect_get_all_file_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_all_chunk_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_all_xattr_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_clone)
+            .returning(|_| Ok(None));
+
+        // no delete_* expectations: the error must short-circuit deletion
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let err = pruner
+            .prune_unreachable_records()
+            .expect_err("missing reachable tree should error");
+        assert!(
+            err.to_string().contains("reachable tree missing"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_prune_unreachable_errors_on_missing_reachable_file() {
+        // A tree references a file that is not in the database. The previous
+        // behavior was to silently skip and let the file's chunks get deleted;
+        // now we surface this as a hard error so the orphan is investigated.
+        let mut mock = MockRecordRepository::new();
+
+        let file_digest = Checksum::BLAKE3("ffffeeee".to_owned());
+        let file_digest_clone = file_digest.clone();
+        let file_digest_str = file_digest.to_string();
+        let entry = TreeEntry::new(
+            std::path::Path::new("../test/fixtures/lorem-ipsum.txt"),
+            TreeReference::FILE(file_digest),
+        );
+        let tree = Tree::new(vec![entry], 1);
+        let tree_digest = tree.digest.clone();
+        let tree_digest_clone = tree_digest.clone();
+        let tree_digest_str = tree_digest.to_string();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &tree_digest_clone)
+            .returning(move |_| Ok(Some(tree.clone())));
+
+        let mut snapshot = Snapshot::new(None, tree_digest, Default::default());
+        snapshot.set_end_time(Utc::now());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.snapshot = Some(snapshot_digest);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        mock.expect_get_all_tree_digests()
+            .once()
+            .returning(move || Ok(hat![tree_digest_str.clone()]));
+        mock.expect_get_all_file_digests()
+            .once()
+            .returning(move || Ok(hat![file_digest_str.clone()]));
+        mock.expect_get_all_chunk_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_all_xattr_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_digest_clone)
+            .returning(|_| Ok(None));
+
+        // no delete_* expectations: the error must short-circuit deletion
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let err = pruner
+            .prune_unreachable_records()
+            .expect_err("missing reachable file should error");
+        assert!(
+            err.to_string().contains("reachable file missing"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_prune_unreachable_walks_tree_missing_from_initial_digest_snapshot() {
+        // Regression test for the original bug: a reachable subtree whose
+        // digest is NOT in the result of `get_all_tree_digests` must still be
+        // walked, so that any files behind it are marked reachable rather
+        // than silently deleted.
+        //
+        // Under the old code, `trees.contains(sub_digest)` returned false for
+        // the missing subtree and the entire subtree walk was skipped, which
+        // caused the file behind it to remain in the deletion candidate set
+        // and ultimately get deleted. With the visited/candidate split, the
+        // walk now relies on `visited_trees` and proceeds regardless of
+        // whether the digest appeared in the candidate snapshot.
+        let mut mock = MockRecordRepository::new();
+
+        // file F (single-entry "chunks" list → pack reference, so no chunk
+        // records to deal with). F IS in the file-digest snapshot.
+        let pack_digest = Checksum::BLAKE3("pack-zz".to_owned());
+        let file_f = Checksum::BLAKE3("filef".to_owned());
+        let file_f_clone = file_f.clone();
+        let file_f_str = file_f.to_string();
+        let file_record = File::new(file_f.clone(), 64, vec![(0, pack_digest)]);
+        mock.expect_get_file()
+            .once()
+            .withf(move |d| d == &file_f_clone)
+            .returning(move |_| Ok(Some(file_record.clone())));
+
+        // subtree T_sub references file F. T_sub IS readable from the DB but
+        // is deliberately omitted from get_all_tree_digests below.
+        let entry_f = TreeEntry::new(
+            std::path::Path::new("../test/fixtures/lorem-ipsum.txt"),
+            TreeReference::FILE(file_f),
+        );
+        let t_sub = Tree::new(vec![entry_f], 1);
+        let t_sub_digest = t_sub.digest.clone();
+        let t_sub_digest_clone = t_sub_digest.clone();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &t_sub_digest_clone)
+            .returning(move |_| Ok(Some(t_sub.clone())));
+
+        // root tree references the subtree.
+        let entry_sub = TreeEntry::new(
+            std::path::Path::new("../test/fixtures"),
+            TreeReference::TREE(t_sub_digest),
+        );
+        let t_root = Tree::new(vec![entry_sub], 1);
+        let t_root_digest = t_root.digest.clone();
+        let t_root_digest_clone = t_root_digest.clone();
+        let t_root_str = t_root_digest.to_string();
+        mock.expect_get_tree()
+            .once()
+            .withf(move |d| d == &t_root_digest_clone)
+            .returning(move |_| Ok(Some(t_root.clone())));
+
+        let mut snapshot = Snapshot::new(None, t_root_digest, Default::default());
+        snapshot.set_end_time(Utc::now());
+        let snapshot_digest = snapshot.digest.clone();
+        let snapshot_digest_filter = snapshot_digest.clone();
+        mock.expect_get_snapshot()
+            .once()
+            .withf(move |d| d == &snapshot_digest_filter)
+            .returning(move |_| Ok(Some(snapshot.clone())));
+
+        let mut dataset = Dataset::new(std::path::Path::new("/home/planet"));
+        dataset.snapshot = Some(snapshot_digest);
+        mock.expect_get_datasets()
+            .once()
+            .returning(move || Ok(vec![dataset.clone()]));
+
+        // Crucially: get_all_tree_digests omits t_sub_digest. The old code
+        // would silently skip walking t_sub because `trees.contains(t_sub)`
+        // is false; the new code walks it via `visited_trees`.
+        mock.expect_get_all_tree_digests()
+            .once()
+            .returning(move || Ok(hat![t_root_str.clone()]));
+        mock.expect_get_all_file_digests()
+            .once()
+            .returning(move || Ok(hat![file_f_str.clone()]));
+        mock.expect_get_all_chunk_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+        mock.expect_get_all_xattr_digests()
+            .once()
+            .returning(|| Ok(hat![]));
+
+        // No delete_* expectations: file F must be marked reachable. If the
+        // old buggy code were in place, `delete_file(F)` would be invoked
+        // and mockall would fail with an unexpected call.
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        pruner
+            .prune_unreachable_records()
+            .expect("subtree absent from candidate set must still be walked");
     }
 
     // --- database_scrub tests ---------------------------------------------
