@@ -584,6 +584,13 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                         let left_is_dir = left_entry.reference.is_tree();
                         let left_is_file = left_entry.reference.is_file();
                         let left_is_link = left_entry.reference.is_link();
+                        // a very small file is stored inline (SMALL) and has no
+                        // file record; when such a path grows into a regular
+                        // file or becomes a directory it must be treated like
+                        // any other changed entry, otherwise its new record(s)
+                        // are never inserted and the snapshot tree ends up
+                        // referencing files that are missing from the database
+                        let left_is_small = left_entry.reference.is_small();
                         let right_is_dir = right_entry.reference.is_tree();
                         let right_is_file = right_entry.reference.is_file();
                         if left_is_dir && right_is_dir {
@@ -593,14 +600,16 @@ impl<'a> Iterator for ChangedFilesIter<'a> {
                             let mut path = PathBuf::from(base);
                             path.push(&left_entry.name);
                             self.queue.push_back((path, left_sum, right_sum));
-                        } else if (left_is_file || left_is_dir || left_is_link) && right_is_file {
+                        } else if (left_is_file || left_is_dir || left_is_link || left_is_small)
+                            && right_is_file
+                        {
                             // new file or a changed file
                             let sum = right_entry.reference.checksum().unwrap();
                             let mut path = PathBuf::from(base);
                             path.push(&right_entry.name);
                             let changed = ChangedFile::new(&path, sum);
                             return Some(Ok(changed));
-                        } else if (left_is_file || left_is_link) && right_is_dir {
+                        } else if (left_is_file || left_is_link || left_is_small) && right_is_dir {
                             // now a directory, add everything under it
                             let mut path = PathBuf::from(base);
                             path.push(&right_entry.name);
@@ -2147,6 +2156,67 @@ mod tests {
         assert_eq!(changed.len(), 2);
         assert_eq!(changed[0].as_ref().unwrap().path, bbb);
         assert_eq!(changed[1].as_ref().unwrap().path, ccc);
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_small_grew() -> Result<(), Error> {
+        // Regression test: a file small enough to be stored inline
+        // (TreeReference::SMALL, <= FILE_SIZE_SMALL bytes) that later grows into
+        // a regular file, or is replaced by a directory, must be reported as
+        // changed. Otherwise add_file is never called for it, its file record is
+        // never inserted, and the snapshot tree ends up referencing a file that
+        // is missing from the database (surfaced later as "reachable file
+        // missing from database" during pruning).
+        let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
+        fs::create_dir_all(&db_base)?;
+        let db_path = tempfile::tempdir_in(&db_base)?;
+        let datasource = RocksDBEntityDataSource::new(&db_path).unwrap();
+        let repo = RecordRepositoryImpl::new(Arc::new(datasource));
+        let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
+
+        let fixture_base: PathBuf = ["tmp", "test", "fixtures"].iter().collect();
+        fs::create_dir_all(&fixture_base)?;
+        let fixture_path = tempfile::tempdir_in(&fixture_base)?;
+        let ddd: PathBuf = fixture_path.path().join("ddd");
+        let sss: PathBuf = fixture_path.path().join("sss");
+        // both files are small enough to be stored inline (<= 64 bytes)
+        fs::write(&ddd, b"tiny ddd")?;
+        fs::write(&sss, b"tiny sss")?;
+        // take a snapshot of the test data
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
+        assert_eq!(snapshot1.file_counts.total_files(), 2);
+        // grow the small file past the inline threshold (SMALL -> file), and
+        // replace the other small file with a directory containing a file that
+        // is itself large enough to be a regular file (SMALL -> directory)
+        fs::write(&sss, b"swift squirrels scaling spruces, swift squirrels scaling spruces, swift squirrels scaling spruces")?;
+        fs::remove_file(&ddd)?;
+        let ddd: PathBuf = fixture_path.path().join("ddd").join("ddd.txt");
+        fs::create_dir(ddd.parent().unwrap())?;
+        fs::write(&ddd, b"dancing ducks diving deep, dancing ducks diving deep, dancing ducks diving deep, dancing ducks diving deep")?;
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
+        // compute the differences
+        let iter = find_changed_files(
+            &dbase,
+            fixture_path.path().to_path_buf(),
+            snap1_sha,
+            snap2_sha,
+        )?;
+        let changed: Vec<Result<ChangedFile, Error>> = iter.collect();
+        // both transitions must be detected: the grown file and the file now
+        // living inside the new directory (entries are name-sorted, ddd < sss)
+        assert_eq!(changed.len(), 2);
+        assert_eq!(changed[0].as_ref().unwrap().path, ddd);
+        assert_eq!(changed[1].as_ref().unwrap().path, sss);
         Ok(())
     }
 
