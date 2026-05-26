@@ -73,3 +73,5 @@ Daily task to prune all datasets according to their snapshot retention policy. W
 ## May 2026
 
 Data loss bug in snapshot pruning resulting in missing file records (caught by weekly database scrub).
+
+Data loss bug in backup process when a small file became a not-small file, going from stored directly in the tree record to requiring a file record. The change was not noticed and a file record was never created for the new, larger file.
