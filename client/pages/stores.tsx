@@ -395,6 +395,7 @@ const ALL_STORES: TypedDocumentNode<Query, Record<string, never>> = gql`
 
 export function StoresPage(props: any) {
   const navigate = useNavigate();
+  const params = useParams();
   const [dropdownOpen, setDropdownOpen] = createSignal(false);
   let dropdownRef: HTMLDivElement | undefined;
   useClickOutside(
@@ -415,6 +416,17 @@ export function StoresPage(props: any) {
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
+  // when exactly one store exists, auto-select it so the index route never
+  // renders its placeholder
+  const autoSelecting = () =>
+    !params.id &&
+    storesQuery.state === 'ready' &&
+    sortedStores().length === 1;
+  createEffect(() => {
+    if (autoSelecting()) {
+      navigate(`/stores/${sortedStores()[0]!.id}`, { replace: true });
+    }
+  });
   // listen for path changes and cause the store list to refresh in case a store
   // was deleted, which does not directly impact this component
   const location = useLocation();
@@ -532,7 +544,11 @@ export function StoresPage(props: any) {
             </div>
           </div>
         </div>
-        <div class="column">{props.children}</div>
+        <div class="column">
+          <Show when={!autoSelecting()} fallback={'...'}>
+            {props.children}
+          </Show>
+        </div>
       </div>
     </div>
   );

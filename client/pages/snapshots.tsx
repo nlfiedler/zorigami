@@ -49,6 +49,7 @@ const ALL_DATASETS: TypedDocumentNode<Query, Record<string, never>> = gql`
 
 export function SnapshotsPage(props: any) {
   const navigate = useNavigate();
+  const params = useParams();
   const client = useApolloClient();
   const [datasetsQuery, { refetch }] = createResource(async () => {
     const { data } = await client.query({ query: ALL_DATASETS });
@@ -63,6 +64,17 @@ export function SnapshotsPage(props: any) {
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
+  // when exactly one dataset exists, auto-select it so the index route never
+  // renders its placeholder
+  const autoSelecting = () =>
+    !params.id &&
+    datasetsQuery.state === 'ready' &&
+    sortedDatasets().length === 1;
+  createEffect(() => {
+    if (autoSelecting()) {
+      navigate(`/snapshots/${sortedDatasets()[0]!.id}`, { replace: true });
+    }
+  });
   // listen for path changes and cause the dataset to refresh
   const location = useLocation();
   // the pathname is not actually used, just listening for route changes
@@ -104,7 +116,11 @@ export function SnapshotsPage(props: any) {
           </div>
         </div>
       </div>
-      <div class="column">{props.children}</div>
+      <div class="column">
+        <Show when={!autoSelecting()} fallback={'...'}>
+          {props.children}
+        </Show>
+      </div>
     </div>
   );
 }
