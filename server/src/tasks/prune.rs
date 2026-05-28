@@ -391,6 +391,7 @@ impl PrunerImpl {
         let mut visit_tree = |tree_sum: Checksum| -> Result<(), Error> {
             // Rust does not know how to compile recursive closures, so use a
             // function within the closure to get around the types issue.
+            #[allow(clippy::too_many_arguments)]
             fn rec(
                 repo: &Arc<dyn RecordRepository>,
                 tree_sum: Checksum,
@@ -1329,11 +1330,7 @@ impl Pruner for PrunerImpl {
                 Ok(entries) => entries,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(err) => {
-                    let msg = format!(
-                        "failed to read workspace {}: {}",
-                        workspace.display(),
-                        err
-                    );
+                    let msg = format!("failed to read workspace {}: {}", workspace.display(), err);
                     warn!("cleanup: {}", msg);
                     issues.push(ScrubIssue {
                         dataset_id: Some(dataset.id.clone()),
@@ -1367,11 +1364,8 @@ impl Pruner for PrunerImpl {
                 let file_type = match entry.file_type() {
                     Ok(ft) => ft,
                     Err(err) => {
-                        let msg = format!(
-                            "failed to stat workspace entry {}: {}",
-                            path.display(),
-                            err
-                        );
+                        let msg =
+                            format!("failed to stat workspace entry {}: {}", path.display(), err);
                         warn!("cleanup: {}", msg);
                         issues.push(ScrubIssue {
                             dataset_id: Some(dataset.id.clone()),
@@ -1389,15 +1383,11 @@ impl Pruner for PrunerImpl {
                 // workspace was misconfigured.
                 let file_name = entry.file_name();
                 let name = file_name.to_string_lossy();
-                let is_backup_tempfile = file_type.is_file()
-                    && name.starts_with(".tmp")
-                    && name.ends_with(".pack");
+                let is_backup_tempfile =
+                    file_type.is_file() && name.starts_with(".tmp") && name.ends_with(".pack");
                 let is_restore_tempdir = file_type.is_dir() && name.starts_with(".tmp");
                 if !is_backup_tempfile && !is_restore_tempdir {
-                    let msg = format!(
-                        "skipping unrecognized workspace entry {}",
-                        path.display()
-                    );
+                    let msg = format!("skipping unrecognized workspace entry {}", path.display());
                     warn!("cleanup: {}", msg);
                     issues.push(ScrubIssue {
                         dataset_id: Some(dataset.id.clone()),
@@ -1411,8 +1401,11 @@ impl Pruner for PrunerImpl {
                     std::fs::remove_file(&path)
                 };
                 if let Err(err) = removed {
-                    let msg =
-                        format!("failed to remove workspace entry {}: {}", path.display(), err);
+                    let msg = format!(
+                        "failed to remove workspace entry {}: {}",
+                        path.display(),
+                        err
+                    );
                     warn!("cleanup: {}", msg);
                     issues.push(ScrubIssue {
                         dataset_id: Some(dataset.id.clone()),
@@ -3591,9 +3584,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner
-            .cleanup_workspaces()
-            .expect("cleanup should succeed");
+        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
         assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
         assert!(workspace.exists(), "workspace itself should remain");
         let remaining: Vec<_> = std::fs::read_dir(&workspace).unwrap().collect();
@@ -3630,9 +3621,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner
-            .cleanup_workspaces()
-            .expect("cleanup should succeed");
+        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
         assert_eq!(issues.len(), 3, "expected 3 issues, got: {:?}", issues);
         assert!(workspace.join("important.txt").exists());
         assert!(workspace.join(".tmpAbCdEf.log").exists());
@@ -3655,9 +3644,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner
-            .cleanup_workspaces()
-            .expect("cleanup should succeed");
+        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
         assert!(issues.is_empty(), "got: {:?}", issues);
     }
 
@@ -3678,9 +3665,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(true));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner
-            .cleanup_workspaces()
-            .expect("cleanup should succeed");
+        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
         assert!(issues.is_empty());
         assert!(workspace.join(".tmpAbCdEf.pack").exists());
     }
