@@ -106,13 +106,15 @@ Similarly, to have restore requests stuck in the _processing_ state indefinitely
 env RESTORE_ALWAYS_PROCESSING=1 RUST_LOG=info cargo run
 ```
 
-### Testing Prune
+### Scheduler Configuration
 
-To have the automatic snapshot pruning occur more frequently than the default 24 hours, set the `PRUNE_INTERVAL_HOURS` environment variable to a numeric value.
+The background scheduler runs several periodic tasks. Each interval can be tuned via an environment variable; out-of-range values are clamped, and unset or unparseable values fall back to the default.
 
-```shell
-env PRUNE_INTERVAL_HOURS=1 RUST_LOG=info cargo run
-```
+- `PRUNE_INTERVAL_HOURS` — How often, in hours, to prune old snapshots from each dataset according to its retention policy. Default `24`; no clamp.
+- `RESTORE_TEST_INTERVAL_DAYS` — How often, in days, to exercise the restore path on a random file to catch store or encryption regressions before they bite. Range `1`–`30`, default `7`.
+- `DATABASE_SCRUB_INTERVAL_DAYS` — How often, in days, to scan the entity database for unreachable or unreadable records. Range `1`–`30`, default `7`.
+- `PACK_PRUNE_INTERVAL_DAYS` — How often, in days, to delete unreachable pack files from the stores and remove old database archives. Range `1`–`180`, default `7`.
+- `WORKSPACE_CLEANUP_INTERVAL_HOURS` — How often, in hours, to wipe leftover temporary pack files from each dataset's workspace (a killed backup or restore can leave these behind). Range `1`–`720`, default `24`.
 
 ### Code Coverage
 
