@@ -4,7 +4,7 @@
 use crate::domain::services::buckets::BucketNamingPolicy;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
-use data_encoding::BASE64;
+use data_encoding::{BASE64, HEXLOWER};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ impl Checksum {
         let mut hasher = Sha1::new();
         hasher.update(data);
         let digest = hasher.finalize();
-        Checksum::SHA1(format!("{:x}", digest))
+        Checksum::SHA1(HEXLOWER.encode(&digest))
     }
 
     ///

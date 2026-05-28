@@ -625,9 +625,17 @@ async fn create_bucket(
 /// Compute the MD5 digest of the given file.
 fn md5sum_file(infile: &Path) -> Result<Vec<u8>, Error> {
     use md5::{Digest, Md5};
+    use std::io::Read;
     let mut file = std::fs::File::open(infile)?;
     let mut hasher = Md5::new();
-    std::io::copy(&mut file, &mut hasher)?;
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
     let digest: Vec<u8> = hasher.finalize()[..].into();
     Ok(digest)
 }

@@ -29,16 +29,16 @@ globset = "0.4.13"
 hashed-array-tree = "1.2.0"
 juniper = { version = "0.17.0", features = ["chrono", "schema-language"] }
 libc = "0.2.119"
-log = "0.4.7"
+log = "0.4.30"
 memmap2 = "0.9.4"
 os_str_bytes = { version = "7.0.0", features = ["conversions"] }
 rand = "0.10.1"
 reducer = "3.0"
-rusqlite = { version = "0.33", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 serde = { version = "1.0.182", features = ["derive"] }
 serde_json = "1.0.79"
-sha1 = "0.10.6"
+sha1 = "0.11.0"
 store_amazon = { path = "../stores/store_amazon" }
 store_azure = { path = "../stores/store_azure" }
 store_core = { path = "../stores/store_core" }

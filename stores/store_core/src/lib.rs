@@ -6,8 +6,9 @@
 
 use anyhow::Error;
 use std::fmt;
+use std::fmt::Write as _;
 use std::fs::File;
-use std::io;
+use std::io::Read;
 use std::path::Path;
 
 ///
@@ -37,10 +38,15 @@ pub fn md5sum_file(infile: &Path) -> Result<String, Error> {
     use md5::{Digest, Md5};
     let mut file = File::open(infile)?;
     let mut hasher = Md5::new();
-    io::copy(&mut file, &mut hasher)?;
-    let digest = hasher.finalize();
-    let result = format!("{:x}", digest);
-    Ok(result)
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex_lower(&hasher.finalize()))
 }
 
 /// Compute the MD5 digest of the given blob of data.
@@ -48,9 +54,15 @@ pub fn md5sum_blob<T: AsRef<[u8]>>(data: T) -> Result<String, Error> {
     use md5::{Digest, Md5};
     let mut hasher = Md5::new();
     hasher.update(data);
-    let digest = hasher.finalize();
-    let result = format!("{:x}", digest);
-    Ok(result)
+    Ok(hex_lower(&hasher.finalize()))
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(out, "{:02x}", b);
+    }
+    out
 }
 
 ///
