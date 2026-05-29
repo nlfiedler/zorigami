@@ -562,9 +562,15 @@ impl LeaderSupervisor {
                     self.context.backup_stopper.clone(),
                 ))
             };
+            let dataset_id = request.dataset.clone();
             self.context.insert_started_backup(request.clone());
             if let Err(err) = backuper.backup(request) {
                 error!("leader supervisor backup error: {}", err);
+                self.context.capture_error(
+                    ErrorOperation::Backup,
+                    Some(dataset_id),
+                    &err.to_string(),
+                );
             }
             true
         } else {
