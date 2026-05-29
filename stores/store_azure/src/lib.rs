@@ -2,16 +2,21 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use anyhow::{Error, anyhow};
-use azure_core::{RetryOptions, StatusCode};
-use azure_storage::{CloudLocation, ErrorKind, StorageCredentials};
-use azure_storage_blobs::prelude::{
-    AccessTier, BlobBlockType, BlockId, BlockList, ClientBuilder, PublicAccess,
+use azure_core::credentials::{Secret, TokenCredential};
+use azure_core::http::{RequestContent, Url};
+use azure_identity::ClientSecretCredential;
+use azure_storage_blob::models::{
+    AccessTier, BlobClientDeleteOptions, BlobContainerClientCreateOptions,
+    BlobContainerClientDeleteOptions, BlockBlobClientCommitBlockListOptions,
+    BlockBlobClientStageBlockOptions, BlockLookupList,
 };
+use azure_storage_blob::{BlobContainerClient, BlobServiceClient, BlobServiceClientOptions};
 use futures::StreamExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use store_core::Coordinates;
 use tokio::time::timeout;
@@ -42,14 +47,21 @@ where
 ///
 /// A pack store implementation that uses Azure blob storage.
 ///
+/// Authenticates via an Entra ID service principal. The new Microsoft Azure
+/// SDK for Rust does not support storage-account shared-key authentication,
+/// so the store requires `tenant_id`, `client_id`, and `client_secret`
+/// properties identifying an Entra ID app registration that has been granted
+/// a Storage Blob Data Contributor role on the target storage account.
+///
 #[derive(Clone, Debug)]
 pub struct AzureStore {
     store_id: String,
     account: String,
-    access_key: String,
+    tenant_id: String,
+    client_id: String,
+    client_secret: String,
     access_tier: Option<AccessTier>,
     custom_uri: Option<String>,
-    retry_options: Option<RetryOptions>,
 }
 
 impl AzureStore {
@@ -58,9 +70,15 @@ impl AzureStore {
         let account = props
             .get("account")
             .ok_or_else(|| anyhow!("missing account property"))?;
-        let access_key = props
-            .get("access_key")
-            .ok_or_else(|| anyhow!("missing access_key property"))?;
+        let tenant_id = props
+            .get("tenant_id")
+            .ok_or_else(|| anyhow!("missing tenant_id property"))?;
+        let client_id = props
+            .get("client_id")
+            .ok_or_else(|| anyhow!("missing client_id property"))?;
+        let client_secret = props
+            .get("client_secret")
+            .ok_or_else(|| anyhow!("missing client_secret property"))?;
         // an empty URI must be nullified to avoid errors from Azure
         let mut custom_uri = props.get("custom_uri");
         if let Some(uri) = custom_uri
@@ -84,30 +102,38 @@ impl AzureStore {
         Ok(Self {
             store_id: store_id.to_owned(),
             account: account.to_owned(),
-            access_key: access_key.to_owned(),
+            tenant_id: tenant_id.to_owned(),
+            client_id: client_id.to_owned(),
+            client_secret: client_secret.to_owned(),
             custom_uri: custom_uri.cloned(),
             access_tier,
-            retry_options: None,
         })
     }
 
-    fn connect(&self) -> ClientBuilder {
-        let account = self.account.clone();
-        let access_key = self.access_key.clone();
-        let credentials = StorageCredentials::access_key(account.clone(), access_key);
-        let mut cb = if let Some(uri) = &self.custom_uri {
-            let location = CloudLocation::Custom {
-                account,
-                uri: uri.to_owned(),
-            };
-            ClientBuilder::with_location(location, credentials)
-        } else {
-            ClientBuilder::new(account, credentials)
-        };
-        if let Some(ref retry) = self.retry_options {
-            cb = cb.retry(retry.to_owned());
-        }
-        cb
+    fn credential(&self) -> Result<Arc<dyn TokenCredential>, Error> {
+        let cred = ClientSecretCredential::new(
+            &self.tenant_id,
+            self.client_id.clone(),
+            Secret::new(self.client_secret.clone()),
+            None,
+        )?;
+        Ok(cred)
+    }
+
+    fn service_url(&self) -> Result<Url, Error> {
+        let url = self
+            .custom_uri
+            .clone()
+            .unwrap_or_else(|| format!("https://{}.blob.core.windows.net/", self.account));
+        Ok(Url::parse(&url)?)
+    }
+
+    fn service_client(&self) -> Result<BlobServiceClient, Error> {
+        let credential = self.credential()?;
+        let url = self.service_url()?;
+        let options = BlobServiceClientOptions::default();
+        let client = BlobServiceClient::new(url, Some(credential), Some(options))?;
+        Ok(client)
     }
 
     pub fn store_pack_sync(
@@ -127,22 +153,21 @@ impl AzureStore {
         object: &str,
     ) -> Result<Coordinates, Error> {
         // the container must exist before receiving blobs
-        let builder = self.connect();
-        create_container(builder, bucket).await?;
+        let service = self.service_client()?;
+        let container_client = service.blob_container_client(bucket);
+        create_container(&container_client).await?;
         //
         // Process the pack file by uploading it in 8mb chunks as "blocks", then
         // assembling the "blob" from the list of blocks ("block list"). Blocks
         // larger than 5mb will benefit from the "high throughput" feature of
         // the Azure storage API.
         //
-        let builder = self.connect();
-        let blob_client = builder.blob_client(bucket, object);
+        let blob_client = container_client.blob_client(object);
+        let block_blob_client = blob_client.block_blob_client();
         let mut file_handle = File::open(packfile)?;
         let block_size: usize = 8388608;
-        let mut block_list: Vec<BlobBlockType> = Vec::new();
+        let mut block_ids: Vec<Vec<u8>> = Vec::new();
         loop {
-            // blob API wants to take ownership of the data, so allocate a new
-            // buffer for every put_block call (i.e. cannot use BufReader)
             let mut data = Vec::with_capacity(block_size);
             let mut take_handle = file_handle.take(block_size as u64);
             let read_bytes = take_handle.read_to_end(&mut data)?;
@@ -154,39 +179,53 @@ impl AzureStore {
                 break;
             }
             // block identifiers must all have the same length, and be less than
-            // 64 bytes, otherwise only uniqueness matters; n.b. the client will
-            // perform the base64 encoding
-            let block_id = xid::new().to_string();
-            let data_ref: &[u8] = data.as_ref();
-            let md5 = md5sum_blob(data_ref)?;
-            let hash = azure_storage_blobs::prelude::Hash::MD5(md5);
-            let response = with_deadline(
+            // 64 bytes, otherwise only uniqueness matters; the SDK base64-
+            // encodes the bytes before sending.
+            let block_id = xid::new().to_string().into_bytes();
+            let md5 = md5sum_blob(&data)?;
+            let data_len = data.len() as u64;
+            let options = BlockBlobClientStageBlockOptions {
+                transactional_content_md5: Some(md5.to_vec()),
+                ..Default::default()
+            };
+            with_deadline(
                 &format!("put_block {}/{}", bucket, object),
                 TRANSFER_TIMEOUT,
                 async {
-                    blob_client
-                        .put_block(block_id.clone(), data)
-                        .hash(hash)
+                    block_blob_client
+                        .stage_block(
+                            &block_id,
+                            data_len,
+                            RequestContent::from(data),
+                            Some(options),
+                        )
                         .await
+                        .map(|_| ())
                         .map_err(Error::from)
                 },
             )
             .await?;
-            if let Some(content_md5) = response.content_md5
-                && content_md5.as_slice() != &md5
-            {
-                return Err(anyhow!("returned MD5 does not match"));
-            }
-            block_list.push(BlobBlockType::Uncommitted(BlockId::new(block_id)));
+            block_ids.push(block_id);
         }
-        let mut builder = blob_client.put_block_list(BlockList { blocks: block_list });
-        if let Some(tier) = &self.access_tier {
-            builder = builder.access_tier(*tier);
-        }
+        let block_list = BlockLookupList {
+            committed: None,
+            latest: Some(block_ids),
+            uncommitted: None,
+        };
+        let commit_options = BlockBlobClientCommitBlockListOptions {
+            tier: self.access_tier.clone(),
+            ..Default::default()
+        };
         with_deadline(
             &format!("put_block_list {}/{}", bucket, object),
             TRANSFER_TIMEOUT,
-            async { builder.await.map(|_| ()).map_err(Error::from) },
+            async {
+                block_blob_client
+                    .commit_block_list(block_list.try_into()?, Some(commit_options))
+                    .await
+                    .map(|_| ())
+                    .map_err(Error::from)
+            },
         )
         .await?;
         let loc = Coordinates::new(&self.store_id, bucket, object);
@@ -198,16 +237,16 @@ impl AzureStore {
     }
 
     pub async fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        let builder = self.connect();
-        let client = builder.blob_client(&location.bucket, &location.object);
+        let service = self.service_client()?;
+        let client = service.blob_client(&location.bucket, &location.object);
         let mut file_handle = File::create(outfile)?;
-        // n.b. this uses the default chunk size of 1MB, which enables the
-        // pipeline to handle intermittent connection failures with retry,
-        // rather than restarting the whole blob on a failure.
-        let mut stream = client.get().into_stream();
         let label = format!("retrieve_pack {}/{}", location.bucket, location.object);
+        let mut response = with_deadline(&label, TRANSFER_TIMEOUT, async {
+            client.download(None).await.map_err(Error::from)
+        })
+        .await?;
         loop {
-            let next = match timeout(TRANSFER_TIMEOUT, stream.next()).await {
+            let next = match timeout(TRANSFER_TIMEOUT, response.body.next()).await {
                 Ok(n) => n,
                 Err(_) => {
                     return Err(anyhow!(
@@ -217,14 +256,11 @@ impl AzureStore {
                     ));
                 }
             };
-            let value = match next {
-                Some(v) => v,
+            let chunk = match next {
+                Some(Ok(c)) => c,
+                Some(Err(err)) => return Err(err.into()),
                 None => break,
             };
-            let chunk = with_deadline(&label, TRANSFER_TIMEOUT, async move {
-                value?.data.collect().await.map_err(Error::from)
-            })
-            .await?;
             file_handle.write_all(&chunk)?;
         }
         Ok(())
@@ -236,11 +272,10 @@ impl AzureStore {
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, Error> {
         let mut results = Vec::new();
-        let builder = self.connect();
-        let blob_service = builder.blob_service_client();
-        let mut pageable = blob_service.list_containers().into_stream();
+        let service = self.service_client()?;
+        let mut pager = service.list_containers(None)?;
         loop {
-            let next = match timeout(TRANSFER_TIMEOUT, pageable.next()).await {
+            let next = match timeout(TRANSFER_TIMEOUT, pager.next()).await {
                 Ok(n) => n,
                 Err(_) => {
                     return Err(anyhow!(
@@ -250,9 +285,9 @@ impl AzureStore {
                 }
             };
             match next {
-                Some(Ok(response)) => {
-                    for container in response.containers {
-                        results.push(container.name);
+                Some(Ok(container)) => {
+                    if let Some(name) = container.name {
+                        results.push(name);
                     }
                 }
                 Some(Err(err)) => return Err(err.into()),
@@ -267,13 +302,12 @@ impl AzureStore {
     }
 
     pub async fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        use azure_storage_blobs::container::operations::BlobItem::Blob;
-        let builder = self.connect();
-        let client = builder.container_client(bucket);
+        let service = self.service_client()?;
+        let container_client = service.blob_container_client(bucket);
         let mut results = Vec::new();
-        let mut pageable = client.list_blobs().into_stream();
+        let mut pager = container_client.list_blobs(None)?;
         loop {
-            let next = match timeout(TRANSFER_TIMEOUT, pageable.next()).await {
+            let next = match timeout(TRANSFER_TIMEOUT, pager.next()).await {
                 Ok(n) => n,
                 Err(_) => {
                     return Err(anyhow!(
@@ -283,11 +317,9 @@ impl AzureStore {
                 }
             };
             match next {
-                Some(Ok(response)) => {
-                    for blob_item in response.blobs.items {
-                        if let Blob(blob) = blob_item {
-                            results.push(blob.name);
-                        }
+                Some(Ok(blob)) => {
+                    if let Some(name) = blob.name {
+                        results.push(name);
                     }
                 }
                 Some(Err(err)) => return Err(err.into()),
@@ -302,10 +334,14 @@ impl AzureStore {
     }
 
     pub async fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let builder = self.connect();
-        let client = builder.blob_client(bucket, object);
+        let service = self.service_client()?;
+        let client = service.blob_client(bucket, object);
         with_deadline("delete_object", METADATA_TIMEOUT, async {
-            client.delete().await.map(|_| ()).map_err(Error::from)
+            client
+                .delete(None::<BlobClientDeleteOptions<'_>>)
+                .await
+                .map(|_| ())
+                .map_err(Error::from)
         })
         .await
     }
@@ -315,10 +351,14 @@ impl AzureStore {
     }
 
     pub async fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let builder = self.connect();
-        let client = builder.container_client(bucket);
+        let service = self.service_client()?;
+        let client = service.blob_container_client(bucket);
         with_deadline("delete_bucket", METADATA_TIMEOUT, async {
-            client.delete().await.map(|_| ()).map_err(Error::from)
+            client
+                .delete(None::<BlobContainerClientDeleteOptions>)
+                .await
+                .map(|_| ())
+                .map_err(Error::from)
         })
         .await
     }
@@ -331,15 +371,6 @@ impl AzureStore {
     ) -> Result<Coordinates, Error> {
         self.store_pack_sync(packfile, bucket, object)
     }
-
-    // pub async fn store_database(
-    //     &self,
-    //     packfile: &Path,
-    //     bucket: &str,
-    //     object: &str,
-    // ) -> Result<Coordinates, Error> {
-    //     self.store_pack(packfile, bucket, object)
-    // }
 
     pub fn retrieve_database_sync(
         &self,
@@ -359,36 +390,30 @@ impl AzureStore {
 /// Raw `timeout(...)` is used here (rather than `with_deadline`) because the
 /// inner match needs to inspect the typed `azure_core::Error` to detect the
 /// "already exists" 409 case below.
-async fn create_container(builder: ClientBuilder, container: &str) -> Result<(), Error> {
-    let client = builder.container_client(container);
+async fn create_container(client: &BlobContainerClient) -> Result<(), Error> {
+    use azure_core::http::StatusCode;
     let result = match timeout(
         METADATA_TIMEOUT,
-        client.create().public_access(PublicAccess::None),
+        client.create(None::<BlobContainerClientCreateOptions>),
     )
     .await
     {
         Ok(r) => r,
         Err(_) => {
             return Err(anyhow!(
-                "create_container timed out after {:?} for {}",
-                METADATA_TIMEOUT,
-                container
+                "create_container timed out after {:?}",
+                METADATA_TIMEOUT
             ));
         }
     };
-    // certain error conditions are okay
     match result {
-        Err(e) => match e.kind() {
-            #[allow(unused_variables)]
-            ErrorKind::HttpResponse { status, error_code } => {
-                if *status == StatusCode::Conflict {
-                    Ok(())
-                } else {
-                    Err(e.into())
-                }
+        Err(e) => {
+            if e.http_status() == Some(StatusCode::Conflict) {
+                Ok(())
+            } else {
+                Err(e.into())
             }
-            _ => Err(e.into()),
-        },
+        }
         Ok(_) => Ok(()),
     }
 }
@@ -433,7 +458,6 @@ mod tests {
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
         assert!(err_string.contains("missing account property"));
-        // could check all of the others, I guess?
     }
 
     #[test]
@@ -441,15 +465,20 @@ mod tests {
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("account".into(), "zoragamincorrect".into());
-        properties.insert("access_key".into(), "kbMB+UABej9Y/dvLlKh05deDDSiS0TyraeUkDdCserQuLz9JgNEoK/EfOeaEiv8JHHhLAyflMRTb+ASt1Q7JCQ==".into());
-        let mut source = AzureStore::new("azure2", &properties)?;
-        source.retry_options = Some(RetryOptions::none());
+        properties.insert(
+            "tenant_id".into(),
+            "00000000-0000-0000-0000-000000000000".into(),
+        );
+        properties.insert(
+            "client_id".into(),
+            "00000000-0000-0000-0000-000000000000".into(),
+        );
+        properties.insert("client_secret".into(), "definitely-not-a-real-secret".into());
+        let source = AzureStore::new("azure2", &properties)?;
         // act
         let result = source.list_buckets_sync();
         // assert
         assert!(result.is_err());
-        let err_string = result.err().unwrap().to_string();
-        assert!(err_string.contains("failed to execute `reqwest` request"));
         Ok(())
     }
 
@@ -457,7 +486,15 @@ mod tests {
     fn test_new_azure_store_ok() {
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("account".to_owned(), "zorigami-test".to_owned());
-        properties.insert("access_key".to_owned(), "azure-access-key".to_owned());
+        properties.insert(
+            "tenant_id".to_owned(),
+            "00000000-0000-0000-0000-000000000000".to_owned(),
+        );
+        properties.insert(
+            "client_id".to_owned(),
+            "00000000-0000-0000-0000-000000000000".to_owned(),
+        );
+        properties.insert("client_secret".to_owned(), "secret-value".to_owned());
         let result = AzureStore::new("azure123", &properties);
         assert!(result.is_ok());
     }
@@ -466,20 +503,24 @@ mod tests {
     fn test_azure_store_roundtrip() -> Result<(), Error> {
         // set up the environment and remote connection
         dotenv().ok();
-        let acct_var = env::var("AZURE_STORAGE_ACCOUNT");
-        if acct_var.is_err() {
-            // bail out silently if azure is not available
-            return Ok(());
-        }
-        let account = acct_var?;
-        let access_key = env::var("AZURE_STORAGE_ACCESS_KEY")?;
+        // Bail out silently if Entra ID credentials are not configured; the
+        // tenant ID is the gating variable now that we're on a TokenCredential.
+        let tenant_id = match env::var("AZURE_TENANT_ID") {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+        let account = env::var("AZURE_STORAGE_ACCOUNT")?;
+        let client_id = env::var("AZURE_CLIENT_ID")?;
+        let client_secret = env::var("AZURE_CLIENT_SECRET")?;
         let custom_uri = env::var("AZURE_STORAGE_URI");
         let access_tier = env::var("AZURE_STORAGE_ACCESS_TIER");
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("account".to_owned(), account);
-        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("tenant_id".to_owned(), tenant_id);
+        properties.insert("client_id".to_owned(), client_id);
+        properties.insert("client_secret".to_owned(), client_secret);
         if let Ok(uri) = custom_uri {
             properties.insert("custom_uri".to_owned(), uri);
         }
@@ -542,19 +583,21 @@ mod tests {
         // test using the connection when custom_uri property is an empty string
         // which seems to cause Azure a lot of needless grief
         dotenv().ok();
-        let acct_var = env::var("AZURE_STORAGE_ACCOUNT");
-        if acct_var.is_err() {
-            // bail out silently if azure is not available
-            return Ok(());
-        }
-        let account = acct_var?;
-        let access_key = env::var("AZURE_STORAGE_ACCESS_KEY")?;
+        let tenant_id = match env::var("AZURE_TENANT_ID") {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+        let account = env::var("AZURE_STORAGE_ACCOUNT")?;
+        let client_id = env::var("AZURE_CLIENT_ID")?;
+        let client_secret = env::var("AZURE_CLIENT_SECRET")?;
         let access_tier = env::var("AZURE_STORAGE_ACCESS_TIER");
 
         // arrange
         let mut properties: HashMap<String, String> = HashMap::new();
         properties.insert("account".to_owned(), account);
-        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("tenant_id".to_owned(), tenant_id);
+        properties.insert("client_id".to_owned(), client_id);
+        properties.insert("client_secret".to_owned(), client_secret);
         properties.insert("custom_uri".to_owned(), String::new());
         if let Ok(tier) = access_tier {
             properties.insert("access_tier".to_owned(), tier);

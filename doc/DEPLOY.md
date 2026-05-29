@@ -54,7 +54,7 @@ May need to run the `enable` and `kickstart` commands twice due to code signing 
 Recommended set of excludes that ignores a bunch of Mac stuff and directories that tend to have large binary files:
 
 ```
-.Trash, .bun, .cache, .cargo, .npm, .rustup, .tmp, .vscode, Library, **/Downloads, **/node_modules, **/target
+.Trash, .bun, .cache, .cargo, .npm, .rustup, .tmp, .vscode, Library, **/Downloads, **/node_modules, **/target, **/tmp
 ```
 
 ### plist file
@@ -138,6 +138,10 @@ Note that Azure seems to have little in the way of limits on the number of bucke
 
 How to create a new storage account and get the access key.
 
+1. From the default directory page, copy the **Tenant ID**, will need that later for connecting.
+1. Navigate to **App registrations** and register a new application (such as `zorigami-server-backup`).
+1. From the **Overview** page of the application, copy the **Application ID** for later.
+1. Navigate to **Certificates & secrets** and create a new _shared secret_, copy the **Value** for later.
 1. From the Azure portal, find **Storage accounts** and select it
 1. Find and click the **Create** button
 1. Create a new resource group, choose a storage account name
@@ -150,8 +154,9 @@ How to create a new storage account and get the access key.
 1. Click the **Encryption** button and review the default selections
 1. Click the **Review** button and then click **Create**
 1. Once the deployment is done, click the button to view the resource.
-1. Find the **Access keys** option on the left panel
-1. Copy the _Storage account name_ and _Key_ value from **key1**
+1. Navigate to the **Access Control (IAM)** page and click **Add role assignment**
+1. On the **Members** tab, click **Select members** and enter the name of the _application_ created earlier into the search field, select that entry.
+1. Click **Review and assign** and now you can test the connection.
 
 ### Google Cloud Setup
 

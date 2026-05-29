@@ -68,7 +68,9 @@ const STORE_TYPES: StoreType[] = [
     label: 'Azure',
     properties: [
       { name: 'account', value: 'my-storage' },
-      { name: 'access_key', value: 'EXAMPLE_ACCESS_KEY' },
+      { name: 'tenant_id', value: '' },
+      { name: 'client_id', value: '' },
+      { name: 'client_secret', value: '' },
       { name: 'access_tier', value: 'Cool' },
       { name: 'custom_uri', value: '' }
     ]
@@ -955,8 +957,14 @@ function AzureStoreForm(props: AzureStoreFormProps) {
   const [account, setAccount] = createSignal(
     getProperty(props.store.properties, 'account')
   );
-  const [accessKey, setAccessKey] = createSignal(
-    getProperty(props.store.properties, 'access_key')
+  const [tenantId, setTenantId] = createSignal(
+    getProperty(props.store.properties, 'tenant_id')
+  );
+  const [clientId, setClientId] = createSignal(
+    getProperty(props.store.properties, 'client_id')
+  );
+  const [clientSecret, setClientSecret] = createSignal(
+    getProperty(props.store.properties, 'client_secret')
   );
   const [accessTier, setAccessTier] = createSignal(
     getProperty(props.store.properties, 'access_tier')
@@ -972,7 +980,9 @@ function AzureStoreForm(props: AzureStoreFormProps) {
       label: label(),
       properties: [
         { name: 'account', value: account() },
-        { name: 'access_key', value: accessKey() },
+        { name: 'tenant_id', value: tenantId() },
+        { name: 'client_id', value: clientId() },
+        { name: 'client_secret', value: clientSecret() },
         { name: 'access_tier', value: accessTier() },
         { name: 'custom_uri', value: customUri() }
       ],
@@ -981,7 +991,11 @@ function AzureStoreForm(props: AzureStoreFormProps) {
   };
   const invalid = createMemo(() => {
     return (
-      label().length === 0 || account().length === 0 || accessKey().length === 0
+      label().length === 0 ||
+      account().length === 0 ||
+      tenantId().length === 0 ||
+      clientId().length === 0 ||
+      clientSecret().length === 0
     );
   });
 
@@ -1014,12 +1028,28 @@ function AzureStoreForm(props: AzureStoreFormProps) {
           placeholder="Name of the storage account."
           icon="fa-solid fa-cloud"
         />
+        <RequiredTextInput
+          label="Tenant ID"
+          name="tenant-input"
+          field={tenantId}
+          setField={setTenantId}
+          placeholder="Entra ID directory (tenant) ID."
+          icon="fa-solid fa-id-card"
+        />
+        <RequiredTextInput
+          label="Client ID"
+          name="client-input"
+          field={clientId}
+          setField={setClientId}
+          placeholder="Service principal application (client) ID."
+          icon="fa-solid fa-id-badge"
+        />
         <RequiredHiddenInput
-          label="Access Key"
-          name="access-input"
-          field={accessKey}
-          setField={setAccessKey}
-          placeholder="Access key."
+          label="Client Secret"
+          name="secret-input"
+          field={clientSecret}
+          setField={setClientSecret}
+          placeholder="Service principal client secret."
           icon="fa-solid fa-key"
         />
 

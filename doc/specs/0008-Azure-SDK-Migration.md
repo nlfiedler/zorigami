@@ -49,8 +49,21 @@ The existing integration tests run against Azurite via `containers/docker-compos
 
 ### Out of Scope
 
-- Switching authentication mechanisms (e.g. moving to managed identity or `DefaultAzureCredential`). The store currently uses shared-key auth and should continue to do so; broader auth options can be added later.
 - Migrating the `azure_storage_queues` or `azure_storage_datalake` crates — we don't use them.
+
+### Authentication — Update
+
+The original draft of this spec assumed shared-key auth would carry over from the old crates. It cannot: the official Microsoft Azure SDK for Rust does not support shared-key authentication, and per the SDK team (see [Azure/azure-sdk-for-rust#3614](https://github.com/Azure/azure-sdk-for-rust/issues/3614), closed February 2026) it is not planned to. The migration therefore also switches the store's auth from shared key to an Entra ID service-principal client secret (`azure_identity::ClientSecretCredential`). This is a breaking change to the `Configuration::properties` schema:
+
+- Removed: `access_key`
+- Added: `tenant_id`, `client_id`, `client_secret`
+- Kept: `account`, `access_tier`, `custom_uri`
+
+The web form on the Stores page collects the three new fields. Existing Azure pack stores must be re-entered. See `doc/CHANGES.md` for the user-facing note.
+
+### Testing — Update
+
+The Azurite-based integration tests are temporarily skipped (they bail silently when `AZURE_TENANT_ID` is unset) because Azurite requires `--oauth basic` plus HTTPS with a self-signed certificate to be reachable via a `TokenCredential`, and the SDK refuses plain HTTP under token auth. Reconfiguring `containers/docker-compose.yml` to run Azurite with OAuth + a cert mount, generating the cert pair, and adding a test-only HTTP transport that accepts the self-signed cert plus a fake `TokenCredential` that returns a hardcoded JWT, is a self-contained follow-up. Production-account integration tests still work end-to-end once the user supplies `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_STORAGE_ACCOUNT` for a real Entra ID app registration with Storage Blob Data Contributor on the target account.
 
 ## Risks
 

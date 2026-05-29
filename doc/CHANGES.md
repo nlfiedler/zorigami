@@ -83,3 +83,7 @@ Added a `schema_version` entry in RocksDB that is a monotonically increasing num
 Added support for [SQLite](https://sqlite.org) as an alternative to RocksDB.
 
 Errors encountered in background tasks are written to an SQLite database named `errors.db`.
+
+### May
+
+The Azure pack store now authenticates with the Microsoft identity platform (Entra ID) via a service-principal client secret rather than a storage-account shared key. The `access_key` property has been removed from the Azure pack store configuration; `tenant_id`, `client_id`, and `client_secret` properties are required in its place. Existing Azure pack stores must be re-entered through the Stores page of the web UI with the new credentials. The change was forced by the migration to the official Microsoft Azure SDK for Rust, which does not support shared-key authentication and per Microsoft is not planned to (see [Azure/azure-sdk-for-rust#3614](https://github.com/Azure/azure-sdk-for-rust/issues/3614)). The local Azurite-based integration tests are temporarily skipped pending a follow-up that reconfigures Azurite with OAuth and HTTPS so it can be reached via a `TokenCredential`.
