@@ -6,9 +6,9 @@
 #![allow(clippy::await_holding_lock)]
 
 use anyhow::{Error, anyhow};
-use aws_config::{BehaviorVersion, Region, SdkConfig};
 use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_config::timeout::TimeoutConfig;
+use aws_config::{BehaviorVersion, Region, SdkConfig};
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_dynamodb::operation::create_table::CreateTableError;

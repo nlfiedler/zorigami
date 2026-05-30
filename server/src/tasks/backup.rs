@@ -436,7 +436,14 @@ fn take_snapshot(
     let cpu_count = std::thread::available_parallelism()?.get();
     let pool = ThreadPool::new(cpu_count);
     debug!("take_snapshot: creating pool of {cpu_count} threads");
-    let tree = scan_tree(basepath, dbase, &exclusions, &mut file_counts, &pool, warn_sink)?;
+    let tree = scan_tree(
+        basepath,
+        dbase,
+        &exclusions,
+        &mut file_counts,
+        &pool,
+        warn_sink,
+    )?;
     if let Some(ref parent_sha1) = parent {
         let parent_doc = dbase
             .get_snapshot(parent_sha1)?
@@ -937,8 +944,7 @@ fn scan_tree(
                         }
                     }
                     Err(err) => {
-                        let msg =
-                            format!("read_dir error for an entry in {:?}: {}", basepath, err);
+                        let msg = format!("read_dir error for an entry in {:?}: {}", basepath, err);
                         error!("{}", msg);
                         (warn_sink)(msg);
                     }
@@ -1706,7 +1712,8 @@ mod tests {
         // take a snapshot of the dataset
         let dest: PathBuf = fixture_path.path().join("lorem-ipsum.txt");
         assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 1);
@@ -1714,8 +1721,14 @@ mod tests {
         // take another snapshot
         let dest: PathBuf = fixture_path.path().join("SekienAkashita.jpg");
         assert!(fs::copy("../test/fixtures/SekienAkashita.jpg", &dest).is_ok());
-        let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         let snapshot2 = dbase.get_snapshot(&snap2_sha)?.unwrap();
         assert!(snapshot2.parent.is_some());
         assert_eq!(snapshot2.parent.unwrap(), snap1_sha);
@@ -1743,7 +1756,13 @@ mod tests {
         );
 
         // take yet another snapshot, should find no changes
-        let snap3_opt = take_snapshot(fixture_path.path(), Some(snap2_sha), &dbase, vec![], &null_warn_sink())?;
+        let snap3_opt = take_snapshot(
+            fixture_path.path(),
+            Some(snap2_sha),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?;
         assert!(snap3_opt.is_none());
         Ok(())
     }
@@ -1762,7 +1781,8 @@ mod tests {
         workspace.push(".tmp");
         let excludes = vec![workspace];
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 6);
@@ -1817,7 +1837,8 @@ mod tests {
         ];
         let basepath: PathBuf = ["..", "test", "fixtures", "dataset_1"].iter().collect();
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(&basepath, None, &dbase, excludes, &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 3);
@@ -1857,7 +1878,8 @@ mod tests {
                 && xattr::set(&dest, "me.fiedlers.test", b"foobar").is_ok();
         }
 
-        let snapshot_digest = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snapshot_digest =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot = dbase.get_snapshot(&snapshot_digest)?.unwrap();
         assert!(snapshot.parent.is_none());
         assert_eq!(snapshot.file_counts.total_files(), 1);
@@ -1907,7 +1929,8 @@ mod tests {
         }
 
         // take a snapshot
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert!(snapshot1.parent.is_none());
         assert_eq!(snapshot1.file_counts.total_files(), 0);
@@ -1948,7 +1971,8 @@ mod tests {
         fs::write(&mmm, b"morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins")?;
         fs::write(&yyy, b"yellow yak yodeling, yellow yak yodeling, yellow yak yodeling, yellow yak yodeling, yellow yak yodeling")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 3);
         // add new files, change one file
@@ -1962,8 +1986,14 @@ mod tests {
         fs::write(&mmm, b"many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight")?;
         fs::write(&nnn, b"neat newts gnawing noodles, neat newts gnawing noodles, neat newts gnawing noodles, neat newts gnawing noodles")?;
         fs::write(&zzz, b"zebras riding on a zephyr, zebras riding on a zephyr, zebras riding on a zephyr, zebras riding on a zephyr")?;
-        let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -1984,8 +2014,14 @@ mod tests {
         fs::remove_file(&bbb)?;
         fs::remove_file(&yyy)?;
         fs::write(&zzz, b"zippy zip ties zooming, zippy zip ties zooming, zippy zip ties zooming, zippy zip ties zooming")?;
-        let snap3_sha =
-            take_snapshot(fixture_path.path(), Some(snap2_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap3_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap2_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -2017,7 +2053,8 @@ mod tests {
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
         fs::write(&mmm, b"morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins, morose monkey munching muffins")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 2);
         // change files to dirs and vice versa
@@ -2028,8 +2065,14 @@ mod tests {
         fs::remove_dir_all(&mmm)?;
         fs::write(&ccc, b"catastrophic catastrophes, catastrophic catastrophes, catastrophic catastrophes, catastrophic catastrophes")?;
         fs::write(&mmm, b"many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight, many mumbling mice moonlight")?;
-        let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -2062,7 +2105,8 @@ mod tests {
         fs::write(&bbb, b"bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing, bored baby baboons bathing")?;
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 2);
         // replace the files and directories with links
@@ -2086,8 +2130,14 @@ mod tests {
             #[cfg(target_family = "windows")]
             fs::symlink_file("mmm.txt", &ccc)?;
         }
-        let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,
@@ -2133,7 +2183,8 @@ mod tests {
             fs::symlink_file("mmm.txt", &ccc)?;
         }
         // take a snapshot of the test data
-        let snap1_sha = take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap1_sha =
+            take_snapshot(fixture_path.path(), None, &dbase, vec![], &null_warn_sink())?.unwrap();
         let snapshot1 = dbase.get_snapshot(&snap1_sha)?.unwrap();
         assert_eq!(snapshot1.file_counts.total_files(), 1);
         // replace the links with files and directories
@@ -2143,8 +2194,14 @@ mod tests {
         let ccc: PathBuf = fixture_path.path().join("ccc").join("ccc.txt");
         fs::create_dir(ccc.parent().unwrap())?;
         fs::write(&ccc, b"crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs, crazy cat clawing chairs")?;
-        let snap2_sha =
-            take_snapshot(fixture_path.path(), Some(snap1_sha.clone()), &dbase, vec![], &null_warn_sink())?.unwrap();
+        let snap2_sha = take_snapshot(
+            fixture_path.path(),
+            Some(snap1_sha.clone()),
+            &dbase,
+            vec![],
+            &null_warn_sink(),
+        )?
+        .unwrap();
         // compute the differences
         let iter = find_changed_files(
             &dbase,

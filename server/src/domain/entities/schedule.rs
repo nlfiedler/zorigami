@@ -653,7 +653,12 @@ mod tests {
         for (idx, values) in test_data.iter().enumerate() {
             let sched = Schedule::Monthly(Some((values.1, None)));
             assert!(sched.past_due(values.0));
-            assert_eq!(sched.within_range(values.0, Tz::UTC), values.2, "index: {}", idx);
+            assert_eq!(
+                sched.within_range(values.0, Tz::UTC),
+                values.2,
+                "index: {}",
+                idx
+            );
         }
     }
 

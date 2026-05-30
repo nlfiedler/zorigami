@@ -369,9 +369,7 @@ impl From<entities::ErrorOperation> for CapturedErrorOperation {
             entities::ErrorOperation::RestoreTest => CapturedErrorOperation::RestoreTest,
             entities::ErrorOperation::DatabaseScrub => CapturedErrorOperation::DatabaseScrub,
             entities::ErrorOperation::PackPrune => CapturedErrorOperation::PackPrune,
-            entities::ErrorOperation::WorkspaceCleanup => {
-                CapturedErrorOperation::WorkspaceCleanup
-            }
+            entities::ErrorOperation::WorkspaceCleanup => CapturedErrorOperation::WorkspaceCleanup,
         }
     }
 }

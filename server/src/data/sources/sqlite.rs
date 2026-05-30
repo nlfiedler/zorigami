@@ -314,7 +314,9 @@ fn bucket_policy_from_columns(
         Some("RandomPool") => Ok(Some(BucketNamingPolicy::RandomPool(
             p1.unwrap_or(0) as usize
         ))),
-        Some("Scheduled") => Ok(Some(BucketNamingPolicy::Scheduled(p1.unwrap_or(0) as usize))),
+        Some("Scheduled") => Ok(Some(
+            BucketNamingPolicy::Scheduled(p1.unwrap_or(0) as usize),
+        )),
         Some("ScheduledRandomPool") => Ok(Some(BucketNamingPolicy::ScheduledRandomPool {
             days: p1.unwrap_or(0) as usize,
             limit: p2.unwrap_or(0) as usize,
@@ -345,7 +347,11 @@ fn xattrs_from_json(s: Option<String>) -> Result<HashMap<String, Checksum>, Erro
     }
 }
 
-fn read_pack_locations(conn: &Connection, table: &str, digest: &str) -> Result<Vec<PackLocation>, Error> {
+fn read_pack_locations(
+    conn: &Connection,
+    table: &str,
+    digest: &str,
+) -> Result<Vec<PackLocation>, Error> {
     let sql = format!(
         "SELECT store_id, bucket, object FROM {} WHERE {} = ?1",
         table,
@@ -645,7 +651,9 @@ impl EntityDataSource for SQLiteEntityDataSource {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT digest, upload_time FROM databases")?;
         let rows: Vec<(String, i64)> = stmt
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?
             .collect::<Result<Vec<_>, _>>()?;
         let mut packs: Vec<Pack> = Vec::with_capacity(rows.len());
         for (digest_text, upload_time) in rows {
@@ -832,16 +840,16 @@ impl EntityDataSource for SQLiteEntityDataSource {
         )?;
         let entries_iter = stmt.query_map(params![digest.to_string()], |row| {
             Ok((
-                row.get::<_, String>(0)?,                 // name
-                row.get::<_, Option<i64>>(1)?,            // mode
-                row.get::<_, Option<i64>>(2)?,            // uid
-                row.get::<_, Option<String>>(3)?,         // user
-                row.get::<_, Option<i64>>(4)?,            // gid
-                row.get::<_, Option<String>>(5)?,         // group
-                row.get::<_, i64>(6)?,                    // ctime
-                row.get::<_, i64>(7)?,                    // mtime
-                row.get::<_, String>(8)?,                 // reference
-                row.get::<_, Option<String>>(9)?,         // xattrs_json
+                row.get::<_, String>(0)?,         // name
+                row.get::<_, Option<i64>>(1)?,    // mode
+                row.get::<_, Option<i64>>(2)?,    // uid
+                row.get::<_, Option<String>>(3)?, // user
+                row.get::<_, Option<i64>>(4)?,    // gid
+                row.get::<_, Option<String>>(5)?, // group
+                row.get::<_, i64>(6)?,            // ctime
+                row.get::<_, i64>(7)?,            // mtime
+                row.get::<_, String>(8)?,         // reference
+                row.get::<_, Option<String>>(9)?, // xattrs_json
             ))
         })?;
         let mut entries: Vec<TreeEntry> = Vec::new();
@@ -892,7 +900,13 @@ impl EntityDataSource for SQLiteEntityDataSource {
         tx.execute(
             "INSERT INTO stores (id, store_type, label, retention_kind, retention_days) \
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![store.id, store.store_type.to_string(), store.label, kind, days],
+            params![
+                store.id,
+                store.store_type.to_string(),
+                store.label,
+                kind,
+                days
+            ],
         )?;
         for (k, v) in &store.properties {
             tx.execute(
@@ -906,9 +920,8 @@ impl EntityDataSource for SQLiteEntityDataSource {
 
     fn get_stores(&self) -> Result<Vec<Store>, Error> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT id, store_type, label, retention_kind, retention_days FROM stores",
-        )?;
+        let mut stmt = conn
+            .prepare("SELECT id, store_type, label, retention_kind, retention_days FROM stores")?;
         let rows: Vec<(String, String, String, String, Option<i64>)> = stmt
             .query_map([], |row| {
                 Ok((
@@ -1206,8 +1219,9 @@ impl EntityDataSource for SQLiteEntityDataSource {
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
         let conn = self.conn.lock().unwrap();
         let count = |table: &str| -> Result<usize, Error> {
-            let n: i64 =
-                conn.query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |row| row.get(0))?;
+            let n: i64 = conn.query_row(&format!("SELECT COUNT(*) FROM {}", table), [], |row| {
+                row.get(0)
+            })?;
             Ok(n as usize)
         };
         Ok(RecordCounts {
@@ -1303,15 +1317,13 @@ fn read_dataset(conn: &Connection, id: &str) -> Result<Option<Dataset>, Error> {
         Some(s) => Some(parse_checksum(&s)?),
         None => None,
     };
-    let mut stores_stmt = conn.prepare(
-        "SELECT store_id FROM dataset_stores WHERE dataset_id = ?1 ORDER BY ord",
-    )?;
+    let mut stores_stmt =
+        conn.prepare("SELECT store_id FROM dataset_stores WHERE dataset_id = ?1 ORDER BY ord")?;
     let stores: Vec<String> = stores_stmt
         .query_map(params![id], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut excludes_stmt = conn.prepare(
-        "SELECT pattern FROM dataset_excludes WHERE dataset_id = ?1 ORDER BY ord",
-    )?;
+    let mut excludes_stmt =
+        conn.prepare("SELECT pattern FROM dataset_excludes WHERE dataset_id = ?1 ORDER BY ord")?;
     let excludes: Vec<String> = excludes_stmt
         .query_map(params![id], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;

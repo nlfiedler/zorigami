@@ -473,7 +473,10 @@ mod tests {
             "client_id".into(),
             "00000000-0000-0000-0000-000000000000".into(),
         );
-        properties.insert("client_secret".into(), "definitely-not-a-real-secret".into());
+        properties.insert(
+            "client_secret".into(),
+            "definitely-not-a-real-secret".into(),
+        );
         let source = AzureStore::new("azure2", &properties)?;
         // act
         let result = source.list_buckets_sync();

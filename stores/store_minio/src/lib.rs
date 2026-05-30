@@ -2,9 +2,9 @@
 // Copyright (c) 2025 Nathan Fiedler
 //
 use anyhow::{Error, anyhow};
-use aws_config::{BehaviorVersion, Region};
 use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_config::timeout::TimeoutConfig;
+use aws_config::{BehaviorVersion, Region};
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::error::ProvideErrorMetadata;
