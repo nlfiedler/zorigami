@@ -1,22 +1,22 @@
 [package]
 name = "store_amazon"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.55"
-aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-credential-types = "1"
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-credential-types = { workspace = true }
 aws-sdk-dynamodb = "1"
-aws-sdk-s3 = "1"
-rand = "0.10.0"
+aws-sdk-s3 = { workspace = true }
+rand = { workspace = true }
 store_core = { path = "../store_core" }
-thiserror = "2.0.7"
-tokio = { version = "1.46.1", features = ["fs", "rt-multi-thread", "time"] }
-uuid = { version = "1.1.2", features = ["v4"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "rt-multi-thread", "time"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-dotenvy = "0.15.7"
-serial_test = "3.0.0"
-tempfile = "3.7.1"
-xid = "1.0.0"
+dotenvy = { workspace = true }
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+xid = { workspace = true }

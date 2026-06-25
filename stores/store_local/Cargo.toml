@@ -1,11 +1,11 @@
 [package]
 name = "store_local"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { workspace = true }
 store_core = { path = "../store_core" }
 
 [dev-dependencies]
-tempfile = "3.7.1"
+tempfile = { workspace = true }

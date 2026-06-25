@@ -1,7 +1,7 @@
 [package]
 name = "server"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "zorigami"
@@ -13,7 +13,7 @@ actix-cors = "0.7.0"
 actix-files = "0.6.0"
 actix-rt = "2.8.0"
 actix-web = "4.3.0"
-anyhow = "1.0.55"
+anyhow = { workspace = true }
 data-encoding = "2.10.0"
 blake3 = "1.5.1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -21,7 +21,7 @@ chrono-tz = "0.10"
 ciborium = "0.2.2"
 database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
-dotenvy = "0.15.7"
+dotenvy = { workspace = true }
 env_logger = "0.11.0"
 exaf-rs = "2.0.0"
 fastcdc = "4.0.0"
@@ -32,11 +32,11 @@ libc = "0.2.119"
 log = "0.4.30"
 memmap2 = "0.9.4"
 os_str_bytes = { version = "7.0.0", features = ["conversions"] }
-rand = "0.10.1"
+rand = { workspace = true }
 reducer = "3.0"
 rusqlite = { version = "0.40", features = ["bundled"] }
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
-serde = { version = "1.0.182", features = ["derive"] }
+rustls = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.79"
 sha1 = "0.11.0"
 store_amazon = { path = "../stores/store_amazon" }
@@ -46,17 +46,17 @@ store_google = { path = "../stores/store_google" }
 store_local = { path = "../stores/store_local" }
 store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
-tempfile = { version = "3.7.1" }
-thiserror = "2.0.7"
+tempfile = { workspace = true }
+thiserror = { workspace = true }
 ulid = "1.1.2"
-uuid = { version = "1.1.2", features = ["serde", "v4", "v5"] }
+uuid = { workspace = true, features = ["serde", "v4", "v5"] }
 whoami = "2.0.2"
-xid = "1.0.0"
+xid = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 xattr = "1.0.0"
 
 [dev-dependencies]
 mockall = "0.14.0"
-rocksdb = "0.24.0"
-serial_test = "3.0.0"
+rocksdb = { workspace = true }
+serial_test = { workspace = true }

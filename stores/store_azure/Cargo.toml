@@ -1,20 +1,20 @@
 [package]
 name = "store_azure"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { workspace = true }
 azure_core = "1"
 azure_identity = "1"
 azure_storage_blob = "1"
 bytes = "1.0"
 futures = "0.3"
-md-5 = "0.11.0"
+md-5 = { workspace = true }
 store_core = { path = "../store_core" }
-tokio = { version = "1.46.1", features = ["fs", "rt-multi-thread", "time"] }
-xid = "1.0.3"
+tokio = { workspace = true, features = ["fs", "rt-multi-thread", "time"] }
+xid = { workspace = true }
 
 [dev-dependencies]
-dotenvy = "0.15.7"
-tempfile = "3.7.1"
+dotenvy = { workspace = true }
+tempfile = { workspace = true }

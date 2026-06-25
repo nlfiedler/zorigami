@@ -1,25 +1,25 @@
 [package]
 name = "store_google"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { workspace = true }
 base64 = "0.22.1"
 google-firestore1 = "7.0.0"
 google-storage1 = "7.0.0"
 http-body-util = "0.1.2"
-md-5 = "0.11.0"
+md-5 = { workspace = true }
 yup-oauth2 = { version = "12.1", features = ["service-account"] }
-serde = "1.0.182"
+serde = { workspace = true }
 store_core = { path = "../store_core" }
-thiserror = "2.0.7"
-tokio = { version = "1.46.1", features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
-uuid = { version = "1.1.2", features = ["v4"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "rt-multi-thread"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-dotenvy = "0.15.7"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
-serial_test = "3.0.0"
-tempfile = "3.7.1"
-xid = "1.0.0"
+dotenvy = { workspace = true }
+rustls = { workspace = true }
+serial_test = { workspace = true }
+tempfile = { workspace = true }
+xid = { workspace = true }

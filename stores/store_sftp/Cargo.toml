@@ -1,19 +1,19 @@
 [package]
 name = "store_sftp"
-version = "1.0.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = "1.0.55"
+anyhow = { workspace = true }
 ssh2 = "0.9.4"
 store_core = { path = "../store_core" }
 
 [dev-dependencies]
-dotenvy = "0.15.7"
-tempfile = "3.7.1"
+dotenvy = { workspace = true }
+tempfile = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-openssl = { version = "0.10" }
+openssl = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
+openssl = { workspace = true, features = ["vendored"] }
