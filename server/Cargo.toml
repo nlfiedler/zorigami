@@ -23,7 +23,7 @@ database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenvy = { workspace = true }
 env_logger = "0.11.0"
-exaf-rs = "2.0.0"
+exaf-rs = "3.1.0"
 fastcdc = "4.0.0"
 globset = "0.4.13"
 hashed-array-tree = "1.2.0"
@@ -48,7 +48,7 @@ store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-ulid = "1.1.2"
+ulid = "2.0.1"
 uuid = { workspace = true, features = ["serde", "v4", "v5"] }
 whoami = "2.0.2"
 xid = { workspace = true }
@@ -57,6 +57,6 @@ xid = { workspace = true }
 xattr = "1.0.0"
 
 [dev-dependencies]
-mockall = "0.14.0"
+mockall = "0.15.0"
 rocksdb = { workspace = true }
 serial_test = { workspace = true }

@@ -466,7 +466,7 @@ impl PackRepository for PackRepositoryImpl {
     fn store_database(&self, computer_id: &str, infile: &Path) -> Result<Vec<PackLocation>, Error> {
         // Use a ULID as the object name so they sort by time which will make
         // it easier to find the latest database archive later.
-        let object = ulid::Ulid::new().to_string();
+        let object = ulid::Ulid::r#gen().to_string();
         // Use a predictable bucket name so we can find it easily later.
         let bucket = computer_bucket_name(computer_id)?;
         let mut results: Vec<PackLocation> = Vec::new();
