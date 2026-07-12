@@ -329,7 +329,7 @@ fn should_run(
                     } else if backup.status != backup::Status::PAUSED {
                         // not error and not paused means it is still running
                         maybe_run = false;
-                        debug!("dataset {} already in progress", &dataset.id);
+                        debug!("dataset {} already in progress", dataset.id);
                     }
                 }
             }

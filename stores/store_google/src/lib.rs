@@ -406,7 +406,7 @@ impl GoogleStore {
         values.insert("renamed".into(), value);
         let name = format!(
             "projects/{}/databases/{}/documents/renames/{}",
-            &self.project, "(default)", original
+            self.project, "(default)", original
         );
         let document = firestore1::api::Document {
             fields: Some(values),
@@ -436,7 +436,7 @@ impl GoogleStore {
         let hub = self.connect_fire().await?;
         let name = format!(
             "projects/{}/databases/{}/documents/renames/{}",
-            &self.project, "(default)", original
+            self.project, "(default)", original
         );
         let fetch = hub.projects().databases_documents_get(&name).doit();
         let result = match timeout(METADATA_TIMEOUT, fetch).await {
@@ -481,7 +481,7 @@ impl GoogleStore {
             let hub = self.connect_fire().await?;
             let name = format!(
                 "projects/{}/databases/{}/documents/renames/{}",
-                &self.project, "(default)", original
+                self.project, "(default)", original
             );
             hub.projects()
                 .databases_documents_delete(&name)

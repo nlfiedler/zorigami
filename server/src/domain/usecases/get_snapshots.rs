@@ -25,14 +25,14 @@ impl super::UseCase<Vec<Snapshot>, Params> for GetSnapshots {
         let dataset = self
             .repo
             .get_dataset(&params.dataset)?
-            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", &params.dataset)))?;
+            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", params.dataset)))?;
         if let Some(mut digest) = dataset.snapshot {
             let mut snaps: Vec<Snapshot> = vec![];
             loop {
                 let snapshot = self
                     .repo
                     .get_snapshot(&digest)?
-                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", digest)))?;
                 snaps.push(snapshot.clone());
                 if let Some(parent) = snapshot.parent {
                     digest = parent;

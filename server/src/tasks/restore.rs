@@ -670,7 +670,7 @@ impl FileRestorer for FileRestorerImpl {
             debug!(
                 "assembling 1-chunk file {} from {:?}",
                 outfile.display(),
-                &saved_file
+                saved_file
             );
             assemble_chunks(&chunk_paths, &outfile)?;
         } else {
@@ -774,7 +774,7 @@ fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
     if &actual != digest {
         Err(anyhow!(format!(
             "pack digest does not match: {} != {}",
-            &actual, digest
+            actual, digest
         )))
     } else {
         Ok(())

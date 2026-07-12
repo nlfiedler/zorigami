@@ -229,7 +229,7 @@ impl BackuperImpl {
                     // continue from the previous incomplete backup
                     let parent_sha1 = snapshot.parent;
                     let current_sha1 = latest.to_owned();
-                    debug!("backup: continuing previous snapshot {}", &current_sha1);
+                    debug!("backup: continuing previous snapshot {}", current_sha1);
                     return self.continue_backup(request, dataset, parent_sha1, current_sha1);
                 }
             }
@@ -268,7 +268,7 @@ impl BackuperImpl {
                 let mut ds = dataset.clone();
                 ds.snapshot = Some(new_snapshot.clone());
                 self.dbase.put_dataset(&ds)?;
-                debug!("backup: starting new snapshot {}", &new_snapshot);
+                debug!("backup: starting new snapshot {}", new_snapshot);
                 self.continue_backup(request, dataset, latest_snapshot, new_snapshot)
             }
         }
@@ -344,7 +344,7 @@ impl BackuperImpl {
 
 impl Backuper for BackuperImpl {
     fn backup(&self, request: Request) -> Result<Option<entities::Checksum>, Error> {
-        info!("dataset {} to be backed up", &request.dataset);
+        info!("dataset {} to be backed up", request.dataset);
         let start_time = SystemTime::now();
         // reset any error state in the backup
         self.subscriber.restarted(&request.id);
@@ -355,10 +355,10 @@ impl Backuper for BackuperImpl {
                 let end_time = SystemTime::now();
                 let time_diff = end_time.duration_since(start_time);
                 let pretty_time = pretty_print_duration(time_diff);
-                info!("created new snapshot {}", &checksum);
+                info!("created new snapshot {}", checksum);
                 info!(
                     "dataset {} backup complete after {}",
-                    &dataset_id, pretty_time
+                    dataset_id, pretty_time
                 );
                 Ok(Some(checksum))
             }

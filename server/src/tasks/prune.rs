@@ -174,7 +174,7 @@ impl PrunerImpl {
             let snapshot = self
                 .repo
                 .get_snapshot(&digest)?
-                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", digest)))?;
             if let Some(parent) = snapshot.parent {
                 digest = parent;
             } else {
@@ -202,7 +202,7 @@ impl PrunerImpl {
             let snapshot = self
                 .repo
                 .get_snapshot(&digest)?
-                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", digest)))?;
             if snapshot.start_time < then {
                 break;
             }
@@ -223,7 +223,7 @@ impl PrunerImpl {
         let mut snapshot = self
             .repo
             .get_snapshot(&start)?
-            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &start)))?;
+            .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", start)))?;
         let mut maybe_parent = snapshot.parent.take();
         if maybe_parent.is_some() {
             self.repo.put_snapshot(&snapshot)?;
@@ -234,7 +234,7 @@ impl PrunerImpl {
             snapshot = self
                 .repo
                 .get_snapshot(&parent)?
-                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &parent)))?;
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", parent)))?;
             maybe_parent = snapshot.parent.take();
             let id = snapshot.digest.to_string();
             self.repo.delete_snapshot(&id)?;
@@ -279,7 +279,7 @@ impl PrunerImpl {
             let snapshot = self
                 .repo
                 .get_snapshot(&digest)?
-                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+                .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", digest)))?;
             let maybe_parent = snapshot.parent.clone();
             snapshots.insert(snapshot.digest.clone(), snapshot);
             if let Some(parent) = maybe_parent {
@@ -452,7 +452,7 @@ impl PrunerImpl {
                         _ => (),
                     }
                     // xattrs of this entry are all reachable
-                    for (_, xd) in entry.xattrs.iter() {
+                    for xd in entry.xattrs.values() {
                         xattrs.remove(&xd.to_string());
                     }
                 }
@@ -487,7 +487,7 @@ impl PrunerImpl {
                 match parent {
                     Some(parent_digest) => {
                         snapshot = self.repo.get_snapshot(&parent_digest)?.ok_or_else(|| {
-                            anyhow!(format!("missing snapshot: {:?}", &parent_digest))
+                            anyhow!(format!("missing snapshot: {:?}", parent_digest))
                         })?;
                     }
                     None => break,
@@ -803,11 +803,11 @@ impl Pruner for PrunerImpl {
         let dataset = self
             .repo
             .get_dataset(&request.dataset)?
-            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", &request.dataset)))?;
+            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", request.dataset)))?;
         let latest_hash = dataset
             .snapshot
             .clone()
-            .ok_or_else(|| anyhow!(format!("no snapshots for dataset: {:?}", &request.dataset)))?;
+            .ok_or_else(|| anyhow!(format!("no snapshots for dataset: {:?}", request.dataset)))?;
         let pruned_count = match dataset.retention {
             SnapshotRetention::ALL => {
                 info!("will retain all snapshots for dataset {}", dataset.id);

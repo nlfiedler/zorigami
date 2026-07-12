@@ -27,7 +27,7 @@ impl super::UseCase<SnapshotCount, Params> for CountSnapshots {
         let dataset = self
             .repo
             .get_dataset(&params.dataset)?
-            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", &params.dataset)))?;
+            .ok_or_else(|| anyhow!(format!("missing dataset: {:?}", params.dataset)))?;
         if let Some(latest_hash) = dataset.snapshot {
             let mut visited = 1;
             let mut digest = latest_hash;
@@ -37,7 +37,7 @@ impl super::UseCase<SnapshotCount, Params> for CountSnapshots {
                 let snapshot = self
                     .repo
                     .get_snapshot(&digest)?
-                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", &digest)))?;
+                    .ok_or_else(|| anyhow!(format!("missing snapshot: {:?}", digest)))?;
                 if newest.is_none() {
                     newest = snapshot.end_time.or(Some(snapshot.start_time));
                 }
