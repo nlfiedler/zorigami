@@ -66,6 +66,11 @@ pub struct GoogleStore {
     project: String,
     region: Option<String>,
     storage: Option<String>,
+    // Object-lock (WORM) window in days. Zero means no lock, preserving the
+    // pre-immutability behavior. When positive, buckets are created with object
+    // retention enabled and every uploaded object is given a locked per-object
+    // retention of this many days.
+    lock_days: u16,
 }
 
 impl GoogleStore {
@@ -85,6 +90,7 @@ impl GoogleStore {
             project: project.to_owned(),
             region,
             storage,
+            lock_days: store_core::lock_days_from_props(props),
         })
     }
 
@@ -180,8 +186,39 @@ impl GoogleStore {
     ) -> Result<Coordinates, Error> {
         let hub = self.connect().await?;
         // the bucket must exist before receiving objects
-        create_bucket(&hub, &self.project, bucket, &self.region, &self.storage).await?;
-        let req = storage1::api::Object::default();
+        let already_existed = create_bucket(
+            &hub,
+            &self.project,
+            bucket,
+            &self.region,
+            &self.storage,
+            self.lock_days > 0,
+        )
+        .await?;
+        // Object retention can only be enabled at bucket creation. A bucket
+        // zorigami just created (when locked) already has it enabled; only a
+        // pre-existing bucket needs verifying, so per-object retention is not
+        // silently rejected at upload time. Restricting the check to the
+        // already-existing case mirrors the S3 store and avoids both a redundant
+        // metadata round-trip per upload and clobbering the bucket-collision
+        // retry: a foreign-owned bucket surfaces here as a CollisionError so
+        // store_pack renames and retries (see ensure_object_retention_enabled).
+        if self.lock_days > 0 && already_existed {
+            ensure_object_retention_enabled(&hub, bucket).await?;
+        }
+        let mut req = storage1::api::Object::default();
+        // When object lock is configured, give the object a locked per-object
+        // retention. In "Locked" mode the retain-until cannot be shortened or
+        // removed until it passes; the pruner defers reclamation of locked
+        // stores to a bucket lifecycle rule.
+        if self.lock_days > 0 {
+            req.retention = Some(storage1::api::ObjectRetention {
+                mode: Some("Locked".to_owned()),
+                retain_until_time: Some(chrono::DateTime::<chrono::Utc>::from(
+                    store_core::lock_retain_until(self.lock_days),
+                )),
+            });
+        }
         let infile = std::fs::File::open(packfile)?;
         let mimetype = "application/octet-stream"
             .parse()
@@ -232,23 +269,15 @@ impl GoogleStore {
                 }
                 Ok(Coordinates::new(&self.store_id, bucket, object))
             }
-            Err(error) => match &error {
-                // detect the case of a bucket that exists but belongs to
-                // another project, in which case we are forbidden to write to
-                // that bucket
-                storage1::Error::BadRequest(value) => {
-                    if let Some(object) = value.as_object()
-                        && let Some(errobj) = object.get("error")
-                        && let Some(code) = errobj.get("code")
-                        && let Some(num) = code.as_u64()
-                        && num == 403
-                    {
-                        return Err(Error::from(CollisionError {}));
-                    }
+            Err(error) => {
+                // a 403 means the bucket exists but belongs to another project,
+                // so we are forbidden to write to it; recover by renaming
+                if is_foreign_bucket_403(&error) {
+                    Err(Error::from(CollisionError {}))
+                } else {
                     Err(anyhow!(format!("{:?}", error)))
                 }
-                _ => Err(anyhow!(format!("{:?}", error))),
-            },
+            }
         }
     }
 
@@ -574,14 +603,36 @@ impl GoogleStore {
     }
 }
 
-/// Ensure the named bucket exists.
+/// Return true if the error is a 403 indicating the bucket exists but is owned
+/// by another project — a name collision we recover from by renaming.
+fn is_foreign_bucket_403(error: &storage1::Error) -> bool {
+    if let storage1::Error::BadRequest(value) = error
+        && let Some(object) = value.as_object()
+        && let Some(errobj) = object.get("error")
+        && let Some(code) = errobj.get("code")
+        && let Some(num) = code.as_u64()
+    {
+        num == 403
+    } else {
+        false
+    }
+}
+
+/// Ensure the named bucket exists, returning `true` if it already existed.
+///
+/// When `object_retention` is set, the bucket is created with object retention
+/// enabled. Object retention can only be turned on at bucket creation, so this
+/// is the sole opportunity to do so; a freshly created bucket therefore already
+/// has it, while an already-existing bucket (return value `true`) must have its
+/// retention configuration verified by the caller.
 async fn create_bucket(
     hub: &storage1::Storage<HttpsConnector<HttpConnector>>,
     project_id: &str,
     name: &str,
     region: &Option<String>,
     storage_class: &Option<String>,
-) -> Result<(), Error> {
+    object_retention: bool,
+) -> Result<bool, Error> {
     let req = storage1::api::Bucket {
         location: region.to_owned(),
         name: Some(name.to_owned()),
@@ -592,7 +643,11 @@ async fn create_bucket(
     // but may possibly be owned by some other project. Raw `timeout(...)` is
     // used here (rather than `with_deadline`) because the inner match needs
     // to inspect the typed `storage1::Error` to detect that 409 case below.
-    let insert_fut = hub.buckets().insert(req, project_id).doit();
+    let mut call = hub.buckets().insert(req, project_id);
+    if object_retention {
+        call = call.enable_object_retention(true);
+    }
+    let insert_fut = call.doit();
     let insert_result = match timeout(METADATA_TIMEOUT, insert_fut).await {
         Ok(r) => r,
         Err(_) => {
@@ -612,14 +667,64 @@ async fn create_bucket(
                     && let Some(num) = code.as_u64()
                     && num == 409
                 {
-                    return Ok(());
+                    // 409: the bucket already exists (possibly in another
+                    // project); it was not created by this call.
+                    return Ok(true);
                 }
                 return Err(anyhow!(format!("{:?}", error)));
             }
             _ => return Err(anyhow!(format!("{:?}", error))),
         }
     }
-    Ok(())
+    Ok(false)
+}
+
+/// Verify a pre-existing bucket has object retention enabled.
+///
+/// Object retention can only be turned on at bucket creation, so a store that
+/// has `lock_days` set but points at a bucket created without it would otherwise
+/// fail every upload with an opaque error. Fail fast with an actionable message
+/// instead. A bucket with retention enabled reports `objectRetention.mode` as
+/// "Enabled"; its absence means retention is not enabled.
+async fn ensure_object_retention_enabled(
+    hub: &storage1::Storage<HttpsConnector<HttpConnector>>,
+    bucket: &str,
+) -> Result<(), Error> {
+    let get_fut = hub.buckets().get(bucket).doit();
+    let (_, bkt) = match timeout(METADATA_TIMEOUT, get_fut).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            // A 403 here means the bucket is owned by another project; surface
+            // it as a collision so store_pack renames and retries rather than
+            // aborting the backup on a recoverable name clash.
+            if is_foreign_bucket_403(&e) {
+                return Err(Error::from(CollisionError {}));
+            }
+            return Err(anyhow!(format!("{:?}", e)));
+        }
+        Err(_) => {
+            return Err(anyhow!(
+                "get bucket timed out after {:?} for {}",
+                METADATA_TIMEOUT,
+                bucket
+            ));
+        }
+    };
+    let enabled = bkt
+        .object_retention
+        .as_ref()
+        .and_then(|r| r.mode.as_deref())
+        .map(|m| m.eq_ignore_ascii_case("enabled"))
+        .unwrap_or(false);
+    if enabled {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "bucket {} does not have object retention enabled; a store with lock_days \
+             requires buckets created with object retention (see doc/DEPLOY.md)",
+            bucket
+        ))
+    }
 }
 
 /// Compute the MD5 digest of the given file.
@@ -700,6 +805,48 @@ mod tests {
         properties.insert("storage".to_owned(), "nearline".to_owned());
         let result = GoogleStore::new("google123", &properties);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn test_google_object_lock() -> Result<(), Error> {
+        // Opt-in only: a locked per-object retention cannot be removed until it
+        // expires, so this test necessarily leaves an undeletable object (and
+        // its bucket) behind for the lock window. Run it against a throwaway GCS
+        // project by setting GOOGLE_OBJECT_LOCK=1 alongside the usual GOOGLE_*
+        // variables.
+        ensure_crypto_provider();
+        dotenv().ok();
+        // gate on the opt-in flag first, then fall through to the usual creds
+        let creds_var = env::var("GOOGLE_OBJECT_LOCK").and(env::var("GOOGLE_CREDENTIALS"));
+        if creds_var.is_err() {
+            return Ok(());
+        }
+        let credentials = creds_var?;
+        let project_id = env::var("GOOGLE_PROJECT_ID")?;
+        let region = env::var("GOOGLE_REGION")?;
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("credentials".to_owned(), credentials);
+        properties.insert("project".to_owned(), project_id);
+        properties.insert("storage".to_owned(), "STANDARD".to_owned());
+        properties.insert("region".to_owned(), region);
+        properties.insert("lock_days".to_owned(), "1".to_owned());
+        let source = GoogleStore::new("googlelock", &properties)?;
+
+        // storing a pack must create a retention-enabled bucket and attach the
+        // locked per-object retention without error
+        let bucket = xid::new().to_string();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // the object is present in the retention-enabled bucket
+        let listing = source.list_objects_sync(&bucket)?;
+        assert!(listing.contains(&object));
+        Ok(())
     }
 
     #[test]

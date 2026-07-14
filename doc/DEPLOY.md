@@ -199,38 +199,42 @@ Object lock is configured per store with a single property, **lock_days**:
   principal — not even the cloud account root — can delete or overwrite the
   object before its retention expires.
 
-Currently supported on the **Amazon S3**, **MinIO**, and **Azure Blob Storage**
-stores. The SFTP and local stores have no WORM primitive and are explicitly
-_unprotected_; setting `lock_days` on any store other than Amazon, MinIO, or
-Azure is rejected.
+Currently supported on the **Amazon S3**, **MinIO**, **Azure Blob Storage**, and
+**Google Cloud Storage** stores. The SFTP and local stores have no WORM primitive
+and are explicitly _unprotected_; setting `lock_days` on any store other than
+Amazon, MinIO, Azure, or Google is rejected.
 
-On Azure the lock is implemented as a **locked, time-based immutability policy**
-on each blob, which is Azure's compliance-grade WORM equivalent (it cannot be
-shortened or removed before it expires).
+The mechanism per backend: S3/MinIO use compliance-mode Object Lock; Azure uses a
+**locked, time-based immutability policy** on each blob; Google uses a **locked
+per-object retention** (`retention.mode = Locked`). All three are compliance-grade:
+the lock cannot be shortened or removed before it expires.
 
 ### Requirements and constraints
 
 - **The lock capability must be provisioned before use.** On **S3/MinIO** this is
-  Object Lock, which can only be enabled when a bucket is created (and also enables
-  versioning); zorigami turns it on automatically for the buckets it creates once
-  `lock_days > 0`, so an object-locking store should start from freshly created
-  buckets. On **Azure** this is _version-level immutability_ (immutable storage with
-  versioning), which is an account/container provisioning step that the blob API
-  cannot enable — turn it on for the storage account (or container) out of band
-  first. In both cases, if zorigami finds an existing bucket/container that lacks
-  the capability, it fails the upload immediately with an actionable error rather
-  than silently uploading unprotected objects.
-- **A storage lifecycle rule is required to reclaim space.** Because these
-  immutability models entail versioning, zorigami does **not** delete locked pack
-  objects itself — an app-issued delete cannot remove a still-locked version (on
-  S3 it merely writes a delete marker; on Azure the base-blob delete retains the
-  prior versions). Reclamation is therefore delegated to a storage lifecycle rule
-  that expires object versions after they age out of the lock window: on S3, a
-  lifecycle rule expiring current + noncurrent versions and expired delete
-  markers; on Azure, a lifecycle-management rule expiring blob **versions** (Azure
-  has no delete-marker concept). Without such a rule, aged-out locked objects
-  accumulate and are never reclaimed. The pruner leaves the pack records for
-  locked stores in place rather than claiming a deletion it did not perform.
+  Object Lock, and on **Google** it is object retention: both can only be enabled
+  when a bucket is created, and zorigami turns them on automatically for the buckets
+  it creates once `lock_days > 0`, so an object-locking store should start from
+  freshly created buckets. (S3 Object Lock also enables versioning; Google object
+  retention does not.) On **Azure** the capability is _version-level immutability_
+  (immutable storage with versioning), which is an account/container provisioning
+  step that the blob API cannot enable — turn it on for the storage account (or
+  container) out of band first. In all cases, if zorigami finds an existing
+  bucket/container that lacks the capability, it fails the upload immediately with
+  an actionable error rather than silently uploading unprotected objects.
+- **A storage lifecycle rule is required to reclaim space.** zorigami does **not**
+  delete locked pack objects itself — an app-issued delete cannot remove a
+  still-locked object, and on the versioned backends it would not truly reclaim
+  space even once unlocked (on S3 a delete merely writes a delete marker; on Azure
+  a base-blob delete retains prior versions). Reclamation is therefore delegated to
+  a storage lifecycle rule that expires objects after they age out of the lock
+  window: on **S3**, a rule expiring current + noncurrent versions and expired
+  delete markers; on **Azure**, a lifecycle-management rule expiring blob
+  **versions** (Azure has no delete-marker concept); on **Google**, an Object
+  Lifecycle Management rule with an age condition (retention is honored, so locked
+  objects are not deleted early). Without such a rule, aged-out locked objects
+  accumulate and are never reclaimed. The pruner leaves the pack records for locked
+  stores in place rather than claiming a deletion it did not perform.
 - **lock_days must be ≥ the store's pack retention (DAYS).** zorigami rejects a
   store whose `lock_days` is shorter than its `PackRetention::DAYS` value, so the
   lock never outlives the point at which a pack ages out. With retention set to
@@ -276,3 +280,10 @@ shortened or removed before it expires).
     on a versioned account a non-locked store's pruning cannot truly reclaim space (a
     base-blob delete leaves prior versions behind). Keep object-locked stores in their
     own account, governed by a lifecycle rule as above.
+- **Google Cloud Storage** — no extra console steps beyond the
+  [Google Cloud Setup](#google-cloud-setup) above; set `lock_days` on the store and
+  let zorigami create the bucket with object retention enabled. Each uploaded object
+  gets a locked per-object retention. Object retention does not enable versioning, so
+  a straightforward Object Lifecycle Management rule (age-based deletion) reclaims
+  space once the retention expires. The service account still needs permission to
+  create buckets and objects (see the Google setup above).

@@ -721,13 +721,16 @@ impl PrunerImpl {
     // config emits one issue per run rather than one per referencing pack.
     // Returns `true` iff at least one location was successfully deleted.
     //
-    // Object-locked stores (`lock_days > 0`) are deliberately skipped: their
-    // buckets are versioned, so an app-issued `delete_object` only writes a
-    // delete marker and cannot remove the still-locked version. Rather than
-    // claim a deletion we did not perform (and drop the pack record for an
-    // object that physically remains), reclamation for those stores is
-    // delegated to a bucket lifecycle rule that expires versions after the
-    // lock window (see doc/DEPLOY.md). Their locations are retained here.
+    // Object-locked stores (`lock_days > 0`) are deliberately skipped: a
+    // still-locked object cannot be deleted at all, and on the versioned
+    // backends (S3 Object Lock, Azure version-level immutability) even a
+    // post-expiry app delete would not truly reclaim space — it leaves a delete
+    // marker / prior version behind. (Google object retention is not versioned,
+    // so a post-expiry delete would reclaim, but the same skip is applied
+    // uniformly.) Rather than claim a deletion we did not perform, and drop the
+    // pack record for an object that physically remains, reclamation for locked
+    // stores is delegated to a storage lifecycle rule that expires objects
+    // after the lock window (see doc/DEPLOY.md). Their locations are retained.
     //
     // The tuple in `store_map` carries the store's `lock_days` parsed once when
     // the map was built, so it is not re-parsed per pack or per location.

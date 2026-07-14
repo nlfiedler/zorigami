@@ -261,6 +261,29 @@ mod tests {
     }
 
     #[test]
+    fn test_update_store_lock_on_google_ok() {
+        // Google Cloud Storage supports object lock (per-object retention), so a
+        // lock_days >= retention config on a google store is accepted.
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store().returning(|_| Ok(None));
+        mock.expect_put_store().returning(|_| Ok(()));
+        let usecase = UpdateStore::new(Box::new(mock));
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("credentials".to_owned(), "/etc/creds.json".to_owned());
+        properties.insert("project".to_owned(), "zorigami-test".to_owned());
+        properties.insert("lock_days".to_owned(), "20".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "google".to_owned(),
+            label: "locked google".to_owned(),
+            properties,
+            retention: PackRetention::DAYS(20),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+    }
+
+    #[test]
     fn test_update_store_lock_reduction_rejected() {
         // The existing store is locked at 30 days; an update that drops the
         // window to 7 (still >= retention, so validate() passes) must be
