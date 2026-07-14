@@ -275,11 +275,13 @@ impl Store {
     ///
     /// This enforces the object-lock (WORM) invariants:
     /// - `lock_days` must be a non-negative integer.
-    /// - Object lock is only supported on the S3-compatible backends (Amazon,
-    ///   MinIO); enabling it elsewhere would silently have no effect.
-    /// - The lock window must be at least as long as the pack retention window.
-    ///   Otherwise the pruner would try to delete objects that are still under
-    ///   retention, so pack pruning would wedge forever. See
+    /// - Object lock is only supported on the backends that implement it
+    ///   (Amazon, MinIO, Azure); enabling it elsewhere would silently have no
+    ///   effect.
+    /// - The lock window must be at least as long as the pack retention window,
+    ///   so the storage-side lock outlives the point at which a pack ages out
+    ///   and reclamation (delegated to a bucket lifecycle rule for locked
+    ///   stores) stays aligned with the logical retention. See
     ///   `doc/specs/0009-Ransomware-Protection.md`.
     pub fn validate(&self) -> Result<(), Error> {
         let lock_days = match self.properties.get(store_core::LOCK_DAYS_PROPERTY) {
@@ -297,7 +299,7 @@ impl Store {
             return Ok(());
         }
         match self.store_type {
-            StoreType::AMAZON | StoreType::MINIO => {}
+            StoreType::AMAZON | StoreType::AZURE | StoreType::MINIO => {}
             other => {
                 return Err(anyhow!(
                     "object lock ({}) is not supported for {} stores",

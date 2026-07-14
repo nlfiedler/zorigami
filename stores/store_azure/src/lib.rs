@@ -4,11 +4,13 @@
 use anyhow::{Error, anyhow};
 use azure_core::credentials::{Secret, TokenCredential};
 use azure_core::http::{RequestContent, Url};
+use azure_core::time::OffsetDateTime;
 use azure_identity::ClientSecretCredential;
 use azure_storage_blob::models::{
     AccessTier, BlobClientDeleteOptions, BlobContainerClientCreateOptions,
-    BlobContainerClientDeleteOptions, BlockBlobClientCommitBlockListOptions,
-    BlockBlobClientStageBlockOptions, BlockLookupList,
+    BlobContainerClientDeleteOptions, BlobContainerClientGetPropertiesOptions,
+    BlobContainerClientGetPropertiesResultHeaders, BlockBlobClientCommitBlockListOptions,
+    BlockBlobClientStageBlockOptions, BlockLookupList, ImmutabilityPolicyMode,
 };
 use azure_storage_blob::{BlobContainerClient, BlobServiceClient, BlobServiceClientOptions};
 use futures::StreamExt;
@@ -62,6 +64,11 @@ pub struct AzureStore {
     client_secret: String,
     access_tier: Option<AccessTier>,
     custom_uri: Option<String>,
+    // Object-lock (WORM) window in days. Zero means no lock, preserving the
+    // pre-immutability behavior. When positive, every uploaded blob is written
+    // under a locked, time-based immutability policy of this many days, which
+    // requires the container to have version-level immutability enabled.
+    lock_days: u16,
 }
 
 impl AzureStore {
@@ -107,6 +114,7 @@ impl AzureStore {
             client_secret: client_secret.to_owned(),
             custom_uri: custom_uri.cloned(),
             access_tier,
+            lock_days: store_core::lock_days_from_props(props),
         })
     }
 
@@ -156,6 +164,14 @@ impl AzureStore {
         let service = self.service_client()?;
         let container_client = service.blob_container_client(bucket);
         create_container(&container_client).await?;
+        // Blob-level immutability requires the container to have version-level
+        // immutability (WORM) enabled, which cannot be turned on through the
+        // data-plane container API — it is an account/container provisioning
+        // step. Verify it up front so a misconfigured store fails with an
+        // actionable error rather than an opaque commit rejection.
+        if self.lock_days > 0 {
+            ensure_versioning_immutability_enabled(&container_client, bucket).await?;
+        }
         //
         // Process the pack file by uploading it in 8mb chunks as "blocks", then
         // assembling the "blob" from the list of blocks ("block list"). Blocks
@@ -212,10 +228,19 @@ impl AzureStore {
             latest: Some(block_ids),
             uncommitted: None,
         };
-        let commit_options = BlockBlobClientCommitBlockListOptions {
+        let mut commit_options = BlockBlobClientCommitBlockListOptions {
             tier: self.access_tier.clone(),
             ..Default::default()
         };
+        // When object lock is configured, commit the blob under a locked,
+        // time-based immutability policy. In "Locked" mode the policy cannot be
+        // shortened or removed until the expiry passes; the pruner defers
+        // reclamation of locked stores to a lifecycle rule.
+        if self.lock_days > 0 {
+            commit_options.immutability_policy_expiry =
+                Some(OffsetDateTime::from(store_core::lock_retain_until(self.lock_days)));
+            commit_options.immutability_policy_mode = Some(ImmutabilityPolicyMode::Locked);
+        }
         with_deadline(
             &format!("put_block_list {}/{}", bucket, object),
             TRANSFER_TIMEOUT,
@@ -418,6 +443,42 @@ async fn create_container(client: &BlobContainerClient) -> Result<(), Error> {
     }
 }
 
+/// Verify the container has version-level immutability (WORM) enabled.
+///
+/// Blob-level immutability policies can only be applied when the container (or
+/// its storage account) was provisioned with version-level immutability. That
+/// is a management-plane/account setting the data-plane container API cannot
+/// enable, so a store with `lock_days` pointed at a container without it would
+/// otherwise fail every upload with an opaque error. Fail fast with an
+/// actionable message instead.
+async fn ensure_versioning_immutability_enabled(
+    client: &BlobContainerClient,
+    bucket: &str,
+) -> Result<(), Error> {
+    let props = with_deadline("get_container_properties", METADATA_TIMEOUT, async {
+        client
+            .get_properties(None::<BlobContainerClientGetPropertiesOptions>)
+            .await
+            .map_err(Error::from)
+    })
+    .await?;
+    let enabled = props
+        .is_immutable_storage_with_versioning_enabled()
+        .ok()
+        .flatten()
+        .unwrap_or(false);
+    if enabled {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "container {} does not have version-level immutability (WORM) enabled; \
+             a store with lock_days requires it enabled on the storage account or \
+             container (see doc/DEPLOY.md)",
+            bucket
+        ))
+    }
+}
+
 /// Run the given future on a newly created single-threaded runtime if possible,
 /// otherwise raise an error if this thread already has a runtime.
 fn block_on<F: std::future::Future>(future: F) -> Result<F::Output, Error> {
@@ -578,6 +639,54 @@ mod tests {
             }
             source.delete_bucket_sync(&bucket)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_azure_object_lock() -> Result<(), Error> {
+        // Opt-in only: a locked immutability policy cannot be removed until it
+        // expires, so this test leaves an undeletable blob (and its container)
+        // behind for the lock window. It also requires a storage account (or
+        // container) provisioned with version-level immutability. Run it by
+        // setting AZURE_OBJECT_LOCK=1 alongside the usual AZURE_* variables and
+        // pointing at such an account.
+        dotenv().ok();
+        if env::var("AZURE_OBJECT_LOCK").is_err() {
+            return Ok(());
+        }
+        let tenant_id = match env::var("AZURE_TENANT_ID") {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+        let account = env::var("AZURE_STORAGE_ACCOUNT")?;
+        let client_id = env::var("AZURE_CLIENT_ID")?;
+        let client_secret = env::var("AZURE_CLIENT_SECRET")?;
+        let custom_uri = env::var("AZURE_STORAGE_URI");
+
+        // arrange: a store configured with a one-day locked immutability policy
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("account".to_owned(), account);
+        properties.insert("tenant_id".to_owned(), tenant_id);
+        properties.insert("client_id".to_owned(), client_id);
+        properties.insert("client_secret".to_owned(), client_secret);
+        if let Ok(uri) = custom_uri {
+            properties.insert("custom_uri".to_owned(), uri);
+        }
+        properties.insert("lock_days".to_owned(), "1".to_owned());
+        let source = AzureStore::new("azurelock", &properties)?;
+
+        // storing a pack must verify version-level immutability, then commit
+        // the blob under the locked policy without error
+        let bucket = xid::new().to_string();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // the object is present in the container
+        let listing = source.list_objects_sync(&bucket)?;
+        assert!(listing.contains(&object));
         Ok(())
     }
 
