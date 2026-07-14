@@ -5,11 +5,41 @@
 //! Defines the traits and types for all pack stores.
 
 use anyhow::Error;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+/// Store property key selecting the object-lock (WORM) window, in days.
+///
+/// Absent, empty, `0`, or an unparseable value all mean "no lock", preserving
+/// the pre-immutability behavior. See `lock_days_from_props`.
+pub const LOCK_DAYS_PROPERTY: &str = "lock_days";
+
+/// Parse the object-lock window (in days) from a store's `properties` map.
+///
+/// This is the lenient reader used on the hot paths (upload and pruning): any
+/// absent, empty, or malformed value yields `0` (no lock). Values are validated
+/// strictly at store create/update time, so a malformed value should not reach
+/// here in practice; treating it as "no lock" is the safe fallback.
+pub fn lock_days_from_props(props: &HashMap<String, String>) -> u16 {
+    props
+        .get(LOCK_DAYS_PROPERTY)
+        .and_then(|s| s.trim().parse::<u16>().ok())
+        .unwrap_or(0)
+}
+
+/// Compute the object-lock retain-until instant: `lock_days` from now.
+///
+/// Returned as a `SystemTime` so this stays free of any storage SDK; callers
+/// convert to their backend's timestamp type. The store fixes this absolute
+/// value at upload time, so later changes to `lock_days` do not alter objects
+/// already written.
+pub fn lock_retain_until(lock_days: u16) -> std::time::SystemTime {
+    std::time::SystemTime::now() + std::time::Duration::from_secs(lock_days as u64 * 24 * 60 * 60)
+}
 
 ///
 /// Return the last part of the path, converting to a String.
@@ -124,5 +154,35 @@ mod tests {
         assert_eq!(md5sum, "5eb63bbbe01eeed093cb22bb8f5acdc3");
         #[cfg(target_family = "windows")]
         assert_eq!(md5sum, "5eb63bbbe01eeed093cb22bb8f5acdc3");
+    }
+
+    #[test]
+    fn test_lock_days_from_props() {
+        let mut props: HashMap<String, String> = HashMap::new();
+        // absent -> 0
+        assert_eq!(lock_days_from_props(&props), 0);
+        // explicit zero -> 0
+        props.insert(LOCK_DAYS_PROPERTY.to_owned(), "0".to_owned());
+        assert_eq!(lock_days_from_props(&props), 0);
+        // normal value, tolerating surrounding whitespace
+        props.insert(LOCK_DAYS_PROPERTY.to_owned(), " 30 ".to_owned());
+        assert_eq!(lock_days_from_props(&props), 30);
+        // empty -> 0
+        props.insert(LOCK_DAYS_PROPERTY.to_owned(), "".to_owned());
+        assert_eq!(lock_days_from_props(&props), 0);
+        // malformed -> 0 (validation rejects these at write time)
+        props.insert(LOCK_DAYS_PROPERTY.to_owned(), "notanumber".to_owned());
+        assert_eq!(lock_days_from_props(&props), 0);
+    }
+
+    #[test]
+    fn test_lock_retain_until() {
+        use std::time::{Duration, SystemTime};
+        let before = SystemTime::now();
+        let retain = lock_retain_until(2);
+        // the retain-until must be at least ~2 days out, and no more than a
+        // hair over 2 days from the moment we sampled `before`
+        assert!(retain >= before + Duration::from_secs(2 * 24 * 60 * 60));
+        assert!(retain <= SystemTime::now() + Duration::from_secs(2 * 24 * 60 * 60 + 5));
     }
 }

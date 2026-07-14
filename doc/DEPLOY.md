@@ -182,3 +182,66 @@ How to create a new project and get the service account credentials file.
 1. Click on the _Actions_ 3-dot button (next to the new account) and select _Manage keys_
 1. Open the **Add key** dropdown and choose _Create new key_
 1. Choose _JSON_ and click **Create** button
+
+## Immutable Backups (Object Lock / WORM)
+
+Immutable backups defend against a ransomware scenario in which the machine
+running the zorigami server is compromised: even with full store credentials,
+an attacker cannot delete or overwrite pack objects that are under a storage-side
+retention lock until that lock expires. This is _Tier 1_ of
+[the ransomware protection plan](specs/0009-Ransomware-Protection.md).
+
+Object lock is configured per store with a single property, **lock_days**:
+
+- **lock_days** — the number of days each uploaded pack (and database archive)
+  is held under a compliance-mode object-lock retention. Absent or `0` means no
+  lock (the default; existing stores are unaffected). Compliance mode means no
+  principal — not even the cloud account root — can delete or overwrite the
+  object before its retention expires.
+
+Currently supported on the **Amazon S3** and **MinIO** stores only. The SFTP and
+local stores have no WORM primitive and are explicitly _unprotected_; setting
+`lock_days` on any store other than Amazon or MinIO is rejected.
+
+### Requirements and constraints
+
+- **New buckets only.** Object Lock must be enabled when a bucket is created and
+  cannot be added to an existing bucket. zorigami enables it automatically on the
+  buckets it creates once `lock_days > 0`, so a store using object lock should
+  start from freshly created buckets. If it finds an existing bucket that lacks
+  Object Lock, it fails the upload immediately with an actionable error rather
+  than silently uploading unprotected objects. (Enabling Object Lock also enables
+  versioning on the bucket.)
+- **A bucket lifecycle rule is required to reclaim space.** Because the bucket is
+  versioned, zorigami does **not** delete locked pack objects itself — an
+  app-issued delete on a versioned bucket only writes a delete marker and cannot
+  remove the still-locked version. Reclamation is therefore delegated to a storage
+  lifecycle rule that expires object versions after they age out of the lock
+  window (e.g. an S3 lifecycle rule expiring current versions, plus expiring
+  noncurrent versions / expired delete markers). Without such a rule, aged-out
+  locked objects accumulate and are never reclaimed. The pruner leaves the pack
+  records for locked stores in place rather than claiming a deletion it did not
+  perform.
+- **lock_days must be ≥ the store's pack retention (DAYS).** zorigami rejects a
+  store whose `lock_days` is shorter than its `PackRetention::DAYS` value, so the
+  lock never outlives the point at which a pack ages out. With retention set to
+  `ALL` (never prune), any `lock_days` is accepted.
+- **Compliance mode is unforgiving.** A mistaken `lock_days` cannot be shortened
+  for objects already written — they remain locked for the full window. Choose the
+  value deliberately; it is a direct cost/rigidity trade-off, since locked objects
+  cannot be deleted early no matter what.
+- **lock_days cannot be reduced for a locked store.** Because `lock_days` lives in
+  the free-form store properties, an update that omitted it would silently drop
+  protection for future packs. zorigami rejects an update that lowers or removes
+  `lock_days` on a store that currently has it set; raise it freely, but a
+  reduction must be a deliberate, explicit change (and does not affect objects
+  already written).
+
+### Setup notes
+
+- **Amazon S3** — no extra console steps beyond the
+  [Amazon S3 Setup](#amazon-s3-setup) above; set `lock_days` on the store and let
+  zorigami create lock-enabled buckets. (Credential separation so the backup
+  identity cannot delete at all is _Tier 2_ and is not yet implemented.)
+- **MinIO** — the deployment must run a MinIO/S3-compatible server that honors S3
+  Object Lock. Verify against your specific server before relying on it.

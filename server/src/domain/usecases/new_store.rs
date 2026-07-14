@@ -30,6 +30,7 @@ impl super::UseCase<Store, Params> for NewStore {
             properties: params.properties,
             retention: PackRetention::ALL,
         };
+        store.validate()?;
         self.repo.put_store(&store)?;
         Ok(store)
     }

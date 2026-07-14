@@ -269,6 +269,57 @@ impl std::hash::Hash for Store {
     }
 }
 
+impl Store {
+    /// Validate the store configuration, rejecting settings that would be
+    /// unsafe or non-functional.
+    ///
+    /// This enforces the object-lock (WORM) invariants:
+    /// - `lock_days` must be a non-negative integer.
+    /// - Object lock is only supported on the S3-compatible backends (Amazon,
+    ///   MinIO); enabling it elsewhere would silently have no effect.
+    /// - The lock window must be at least as long as the pack retention window.
+    ///   Otherwise the pruner would try to delete objects that are still under
+    ///   retention, so pack pruning would wedge forever. See
+    ///   `doc/specs/0009-Ransomware-Protection.md`.
+    pub fn validate(&self) -> Result<(), Error> {
+        let lock_days = match self.properties.get(store_core::LOCK_DAYS_PROPERTY) {
+            None => 0,
+            Some(value) if value.trim().is_empty() => 0,
+            Some(value) => value.trim().parse::<u16>().map_err(|_| {
+                anyhow!(
+                    "{} must be a non-negative integer: {}",
+                    store_core::LOCK_DAYS_PROPERTY,
+                    value
+                )
+            })?,
+        };
+        if lock_days == 0 {
+            return Ok(());
+        }
+        match self.store_type {
+            StoreType::AMAZON | StoreType::MINIO => {}
+            other => {
+                return Err(anyhow!(
+                    "object lock ({}) is not supported for {} stores",
+                    store_core::LOCK_DAYS_PROPERTY,
+                    other
+                ));
+            }
+        }
+        if let PackRetention::DAYS(days) = self.retention
+            && lock_days < days
+        {
+            return Err(anyhow!(
+                "{} ({}) must be >= pack retention days ({})",
+                store_core::LOCK_DAYS_PROPERTY,
+                lock_days,
+                days
+            ));
+        }
+        Ok(())
+    }
+}
+
 ///
 /// Policy dictating how many snapshots to retain.
 ///

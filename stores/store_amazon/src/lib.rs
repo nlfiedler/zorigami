@@ -20,7 +20,10 @@ use aws_sdk_dynamodb::types::{
 use aws_sdk_s3::error::ProvideErrorMetadata;
 use aws_sdk_s3::operation::create_bucket::CreateBucketError;
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::{BucketLocationConstraint, CreateBucketConfiguration, StorageClass};
+use aws_sdk_s3::types::{
+    BucketLocationConstraint, CreateBucketConfiguration, ObjectLockEnabled, ObjectLockMode,
+    StorageClass,
+};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
@@ -71,6 +74,11 @@ pub struct AmazonStore {
     store_id: String,
     region: String,
     storage: String,
+    // Object-lock (WORM) window in days. Zero means no lock, preserving the
+    // pre-immutability behavior. When positive, buckets are created with S3
+    // Object Lock enabled and every uploaded object is put under a
+    // compliance-mode retention of this many days.
+    lock_days: u16,
     s3: aws_sdk_s3::Client,
     ddb: aws_sdk_dynamodb::Client,
 }
@@ -129,6 +137,7 @@ impl AmazonStore {
             store_id: store_id.to_owned(),
             region: region.to_owned(),
             storage: storage.to_owned(),
+            lock_days: store_core::lock_days_from_props(props),
             s3,
             ddb,
         })
@@ -155,7 +164,7 @@ impl AmazonStore {
     async fn try_create_bucket(&self, bucket: &str) -> Result<String, Error> {
         let mut bucket_name = bucket.to_owned();
         loop {
-            match create_bucket(&self.s3, &bucket_name, &self.region).await {
+            match create_bucket(&self.s3, &bucket_name, &self.region, self.lock_days > 0).await {
                 Ok(()) => return Ok(bucket_name),
                 Err(err) => match err.downcast::<CollisionError>() {
                     Ok(_) => {
@@ -196,15 +205,26 @@ impl AmazonStore {
         let body = ByteStream::from_path(packfile)
             .await
             .map_err(anyhow::Error::new)?;
-        let result = self
+        let mut request = self
             .s3
             .put_object()
             .bucket(&bucket_name)
             .key(object)
             .storage_class(StorageClass::from(self.storage.as_str()))
-            .body(body)
-            .send()
-            .await?;
+            .body(body);
+        // When object lock is configured, place this object under a
+        // compliance-mode retention. No principal (not even the account root)
+        // can delete or overwrite it until the retain-until date passes. The
+        // pruner defers its deletes until the same window has elapsed (see the
+        // lock/retention invariant enforced at store configuration time).
+        if self.lock_days > 0 {
+            let retain_until =
+                aws_sdk_s3::primitives::DateTime::from(store_core::lock_retain_until(self.lock_days));
+            request = request
+                .object_lock_mode(ObjectLockMode::Compliance)
+                .object_lock_retain_until_date(retain_until);
+        }
+        let result = request.send().await?;
         if let Some(etag) = result.e_tag() {
             // compute MD5 of file and compare to returned e_tag
             let md5 = store_core::md5sum_file(packfile)?;
@@ -499,13 +519,60 @@ impl AmazonStore {
     }
 }
 
+/// Verify a pre-existing bucket actually has Object Lock enabled.
+///
+/// Object Lock can only be turned on at bucket creation, so a store that has
+/// `lock_days` set but points at a bucket created without it would otherwise
+/// silently attempt locked uploads that S3 rejects with an opaque error. Fail
+/// fast with an actionable message instead.
+async fn ensure_object_lock_enabled(
+    client: &aws_sdk_s3::Client,
+    bucket: &str,
+) -> Result<(), Error> {
+    let not_enabled = || {
+        anyhow!(
+            "bucket {} exists without Object Lock enabled; a store with lock_days \
+             requires buckets created with Object Lock (see doc/DEPLOY.md)",
+            bucket
+        )
+    };
+    match client
+        .get_object_lock_configuration()
+        .bucket(bucket)
+        .send()
+        .await
+    {
+        Ok(output) => {
+            let enabled = output
+                .object_lock_configuration()
+                .and_then(|c| c.object_lock_enabled())
+                .map(|e| e == &ObjectLockEnabled::Enabled)
+                .unwrap_or(false);
+            if enabled { Ok(()) } else { Err(not_enabled()) }
+        }
+        // A bucket with no lock configuration reports this specific code; treat
+        // it as "not enabled". Anything else (auth, network) surfaces unchanged.
+        Err(e) if e.code() == Some("ObjectLockConfigurationNotFoundError") => Err(not_enabled()),
+        Err(e) => Err(anyhow::Error::new(e.into_service_error())),
+    }
+}
+
 /// Ensure the named bucket exists.
+///
+/// When `object_lock` is set, the bucket is created with S3 Object Lock enabled
+/// (which also enables versioning). Object Lock can only be turned on at bucket
+/// creation time, so this is the sole opportunity to do so; if the bucket
+/// already exists, its lock configuration is verified instead.
 async fn create_bucket(
     client: &aws_sdk_s3::Client,
     bucket: &str,
     region: &str,
+    object_lock: bool,
 ) -> Result<(), Error> {
     let mut req = client.create_bucket().bucket(bucket);
+    if object_lock {
+        req = req.object_lock_enabled_for_bucket(true);
+    }
     // us-east-1 rejects an explicit LocationConstraint; all other regions
     // require it.
     if region != "us-east-1" {
@@ -518,7 +585,13 @@ async fn create_bucket(
         Ok(_) => Ok(()),
         Err(e) => match e.into_service_error() {
             CreateBucketError::BucketAlreadyExists(_) => Err(Error::from(CollisionError {})),
-            CreateBucketError::BucketAlreadyOwnedByYou(_) => Ok(()),
+            CreateBucketError::BucketAlreadyOwnedByYou(_) => {
+                if object_lock {
+                    ensure_object_lock_enabled(client, bucket).await
+                } else {
+                    Ok(())
+                }
+            }
             other => {
                 // TooManyBuckets is not a modeled variant; pull the code from
                 // the error metadata.
