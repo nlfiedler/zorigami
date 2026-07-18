@@ -714,6 +714,60 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_amazon_object_lock() -> Result<(), Error> {
+        // Opt-in only: enabling Object Lock also enables bucket versioning, so
+        // the compliance-locked object version cannot be reclaimed until its
+        // retention expires (an app-level delete only writes a delete marker),
+        // which is why this test does NOT assert on delete. The test leaves an
+        // object and its bucket behind for the lock window. Run it against a
+        // throwaway AWS account that honors Object Lock by setting
+        // AWS_OBJECT_LOCK=1 in addition to the usual AWS_* variables.
+        dotenv().ok();
+        if env::var("AWS_OBJECT_LOCK").is_err() {
+            return Ok(());
+        }
+        let region_var = env::var("AWS_REGION");
+        if region_var.is_err() {
+            // bail out silently if amazon is not configured
+            return Ok(());
+        }
+        let region = region_var?;
+        let access_key = env::var("AWS_ACCESS_KEY")?;
+        let secret_key = env::var("AWS_SECRET_KEY")?;
+
+        // arrange: a store configured with a one-day compliance lock
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), region);
+        properties.insert("storage".to_owned(), "STANDARD_IA".to_owned());
+        properties.insert("access_key".to_owned(), access_key);
+        properties.insert("secret_key".to_owned(), secret_key);
+        properties.insert("lock_days".to_owned(), "1".to_owned());
+        let source = AmazonStore::new("amazonlock", &properties)?;
+
+        // storing a pack must create a lock-enabled bucket and attach the
+        // per-object compliance retention without error
+        let bucket = xid::new().to_string();
+        let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
+        let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
+        let location = source.store_pack_sync(packfile, &bucket, &object)?;
+        assert_eq!(location.bucket, bucket);
+        assert_eq!(location.object, object);
+
+        // the object is present in the lock-enabled bucket
+        let listing = source.list_objects_sync(&bucket)?;
+        assert!(listing.contains(&object));
+
+        // a second store_pack against the now-existing lock-enabled bucket must
+        // still succeed: the ensure-object-lock-enabled check on the
+        // already-owned bucket path must pass for a genuinely locked bucket
+        let object2 = "489492a49220c814f49487efb12adfbc372aa3f8".to_owned();
+        let packfile2 = Path::new("../../test/fixtures/washington-journal.txt");
+        source.store_pack_sync(packfile2, &bucket, &object2)?;
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
     fn test_amazon_store_roundtrip() -> Result<(), Error> {
         //
         // N.B. the AWS SDK will pick up environment variables, such as
