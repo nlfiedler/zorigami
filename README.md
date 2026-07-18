@@ -35,8 +35,6 @@ This project has been a work-in-progress since 2014, originally started as [akas
 - [Rust](https://www.rust-lang.org) stable, 2024 edition
 - [Bun](https://bun.com)
 
-### Initial Setup
-
 ### Building and Testing the Backend
 
 ```shell
@@ -51,6 +49,17 @@ To build a single package or run its tests, use the `-p` option, like so:
 cargo build -p store_minio
 cargo test -p store_minio
 ```
+
+### Testing Pack Store WORM / Object Locking
+
+Set the appropriate environment variable to any value before running the corresponding pack store tests. Note that this creates an object in a random bucket that cannot be deleted before 24 hours have passed (the whole point of WORM).
+
+| Envar | Pack Store | Notes |
+| ----- | ---------- | ----- |
+| `AWS_OBJECT_LOCK` | `store_amazon` | _No additional setup required_ |
+| `AZURE_OBJECT_LOCK` | `store_azure` | **Additional setup required**, see `DEPLOY.md` |
+| `GOOGLE_OBJECT_LOCK` | `store_google` | _No additional setup required_ |
+| `MINIO_OBJECT_LOCK` | `store_minio` | **Requires support in the backend** |
 
 ### Building the Frontend, Starting Everything
 
