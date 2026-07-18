@@ -566,13 +566,16 @@ mod tests {
         #[cfg(target_family = "windows")]
         assert_eq!(md5sum, "f143ccda41d1e2a553ef214e4549cd6e");
 
-        // remove all objects from all buckets, and the buckets, too
+        // remove all objects from all buckets, and the buckets, too;
+        // deletions are best-effort during cleanup because an object under an
+        // active retention/lock (e.g. one left behind by the object-lock test)
+        // cannot be removed until it expires, and its bucket cannot be emptied
         for bucket in buckets {
             let objects = source.list_objects_sync(&bucket)?;
             for obj in objects {
-                source.delete_object_sync(&bucket, &obj)?;
+                let _ = source.delete_object_sync(&bucket, &obj);
             }
-            source.delete_bucket_sync(&bucket)?;
+            let _ = source.delete_bucket_sync(&bucket);
         }
         Ok(())
     }
