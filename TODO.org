@@ -1,4 +1,6 @@
 * Tasks
+** Visibility into background task status
+*** what was the result of the last prune, etc
 ** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern
