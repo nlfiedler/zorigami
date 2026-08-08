@@ -60,7 +60,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'region', value: 'us-east-1' },
       { name: 'access_key', value: 'EXAMPLE_ACCESS_KEY' },
       { name: 'secret_key', value: 'EXAMPLE_SECRET_KEY' },
-      { name: 'storage', value: 'STANDARD_IA' }
+      { name: 'storage', value: 'STANDARD_IA' },
+      { name: 'lock_days', value: '0' }
     ]
   },
   {
@@ -72,7 +73,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'client_id', value: '' },
       { name: 'client_secret', value: '' },
       { name: 'access_tier', value: 'Cool' },
-      { name: 'custom_uri', value: '' }
+      { name: 'custom_uri', value: '' },
+      { name: 'lock_days', value: '0' }
     ]
   },
   {
@@ -82,7 +84,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'credentials', value: '/path/to/credentials.json' },
       { name: 'project', value: 'example-project-123' },
       { name: 'region', value: 'us-west1' },
-      { name: 'storage', value: 'NEARLINE' }
+      { name: 'storage', value: 'NEARLINE' },
+      { name: 'lock_days', value: '0' }
     ]
   },
   {
@@ -97,7 +100,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'region', value: 'us-west-1' },
       { name: 'endpoint', value: 'http://192.168.1.1:9000' },
       { name: 'access_key', value: 'EXAMPLE_ACCESS_KEY' },
-      { name: 'secret_key', value: 'EXAMPLE_SECRET_KEY' }
+      { name: 'secret_key', value: 'EXAMPLE_SECRET_KEY' },
+      { name: 'lock_days', value: '0' }
     ]
   },
   {
@@ -421,9 +425,7 @@ export function StoresPage(props: any) {
   // when exactly one store exists, auto-select it so the index route never
   // renders its placeholder
   const autoSelecting = () =>
-    !params.id &&
-    storesQuery.state === 'ready' &&
-    sortedStores().length === 1;
+    !params.id && storesQuery.state === 'ready' && sortedStores().length === 1;
   createEffect(() => {
     if (autoSelecting()) {
       navigate(`/stores/${sortedStores()[0]!.id}`, { replace: true });
@@ -758,6 +760,99 @@ function PackRetentionForm(props: PackRetentionFormProps) {
   );
 }
 
+// Largest value the server will accept for lock_days (a Rust u16).
+const MAX_LOCK_DAYS = 65_535;
+
+// Mirror of the server-side object-lock invariants (see Store::validate() in
+// server/src/domain/entities.rs and the UpdateStore use case) so the user gets
+// immediate feedback rather than a rejected save. The server remains the
+// authority; this only avoids a round-trip.
+function lockDaysError(
+  lockDays: number,
+  original: number,
+  retention: PackRetention
+): string {
+  if (!Number.isInteger(lockDays) || lockDays < 0 || lockDays > MAX_LOCK_DAYS) {
+    return `Lock Days must be a whole number from 0 to ${MAX_LOCK_DAYS}.`;
+  }
+  if (original > 0 && lockDays < original) {
+    // compliance-mode locks cannot be weakened; an update that lowers or drops
+    // lock_days would silently unprotect future packs, so the server rejects it
+    return `Lock Days cannot be reduced below the current value of ${original}.`;
+  }
+  if (
+    lockDays > 0 &&
+    retention.policy === PackRetentionPolicy.Days &&
+    lockDays < retention.value
+  ) {
+    return `Lock Days must be at least the retention days limit (${retention.value}).`;
+  }
+  return '';
+}
+
+interface ObjectLockFormProps {
+  lockDays: Accessor<number>;
+  setLockDays: Setter<number>;
+  // value stored when the form was loaded; the lock window cannot be reduced
+  original: number;
+  retention: Accessor<PackRetention>;
+}
+
+// Object lock (WORM) setting, shown only for the store types that support it:
+// Amazon, Azure, Google, and MinIO.
+function ObjectLockForm(props: ObjectLockFormProps) {
+  const errorMessage = createMemo(() =>
+    lockDaysError(props.lockDays(), props.original, props.retention())
+  );
+
+  return (
+    <div class="mb-2 field is-horizontal">
+      <div class="field-label is-normal">
+        <label class="label" for="lock-days">
+          Lock Days
+        </label>
+      </div>
+      <div class="field-body">
+        <div class="field">
+          <div class="control">
+            <input
+              class="input"
+              type="number"
+              id="lock-days"
+              min="0"
+              max={MAX_LOCK_DAYS}
+              value={props.lockDays()}
+              on:change={(ev) =>
+                props.setLockDays(ev.target.valueAsNumber || 0)
+              }
+            />
+          </div>
+          <Show when={errorMessage().length > 0}>
+            <p class="help is-danger">{errorMessage()}</p>
+          </Show>
+          <p class="help">
+            Days that each uploaded pack is held under a storage-side object
+            lock, during which nothing can delete or overwrite it. Zero means no
+            lock. The lock is compliance-grade and cannot be shortened later, so
+            a bucket lifecycle rule is required to reclaim the space; see the
+            deployment guide.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown for the store types that have no write-once storage primitive.
+function NoObjectLockNotice() {
+  return (
+    <p class="help">
+      This store type has no object lock (WORM) support, so packs saved here can
+      be deleted by anyone holding the store credentials.
+    </p>
+  );
+}
+
 interface LocalStoreFormProps {
   store: Store;
   deleted: () => void;
@@ -812,6 +907,7 @@ function LocalStoreForm(props: LocalStoreFormProps) {
           icon="fa-solid fa-folder"
         />
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <NoObjectLockNotice />
       </div>
     </form>
   );
@@ -836,6 +932,11 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
   const [storage, setStorage] = createSignal(
     getProperty(props.store.properties, 'storage')
   );
+  const originalLockDays = getNumericProperty(
+    props.store.properties,
+    'lock_days'
+  );
+  const [lockDays, setLockDays] = createSignal(originalLockDays);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -846,7 +947,8 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
         { name: 'region', value: region() },
         { name: 'access_key', value: accessKey() },
         { name: 'secret_key', value: secretKey() },
-        { name: 'storage', value: storage() }
+        { name: 'storage', value: storage() },
+        { name: 'lock_days', value: lockDays().toString() }
       ],
       retention: buildPackRetention(retention())
     };
@@ -856,7 +958,8 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
       label().length === 0 ||
       region().length === 0 ||
       accessKey().length === 0 ||
-      secretKey().length === 0
+      secretKey().length === 0 ||
+      lockDaysError(lockDays(), originalLockDays, retention()).length > 0
     );
   });
 
@@ -942,6 +1045,12 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
         </div>
 
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <ObjectLockForm
+          lockDays={lockDays}
+          setLockDays={setLockDays}
+          original={originalLockDays}
+          retention={retention}
+        />
       </div>
     </form>
   );
@@ -972,6 +1081,11 @@ function AzureStoreForm(props: AzureStoreFormProps) {
   const [customUri, setCustomUri] = createSignal(
     getProperty(props.store.properties, 'custom_uri')
   );
+  const originalLockDays = getNumericProperty(
+    props.store.properties,
+    'lock_days'
+  );
+  const [lockDays, setLockDays] = createSignal(originalLockDays);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -984,7 +1098,8 @@ function AzureStoreForm(props: AzureStoreFormProps) {
         { name: 'client_id', value: clientId() },
         { name: 'client_secret', value: clientSecret() },
         { name: 'access_tier', value: accessTier() },
-        { name: 'custom_uri', value: customUri() }
+        { name: 'custom_uri', value: customUri() },
+        { name: 'lock_days', value: lockDays().toString() }
       ],
       retention: buildPackRetention(retention())
     };
@@ -995,7 +1110,8 @@ function AzureStoreForm(props: AzureStoreFormProps) {
       account().length === 0 ||
       tenantId().length === 0 ||
       clientId().length === 0 ||
-      clientSecret().length === 0
+      clientSecret().length === 0 ||
+      lockDaysError(lockDays(), originalLockDays, retention()).length > 0
     );
   });
 
@@ -1092,6 +1208,12 @@ function AzureStoreForm(props: AzureStoreFormProps) {
           icon="fa-solid fa-link"
         />
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <ObjectLockForm
+          lockDays={lockDays}
+          setLockDays={setLockDays}
+          original={originalLockDays}
+          retention={retention}
+        />
       </div>
     </form>
   );
@@ -1116,6 +1238,11 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
   const [storage, setStorage] = createSignal(
     getProperty(props.store.properties, 'storage')
   );
+  const originalLockDays = getNumericProperty(
+    props.store.properties,
+    'lock_days'
+  );
+  const [lockDays, setLockDays] = createSignal(originalLockDays);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1126,7 +1253,8 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
         { name: 'credentials', value: credentials() },
         { name: 'project', value: project() },
         { name: 'region', value: region() },
-        { name: 'storage', value: storage() }
+        { name: 'storage', value: storage() },
+        { name: 'lock_days', value: lockDays().toString() }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1136,7 +1264,8 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
       label().length === 0 ||
       credentials().length === 0 ||
       project().length === 0 ||
-      region().length === 0
+      region().length === 0 ||
+      lockDaysError(lockDays(), originalLockDays, retention()).length > 0
     );
   });
 
@@ -1220,6 +1349,12 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
         </div>
 
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <ObjectLockForm
+          lockDays={lockDays}
+          setLockDays={setLockDays}
+          original={originalLockDays}
+          retention={retention}
+        />
       </div>
     </form>
   );
@@ -1244,6 +1379,11 @@ function MinioStoreForm(props: MinioStoreFormProps) {
   const [secretKey, setSecretKey] = createSignal(
     getProperty(props.store.properties, 'secret_key')
   );
+  const originalLockDays = getNumericProperty(
+    props.store.properties,
+    'lock_days'
+  );
+  const [lockDays, setLockDays] = createSignal(originalLockDays);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1254,7 +1394,8 @@ function MinioStoreForm(props: MinioStoreFormProps) {
         { name: 'region', value: region() },
         { name: 'endpoint', value: endpoint() },
         { name: 'access_key', value: accessKey() },
-        { name: 'secret_key', value: secretKey() }
+        { name: 'secret_key', value: secretKey() },
+        { name: 'lock_days', value: lockDays().toString() }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1265,7 +1406,8 @@ function MinioStoreForm(props: MinioStoreFormProps) {
       region().length === 0 ||
       endpoint().length === 0 ||
       accessKey().length === 0 ||
-      secretKey().length === 0
+      secretKey().length === 0 ||
+      lockDaysError(lockDays(), originalLockDays, retention()).length > 0
     );
   });
 
@@ -1324,6 +1466,12 @@ function MinioStoreForm(props: MinioStoreFormProps) {
         />
 
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <ObjectLockForm
+          lockDays={lockDays}
+          setLockDays={setLockDays}
+          original={originalLockDays}
+          retention={retention}
+        />
       </div>
     </form>
   );
@@ -1428,6 +1576,7 @@ function SftpStoreForm(props: SftpStoreFormProps) {
         />
 
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <NoObjectLockNotice />
       </div>
     </form>
   );
@@ -1439,4 +1588,11 @@ function getProperty(properties: Property[], name: string): string {
     return entry.value;
   }
   return '';
+}
+
+// Read a numeric property, treating a missing or malformed value as zero; this
+// matches the lenient parsing the stores perform on lock_days.
+function getNumericProperty(properties: Property[], name: string): number {
+  const value = Number.parseInt(getProperty(properties, name).trim(), 10);
+  return Number.isNaN(value) ? 0 : value;
 }

@@ -204,6 +204,10 @@ Currently supported on the **Amazon S3**, **MinIO**, **Azure Blob Storage**, and
 and are explicitly _unprotected_; setting `lock_days` on any store other than
 Amazon, MinIO, Azure, or Google is rejected.
 
+In the web interface the setting appears as the **Lock Days** field on the store
+form for those four store types, just below the retention policy; the local and
+SFTP forms instead note that they offer no object-lock protection.
+
 The mechanism per backend: S3/MinIO use compliance-mode Object Lock; Azure uses a
 **locked, time-based immutability policy** on each blob; Google uses a **locked
 per-object retention** (`retention.mode = Locked`). All three are compliance-grade:
