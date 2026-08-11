@@ -272,6 +272,16 @@ impl PrunerImpl {
     // Prune snapshots automatically according to a convention similar to that
     // of Apple Time Machine.
     fn prune_snapshots_auto(&self, start: Checksum) -> Result<usize, Error> {
+        self.prune_snapshots_auto_as_of(start, Utc::now())
+    }
+
+    // Same as `prune_snapshots_auto()` but with an explicit reference time, as
+    // the retention convention is relative to "now" (allows for testing).
+    fn prune_snapshots_auto_as_of(
+        &self,
+        start: Checksum,
+        now: DateTime<Utc>,
+    ) -> Result<usize, Error> {
         // read all snapshots for the given dataset
         let mut digest = start;
         let mut snapshots: HashMap<Checksum, Snapshot> = HashMap::new();
@@ -294,7 +304,7 @@ impl PrunerImpl {
             .map(|s| (s.digest.clone(), s.start_time))
             .collect();
         let candidates_len = candidates.len();
-        let keepers = auto_prune_snapshots(candidates, Utc::now());
+        let keepers = auto_prune_snapshots(candidates, now);
         // update all snapshot records accordingly -- take them in pairs and
         // update the first to point to the next, with the last one having its
         // parent set to none to cut off the remaining snapshots
@@ -1483,7 +1493,7 @@ fn auto_prune_snapshots(
         let date = (now - TimeDelta::weeks(week)).date_naive();
         if let Some(on_date) = incoming
             .iter()
-            .filter(|(_, d)| d.year() == date.year() && d.iso_week() == date.iso_week())
+            .filter(|(_, d)| d.iso_week() == date.iso_week())
             .min_by_key(|(_, d)| d)
         {
             retain.push(on_date.to_owned());
@@ -1492,10 +1502,10 @@ fn auto_prune_snapshots(
 
     // keep the oldest for each year within the last decade
     for year in 1..10 {
-        let date = (now - TimeDelta::weeks(52 * year)).date_naive();
+        let target = now.year() - year;
         if let Some(on_date) = incoming
             .iter()
-            .filter(|(_, d)| d.year() == date.year())
+            .filter(|(_, d)| d.year() == target)
             .min_by_key(|(_, d)| d)
         {
             retain.push(on_date.to_owned());
@@ -1567,7 +1577,9 @@ mod tests {
             ("00b01d2", TimeDelta::weeks(521), 0, false),
             ("d16da00", TimeDelta::weeks(522), 0, false)
         ];
-        let now = Utc::now();
+        // pin the reference time; the expectations above depend on how the
+        // inputs land within calendar days, ISO weeks, and years
+        let now: DateTime<Utc> = "2026-03-15T12:00:00Z".parse().unwrap();
         let inputs: Vec<(Checksum, DateTime<Utc>)> = raw_inputs
             .iter()
             .map(|input| {
@@ -1955,7 +1967,9 @@ mod tests {
             ("d16da00", "cafebabe", TimeDelta::weeks(522), 0, "", false)
         ];
         let mut mock = MockRecordRepository::new();
-        let now = Utc::now();
+        // pin the reference time; the expectations above depend on how the
+        // inputs land within calendar days, ISO weeks, and years
+        let now: DateTime<Utc> = "2026-03-15T12:00:00Z".parse().unwrap();
         for orig in raw_inputs.iter() {
             #[allow(clippy::clone_on_copy)]
             let input = orig.clone();
@@ -2006,11 +2020,11 @@ mod tests {
         // act
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let result = pruner.prune_snapshots_auto(Checksum::SHA1(raw_inputs[0].0.into()));
+        let result = pruner.prune_snapshots_auto_as_of(Checksum::SHA1(raw_inputs[0].0.into()), now);
         // assert
         assert!(result.is_ok());
         let count = result.unwrap();
-        assert_eq!(count, 11); // 11 pruned, 23 retained
+        assert_eq!(count, 11); // 11 pruned, 21 retained
     }
 
     #[test]
