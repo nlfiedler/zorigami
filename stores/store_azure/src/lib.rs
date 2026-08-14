@@ -237,8 +237,9 @@ impl AzureStore {
         // shortened or removed until the expiry passes; the pruner defers
         // reclamation of locked stores to a lifecycle rule.
         if self.lock_days > 0 {
-            commit_options.immutability_policy_expiry =
-                Some(OffsetDateTime::from(store_core::lock_retain_until(self.lock_days)));
+            commit_options.immutability_policy_expiry = Some(OffsetDateTime::from(
+                store_core::lock_retain_until(self.lock_days),
+            ));
             commit_options.immutability_policy_mode = Some(ImmutabilityPolicyMode::Locked);
         }
         with_deadline(

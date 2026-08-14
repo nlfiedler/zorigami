@@ -149,8 +149,9 @@ impl MinioStore {
         // until the retain-until date passes; the pruner defers its deletes
         // until the same window has elapsed.
         if self.lock_days > 0 {
-            let retain_until =
-                aws_sdk_s3::primitives::DateTime::from(store_core::lock_retain_until(self.lock_days));
+            let retain_until = aws_sdk_s3::primitives::DateTime::from(
+                store_core::lock_retain_until(self.lock_days),
+            );
             request = request
                 .object_lock_mode(ObjectLockMode::Compliance)
                 .object_lock_retain_until_date(retain_until);
