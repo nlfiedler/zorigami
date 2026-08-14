@@ -61,7 +61,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'access_key', value: 'EXAMPLE_ACCESS_KEY' },
       { name: 'secret_key', value: 'EXAMPLE_SECRET_KEY' },
       { name: 'storage', value: 'STANDARD_IA' },
-      { name: 'lock_days', value: '0' }
+      { name: 'lock_days', value: '0' },
+      { name: 'append_only', value: 'false' }
     ]
   },
   {
@@ -74,7 +75,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'client_secret', value: '' },
       { name: 'access_tier', value: 'Cool' },
       { name: 'custom_uri', value: '' },
-      { name: 'lock_days', value: '0' }
+      { name: 'lock_days', value: '0' },
+      { name: 'append_only', value: 'false' }
     ]
   },
   {
@@ -85,13 +87,17 @@ const STORE_TYPES: StoreType[] = [
       { name: 'project', value: 'example-project-123' },
       { name: 'region', value: 'us-west1' },
       { name: 'storage', value: 'NEARLINE' },
-      { name: 'lock_days', value: '0' }
+      { name: 'lock_days', value: '0' },
+      { name: 'append_only', value: 'false' }
     ]
   },
   {
     kind: 'local',
     label: 'Local',
-    properties: [{ name: 'basepath', value: '.' }]
+    properties: [
+      { name: 'basepath', value: '.' },
+      { name: 'append_only', value: 'false' }
+    ]
   },
   {
     kind: 'minio',
@@ -101,7 +107,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'endpoint', value: 'http://192.168.1.1:9000' },
       { name: 'access_key', value: 'EXAMPLE_ACCESS_KEY' },
       { name: 'secret_key', value: 'EXAMPLE_SECRET_KEY' },
-      { name: 'lock_days', value: '0' }
+      { name: 'lock_days', value: '0' },
+      { name: 'append_only', value: 'false' }
     ]
   },
   {
@@ -111,7 +118,8 @@ const STORE_TYPES: StoreType[] = [
       { name: 'address', value: '127.0.0.1:22' },
       { name: 'username', value: 'scott' },
       { name: 'password', value: 'tiger' },
-      { name: 'basepath', value: '.' }
+      { name: 'basepath', value: '.' },
+      { name: 'append_only', value: 'false' }
     ]
   }
 ];
@@ -853,6 +861,52 @@ function NoObjectLockNotice() {
   );
 }
 
+interface AppendOnlyFormProps {
+  appendOnly: Accessor<boolean>;
+  setAppendOnly: Setter<boolean>;
+  // value stored when the form was loaded; the flag cannot be cleared
+  original: boolean;
+}
+
+// Append-only setting, available on every store type since it describes what
+// zorigami itself will do rather than a capability of the storage.
+function AppendOnlyForm(props: AppendOnlyFormProps) {
+  return (
+    <div class="mb-2 field is-horizontal">
+      <div class="field-label">
+        <label class="label" for="append-only">
+          Append Only
+        </label>
+      </div>
+      <div class="field-body">
+        <div class="field">
+          <div class="control">
+            <label class="checkbox" for="append-only">
+              <input
+                type="checkbox"
+                id="append-only"
+                checked={props.appendOnly()}
+                disabled={props.original}
+                on:change={(ev) => props.setAppendOnly(ev.target.checked)}
+              />
+              {' Never delete anything from this store'}
+            </label>
+          </div>
+          <p class="help">
+            For a store whose credentials grant no delete permission, as in the
+            least-privilege policies in the deployment guide. Pruning then
+            leaves pack objects in place and a storage lifecycle rule is
+            required to reclaim the space.
+            {props.original
+              ? ' Once enabled this cannot be turned off here, since doing so would quietly restore the ability to delete.'
+              : ''}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface LocalStoreFormProps {
   store: Store;
   deleted: () => void;
@@ -863,13 +917,21 @@ function LocalStoreForm(props: LocalStoreFormProps) {
   const [basepath, setBasepath] = createSignal(
     getProperty(props.store.properties, 'basepath')
   );
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
       id: props.store.id,
       storeType: props.store.storeType,
       label: label(),
-      properties: [{ name: 'basepath', value: basepath() }],
+      properties: [
+        { name: 'basepath', value: basepath() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
+      ],
       retention: buildPackRetention(retention())
     };
   };
@@ -907,6 +969,11 @@ function LocalStoreForm(props: LocalStoreFormProps) {
           icon="fa-solid fa-folder"
         />
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
         <NoObjectLockNotice />
       </div>
     </form>
@@ -937,6 +1004,11 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
     'lock_days'
   );
   const [lockDays, setLockDays] = createSignal(originalLockDays);
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -948,7 +1020,8 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
         { name: 'access_key', value: accessKey() },
         { name: 'secret_key', value: secretKey() },
         { name: 'storage', value: storage() },
-        { name: 'lock_days', value: lockDays().toString() }
+        { name: 'lock_days', value: lockDays().toString() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1051,6 +1124,11 @@ function AmazonStoreForm(props: AmazonStoreFormProps) {
           original={originalLockDays}
           retention={retention}
         />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
       </div>
     </form>
   );
@@ -1086,6 +1164,11 @@ function AzureStoreForm(props: AzureStoreFormProps) {
     'lock_days'
   );
   const [lockDays, setLockDays] = createSignal(originalLockDays);
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1099,7 +1182,8 @@ function AzureStoreForm(props: AzureStoreFormProps) {
         { name: 'client_secret', value: clientSecret() },
         { name: 'access_tier', value: accessTier() },
         { name: 'custom_uri', value: customUri() },
-        { name: 'lock_days', value: lockDays().toString() }
+        { name: 'lock_days', value: lockDays().toString() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1214,6 +1298,11 @@ function AzureStoreForm(props: AzureStoreFormProps) {
           original={originalLockDays}
           retention={retention}
         />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
       </div>
     </form>
   );
@@ -1243,6 +1332,11 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
     'lock_days'
   );
   const [lockDays, setLockDays] = createSignal(originalLockDays);
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1254,7 +1348,8 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
         { name: 'project', value: project() },
         { name: 'region', value: region() },
         { name: 'storage', value: storage() },
-        { name: 'lock_days', value: lockDays().toString() }
+        { name: 'lock_days', value: lockDays().toString() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1355,6 +1450,11 @@ function GoogleStoreForm(props: GoogleStoreFormProps) {
           original={originalLockDays}
           retention={retention}
         />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
       </div>
     </form>
   );
@@ -1384,6 +1484,11 @@ function MinioStoreForm(props: MinioStoreFormProps) {
     'lock_days'
   );
   const [lockDays, setLockDays] = createSignal(originalLockDays);
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1395,7 +1500,8 @@ function MinioStoreForm(props: MinioStoreFormProps) {
         { name: 'endpoint', value: endpoint() },
         { name: 'access_key', value: accessKey() },
         { name: 'secret_key', value: secretKey() },
-        { name: 'lock_days', value: lockDays().toString() }
+        { name: 'lock_days', value: lockDays().toString() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1472,6 +1578,11 @@ function MinioStoreForm(props: MinioStoreFormProps) {
           original={originalLockDays}
           retention={retention}
         />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
       </div>
     </form>
   );
@@ -1496,6 +1607,11 @@ function SftpStoreForm(props: SftpStoreFormProps) {
   const [basepath, setBasepath] = createSignal(
     getProperty(props.store.properties, 'basepath')
   );
+  const originalAppendOnly = getBooleanProperty(
+    props.store.properties,
+    'append_only'
+  );
+  const [appendOnly, setAppendOnly] = createSignal(originalAppendOnly);
   const [retention, setRetention] = createSignal(props.store.retention);
   const buildStore = () => {
     return {
@@ -1506,7 +1622,8 @@ function SftpStoreForm(props: SftpStoreFormProps) {
         { name: 'address', value: address() },
         { name: 'username', value: username() },
         { name: 'password', value: password() },
-        { name: 'basepath', value: basepath() }
+        { name: 'basepath', value: basepath() },
+        { name: 'append_only', value: appendOnly() ? 'true' : 'false' }
       ],
       retention: buildPackRetention(retention())
     };
@@ -1576,6 +1693,11 @@ function SftpStoreForm(props: SftpStoreFormProps) {
         />
 
         <PackRetentionForm retention={retention} setRetention={setRetention} />
+        <AppendOnlyForm
+          appendOnly={appendOnly}
+          setAppendOnly={setAppendOnly}
+          original={originalAppendOnly}
+        />
         <NoObjectLockNotice />
       </div>
     </form>
@@ -1595,4 +1717,11 @@ function getProperty(properties: Property[], name: string): string {
 function getNumericProperty(properties: Property[], name: string): number {
   const value = Number.parseInt(getProperty(properties, name).trim(), 10);
   return Number.isNaN(value) ? 0 : value;
+}
+
+// Read a boolean property; only 'true' and '1' count as set, matching
+// store_core::append_only_from_props on the server.
+function getBooleanProperty(properties: Property[], name: string): boolean {
+  const value = getProperty(properties, name).trim();
+  return value.toLowerCase() === 'true' || value === '1';
 }
