@@ -731,23 +731,19 @@ impl PrunerImpl {
     // config emits one issue per run rather than one per referencing pack.
     // Returns `true` iff at least one location was successfully deleted.
     //
-    // Object-locked stores (`lock_days > 0`) are deliberately skipped: a
-    // still-locked object cannot be deleted at all, and on the versioned
-    // backends (S3 Object Lock, Azure version-level immutability) even a
-    // post-expiry app delete would not truly reclaim space — it leaves a delete
-    // marker / prior version behind. (Google object retention is not versioned,
-    // so a post-expiry delete would reclaim, but the same skip is applied
-    // uniformly.) Rather than claim a deletion we did not perform, and drop the
-    // pack record for an object that physically remains, reclamation for locked
-    // stores is delegated to a storage lifecycle rule that expires objects
-    // after the lock window (see doc/DEPLOY.md). Their locations are retained.
+    // Stores that zorigami must not delete from are deliberately skipped; see
+    // `Store::deletes_disabled` for what puts a store in that category. Rather
+    // than claim a deletion we did not perform, and drop the pack record for an
+    // object that physically remains, reclamation for those stores is delegated
+    // to a storage lifecycle rule (see doc/DEPLOY.md). Their locations are
+    // retained.
     //
-    // The tuple in `store_map` carries the store's `lock_days` parsed once when
-    // the map was built, so it is not re-parsed per pack or per location.
+    // The tuple in `store_map` carries that flag, derived once when the map was
+    // built, so the properties are not re-read per pack or per location.
     fn prune_pack_locations(
         &self,
         pack: &mut Pack,
-        store_map: &HashMap<String, (Store, u16, Box<dyn PackRepository>)>,
+        store_map: &HashMap<String, (Store, bool, Box<dyn PackRepository>)>,
         unknown_stores_reported: &mut HashSet<String>,
         issues: &mut Vec<ScrubIssue>,
     ) -> bool {
@@ -756,7 +752,7 @@ impl PrunerImpl {
             Vec::with_capacity(pack.locations.len());
         let mut changed = false;
         for location in pack.locations.drain(..) {
-            let Some((store, lock_days, repo)) = store_map.get(&location.store) else {
+            let Some((store, no_deletes, repo)) = store_map.get(&location.store) else {
                 if unknown_stores_reported.insert(location.store.clone()) {
                     let msg = format!(
                         "pack {} references unknown store {}",
@@ -771,14 +767,15 @@ impl PrunerImpl {
                 retained.push(location);
                 continue;
             };
-            // A non-locked location is eligible once its retention window has
-            // elapsed. Object-locked stores are never app-deleted here (see the
-            // function-level comment): their reclamation is delegated to a
-            // bucket lifecycle rule, so we retain the location and move on.
+            // A location on a deletable store is eligible once its retention
+            // window has elapsed. Locked and append-only stores are never
+            // app-deleted here (see the function-level comment): their
+            // reclamation is delegated to a bucket lifecycle rule, so we retain
+            // the location and move on.
             let eligible = match store.retention {
                 PackRetention::ALL => false,
                 PackRetention::DAYS(days) => {
-                    *lock_days == 0 && now - pack.upload_time >= TimeDelta::days(days as i64)
+                    !*no_deletes && now - pack.upload_time >= TimeDelta::days(days as i64)
                 }
             };
             if !eligible {
@@ -1139,17 +1136,18 @@ impl Pruner for PrunerImpl {
         info!("pack prune starting");
         let mut issues: Vec<ScrubIssue> = Vec::new();
 
-        // Build a map from store id to its (Store, lock_days, PackRepository).
+        // Build a map from store id to its (Store, no_deletes, PackRepository).
         // Each pack repo is built once per store so Phase A and Phase B can
-        // reuse them; `lock_days` is parsed once here rather than per pack.
+        // reuse them; the no-delete flag is derived once here rather than per
+        // pack.
         let stores = self.repo.get_stores()?;
-        let mut store_map: HashMap<String, (Store, u16, Box<dyn PackRepository>)> = HashMap::new();
+        let mut store_map: HashMap<String, (Store, bool, Box<dyn PackRepository>)> = HashMap::new();
         for store in stores {
             let store_id = store.id.clone();
-            let lock_days = store_core::lock_days_from_props(&store.properties);
+            let no_deletes = store.deletes_disabled();
             match self.repo.build_pack_repo(&store) {
                 Ok(repo) => {
-                    store_map.insert(store_id, (store, lock_days, repo));
+                    store_map.insert(store_id, (store, no_deletes, repo));
                 }
                 Err(err) => {
                     let msg = format!("failed to build pack repo for store {}: {}", store_id, err);
@@ -3341,6 +3339,57 @@ mod tests {
         let pack = Pack {
             digest: pack_digest.clone(),
             locations: vec![PackLocation::new("store-lock", "bucket", "object")],
+            upload_time: Utc::now() - TimeDelta::days(90),
+        };
+        mock.expect_get_all_pack_digests()
+            .once()
+            .returning(move || Ok(hat![pack_digest_str.clone()]));
+        let pack_clone = pack.clone();
+        mock.expect_get_pack()
+            .once()
+            .withf(move |d| d == &pack_digest_filter)
+            .returning(move |_| Ok(Some(pack_clone.clone())));
+        // Neither put_pack nor the record delete_pack should fire.
+
+        mock.expect_get_databases().once().returning(|| Ok(vec![]));
+
+        let submock = MockSubscriber::new();
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
+    }
+
+    #[test]
+    fn test_prune_packs_append_only_store_retained_for_lifecycle() {
+        // An append-only store is never app-deleted either, and for the same
+        // reason as a locked one: the credentials carry no delete permission,
+        // so reclamation belongs to a lifecycle rule. The pack here is well past
+        // its retention (DAYS(1), age 90d) and carries no lock_days at all, so
+        // only the append-only flag can be keeping it alive.
+        let mut mock = MockRecordRepository::new();
+
+        let mut store = prune_store("store-append", PackRetention::DAYS(1));
+        store
+            .properties
+            .insert("append_only".to_owned(), "true".to_owned());
+        let store_clone = store.clone();
+        mock.expect_get_stores()
+            .once()
+            .returning(move || Ok(vec![store_clone.clone()]));
+        // A bare pack repo: any delete_pack call would be an unexpected mock
+        // invocation and fail the test.
+        mock.expect_build_pack_repo()
+            .returning(|_| Ok(Box::new(MockPackRepository::new())));
+
+        mock.expect_get_datasets().once().returning(|| Ok(vec![]));
+
+        let pack_digest = Checksum::BLAKE3("pack-append-only".to_owned());
+        let pack_digest_str = pack_digest.to_string();
+        let pack_digest_filter = pack_digest.clone();
+        let pack = Pack {
+            digest: pack_digest.clone(),
+            locations: vec![PackLocation::new("store-append", "bucket", "object")],
             upload_time: Utc::now() - TimeDelta::days(90),
         };
         mock.expect_get_all_pack_digests()

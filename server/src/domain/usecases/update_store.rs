@@ -47,6 +47,17 @@ impl super::UseCase<Store, Params> for UpdateStore {
                     new_lock
                 ));
             }
+            // Clearing append-only re-arms the pruner's deletes, so it gets the
+            // same treatment as lowering lock_days: an omitted property must
+            // not silently undo the protection.
+            if store_core::append_only_from_props(&existing.properties)
+                && !store_core::append_only_from_props(&store.properties)
+            {
+                return Err(anyhow!(
+                    "cannot clear append_only on a store that has it set; \
+                     it must remain true (see doc/DEPLOY.md)"
+                ));
+            }
         }
         self.repo.put_store(&store)?;
         Ok(store)
@@ -209,11 +220,7 @@ mod tests {
         let result = usecase.call(params);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("not supported"),
-            "unexpected error: {}",
-            msg
-        );
+        assert!(msg.contains("not supported"), "unexpected error: {}", msg);
     }
 
     #[test]
@@ -321,6 +328,127 @@ mod tests {
         let msg = result.unwrap_err().to_string();
         assert!(
             msg.contains("cannot reduce lock_days"),
+            "unexpected error: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_update_store_append_only_malformed_rejected() {
+        // Anything that is not recognizably a boolean is rejected rather than
+        // quietly read as "off" by the lenient parser used at runtime.
+        let mut mock = MockRecordRepository::new();
+        mock.expect_put_store().never();
+        let usecase = UpdateStore::new(Box::new(mock));
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        properties.insert("append_only".to_owned(), "sometimes".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "confused local".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let result = usecase.call(params);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("append_only"), "unexpected error: {}", msg);
+    }
+
+    #[test]
+    fn test_update_store_append_only_on_local_ok() {
+        // Unlike lock_days, append-only is meaningful on every backend: it
+        // describes what zorigami will refrain from doing.
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store().returning(|_| Ok(None));
+        mock.expect_put_store().returning(|_| Ok(()));
+        let usecase = UpdateStore::new(Box::new(mock));
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        properties.insert("append_only".to_owned(), "true".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "append-only local".to_owned(),
+            properties,
+            retention: PackRetention::DAYS(30),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_update_store_append_only_kept_set_ok() {
+        // The guard must only catch a downgrade: re-sending the flag unchanged
+        // is what every ordinary edit of an append-only store does, and it has
+        // to keep working.
+        let mut existing_props: HashMap<String, String> = HashMap::new();
+        existing_props.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        existing_props.insert("append_only".to_owned(), "true".to_owned());
+        let existing = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "append-only local".to_owned(),
+            properties: existing_props,
+            retention: PackRetention::ALL,
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .returning(move |_| Ok(Some(existing.clone())));
+        mock.expect_put_store().returning(|_| Ok(()));
+        let usecase = UpdateStore::new(Box::new(mock));
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        properties.insert("append_only".to_owned(), "true".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "renamed local".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let result = usecase.call(params);
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_update_store_append_only_cleared_rejected() {
+        // Clearing the flag re-arms the pruner's deletes, so an update that
+        // drops or negates it is refused and the store is not persisted.
+        let mut existing_props: HashMap<String, String> = HashMap::new();
+        existing_props.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        existing_props.insert("append_only".to_owned(), "true".to_owned());
+        let existing = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "append-only local".to_owned(),
+            properties: existing_props,
+            retention: PackRetention::ALL,
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .returning(move |_| Ok(Some(existing.clone())));
+        mock.expect_put_store().never();
+        let usecase = UpdateStore::new(Box::new(mock));
+
+        // an update that simply omits the property is the case that matters:
+        // it is what a client that does not know about the flag would send
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "append-only local".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let result = usecase.call(params);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("cannot clear append_only"),
             "unexpected error: {}",
             msg
         );

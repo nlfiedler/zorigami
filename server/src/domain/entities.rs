@@ -270,10 +270,33 @@ impl std::hash::Hash for Store {
 }
 
 impl Store {
+    /// Return `true` if this store is append-only, meaning zorigami will never
+    /// issue a delete against it because its credentials are not expected to
+    /// carry delete permission. See `doc/specs/0009-Ransomware-Protection.md`.
+    pub fn append_only(&self) -> bool {
+        store_core::append_only_from_props(&self.properties)
+    }
+
+    /// Return `true` if zorigami must not delete objects from this store, which
+    /// is the case for both append-only stores and object-locked stores. A
+    /// still-locked object cannot be deleted at all, and on the versioned
+    /// backends (S3 Object Lock, Azure version-level immutability) even a
+    /// post-expiry delete would not truly reclaim space — it leaves a delete
+    /// marker or prior version behind. (Google object retention is not
+    /// versioned, so a post-expiry delete would reclaim, but the same rule is
+    /// applied uniformly.) Reclaiming space for these stores is the job of a
+    /// storage lifecycle rule; see `doc/DEPLOY.md`.
+    pub fn deletes_disabled(&self) -> bool {
+        self.append_only() || store_core::lock_days_from_props(&self.properties) > 0
+    }
+
     /// Validate the store configuration, rejecting settings that would be
     /// unsafe or non-functional.
     ///
-    /// This enforces the object-lock (WORM) invariants:
+    /// This enforces the append-only invariant:
+    /// - `append_only` must be a boolean (`true`/`false`/`1`/`0`).
+    ///
+    /// And the object-lock (WORM) invariants:
     /// - `lock_days` must be a non-negative integer.
     /// - Object lock is only supported on the backends that implement it
     ///   (Amazon, MinIO, Azure, Google); enabling it elsewhere would silently
@@ -284,6 +307,25 @@ impl Store {
     ///   stores) stays aligned with the logical retention. See
     ///   `doc/specs/0009-Ransomware-Protection.md`.
     pub fn validate(&self) -> Result<(), Error> {
+        // Unlike lock_days, append-only applies to every backend: it is a
+        // statement about what zorigami itself will do, not about a capability
+        // of the storage. It is meaningful even for local and SFTP stores,
+        // whose accounts can be restricted to no-delete out of band.
+        if let Some(value) = self.properties.get(store_core::APPEND_ONLY_PROPERTY) {
+            let trimmed = value.trim();
+            let recognized = trimmed.is_empty()
+                || trimmed.eq_ignore_ascii_case("true")
+                || trimmed.eq_ignore_ascii_case("false")
+                || trimmed == "1"
+                || trimmed == "0";
+            if !recognized {
+                return Err(anyhow!(
+                    "{} must be true or false: {}",
+                    store_core::APPEND_ONLY_PROPERTY,
+                    value
+                ));
+            }
+        }
         let lock_days = match self.properties.get(store_core::LOCK_DAYS_PROPERTY) {
             None => 0,
             Some(value) if value.trim().is_empty() => 0,

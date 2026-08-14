@@ -9,7 +9,7 @@
 //! used by the RocksDB backend; the SQLite backend stores entity fields in
 //! normalized columns.
 
-use crate::domain::entities::{Store, StoreType};
+use crate::domain::entities::{PackLocation, Store, StoreType};
 use crate::domain::sources::{EntityDataSource, PackDataSource, PackSourceBuilder};
 use anyhow::{Error, anyhow};
 use std::path::Path;
@@ -83,7 +83,91 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
             StoreType::MINIO => Box::new(minio::MinioPackSource::new(store)?),
             StoreType::SFTP => Box::new(sftp::SftpPackSource::new(store)?),
         };
+        if store.append_only() {
+            return Ok(Box::new(AppendOnlyPackSource::new(source)));
+        }
         Ok(source)
+    }
+}
+
+/// Wrapper that strips the delete operations from a pack data source.
+///
+/// The credentials of an append-only store are not expected to permit deletes
+/// in the first place (see `doc/DEPLOY.md`), and the pruner already declines to
+/// delete from such a store. This wrapper makes that guarantee structural
+/// rather than a property of one call site: no code path can issue a delete
+/// against an append-only store, and an attempt is a loud local error instead
+/// of a request that leans on the storage provider to refuse it.
+struct AppendOnlyPackSource {
+    inner: Box<dyn PackDataSource>,
+}
+
+impl AppendOnlyPackSource {
+    fn new(inner: Box<dyn PackDataSource>) -> Self {
+        Self { inner }
+    }
+}
+
+impl PackDataSource for AppendOnlyPackSource {
+    fn is_local(&self) -> bool {
+        self.inner.is_local()
+    }
+
+    fn is_slow(&self) -> bool {
+        self.inner.is_slow()
+    }
+
+    fn store_pack(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
+        self.inner.store_pack(packfile, bucket, object)
+    }
+
+    fn retrieve_pack(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
+        self.inner.retrieve_pack(location, outfile)
+    }
+
+    fn list_buckets(&self) -> Result<Vec<String>, Error> {
+        self.inner.list_buckets()
+    }
+
+    fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        self.inner.list_objects(bucket)
+    }
+
+    fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
+        Err(anyhow!(
+            "store is append-only, refusing to delete object {} from bucket {}",
+            object,
+            bucket
+        ))
+    }
+
+    fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
+        Err(anyhow!(
+            "store is append-only, refusing to delete bucket {}",
+            bucket
+        ))
+    }
+
+    fn store_database(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<PackLocation, Error> {
+        self.inner.store_database(packfile, bucket, object)
+    }
+
+    fn retrieve_database(&self, location: &PackLocation, outfile: &Path) -> Result<(), Error> {
+        self.inner.retrieve_database(location, outfile)
+    }
+
+    fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
+        self.inner.list_databases(bucket)
     }
 }
 
@@ -108,6 +192,125 @@ mod tests {
         let source = builder.build_source(&store).unwrap();
         assert!(source.is_local());
         assert!(!source.is_slow());
+    }
+
+    #[test]
+    fn test_build_source_append_only_refuses_deletes() {
+        // An append-only store still reads and writes normally, but the delete
+        // operations are refused locally rather than sent to the backend. A
+        // local store makes this checkable without touching the network: the
+        // basepath does not even have to exist for the deletes to fail.
+        let builder = PackSourceBuilderImpl {};
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp".to_owned());
+        properties.insert("append_only".to_owned(), "true".to_owned());
+        let store = Store {
+            id: "local123".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let source = builder.build_source(&store).unwrap();
+        // the wrapper delegates the informational calls
+        assert!(source.is_local());
+        assert!(!source.is_slow());
+        // ...and refuses both deletes
+        let result = source.delete_object("bucket1", "object1");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("append-only"), "unexpected error: {}", msg);
+        let result = source.delete_bucket("bucket1");
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("append-only"), "unexpected error: {}", msg);
+    }
+
+    #[test]
+    fn test_build_source_without_append_only_permits_deletes() {
+        // The mirror of the test above, and the one that guards against an
+        // inverted or unconditional wrap: an ordinary store must still reach
+        // the real delete. Without this, a refactor that wrapped every store
+        // would silently disable all pruning and pass the whole suite.
+        let basepath = std::path::PathBuf::from("../tmp/test/append-only-off");
+        let bucket = "bucket1";
+        let object = "object1";
+        let bucket_path = basepath.join(bucket);
+        std::fs::create_dir_all(&bucket_path).unwrap();
+        std::fs::write(bucket_path.join(object), b"pack contents").unwrap();
+
+        let builder = PackSourceBuilderImpl {};
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert(
+            "basepath".to_owned(),
+            basepath.to_string_lossy().into_owned(),
+        );
+        properties.insert("append_only".to_owned(), "false".to_owned());
+        let store = Store {
+            id: "local123".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "temporary".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+        };
+        let source = builder.build_source(&store).unwrap();
+        source
+            .delete_object(bucket, object)
+            .expect("delete should reach the real store");
+        assert!(!bucket_path.join(object).exists());
+        source
+            .delete_bucket(bucket)
+            .expect("delete should reach the real store");
+        assert!(!bucket_path.exists());
+    }
+
+    #[test]
+    fn test_append_only_source_delegates_everything_else() {
+        // Only the two deletes are intercepted; every other method must reach
+        // the wrapped source. A slip that returned the refusal from, say,
+        // retrieve_pack would break all restores from an append-only store.
+        let mut inner = crate::domain::sources::MockPackDataSource::new();
+        inner
+            .expect_store_pack()
+            .once()
+            .returning(|_, b, o| Ok(PackLocation::new("store1", b, o)));
+        inner.expect_retrieve_pack().once().returning(|_, _| Ok(()));
+        inner
+            .expect_list_buckets()
+            .once()
+            .returning(|| Ok(vec!["bucket1".to_owned()]));
+        inner
+            .expect_list_objects()
+            .once()
+            .returning(|_| Ok(vec!["object1".to_owned()]));
+        inner
+            .expect_store_database()
+            .once()
+            .returning(|_, b, o| Ok(PackLocation::new("store1", b, o)));
+        inner
+            .expect_retrieve_database()
+            .once()
+            .returning(|_, _| Ok(()));
+        inner
+            .expect_list_databases()
+            .once()
+            .returning(|_| Ok(vec!["archive1".to_owned()]));
+        // the deletes must never reach the inner source
+        inner.expect_delete_object().never();
+        inner.expect_delete_bucket().never();
+
+        let source = AppendOnlyPackSource::new(Box::new(inner));
+        let path = Path::new("/tmp/pack");
+        let location = PackLocation::new("store1", "bucket1", "object1");
+        assert!(source.store_pack(path, "bucket1", "object1").is_ok());
+        assert!(source.retrieve_pack(&location, path).is_ok());
+        assert_eq!(source.list_buckets().unwrap().len(), 1);
+        assert_eq!(source.list_objects("bucket1").unwrap().len(), 1);
+        assert!(source.store_database(path, "bucket1", "object1").is_ok());
+        assert!(source.retrieve_database(&location, path).is_ok());
+        assert_eq!(source.list_databases("bucket1").unwrap().len(), 1);
+        assert!(source.delete_object("bucket1", "object1").is_err());
+        assert!(source.delete_bucket("bucket1").is_err());
     }
 
     #[test]

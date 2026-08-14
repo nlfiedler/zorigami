@@ -41,6 +41,40 @@ pub fn lock_retain_until(lock_days: u16) -> std::time::SystemTime {
     std::time::SystemTime::now() + std::time::Duration::from_secs(lock_days as u64 * 24 * 60 * 60)
 }
 
+/// Store property key marking a store as append-only.
+///
+/// An append-only store is one whose credentials are expected to carry no
+/// delete permission at all (see the least-privilege policies in
+/// `doc/DEPLOY.md`). zorigami never issues a delete against such a store;
+/// reclaiming space is delegated to a storage lifecycle rule, exactly as it is
+/// for object-locked stores. Absent, empty, or `false` preserves the
+/// pre-Tier-2 behavior. See `append_only_from_props`.
+///
+/// Unlike `LOCK_DAYS_PROPERTY`, no store crate reads this: enforcement is
+/// entirely server-side (the pruner declines to delete, and the pack source is
+/// wrapped so the delete methods fail). It lives here to keep the store
+/// property-key vocabulary in one place.
+pub const APPEND_ONLY_PROPERTY: &str = "append_only";
+
+/// Parse the append-only flag from a store's `properties` map.
+///
+/// This is the lenient reader used on the pruning path: only `true` and `1`
+/// (ignoring case and surrounding space) enable the flag, and anything else —
+/// absent, empty, or malformed — leaves it off. Values are validated strictly
+/// at store create/update time, so a malformed value should not reach here in
+/// practice. Note that "off" is the permissive answer here, unlike the rest of
+/// this module: a store whose flag failed to parse still gets its deletes
+/// gated by whatever the credentials actually allow.
+pub fn append_only_from_props(props: &HashMap<String, String>) -> bool {
+    props
+        .get(APPEND_ONLY_PROPERTY)
+        .map(|s| {
+            let value = s.trim();
+            value.eq_ignore_ascii_case("true") || value == "1"
+        })
+        .unwrap_or(false)
+}
+
 ///
 /// Return the last part of the path, converting to a String.
 ///
@@ -173,6 +207,31 @@ mod tests {
         // malformed -> 0 (validation rejects these at write time)
         props.insert(LOCK_DAYS_PROPERTY.to_owned(), "notanumber".to_owned());
         assert_eq!(lock_days_from_props(&props), 0);
+    }
+
+    #[test]
+    fn test_append_only_from_props() {
+        let mut props: HashMap<String, String> = HashMap::new();
+        // absent -> false
+        assert!(!append_only_from_props(&props));
+        // the two accepted spellings, tolerating case and whitespace
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "true".to_owned());
+        assert!(append_only_from_props(&props));
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), " TRUE ".to_owned());
+        assert!(append_only_from_props(&props));
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "1".to_owned());
+        assert!(append_only_from_props(&props));
+        // explicitly off
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "false".to_owned());
+        assert!(!append_only_from_props(&props));
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "0".to_owned());
+        assert!(!append_only_from_props(&props));
+        // empty -> false
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "".to_owned());
+        assert!(!append_only_from_props(&props));
+        // malformed -> false (validation rejects these at write time)
+        props.insert(APPEND_ONLY_PROPERTY.to_owned(), "yes please".to_owned());
+        assert!(!append_only_from_props(&props));
     }
 
     #[test]

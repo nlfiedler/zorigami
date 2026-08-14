@@ -258,8 +258,9 @@ the lock cannot be shortened or removed before it expires.
 
 - **Amazon S3** — no extra console steps beyond the
   [Amazon S3 Setup](#amazon-s3-setup) above; set `lock_days` on the store and let
-  zorigami create lock-enabled buckets. (Credential separation so the backup
-  identity cannot delete at all is _Tier 2_ and is not yet implemented.)
+  zorigami create lock-enabled buckets. (To also deny the backup identity any
+  delete at all, see
+  [Append-Only Credentials](#append-only-credentials-least-privilege) below.)
 - **MinIO** — the deployment must run a MinIO/S3-compatible server that honors S3
   Object Lock. Verify against your specific server before relying on it.
 - **Azure** — enable _version-level immutability_ before setting `lock_days`, then set
@@ -291,3 +292,211 @@ the lock cannot be shortened or removed before it expires.
   a straightforward Object Lifecycle Management rule (age-based deletion) reclaims
   space once the retention expires. The service account still needs permission to
   create buckets and objects (see the Google setup above).
+
+## Append-Only Credentials (Least Privilege)
+
+Object locks (above) stop an attacker from destroying pack objects that are still
+within their lock window. Append-only credentials go further: they stop zorigami's
+own identity from being able to delete anything at all, so a compromised host has
+no delete to issue in the first place. This is _Tier 2_ of
+[the ransomware protection plan](specs/0009-Ransomware-Protection.md), and it is
+worth doing whether or not object lock is in use.
+
+There are two halves, and both are needed:
+
+1. **Restrict the credential** at the provider, using one of the policies below,
+   so the delete APIs are denied no matter what asks for them. This is the half
+   that actually protects the data.
+2. **Set the `append_only` store property** (the **Append Only** checkbox on the
+   store form) so zorigami knows not to try. The pruner then leaves pack objects
+   in place instead of failing a denied delete on every run, and the store's
+   delete operations are refused locally before a request is ever made.
+
+Available on every store type, including local and SFTP, where the equivalent
+restriction is a filesystem or account permission rather than an IAM policy.
+
+### Consequences
+
+- **A storage lifecycle rule is required to reclaim space**, as with object lock.
+  Without one, aged-out packs accumulate. Note the rule differs by case: the recipes
+  in the object-lock section assume the bucket is **versioned** (S3 Object Lock and
+  Azure version-level immutability both force versioning), so they expire noncurrent
+  versions and delete markers. An append-only store with `lock_days = 0` has an
+  ordinary unversioned bucket or container, where the correct rule is a plain
+  age-based expiration — a noncurrent-version rule there matches nothing and
+  reclaims nothing.
+- **Pack records are retained.** The pruner does not remove the database record for
+  a pack it did not delete, so the record outlives the object the lifecycle rule
+  eventually expires.
+- **The flag cannot be cleared** through the store form or the `updateStore`
+  mutation once set: an update that dropped it would silently re-arm deletion.
+  Undoing it means editing the store record in the database, which is
+  straightforward under `DATABASE_TYPE=sqlite` and impractical under the default
+  RocksDB backend, where the record is a CBOR blob. (Restoring the database from an
+  archive predating the change also reinstates the old record.) Unlike a lock
+  window, which the storage provider enforces, this one is only a local software
+  flag — so consider it a speed bump against a careless edit, not a guarantee.
+
+### Amazon S3
+
+Attach this in place of **AmazonS3FullAccess** (see
+[Amazon S3 Setup](#amazon-s3-setup)). It grants the bucket and object operations
+zorigami performs and omits every delete.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListAndCreateBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:PutBucketVersioning",
+        "s3:PutBucketObjectLockConfiguration",
+        "s3:GetBucketObjectLockConfiguration"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadAndWriteObjects",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:PutObjectRetention"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Notes:
+
+- The four object-lock permissions — `s3:PutBucketVersioning`,
+  `s3:PutBucketObjectLockConfiguration`, `s3:GetBucketObjectLockConfiguration`, and
+  `s3:PutObjectRetention` — are only needed when `lock_days > 0`; drop all four for
+  an append-only store with no object lock.
+- The resource is `*` because zorigami generates bucket names with no fixed prefix.
+  Give it a dedicated AWS account, or narrow the ARNs once the bucket names are
+  known.
+- Deliberately absent: `s3:DeleteObject`, `s3:DeleteObjectVersion`,
+  `s3:DeleteBucket`, and `s3:BypassGovernanceRetention`.
+- The **AmazonDynamoDBFullAccess** grant in the setup steps is separate and is left
+  as-is here. It holds no pack data, but it does grant `DeleteItem`/`DeleteTable`
+  over the bucket-rename table that the restore path consults, so an attacker who
+  wipes it degrades recovery. Narrowing it is worthwhile but out of scope for these
+  policies.
+
+### MinIO
+
+MinIO accepts S3-syntax policies, so use the Amazon policy above verbatim, minus
+anything DynamoDB-related. Whether the deletes are actually denied depends on your
+server honoring the policy, so verify against the deployment before relying on it.
+
+### Azure Blob Storage Custom Role
+
+**Storage Blob Data Contributor** (see [Azure Blob Storage](#azure-blob-storage))
+includes blob and container deletes. Create a custom role from the same set of
+data actions with the deletes removed, and assign that to the app registration
+instead:
+
+```json
+{
+  "Name": "Zorigami Backup Append Only",
+  "IsCustom": true,
+  "Description": "Read and write blobs, but never delete them.",
+  "Actions": [],
+  "DataActions": [
+    "Microsoft.Storage/storageAccounts/blobServices/containers/read",
+    "Microsoft.Storage/storageAccounts/blobServices/containers/write",
+    "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read",
+    "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write"
+  ],
+  "NotDataActions": [],
+  "AssignableScopes": ["/subscriptions/<subscription-id>"]
+}
+```
+
+Deliberately absent: `.../containers/delete`, `.../containers/blobs/delete`, and
+`.../containers/blobs/permanentDelete/action`. Also absent, and worth understanding:
+`.../containers/blobs/immutableStorage/runAsSuperUser/action`. That action authorizes
+the standalone _Set Blob Immutability Policy_ operation, and it is a super-user
+action — it equally permits *removing* an unlocked policy, which would undo the Tier 1
+guarantee. zorigami does not need it: it sets the policy inline on the upload commit
+(_Put Block List_ with the `x-ms-immutability-policy-until-date` and
+`x-ms-immutability-policy-mode` headers), and per the Azure REST reference that
+operation authorizes on `.../containers/blobs/write` alone, least-privileged built-in
+role Storage Blob Data Contributor. So an object-locked store needs nothing beyond the
+four data actions above, provided version-level immutability is already enabled on the
+account or container as described in the object-lock section.
+
+Note that `.../containers/blobs/add/action` is deliberately not listed either: it is
+the Append Block operation for append blobs, and zorigami writes block blobs. Compare
+the list against the current built-in definition (`az role definition list --name
+"Storage Blob Data Contributor"`) before creating the role, since Microsoft adds data
+actions over time.
+
+### Google Cloud Storage
+
+Replace the _Storage Admin_ role (see [Google Cloud Setup](#google-cloud-setup))
+with a custom role holding only these permissions:
+
+```
+storage.buckets.create
+storage.buckets.get
+storage.buckets.list
+storage.objects.create
+storage.objects.get
+storage.objects.list
+storage.objects.setRetention
+```
+
+`storage.objects.setRetention` is only needed when `lock_days > 0`. Deliberately
+absent: `storage.objects.delete`, `storage.objects.overrideUnlockedRetention`, and
+`storage.buckets.delete`.
+
+**Read this before choosing GCS for an append-only store.** Cloud Storage treats
+replacing an object as a delete plus a create: `storage.objects.create` alone permits
+writing a *new* object name but returns 403 when the name already exists, and
+overwriting requires `storage.objects.delete` as well. That is the whole point of
+`roles/storage.objectCreator`, and it has a real consequence here. zorigami's upload
+retry (ten attempts with backoff) reuses the same bucket and object name, so an
+upload that times out client-side after the object actually landed will fail its
+remaining retries with 403 and abort the backup. The same happens for any re-upload
+of an already-stored object name. There is no configuration that avoids this: granting
+`storage.objects.delete` restores overwrite but hands back the delete capability this
+whole section exists to remove. Either accept that a store must be repaired by hand
+when it happens, or prefer S3/MinIO/Azure — where overwrite is an ordinary write —
+for append-only deployments. (With `lock_days > 0` the overwrite is blocked by the
+object's retention regardless of IAM, so this is not a new limitation for locked
+stores.)
+
+The separate Firebase role in the Google setup steps is **not** unrelated: Firestore
+holds the bucket-rename map that the archive-retrieval path consults, so an attacker
+who can wipe those documents degrades restore even though no pack bytes are lost.
+Narrowing it is worthwhile but out of scope for these policies.
+
+### Local and SFTP
+
+There is no IAM layer here, so the restriction has to come from the operating
+system — and ordinary POSIX mode bits cannot express it. Unlinking a file is
+governed by write permission on the *containing directory*, which is exactly what
+creating a pack requires, so any directory zorigami can write to is one it can also
+delete from. The sticky bit does not help either: it restricts removal to the file's
+owner, and zorigami creates the packs, so it owns them.
+
+What does work is a filesystem-level append-only attribute on the pack directory,
+applied by root:
+
+- **Linux (ext4, and others supporting file attributes)** — `chattr +a
+  /path/to/packs`. An append-only directory permits creating files but forbids
+  unlinking and renaming them, which is precisely the split needed. This is
+  compatible with how the local store writes: it copies straight to the destination
+  path with no temporary-file-and-rename step.
+- **macOS/BSD** — `chflags sappnd /path/to/packs` is the closest equivalent. Verify
+  it behaves as intended on your filesystem before relying on it.
+
+For SFTP the same attribute is applied on the server, to the directory the account
+lands in; OpenSSH itself has no per-operation permission model to restrict. In every
+case, set **Append Only** on the store as well so zorigami does not attempt deletes
+it cannot perform.
