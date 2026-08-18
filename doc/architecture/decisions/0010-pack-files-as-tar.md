@@ -1,6 +1,6 @@
 # Use tar for pack files
 
-* Status: accepted
+* Status: superseded
 * Deciders: Nathan Fiedler
 * Date: 2023-02-20
 

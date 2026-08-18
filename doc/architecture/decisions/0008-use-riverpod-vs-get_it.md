@@ -1,6 +1,6 @@
 # Use riverpod for dependency injection
 
-* Status: accepted
+* Status: superseded
 * Deciders: Nathan Fiedler
 * Date: 2020-12-27
 
