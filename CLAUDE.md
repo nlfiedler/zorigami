@@ -11,10 +11,6 @@ Zorigami is a backup and restore application. Users define **Datasets** (directo
 ### Backend (Rust)
 
 ```bash
-cargo build                        # Build all workspace crates
-cargo test                         # Run all tests
-cargo test <test_name>             # Run a single test by name
-cargo test -p <crate> <test_name>  # Run a test in a specific crate
 RUST_LOG=info cargo run            # Start the server (http://localhost:3000)
 ```
 
@@ -30,17 +26,6 @@ bunx vite build     # Build frontend
 ```bash
 env GENERATE_SDL=public/schema.graphql cargo run
 bun run codegen
-```
-
-### Code Coverage
-
-```bash
-cargo install grcov
-rustup component add llvm-tools
-export RUSTFLAGS="-Cinstrument-coverage"
-export LLVM_PROFILE_FILE="zorigami-%p-%m.profraw"
-cargo clean && cargo build && cargo test
-grcov . -s . --binary-path ./target/debug/ -t html --branch --ignore-not-existing -o ./target/debug/coverage/
 ```
 
 ## Architecture
