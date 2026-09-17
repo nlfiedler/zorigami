@@ -248,6 +248,23 @@ pub enum PackRetention {
     DAYS(u16),
 }
 
+impl PackRetention {
+    ///
+    /// Returns true if `self` retains packs for a shorter period than
+    /// `other` (i.e. adopting `self` would weaken retention currently
+    /// enforced by `other`). Used to guard against silently shortening
+    /// retention via `updateStore` (see doc/specs/0009-Ransomware-Protection.md).
+    ///
+    pub fn is_weaker_than(&self, other: &PackRetention) -> bool {
+        match (self, other) {
+            (PackRetention::ALL, PackRetention::ALL) => false,
+            (PackRetention::ALL, PackRetention::DAYS(_)) => false,
+            (PackRetention::DAYS(_), PackRetention::ALL) => true,
+            (PackRetention::DAYS(new_days), PackRetention::DAYS(old_days)) => new_days < old_days,
+        }
+    }
+}
+
 /// Store defines a location where packs will be saved.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Store {
@@ -379,6 +396,35 @@ pub enum SnapshotRetention {
     /// Retain all in the last 24 hours, daily for 30 days, weekly for 52 weeks,
     /// and yearly for 10 years.
     AUTO,
+}
+
+impl SnapshotRetention {
+    ///
+    /// Returns true if `self` retains snapshots for a shorter/fewer period
+    /// than `other` (i.e. adopting `self` would weaken retention currently
+    /// enforced by `other`). Used to guard against silently shortening
+    /// retention via `updateDataset`
+    /// (see doc/specs/0009-Ransomware-Protection.md).
+    ///
+    /// `COUNT`/`DAYS`/`AUTO` are different dimensions and not directly
+    /// comparable, so switching between policy *types* (other than moving
+    /// away from `ALL`) is conservatively treated as a reduction: it is not
+    /// provably safe, and this guard fails closed rather than guessing.
+    ///
+    pub fn is_weaker_than(&self, other: &SnapshotRetention) -> bool {
+        match (self, other) {
+            (SnapshotRetention::ALL, SnapshotRetention::ALL) => false,
+            (SnapshotRetention::ALL, _) => false,
+            (_, SnapshotRetention::ALL) => true,
+            (SnapshotRetention::COUNT(new_n), SnapshotRetention::COUNT(old_n)) => new_n < old_n,
+            (SnapshotRetention::DAYS(new_n), SnapshotRetention::DAYS(old_n)) => new_n < old_n,
+            (SnapshotRetention::AUTO, SnapshotRetention::AUTO) => false,
+            // Any other pairing is a policy-type switch (including any
+            // change to/from AUTO between the other variants), which is not
+            // comparable — treat as weakening.
+            _ => true,
+        }
+    }
 }
 
 /// Represents a directory tree that will be backed up according to a schedule,
@@ -1253,6 +1299,31 @@ pub struct CapturedError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pack_retention_is_weaker_than() {
+        assert!(!PackRetention::ALL.is_weaker_than(&PackRetention::ALL));
+        assert!(!PackRetention::ALL.is_weaker_than(&PackRetention::DAYS(30)));
+        assert!(PackRetention::DAYS(30).is_weaker_than(&PackRetention::ALL));
+        assert!(PackRetention::DAYS(7).is_weaker_than(&PackRetention::DAYS(30)));
+        assert!(!PackRetention::DAYS(30).is_weaker_than(&PackRetention::DAYS(7)));
+        assert!(!PackRetention::DAYS(30).is_weaker_than(&PackRetention::DAYS(30)));
+    }
+
+    #[test]
+    fn test_snapshot_retention_is_weaker_than() {
+        assert!(!SnapshotRetention::ALL.is_weaker_than(&SnapshotRetention::ALL));
+        assert!(!SnapshotRetention::ALL.is_weaker_than(&SnapshotRetention::COUNT(5)));
+        assert!(SnapshotRetention::COUNT(5).is_weaker_than(&SnapshotRetention::ALL));
+        assert!(SnapshotRetention::COUNT(5).is_weaker_than(&SnapshotRetention::COUNT(10)));
+        assert!(!SnapshotRetention::COUNT(10).is_weaker_than(&SnapshotRetention::COUNT(5)));
+        assert!(!SnapshotRetention::COUNT(10).is_weaker_than(&SnapshotRetention::COUNT(10)));
+        assert!(SnapshotRetention::DAYS(7).is_weaker_than(&SnapshotRetention::DAYS(30)));
+        assert!(!SnapshotRetention::AUTO.is_weaker_than(&SnapshotRetention::AUTO));
+        // Policy-type switches are conservatively treated as weakening.
+        assert!(SnapshotRetention::DAYS(365).is_weaker_than(&SnapshotRetention::COUNT(1)));
+        assert!(SnapshotRetention::AUTO.is_weaker_than(&SnapshotRetention::COUNT(5)));
+    }
 
     #[test]
     fn test_checksum_sort() {

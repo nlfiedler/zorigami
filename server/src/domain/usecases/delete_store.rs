@@ -3,6 +3,7 @@
 //
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
+use log::warn;
 use std::cmp;
 use std::fmt;
 
@@ -25,23 +26,53 @@ impl super::UseCase<(), Params> for DeleteStore {
             .map(|d| d.id)
             .collect();
         if !in_use.is_empty() {
+            warn!(
+                "audit: rejected deleteStore id={} caller={} reason=in_use datasets={}",
+                params.store_id,
+                params.caller,
+                in_use.join(", ")
+            );
             return Err(anyhow!(
                 "store is still in use by dataset(s): {}",
                 in_use.join(", ")
             ));
         }
-        self.repo.delete_store(&params.store_id)
+        let result = self.repo.delete_store(&params.store_id);
+        match &result {
+            Ok(()) => warn!(
+                "audit: deleteStore id={} caller={} outcome=ok",
+                params.store_id, params.caller
+            ),
+            Err(e) => warn!(
+                "audit: deleteStore id={} caller={} outcome=error error={}",
+                params.store_id, params.caller, e
+            ),
+        }
+        result
     }
 }
 
 pub struct Params {
     /// Unique identifier of the store.
     store_id: String,
+    /// Caller identity for audit logging (e.g. remote address); "unknown"
+    /// when not available.
+    caller: String,
 }
 
 impl Params {
     pub fn new(store_id: String) -> Self {
-        Self { store_id }
+        Self {
+            store_id,
+            caller: "unknown".to_owned(),
+        }
+    }
+
+    /// Attach the caller identity (e.g. remote address) used in audit log
+    /// lines for this deletion.
+    pub fn with_caller(mut self, caller: String) -> Self {
+        self.caller = caller;
+        self
     }
 }
 
@@ -77,6 +108,7 @@ mod tests {
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
             store_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -96,6 +128,7 @@ mod tests {
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
             store_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -113,6 +146,7 @@ mod tests {
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
             store_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -133,6 +167,7 @@ mod tests {
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
             store_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -152,6 +187,7 @@ mod tests {
         let usecase = DeleteStore::new(Box::new(mock));
         let params = Params {
             store_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert

@@ -6,6 +6,7 @@ use crate::domain::entities::SnapshotRetention;
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
+use log::warn;
 use std::cmp;
 use std::fmt;
 use std::path::PathBuf;
@@ -61,6 +62,28 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }
+        // Silent retention reduction is the cleanest way to weaponize the
+        // pruner against its own backups (see
+        // doc/specs/0009-Ransomware-Protection.md, Tier 3) — refuse it
+        // unconditionally, with no override.
+        if params.retention.is_weaker_than(&dataset.retention) {
+            warn!(
+                "audit: rejected updateDataset id={} caller={} reason=retention_reduction old={:?} new={:?}",
+                dataset.id, params.caller, dataset.retention, params.retention
+            );
+            return Err(anyhow!(
+                "cannot reduce snapshot retention from {:?} to {:?}; \
+                 delete and recreate the dataset if this is truly intended",
+                dataset.retention,
+                params.retention
+            ));
+        }
+        if dataset.retention != params.retention {
+            warn!(
+                "audit: accepted updateDataset id={} caller={} retention {:?}->{:?}",
+                dataset.id, params.caller, dataset.retention, params.retention
+            );
+        }
         dataset.retention = params.retention;
         self.repo.put_dataset(&dataset)?;
         Ok(dataset)
@@ -87,6 +110,9 @@ pub struct Params {
     excludes: Vec<String>,
     /// Snapshot retention policy.
     retention: SnapshotRetention,
+    /// Caller identity for audit logging (e.g. remote address); "unknown"
+    /// when not available.
+    caller: String,
 }
 
 impl Params {
@@ -112,7 +138,15 @@ impl Params {
             stores,
             excludes,
             retention,
+            caller: "unknown".to_owned(),
         }
+    }
+
+    /// Attach the caller identity (e.g. remote address) used in audit log
+    /// lines for this update.
+    pub fn with_caller(mut self, caller: String) -> Self {
+        self.caller = caller;
+        self
     }
 }
 
@@ -176,6 +210,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -208,6 +243,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -239,6 +275,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec!["".to_owned()],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -275,6 +312,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -297,6 +335,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -331,6 +370,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -364,12 +404,79 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
         assert!(result.is_ok());
         let actual = result.unwrap();
         assert_eq!(actual.basepath, basepath);
+    }
+
+    #[test]
+    fn test_update_dataset_retention_reduction_rejected() {
+        // Weakening snapshot retention (ALL -> COUNT) must be refused
+        // outright, with no override, per Tier 3 of the ransomware-
+        // protection spec.
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let basepath_copy = basepath.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
+        mock.expect_put_dataset().never();
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: 1_048_576,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::COUNT(5),
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("cannot reduce snapshot retention"),
+            "unexpected error: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_update_dataset_retention_increase_ok() {
+        // Strengthening retention (COUNT -> ALL, or a larger COUNT) must
+        // continue to work; only reductions are guarded.
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let basepath_copy = basepath.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset().returning(move |_| {
+            let mut ds = Dataset::new(&basepath_copy);
+            ds.retention = SnapshotRetention::COUNT(5);
+            Ok(Some(ds))
+        });
+        mock.expect_put_dataset().returning(|_| Ok(()));
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: 1_048_576,
+            pack_size: 33_554_432,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::COUNT(10),
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
     }
 
     #[test]
@@ -391,6 +498,7 @@ mod tests {
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert

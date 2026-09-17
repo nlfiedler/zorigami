@@ -4,6 +4,7 @@
 use crate::domain::entities::{PackRetention, Store, StoreType};
 use crate::domain::repositories::RecordRepository;
 use anyhow::{Error, anyhow};
+use log::warn;
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
@@ -40,6 +41,10 @@ impl super::UseCase<Store, Params> for UpdateStore {
             let old_lock = store_core::lock_days_from_props(&existing.properties);
             let new_lock = store_core::lock_days_from_props(&store.properties);
             if old_lock > 0 && new_lock < old_lock {
+                warn!(
+                    "audit: rejected updateStore id={} caller={} reason=lock_days_reduction old={} new={}",
+                    store.id, params.caller, old_lock, new_lock
+                );
                 return Err(anyhow!(
                     "cannot reduce lock_days from {} to {} on an object-locked store; \
                      set lock_days explicitly to keep the existing window (see doc/DEPLOY.md)",
@@ -53,10 +58,47 @@ impl super::UseCase<Store, Params> for UpdateStore {
             if store_core::append_only_from_props(&existing.properties)
                 && !store_core::append_only_from_props(&store.properties)
             {
+                warn!(
+                    "audit: rejected updateStore id={} caller={} reason=append_only_cleared",
+                    store.id, params.caller
+                );
                 return Err(anyhow!(
                     "cannot clear append_only on a store that has it set; \
                      it must remain true (see doc/DEPLOY.md)"
                 ));
+            }
+            // Silent retention reduction is the cleanest way to weaponize the
+            // pruner against its own backups (see
+            // doc/specs/0009-Ransomware-Protection.md, Tier 3) — refuse it
+            // unconditionally, with no override.
+            if store.retention.is_weaker_than(&existing.retention) {
+                warn!(
+                    "audit: rejected updateStore id={} caller={} reason=retention_reduction old={:?} new={:?}",
+                    store.id, params.caller, existing.retention, store.retention
+                );
+                return Err(anyhow!(
+                    "cannot reduce pack retention from {:?} to {:?}; \
+                     delete and recreate the store if this is truly intended",
+                    existing.retention,
+                    store.retention
+                ));
+            }
+            if existing.retention != store.retention
+                || old_lock != new_lock
+                || store_core::append_only_from_props(&existing.properties)
+                    != store_core::append_only_from_props(&store.properties)
+            {
+                warn!(
+                    "audit: accepted updateStore id={} caller={} retention {:?}->{:?} lock_days {}->{} append_only {}->{}",
+                    store.id,
+                    params.caller,
+                    existing.retention,
+                    store.retention,
+                    old_lock,
+                    new_lock,
+                    store_core::append_only_from_props(&existing.properties),
+                    store_core::append_only_from_props(&store.properties)
+                );
             }
         }
         self.repo.put_store(&store)?;
@@ -75,6 +117,9 @@ pub struct Params {
     properties: HashMap<String, String>,
     /// Pack retention policy.
     retention: PackRetention,
+    /// Caller identity for audit logging (e.g. remote address); "unknown"
+    /// when not available.
+    caller: String,
 }
 
 impl Params {
@@ -91,7 +136,15 @@ impl Params {
             label,
             properties,
             retention,
+            caller: "unknown".to_owned(),
         }
+    }
+
+    /// Attach the caller identity (e.g. remote address) used in audit log
+    /// lines for this update.
+    pub fn with_caller(mut self, caller: String) -> Self {
+        self.caller = caller;
+        self
     }
 }
 
@@ -144,6 +197,7 @@ mod tests {
             label: "pretend S3".to_owned(),
             properties,
             retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -170,6 +224,7 @@ mod tests {
             label: "pretend S3".to_owned(),
             properties,
             retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -193,6 +248,7 @@ mod tests {
             label: "locked minio".to_owned(),
             properties,
             retention: PackRetention::DAYS(30),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_err());
@@ -216,6 +272,7 @@ mod tests {
             label: "locked local".to_owned(),
             properties,
             retention: PackRetention::DAYS(1),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_err());
@@ -240,6 +297,7 @@ mod tests {
             label: "locked minio".to_owned(),
             properties,
             retention: PackRetention::DAYS(30),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_ok(), "unexpected error: {:?}", result.err());
@@ -262,6 +320,7 @@ mod tests {
             label: "locked azure".to_owned(),
             properties,
             retention: PackRetention::DAYS(7),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_ok(), "unexpected error: {:?}", result.err());
@@ -285,6 +344,7 @@ mod tests {
             label: "locked google".to_owned(),
             properties,
             retention: PackRetention::DAYS(20),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_ok(), "unexpected error: {:?}", result.err());
@@ -322,6 +382,7 @@ mod tests {
             label: "locked minio".to_owned(),
             properties,
             retention: PackRetention::DAYS(1),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_err());
@@ -331,6 +392,74 @@ mod tests {
             "unexpected error: {}",
             msg
         );
+    }
+
+    #[test]
+    fn test_update_store_retention_reduction_rejected() {
+        // Weakening pack retention (ALL -> DAYS) must be refused outright,
+        // with no override, per Tier 3 of the ransomware-protection spec.
+        let existing = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "plain local".to_owned(),
+            properties: HashMap::new(),
+            retention: PackRetention::ALL,
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .returning(move |_| Ok(Some(existing.clone())));
+        mock.expect_put_store().never();
+        let usecase = UpdateStore::new(Box::new(mock));
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "plain local".to_owned(),
+            properties,
+            retention: PackRetention::DAYS(30),
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("cannot reduce pack retention"),
+            "unexpected error: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_update_store_retention_increase_ok() {
+        // Strengthening retention (DAYS -> ALL, or a larger DAYS value) must
+        // continue to work; only reductions are guarded.
+        let existing = Store {
+            id: "cafebabe".to_owned(),
+            store_type: StoreType::LOCAL,
+            label: "plain local".to_owned(),
+            properties: HashMap::new(),
+            retention: PackRetention::DAYS(7),
+        };
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_store()
+            .returning(move |_| Ok(Some(existing.clone())));
+        mock.expect_put_store().returning(|_| Ok(()));
+        let usecase = UpdateStore::new(Box::new(mock));
+
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("basepath".to_owned(), "/tmp/store".to_owned());
+        let params = Params {
+            store_id: "cafebabe".to_owned(),
+            type_name: "local".to_owned(),
+            label: "plain local".to_owned(),
+            properties,
+            retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
     }
 
     #[test]
@@ -349,6 +478,7 @@ mod tests {
             label: "confused local".to_owned(),
             properties,
             retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_err());
@@ -373,6 +503,7 @@ mod tests {
             label: "append-only local".to_owned(),
             properties,
             retention: PackRetention::DAYS(30),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_ok(), "unexpected error: {:?}", result.err());
@@ -408,6 +539,7 @@ mod tests {
             label: "renamed local".to_owned(),
             properties,
             retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_ok(), "unexpected error: {:?}", result.err());
@@ -443,6 +575,7 @@ mod tests {
             label: "append-only local".to_owned(),
             properties,
             retention: PackRetention::ALL,
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         assert!(result.is_err());

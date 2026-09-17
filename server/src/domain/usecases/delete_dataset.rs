@@ -3,6 +3,7 @@
 //
 use crate::domain::repositories::RecordRepository;
 use anyhow::Error;
+use log::warn;
 use std::cmp;
 use std::fmt;
 
@@ -18,19 +19,42 @@ impl DeleteDataset {
 
 impl super::UseCase<(), Params> for DeleteDataset {
     fn call(&self, params: Params) -> Result<(), Error> {
-        self.repo.delete_dataset(&params.dataset_id)?;
-        Ok(())
+        let result = self.repo.delete_dataset(&params.dataset_id);
+        match &result {
+            Ok(()) => warn!(
+                "audit: deleteDataset id={} caller={} outcome=ok",
+                params.dataset_id, params.caller
+            ),
+            Err(e) => warn!(
+                "audit: deleteDataset id={} caller={} outcome=error error={}",
+                params.dataset_id, params.caller, e
+            ),
+        }
+        result
     }
 }
 
 pub struct Params {
     /// Unique identifier of the dataset.
     dataset_id: String,
+    /// Caller identity for audit logging (e.g. remote address); "unknown"
+    /// when not available.
+    caller: String,
 }
 
 impl Params {
     pub fn new(dataset_id: String) -> Self {
-        Self { dataset_id }
+        Self {
+            dataset_id,
+            caller: "unknown".to_owned(),
+        }
+    }
+
+    /// Attach the caller identity (e.g. remote address) used in the audit
+    /// log line for this deletion.
+    pub fn with_caller(mut self, caller: String) -> Self {
+        self.caller = caller;
+        self
     }
 }
 
@@ -64,6 +88,7 @@ mod tests {
         let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {
             dataset_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
@@ -80,6 +105,7 @@ mod tests {
         let usecase = DeleteDataset::new(Box::new(mock));
         let params = Params {
             dataset_id: "cafebabe".to_owned(),
+            caller: "unknown".to_owned(),
         };
         let result = usecase.call(params);
         // assert
