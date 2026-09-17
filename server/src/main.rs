@@ -24,6 +24,7 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
+use subtle::ConstantTimeEq;
 
 // When running in test mode, the cwd is the server directory.
 #[cfg(test)]
@@ -52,6 +53,22 @@ static ERROR_RETENTION_DAYS: LazyLock<u32> = LazyLock::new(|| {
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(90)
+});
+
+// Shared secret required on every /graphql request, as `Authorization: Bearer
+// <token>`. Absent means auth is disabled, preserving the previous
+// unauthenticated behavior for local/dev use; any network-exposed deployment
+// must set this (see doc/DEPLOY.md).
+static API_TOKEN: LazyLock<Option<String>> =
+    LazyLock::new(|| std::env::var("API_TOKEN").ok().filter(|s| !s.is_empty()));
+
+// Extra origins (beyond same-origin) allowed to make cross-origin requests,
+// e.g. a Vite dev server running on a different port. Comma-separated.
+static CORS_ALLOWED_ORIGINS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    std::env::var("CORS_ALLOWED_ORIGINS")
+        .ok()
+        .map(|s| s.split(',').map(|o| o.trim().to_owned()).collect())
+        .unwrap_or_default()
 });
 
 // Shared error repository, constructed once at startup. Opening a new SQLite
@@ -102,14 +119,42 @@ async fn graphiql() -> Result<HttpResponse> {
         .body(html))
 }
 
+// Returns true if `header` is a well-formed `Bearer <token>` value matching
+// the configured API_TOKEN, compared in constant time. Always true when no
+// API_TOKEN is configured (auth disabled).
+fn check_bearer_token(header: Option<&http::header::HeaderValue>) -> bool {
+    let Some(expected) = API_TOKEN.as_ref() else {
+        return true;
+    };
+    let Some(presented) = header
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+    else {
+        return false;
+    };
+    // Constant-time compare guards against a timing side-channel on the
+    // shared secret; length is not secret so a cheap early-out is fine.
+    presented.len() == expected.len() && bool::from(presented.as_bytes().ct_eq(expected.as_bytes()))
+}
+
 async fn graphql(
+    req: actix_web::HttpRequest,
     st: web::Data<Arc<graphql::Schema>>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
+    if !check_bearer_token(req.headers().get(http::header::AUTHORIZATION)) {
+        return Ok(HttpResponse::Unauthorized().finish());
+    }
     let datasource = ENTITY_DATA_SOURCE.clone();
     let leader = RING_LEADER.clone();
     let errors = ERROR_REPO.clone();
-    let ctx = Arc::new(graphql::GraphContext::new(datasource, leader, errors));
+    let remote_addr = req.peer_addr().map(|a| a.ip().to_string());
+    let ctx = Arc::new(graphql::GraphContext::new(
+        datasource,
+        leader,
+        errors,
+        remote_addr,
+    ));
     let res = data.execute(&st, &ctx).await;
     let body = serde_json::to_string(&res)?;
     Ok(HttpResponse::Ok()
@@ -187,19 +232,23 @@ async fn main() -> io::Result<()> {
     HttpServer::new(move || {
         // This block is called for every thread that is started, so anything
         // that should be run once is moved outside and cloned in.
+        //
+        // No `.allow_any_origin()`: the frontend is same-origin in
+        // production, and same-origin requests don't need CORS headers at
+        // all. CORS_ALLOWED_ORIGINS covers the one legitimate cross-origin
+        // case (e.g. a Vite dev server on another port).
+        let mut cors = Cors::default()
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+            .allowed_header(http::header::CONTENT_TYPE)
+            .max_age(3600);
+        for origin in CORS_ALLOWED_ORIGINS.iter() {
+            cors = cors.allowed_origin(origin);
+        }
         App::new()
             .app_data(web::Data::new(schema.clone()))
             .wrap(middleware::Logger::default())
-            .wrap(
-                // Respond to OPTIONS requests for CORS support, which is common
-                // with some GraphQL clients, including the Dart package.
-                Cors::default()
-                    .allow_any_origin()
-                    .allowed_methods(vec!["GET", "POST"])
-                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
-                    .allowed_header(http::header::CONTENT_TYPE)
-                    .max_age(3600),
-            )
+            .wrap(cors)
             .service(
                 Files::new("/assets", "./dist/assets")
                     .use_etag(true)

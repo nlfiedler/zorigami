@@ -29,6 +29,10 @@ pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     leader: Arc<dyn RingLeader>,
     errors: Arc<dyn ErrorRepository>,
+    // Caller's remote address, for audit logging of destructive/policy-
+    // weakening mutations. There is no per-user identity behind the shared
+    // bearer token, so this is the only "who" signal available.
+    remote_addr: Option<String>,
 }
 
 impl GraphContext {
@@ -36,12 +40,20 @@ impl GraphContext {
         datasource: Arc<dyn EntityDataSource>,
         leader: Arc<dyn RingLeader>,
         errors: Arc<dyn ErrorRepository>,
+        remote_addr: Option<String>,
     ) -> Self {
         Self {
             datasource,
             leader,
             errors,
+            remote_addr,
         }
+    }
+
+    // Caller's remote address, or "unknown" if it could not be determined,
+    // for use in audit log lines.
+    pub fn caller(&self) -> &str {
+        self.remote_addr.as_deref().unwrap_or("unknown")
     }
 }
 
@@ -1495,7 +1507,7 @@ impl Mutation {
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = UpdateStore::new(Box::new(repo));
         let estore: entities::Store = store.into();
-        let params: Params = estore.into();
+        let params: Params = Params::from(estore).with_caller(ctx.caller().to_owned());
         let result: entities::Store = usecase.call(params)?;
         Ok(result.into())
     }
@@ -1522,7 +1534,7 @@ impl Mutation {
         use crate::domain::usecases::delete_store::{DeleteStore, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = DeleteStore::new(Box::new(repo));
-        let params: Params = Params::new(id);
+        let params: Params = Params::new(id).with_caller(ctx.caller().to_owned());
         usecase.call(params)?;
         Ok(true)
     }
@@ -1554,7 +1566,7 @@ impl Mutation {
         let edataset: entities::Dataset = dataset.into();
         let repo = RecordRepositoryImpl::new(datasource);
         let usecase = UpdateDataset::new(Box::new(repo));
-        let params: Params = edataset.into();
+        let params: Params = Params::from(edataset).with_caller(ctx.caller().to_owned());
         let result = usecase.call(params)?;
         Ok(result)
     }
@@ -1602,7 +1614,7 @@ impl Mutation {
         use crate::domain::usecases::delete_dataset::{DeleteDataset, Params};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = DeleteDataset::new(Box::new(repo));
-        let params: Params = Params::new(id.clone());
+        let params: Params = Params::new(id.clone()).with_caller(ctx.caller().to_owned());
         usecase.call(params)?;
         Ok(id)
     }

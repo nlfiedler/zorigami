@@ -52,6 +52,7 @@ ulid = "2.0.1"
 uuid = { workspace = true, features = ["serde", "v4", "v5"] }
 whoami = "2.0.2"
 xid = { workspace = true }
+subtle = "2.6.1"
 
 [target.'cfg(unix)'.dependencies]
 xattr = "1.0.0"
