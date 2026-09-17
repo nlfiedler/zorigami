@@ -43,7 +43,11 @@ are both required — neither is sufficient alone.
 
 ---
 
-## Tier 1 — Storage-Side Immutability (WORM)
+## Tier 1 — Storage-Side Immutability (WORM) — ✅ Implemented
+
+Shipped across `4d4ce5e` (S3/MinIO), `9a6ef7c` (Azure), `7a65fbf` (GCS), plus
+follow-up hardening (`13e103c`, `356c6be`, `2225742`). See git history for
+details; the design below reflects what was built.
 
 This is the load-bearing change. Pack files are content-addressed and never
 mutated after upload, which maps cleanly onto Write-Once-Read-Many storage.
@@ -107,7 +111,11 @@ enabled when `lock_days > 0`. Document the manual provisioning steps in
 
 ---
 
-## Tier 2 — Credential Separation (Defense in Depth)
+## Tier 2 — Credential Separation (Defense in Depth) — ✅ Implemented
+
+Shipped in `f5b4cf5` (backend append-only credentials) and `faf9e59` (frontend
+exposure of the setting). See git history for details; the design below
+reflects what was built.
 
 Even with compliance-mode locks, the backup path should not hold delete rights at
 all. Splitting the identity means a compromised host can append new backups but
@@ -145,13 +153,75 @@ line of defense.
 Independent of storage, the unauthenticated API is a direct path to data
 destruction and to weakening the policies the other tiers depend on.
 
-### Authentication
+**Status:** no auth/session/token infrastructure exists anywhere in the
+codebase today (confirmed by full-text search of `server/src`). This section
+is now an implementation-ready design, not just a proposal; decisions below
+were made explicitly rather than left open, per the "Auth scheme choice" item
+in Open Questions.
 
-Introduce authentication on the GraphQL endpoint (`server/src/main.rs`,
-`server/src/preso/graphql.rs`). At minimum, gate all **mutations** behind a
-credential; queries may stay open if desired, but mutations must not be callable
-anonymously. The CORS `.allow_any_origin()` posture should be tightened in
-tandem.
+### Authentication — static bearer token
+
+**Decision:** a single shared secret via a new `API_TOKEN` env var, checked as
+an `Authorization: Bearer <token>` header. Rejected alternatives:
+username/password+sessions (needs a user store and password hashing for a
+tool with exactly one operator — unjustified complexity) and mTLS (strong, but
+cert issuance/rotation is heavy operational burden for a self-hosted
+single-user tool, and doesn't fit a browser GraphiQL session). This matches
+the project's existing config style (`LazyLock` + `std::env::var`, e.g.
+`ERROR_RETENTION_DAYS` in `server/src/main.rs:50-55`) and the CORS layer
+already whitelists the `AUTHORIZATION` header (`main.rs:199`) without anything
+reading it yet.
+
+- **Config:** `API_TOKEN` (optional). Absent = auth disabled, matching this
+  project's existing opt-in pattern for security controls (`lock_days`,
+  `append_only`) — preserves today's zero-config local dev experience but
+  means any network-exposed deployment **must** set it; call this out
+  prominently in `doc/DEPLOY.md` and in the top-level env var table in
+  `CLAUDE.md`.
+- **Scope of the gate:** the whole `/graphql` endpoint (queries *and*
+  mutations), not just mutations. The spec's "at minimum" bar only requires
+  mutations, but reliably distinguishing a query from a mutation
+  pre-execution would mean parsing the GraphQL document before handing it to
+  Juniper — not worth the complexity when uniform gating is strictly stronger
+  and simpler. `/graphiql` (the IDE page) and `/liveness` stay reachable
+  unauthenticated: GraphiQL is static HTML with no data of its own (the
+  operator pastes the bearer token into its own header panel to issue
+  queries), and `/liveness` is a health check.
+- **Where it's enforced:** the `graphql()` handler (`main.rs:105-118`). Add an
+  `HttpRequest` parameter to read the `Authorization` header before calling
+  `data.execute(&st, &ctx)`; on a missing/mismatched token, return `401`
+  without touching `GraphContext` or the schema at all. This is coarser than a
+  per-resolver check but is one call site instead of ~15 resolvers
+  (`server/src/preso/graphql.rs:1469-1683`) each needing a guard.
+- **Comparison:** constant-time, via the `subtle` crate (new dependency;
+  `server/Cargo.toml` has no auth/crypto crate today beyond `rand`/`sha1` and
+  transitive `ring`). A plain `==` on a secret risks a timing side-channel;
+  `subtle::ConstantTimeEq` is a small, no-std-friendly, well-audited way to
+  avoid adding a maintenance burden.
+- **Audit context:** thread the caller's remote address (`HttpRequest::peer_addr()`)
+  into `GraphContext` (`server/src/preso/graphql.rs:28-46`) alongside the
+  existing `datasource`/`leader`/`errors` fields, so audit log lines below can
+  record *where* a destructive/policy-weakening call came from. There is no
+  per-user identity with a single shared token, so this is the only "who"
+  signal available — document that limitation rather than implying more
+  attribution than the scheme provides.
+- **CORS:** drop `.allow_any_origin()` (`main.rs:197`) unconditionally — it
+  undermines the bearer-token header allowlist that's already there
+  (`main.rs:199`) by letting any origin send it cross-site. Default to
+  same-origin only (the frontend is served by the same Actix app in
+  production, so no explicit allowed-origin is needed there). Add an optional
+  `CORS_ALLOWED_ORIGINS` env var (comma-separated) for the one legitimate
+  cross-origin case: running the Vite dev server on a different port against
+  a local backend.
+- **Frontend:** `client/apollo-provider.tsx:9-24` builds a bare `HttpLink`
+  with no auth link today, and there is no login/token-entry UI anywhere
+  under `client/pages/` or `client/components/`. Add: (a) a token field on
+  the Settings page, persisted to `localStorage`; (b) an Apollo `setContext`
+  link (from `@apollo/client/link/context`), composed before the `HttpLink`,
+  that reads the token from `localStorage` and sets the `Authorization`
+  header; (c) minimal 401 handling — an error link that surfaces "unauthorized,
+  set your API token in Settings" instead of a silent/confusing GraphQL error.
+  This is real new UI, not just plumbing — track it as its own step.
 
 ### Privileged, retention-weakening operations
 
@@ -161,21 +231,90 @@ are the levers an attacker pulls to make zorigami delete its own data:
 - `updateStore` / `updateDataset` when they **reduce** retention
   (`PackRetention` or `SnapshotRetention` toward fewer/shorter), or reduce a
   store's `lock_days`.
-- `deleteDataset` (`server/src/domain/usecases/delete_dataset.rs` — currently no
-  safeguards) and `deleteStore`
-  (`server/src/domain/usecases/delete_store.rs` — already guards against deleting
-  an in-use store).
+- `deleteDataset` (`server/src/domain/usecases/delete_dataset.rs:19-24` —
+  currently a one-line passthrough with no safeguards) and `deleteStore`
+  (`server/src/domain/usecases/delete_store.rs:19-35` — already guards against
+  deleting an in-use store).
 
-Proposed guard: refuse to *shorten* retention or shorten a lock window without an
-explicit out-of-band confirmation (a config flag, a separate admin token, or a
-mandatory cooling-off period). Silent retention reduction is the cleanest attack
-and should be the hardest single thing to do.
+**Decision — hard reject, no override, for retention/lock-window reduction.**
+`updateStore`/`updateDataset` must unconditionally refuse a request that would
+weaken retention or shorten `lock_days`; there is no `confirm: true` argument
+and no separate admin token that pushes it through. This is deliberately the
+same "hardest single thing to do" bar the spec calls for: silent retention
+reduction through the always-listening API is exactly the attack this tier
+closes, and a second in-band override defeats that. If an operator has a
+genuine, deliberate need to shorten retention, they do it out-of-band (direct
+database edit, or delete-and-recreate the store/dataset — both of which are
+themselves authenticated and audit-logged, and neither is achievable silently
+through a single API call). This guard does **not** apply to `deleteDataset` /
+`deleteStore` themselves — outright deletion is already a visible, singular,
+authenticated action (not a config edit that looks routine), so for those two
+the Tier 3 requirement is simply: require authentication (above) and audit-log
+every call (below). `delete_store.rs`'s existing in-use guard is unaffected.
 
-### Audit logging
+Implementation, following the existing "fetch existing, compare old vs new,
+reject on weakening" shape already used for `lock_days`/`append_only` in
+`update_store.rs:39-61`:
 
-Log every destructive or policy-weakening operation (who, when, what changed,
-old → new value) so that a retention change is observable after the fact even if
-it is not blocked.
+- **`update_store.rs`** — add a `PackRetention` comparison next to the
+  existing `lock_days`/`append_only` checks (same `if let Some(existing) =
+  self.repo.get_store(&store.id)?` block). Ordering: `ALL` is strongest
+  (infinite retention); `ALL → DAYS(n)` is always a reduction; `DAYS(n) →
+  DAYS(m)` is a reduction iff `m < n`. Add a
+  `PackRetention::is_weaker_than(&self, other: &PackRetention) -> bool` helper
+  in `server/src/domain/entities.rs` next to the enum (line 242) to keep the
+  comparison out of the use case.
+- **`update_dataset.rs`** — currently has *no* old-vs-new comparison at all
+  before overwriting `retention` (`dataset.retention = params.retention` at
+  line 64), unlike its sibling basepath-change guard (lines 44-49). Add the
+  same shape: fetch the existing dataset (already done at line 42 for the
+  basepath check), compare `SnapshotRetention`. Ordering is not fully linear
+  (`ALL`/`COUNT(n)`/`DAYS(n)`/`AUTO` are different dimensions), so the rule is
+  conservative by design: `ALL → anything else` is a reduction; `COUNT(n) →
+  COUNT(m)` or `DAYS(n) → DAYS(m)` are reductions iff `m < n`; any change that
+  *switches policy type* (e.g. `COUNT(1000) → DAYS(7)`, or anything `→ AUTO`)
+  is also treated as a reduction and rejected, because it's not provably safe
+  and "hard reject, no override" means ambiguous cases fail closed rather than
+  being guessed at. Add the mirroring `SnapshotRetention::is_weaker_than(...)`
+  helper next to that enum (line 370).
+- Both use cases currently have **zero logging** in `call()` — add the audit
+  logging described next as part of this same change, not as a follow-up.
+
+### Audit logging — log lines, no persisted store
+
+**Decision:** follow the existing background-task convention
+(`log::warn!`/`info!` in `server/src/tasks/prune.rs` and `leader.rs`, e.g.
+`prune.rs:625` `warn!("pack-prune: {}", msg)`) rather than adding a persisted,
+queryable audit table. A SQLite-backed `AuditRepository` cloned from
+`ErrorRepositoryImpl` (`server/src/data/repositories/errors.rs`) was
+considered — it would survive log rotation and be inspectable from the UI —
+but is materially more work (new entity, repository trait, two data-source
+impls, GraphQL type, its own retention/pruning) for a single-operator tool
+that presumably already centralizes logs. Revisit if that assumption turns
+out wrong in practice.
+
+- **Tag:** `"audit: "` prefix, mirroring the existing `"pack-prune: "` /
+  `"scrub: "` style, so these lines are easy to grep out of mixed log output.
+- **What gets logged, and where:**
+  - `delete_dataset.rs` — one line per call: dataset id, remote address,
+    outcome (there's no existing guard to log a rejection for, so this is
+    always a success line until/unless a future guard is added here).
+  - `delete_store.rs` — one line per call, including the existing in-use
+    rejection (currently silent beyond the returned `Err`).
+  - `update_store.rs` / `update_dataset.rs` — one line whenever a call
+    *touches* `retention`, `lock_days`, or `append_only`, whether accepted or
+    rejected, with old → new value and outcome. This is the line that makes a
+    retention-weakening *attempt* observable even though it's blocked, per
+    the spec's original intent — the value here is evidence of an attack
+    attempt, not just a record of successful changes.
+  - `delete_captured_error` / `clear_captured_errors`
+    (`server/src/preso/graphql.rs:1673,1679`) — lower priority, but worth
+    including since they're destructive on the error log; flagged as a
+    stretch item, not blocking the rest of Tier 3.
+- **Caveat to document:** with a single shared bearer token there is no
+  per-user identity, so "who" in the audit line is only ever "an
+  authenticated caller from `<remote addr>`" — do not design log lines or
+  docs to imply richer attribution than that.
 
 ---
 
@@ -183,11 +322,21 @@ it is not blocked.
 
 1. **Tier 1, steps 1–2** — per-object retention on upload for S3/Azure/GCS/MinIO,
    plus the pruner change to skip still-locked objects. This delivers genuine
-   WORM and is the highest-value increment.
+   WORM and is the highest-value increment. ✅ Done.
 2. **Tier 2** — split the backup credential from any delete capability, so the
-   locks hold even under host compromise.
-3. **Tier 3** — authentication on mutations and a guard on retention-weakening,
-   closing the self-destruct path through the API.
+   locks hold even under host compromise. ✅ Done.
+3. **Tier 3** — authentication on the API and a hard guard on
+   retention-weakening, closing the self-destruct path through the API. In
+   progress; suggested landing order within the tier, mirroring how Tiers 1/2
+   shipped in incremental passes:
+   1. Backend auth: `API_TOKEN`, the `graphql()` handler gate, CORS
+      tightening, `subtle` dependency.
+   2. Retention-reduction guards + audit logging in `update_store.rs` /
+      `update_dataset.rs` / `delete_dataset.rs` / `delete_store.rs`.
+   3. Frontend: token entry UI, Apollo `setContext` link, 401 handling.
+   4. `doc/DEPLOY.md` — new "Authentication" section (same shape as the
+      existing Immutable Backups / Append-Only Credentials sections), plus
+      the `CLAUDE.md` env var table.
 
 Tiers can land independently, but the protection is only complete with all three:
 Tier 1 makes objects undeletable, Tier 2 ensures the compromised host cannot use
@@ -209,6 +358,17 @@ policy that makes Tier 1 work.
 - **Azurite / MinIO test parity.** Verify the local test doubles
   (`containers/docker-compose.yml`) honor object-lock semantics, or mark those
   integration tests as requiring a real account.
-- **Auth scheme choice.** Tier 3 needs a decision on the credential model (static
-  token, OIDC, mTLS) consistent with how zorigami is typically deployed
-  (localhost-bound by default, optionally network-exposed via `HOST`).
+- **Auth scheme choice.** ~~Tier 3 needs a decision on the credential
+  model~~ Decided: a static bearer token (`API_TOKEN`). See Tier 3 above for
+  the rationale and the rejected alternatives (session-based auth, mTLS).
+- **Retention-guard false positives.** The `SnapshotRetention` "policy type
+  switch is always a reduction" rule in Tier 3 is deliberately conservative
+  and will reject some legitimate changes (e.g. `COUNT(1000) → DAYS(365)`
+  that a user genuinely intends to be equivalent or stronger). Since there is
+  no override by design, the only path forward for those is
+  delete-and-recreate the dataset. Revisit if this proves too blunt in
+  practice.
+- **Single shared token has no per-user attribution.** Audit log lines can
+  only say "an authenticated caller from `<remote addr>`," not who. Acceptable
+  for a single-operator tool; would need revisiting if zorigami ever grows
+  multi-user deployments.
