@@ -99,6 +99,10 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
 
 Configuration of the application is partly accomplished using environment variables. Defining the data sets, pack stores, local time zone, and bucket naming policy is done through the web interface (or GraphQL if you like).
 
+- **API_TOKEN**
+  - Shared secret required on every `/graphql` request, as `Authorization: Bearer <token>`. Absent (the default) disables authentication, preserving prior behavior for local use. **Any deployment reachable over a network other than `127.0.0.1` should set this** — see [Authentication](#authentication) below.
+- **CORS_ALLOWED_ORIGINS**
+  - Comma-separated list of additional origins allowed to make cross-origin requests to `/graphql` (e.g. a Vite dev server on another port). The frontend served by this application is same-origin and needs no entry here; this is only for cross-origin API clients.
 - **DATABASE_TYPE**
   - Either `rocksdb` (the default) or `sqlite` to choose between RocksDB and SQLite
 - **DB_PATH**
@@ -500,3 +504,50 @@ For SFTP the same attribute is applied on the server, to the directory the accou
 lands in; OpenSSH itself has no per-operation permission model to restrict. In every
 case, set **Append Only** on the store as well so zorigami does not attempt deletes
 it cannot perform.
+
+## Authentication
+
+By default the GraphQL API at `/graphql` has no authentication at all: anyone who
+can reach it can read everything and issue any mutation, including ones that
+weaken retention or delete a dataset or store outright. This is _Tier 3_ of
+[the ransomware protection plan](specs/0009-Ransomware-Protection.md) — it closes
+the path an attacker who reaches the API would otherwise use to rewrite the
+policies Tiers 1 and 2 depend on. **Set `API_TOKEN` for any deployment reachable
+from outside `127.0.0.1`.**
+
+### How it works
+
+- Set the `API_TOKEN` environment variable to a long, random secret before
+  starting the server. Once set, every request to `/graphql` — queries and
+  mutations alike — must include an `Authorization: Bearer <token>` header, or
+  the server responds `401 Unauthorized` without touching the database.
+- Leaving `API_TOKEN` unset disables authentication entirely, matching prior
+  behavior. This is only appropriate for `127.0.0.1`-bound local use.
+- `/graphiql` (the interactive API explorer) and `/liveness` (the health check)
+  remain reachable without a token — `/graphiql` is a static page with no data
+  of its own; to actually issue a query from it, open its **Request Headers**
+  panel and add `Authorization: Bearer <token>` there.
+- The frontend (the web UI) needs the same header on every request it makes.
+  Enter the token on the Settings page; it is stored in the browser's local
+  storage and attached automatically from then on. If a request comes back
+  unauthorized, the UI will prompt you to re-enter it.
+- CORS is locked down to same-origin by default (no `Access-Control-Allow-Origin:
+  *`), since the header allowlist alone does nothing to stop a malicious page in
+  another origin from directing a browser to send it. If you run the frontend
+  dev server (Vite) on a different port than the backend, add that origin to
+  `CORS_ALLOWED_ORIGINS`.
+
+### What it does not do
+
+- There is a single shared secret, not per-user accounts, so an audit log entry
+  can only say a request was authenticated and where it came from
+  (`caller=<remote address>`), never *who*. This is a deliberate trade-off for a
+  single-operator tool; do not read more attribution into the logs than that.
+- Retention-weakening mutations (`updateStore` / `updateDataset` reducing pack or
+  snapshot retention, or a store's `lock_days`) are refused **even from an
+  authenticated caller**, with no override. There is no `confirm` flag and no
+  separate admin token — if you have a deliberate, considered reason to shorten
+  retention, delete and recreate the store or dataset instead. Every rejected
+  attempt, and every `deleteDataset` / `deleteStore` call, is written to the
+  server log as `audit: ...` regardless of outcome, so it is worth keeping an
+  eye on those lines (or shipping them to wherever you centralize logs).

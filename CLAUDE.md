@@ -79,6 +79,8 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 | Variable | Purpose |
 |---|---|
 | `RUST_LOG` | Log level (e.g., `info`, `debug`) |
+| `API_TOKEN` | Bearer token required on `/graphql` requests; unset disables auth (see doc/DEPLOY.md) |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated extra origins allowed to call `/graphql` cross-origin |
 | `DB_PATH` | Override entity database path |
 | `DATABASE_TYPE` | Selects entity-store backend: `rocksdb` (default) or `sqlite` |
 | `HOST` / `PORT` | Server bind address/port |
