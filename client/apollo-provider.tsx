@@ -13,6 +13,20 @@ import { SetContextLink } from '@apollo/client/link/context';
 import { ErrorLink } from '@apollo/client/link/error';
 import { getApiToken, setUnauthorized } from './auth.ts';
 
+// declare the non-default errorPolicy used in defaultOptions below
+declare module '@apollo/client' {
+  export namespace ApolloClient {
+    namespace DeclareDefaultOptions {
+      interface Query {
+        errorPolicy: 'all';
+      }
+      interface WatchQuery {
+        errorPolicy: 'all';
+      }
+    }
+  }
+}
+
 const ApolloContext = createContext<ApolloClient | undefined>();
 
 export function ApolloProvider(props: { children: any }) {

@@ -84,10 +84,7 @@ export function Home() {
   };
   const sortedDatasets = () => {
     // the datasets returned from the server are in no particular order
-    const sorted = [];
-    for (const dataset of datasetsQuery()?.datasets ?? []) {
-      sorted.push(dataset);
-    }
+    const sorted = Array.from(datasetsQuery()?.datasets ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
@@ -252,13 +249,15 @@ function formatTime(value: number): string {
 function formatSchedule(schedule: Schedule) {
   if (schedule.frequency === 'HOURLY') {
     return 'hourly';
-  } else if (schedule.frequency === 'DAILY') {
+  }
+  if (schedule.frequency === 'DAILY') {
     if (schedule.timeRange) {
       if (schedule.timeRange.startTime && schedule.timeRange.stopTime) {
         const start = formatTime(schedule.timeRange.startTime);
         const stop = formatTime(schedule.timeRange.stopTime);
         return `daily from ${start} until ${stop}`;
-      } else if (schedule.timeRange.startTime) {
+      }
+      if (schedule.timeRange.startTime) {
         const start = formatTime(schedule.timeRange.startTime);
         return `daily from ${start}`;
       }

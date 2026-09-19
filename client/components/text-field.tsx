@@ -83,9 +83,8 @@ export function RequiredTextInput(props: RequiredTextInputProps) {
     const v = props.field();
     if (v.length === 0) {
       return `A value for ${props.label} is required.`;
-    } else {
-      return '';
     }
+    return '';
   });
 
   return (
@@ -133,9 +132,8 @@ export function RequiredHiddenInput(props: RequiredHiddenInputProps) {
     const v = props.field();
     if (v.length === 0) {
       return `A value for ${props.label} is required.`;
-    } else {
-      return '';
     }
+    return '';
   });
   const [hidden, setHidden] = createSignal(true);
 

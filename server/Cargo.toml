@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 actix = "0.13.0"
 actix-cors = "0.7.0"
-actix-files = "0.6.0"
+actix-files = "0.7.0"
 actix-rt = "2.8.0"
 actix-web = "4.3.0"
 anyhow = { workspace = true }
@@ -23,8 +23,8 @@ database_core = { path = "../database/database_core" }
 database_rocks = { path = "../database/database_rocks" }
 dotenvy = { workspace = true }
 env_logger = "0.11.0"
-exaf-rs = "3.1.0"
-fastcdc = "4.0.0"
+exaf-rs = "3.2.0"
+fastcdc = "5.0.0"
 globset = "0.4.13"
 hashed-array-tree = "1.2.0"
 juniper = { version = "0.17.0", features = ["chrono", "schema-language"] }
@@ -48,7 +48,7 @@ store_minio = { path = "../stores/store_minio" }
 store_sftp = { path = "../stores/store_sftp" }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-ulid = "2.0.1"
+ulid = "3.0.0"
 uuid = { workspace = true, features = ["serde", "v4", "v5"] }
 whoami = "2.0.2"
 xid = { workspace = true }

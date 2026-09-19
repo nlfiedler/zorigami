@@ -225,10 +225,7 @@ function DatabaseRestore() {
   });
   const sortedStores = () => {
     // the stores returned from the server are in no particular order
-    const sorted = [];
-    for (const store of storesQuery()?.stores ?? []) {
-      sorted.push(store);
-    }
+    const sorted = Array.from(storesQuery()?.stores ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };

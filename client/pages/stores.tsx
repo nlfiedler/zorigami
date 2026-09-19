@@ -423,10 +423,7 @@ export function StoresPage(props: any) {
   });
   const sortedStores = () => {
     // the stores returned from the server are in no particular order
-    const sorted = [];
-    for (const store of storesQuery()?.stores ?? []) {
-      sorted.push(store);
-    }
+    const sorted = Array.from(storesQuery()?.stores ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
@@ -780,7 +777,11 @@ function lockDaysError(
   original: number,
   retention: PackRetention
 ): string {
-  if (!Number.isInteger(lockDays) || lockDays < 0 || lockDays > MAX_LOCK_DAYS) {
+  if (
+    !Number.isSafeInteger(lockDays) ||
+    lockDays < 0 ||
+    lockDays > MAX_LOCK_DAYS
+  ) {
     return `Lock Days must be a whole number from 0 to ${MAX_LOCK_DAYS}.`;
   }
   if (original > 0 && lockDays < original) {

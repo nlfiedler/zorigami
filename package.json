@@ -23,24 +23,24 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@graphql-codegen/cli": "^6.3.1",
-    "@graphql-codegen/typescript": "^5.0.10",
-    "@graphql-codegen/typescript-resolvers": "^5.1.8",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
-    "@typescript-eslint/parser": "^8.59.0",
-    "eslint": "^10.2.1",
-    "eslint-plugin-unicorn": "^64.0.0",
-    "prettier": "^3.8.3",
-    "sass-embedded": "^1.99.0",
+    "@graphql-codegen/cli": "^7.4.1",
+    "@graphql-codegen/typescript": "^6.1.0",
+    "@graphql-codegen/typescript-resolvers": "^6.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "^10.11.0",
+    "eslint-plugin-unicorn": "^76.0.0",
+    "prettier": "^3.9.8",
+    "sass-embedded": "^1.104.1",
     "solid-devtools": "^0.34.5",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.0",
-    "vite": "^8.0.9",
-    "vite-plugin-solid": "^2.11.12"
+    "typescript-eslint": "^8.70.0",
+    "vite": "^8.3.0",
+    "vite-plugin-solid": "^2.11.14"
   },
   "dependencies": {
-    "@apollo/client": "^4.1.7",
-    "solid-js": "^1.9.12",
-    "@solidjs/router": "^0.16.1"
+    "@apollo/client": "^4.3.1",
+    "@solidjs/router": "^1.0.0",
+    "solid-js": "^1.9.15"
   }
 }

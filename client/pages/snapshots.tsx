@@ -57,10 +57,7 @@ export function SnapshotsPage(props: any) {
   });
   const sortedDatasets = () => {
     // the datasets returned from the server are in no particular order
-    const sorted = [];
-    for (const dataset of datasetsQuery()?.datasets ?? []) {
-      sorted.push(dataset);
-    }
+    const sorted = Array.from(datasetsQuery()?.datasets ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
@@ -100,9 +97,7 @@ export function SnapshotsPage(props: any) {
                         }}
                       >
                         <div class="list-item-content">
-                          <div class="list-item-title">
-                            {dataset.basepath}
-                          </div>
+                          <div class="list-item-title">{dataset.basepath}</div>
                           <div class="list-item-description">
                             Status: {dataset.status.status}
                           </div>
@@ -276,10 +271,7 @@ export function Snapshots() {
                   on:click={compare}
                 >
                   <span class="icon">
-                    <i
-                      class="fa-solid fa-code-compare"
-                      aria-hidden="true"
-                    ></i>
+                    <i class="fa-solid fa-code-compare" aria-hidden="true"></i>
                   </span>
                   <span>Compare</span>
                 </button>
@@ -761,10 +753,10 @@ function TreeViewer(props: TreeViewerProps) {
                   ) {
                     setStore('selections', []);
                   } else {
-                    const selections = [];
-                    for (const entry of treeQuery()?.tree?.entries!) {
-                      selections.push(entry.name);
-                    }
+                    const selections = Array.from(
+                      treeQuery()?.tree?.entries!,
+                      (entry) => entry.name
+                    );
                     setStore('selections', selections);
                   }
                 }}
@@ -793,9 +785,8 @@ function TreeViewer(props: TreeViewerProps) {
                       setStore('selections', (selections) => {
                         if (selections.includes(item.name)) {
                           return selections.filter((e) => e !== item.name);
-                        } else {
-                          return [...selections, item.name];
                         }
+                        return [...selections, item.name];
                       });
                     }}
                   />
@@ -842,13 +833,17 @@ function TreeViewer(props: TreeViewerProps) {
 function itemName(reference: string): string {
   if (reference.startsWith('file-')) {
     return reference.slice(5);
-  } else if (reference.startsWith('tree-')) {
+  }
+  if (reference.startsWith('tree-')) {
     return reference.slice(5);
-  } else if (reference === 'small-') {
+  }
+  if (reference === 'small-') {
     return '(empty)';
-  } else if (reference.startsWith('small-')) {
+  }
+  if (reference.startsWith('small-')) {
     return reference.slice(6);
-  } else if (reference.startsWith('link-')) {
+  }
+  if (reference.startsWith('link-')) {
     return reference.slice(5);
   }
   return reference;

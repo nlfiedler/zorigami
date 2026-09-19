@@ -31,7 +31,10 @@ pub fn get_passphrase() -> String {
 pub fn find_file_chunks(infile: &Path, avg_size: usize) -> io::Result<Vec<Chunk>> {
     let file = fs::File::open(infile)?;
     let mmap = unsafe { Mmap::map(&file).expect("cannot create memmap?") };
-    let min_size = avg_size / 4;
+    // FastCDC v2020 requires even sizes; rounding down preserves the cut
+    // points of earlier releases, which halved (and truncated) odd values.
+    let avg_size = avg_size & !1;
+    let min_size = (avg_size / 4) & !1;
     let max_size = avg_size * 4;
     let chunker = FastCDC::new(&mmap[..], min_size, avg_size, max_size);
     let mut results = Vec::new();

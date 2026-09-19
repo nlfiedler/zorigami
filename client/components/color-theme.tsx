@@ -113,10 +113,11 @@ function classForTheme(theme: string) {
 function dataForTheme(theme: string) {
   if (theme === 'light') {
     return 'light';
-  } else if (theme === 'dark') {
-    return 'dark';
   }
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  if (
+    theme === 'dark' ||
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  ) {
     return 'dark';
   }
   return 'light';

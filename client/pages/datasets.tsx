@@ -70,10 +70,7 @@ export function DatasetsPage(props: any) {
   });
   const sortedDatasets = () => {
     // the datasets returned from the server are in no particular order
-    const sorted = [];
-    for (const dataset of datasetsQuery()?.datasets ?? []) {
-      sorted.push(dataset);
-    }
+    const sorted = Array.from(datasetsQuery()?.datasets ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
@@ -311,10 +308,7 @@ function DatasetForm(props: DatasetFormProps) {
   });
   const sortedStores = () => {
     // the stores returned from the server are in no particular order
-    const sorted = [];
-    for (const store of storesQuery()?.stores ?? []) {
-      sorted.push(store);
-    }
+    const sorted = Array.from(storesQuery()?.stores ?? []);
     sorted.sort((a, b) => a.id.localeCompare(b.id));
     return sorted;
   };
@@ -617,14 +611,13 @@ function formatTime(value: number | undefined): string {
     const hh = String(hours).padStart(2, '0');
     const mm = String(minutes).padStart(2, '0');
     return `${hh}:${mm}`;
-  } else {
-    return '00:00';
   }
+  return '00:00';
 }
 
 // Convert the 'hh:mm' string from time into seconds-since-midnight.
 function parseTime(value: string): number {
-  const [hh, mm] = value.split(':');
+  const [hh, mm] = value.split(':', 2);
   const hours = Number.parseInt(hh!);
   const minutes = Number.parseInt(mm!);
   return hours * 3600 + minutes * 60;

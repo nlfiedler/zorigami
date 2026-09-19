@@ -9,7 +9,9 @@ const config: CodegenConfig = {
         // typescript-resolvers plugin: Adds an index signature to any generated resolver(?)
         useIndexSignature: true,
         // typescript plugin: Will use import type {} rather than import {} when importing only types.
-        useTypeImports: true
+        useTypeImports: true,
+        // codegen v6 defaults custom scalars to unknown; keep the prior any
+        defaultScalarType: 'any'
       },
       plugins: ['typescript', 'typescript-resolvers']
     }
