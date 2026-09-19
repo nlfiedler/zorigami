@@ -148,14 +148,19 @@ line of defense.
 
 ---
 
-## Tier 3 — Control-Plane Hardening
+## Tier 3 — Control-Plane Hardening — ✅ Implemented
+
+Shipped in `421fd27` (backend bearer-token auth and CORS lockdown), `99049d4`
+(retention-reduction guards and audit logging), `1ea76b2` (deployment docs),
+and the frontend token entry that followed. The audit logging of
+`delete_captured_error` / `clear_captured_errors` (a stretch item below) was
+not done.
 
 Independent of storage, the unauthenticated API is a direct path to data
 destruction and to weakening the policies the other tiers depend on.
 
-**Status:** no auth/session/token infrastructure exists anywhere in the
-codebase today (confirmed by full-text search of `server/src`). This section
-is now an implementation-ready design, not just a proposal; decisions below
+**Background:** before this tier, no auth/session/token infrastructure existed
+anywhere in the codebase. The decisions below
 were made explicitly rather than left open, per the "Auth scheme choice" item
 in Open Questions.
 
@@ -326,9 +331,9 @@ out wrong in practice.
 2. **Tier 2** — split the backup credential from any delete capability, so the
    locks hold even under host compromise. ✅ Done.
 3. **Tier 3** — authentication on the API and a hard guard on
-   retention-weakening, closing the self-destruct path through the API. In
-   progress; suggested landing order within the tier, mirroring how Tiers 1/2
-   shipped in incremental passes:
+   retention-weakening, closing the self-destruct path through the API. ✅ Done,
+   landed in this order, mirroring how Tiers 1/2 shipped in incremental
+   passes:
    1. Backend auth: `API_TOKEN`, the `graphql()` handler gate, CORS
       tightening, `subtle` dependency.
    2. Retention-reduction guards + audit logging in `update_store.rs` /

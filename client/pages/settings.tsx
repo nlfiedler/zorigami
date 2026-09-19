@@ -10,6 +10,7 @@ import {
 } from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
+import { getApiToken, setApiToken } from '../auth.ts';
 import {
   type BucketNamingPolicyInput,
   BucketPolicyKind,
@@ -61,42 +62,150 @@ const SET_TIMEZONE: TypedDocumentNode<Mutation, MutationSetTimezoneArgs> = gql`
 
 export function Settings() {
   const client = useApolloClient();
-  const [confQuery] = createResource(async () => {
+  const [confQuery, { refetch }] = createResource(async () => {
     const { data } = await client.query({ query: CONFIGURATION });
     return data;
   });
   return (
-    <Suspense fallback={'...'}>
-      <div class="section">
-        <h2 class="title mt-4">Backup Configuration</h2>
-        <ul>
-          <li>
-            <strong>Hostname:</strong> {confQuery()?.configuration.hostname}
-          </li>
-          <li>
-            <strong>Username:</strong> {confQuery()?.configuration.username}
-          </li>
-          <li>
-            <strong>Computer ID:</strong>{' '}
-            {confQuery()?.configuration.computerId}
-          </li>
-          <li>
-            <strong>Database Bucket:</strong>{' '}
-            {confQuery()?.configuration.computerBucket}
-          </li>
-        </ul>
+    <>
+      {/* outside of Suspense so it remains usable when the server rejects
+          every query for want of a valid token */}
+      <ApiTokenForm onSaved={() => refetch()} />
+      <Suspense fallback={'...'}>
+        <div class="section">
+          <h2 class="title mt-4">Backup Configuration</h2>
+          <ul>
+            <li>
+              <strong>Hostname:</strong> {confQuery()?.configuration.hostname}
+            </li>
+            <li>
+              <strong>Username:</strong> {confQuery()?.configuration.username}
+            </li>
+            <li>
+              <strong>Computer ID:</strong>{' '}
+              {confQuery()?.configuration.computerId}
+            </li>
+            <li>
+              <strong>Database Bucket:</strong>{' '}
+              {confQuery()?.configuration.computerBucket}
+            </li>
+          </ul>
+        </div>
+        <Show when={confQuery()}>
+          {(conf) => (
+            <>
+              <TimezoneForm timezone={conf().configuration.timezone} />
+              <BucketNamingForm
+                bucketNaming={conf().configuration.bucketNaming}
+              />
+            </>
+          )}
+        </Show>
+      </Suspense>
+    </>
+  );
+}
+
+interface ApiTokenFormProps {
+  onSaved: () => void;
+}
+
+function ApiTokenForm(props: ApiTokenFormProps) {
+  const [value, setValue] = createSignal(getApiToken() ?? '');
+  const [visible, setVisible] = createSignal(false);
+  const [success, setSuccess] = createSignal(false);
+
+  const save = () => {
+    setApiToken(value().trim());
+    setSuccess(true);
+    props.onSaved();
+  };
+
+  return (
+    <div class="section">
+      <div class="container">
+        <form
+          on:submit={(ev) => {
+            ev.preventDefault();
+            save();
+          }}
+        >
+          <h2 class="title mt-4">API Token</h2>
+          <nav class="mb-4 level">
+            <div class="level-right">
+              <div class="level-item">
+                <button
+                  type="submit"
+                  class="button is-primary"
+                  classList={{ 'is-success': success() }}
+                >
+                  <span class="icon">
+                    <i
+                      class={
+                        success() ? 'fas fa-check' : 'fa-solid fa-floppy-disk'
+                      }
+                    ></i>
+                  </span>
+                  <span>Save</span>
+                </button>
+              </div>
+            </div>
+          </nav>
+          <div class="mb-2 field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label" for="api-token-input">
+                Token
+              </label>
+            </div>
+            <div class="field-body">
+              <div class="field is-narrow has-addons">
+                <div class="control is-expanded">
+                  <input
+                    id="api-token-input"
+                    class="input"
+                    type={visible() ? 'text' : 'password'}
+                    autocomplete="off"
+                    value={value()}
+                    on:input={(ev) => {
+                      setValue(ev.target.value);
+                      setSuccess(false);
+                    }}
+                  />
+                </div>
+                <div class="control">
+                  <button
+                    type="button"
+                    class="button is-light"
+                    title={visible() ? 'Hide token' : 'Show token'}
+                    on:click={() => setVisible((v) => !v)}
+                  >
+                    <span class="icon">
+                      <i
+                        class={
+                          visible()
+                            ? 'fa-solid fa-eye-slash'
+                            : 'fa-solid fa-eye'
+                        }
+                      ></i>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2 field is-horizontal">
+            <div class="field-label" />
+            <div class="field-body">
+              <p class="help">
+                Must match the server's <code>API_TOKEN</code> setting. Stored
+                in this browser's local storage and sent with every request.
+                Leave blank if the server does not require a token.
+              </p>
+            </div>
+          </div>
+        </form>
       </div>
-      <Show when={confQuery()}>
-        {(conf) => (
-          <>
-            <TimezoneForm timezone={conf().configuration.timezone} />
-            <BucketNamingForm
-              bucketNaming={conf().configuration.bucketNaming}
-            />
-          </>
-        )}
-      </Show>
-    </Suspense>
+    </div>
   );
 }
 

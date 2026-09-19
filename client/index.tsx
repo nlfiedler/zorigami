@@ -3,9 +3,11 @@
 //
 /* @refresh reload */
 import { render } from 'solid-js/web';
-import { Router, Route } from '@solidjs/router';
+import { Show } from 'solid-js';
+import { A, Router, Route } from '@solidjs/router';
 import './assets/main.scss';
 import { ApolloProvider } from './apollo-provider.tsx';
+import { unauthorized, setUnauthorized } from './auth.ts';
 import Navbar from './components/navbar.tsx';
 import { Home } from './pages/home.tsx';
 import {
@@ -25,6 +27,15 @@ function App(props: any) {
   return (
     <>
       <Navbar />
+      <Show when={unauthorized()}>
+        <div class="container mt-4">
+          <div class="notification is-danger">
+            <button class="delete" on:click={() => setUnauthorized(false)} />
+            Unauthorized: the server rejected the API token. Set your API token
+            in <A href="/settings">Settings</A>.
+          </div>
+        </div>
+      </Show>
       {props.children}
     </>
   );
