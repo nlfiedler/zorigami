@@ -79,6 +79,21 @@ enum SnapshotRetentionPolicy {
   """ AUTO
 }
 
+"How a background task run turned out."
+enum TaskOutcome {
+  "Ran to completion with no problems." SUCCESS
+  """
+    Ran to completion but recorded one or more issues, each of which also
+    appears in the captured errors.
+  """ ISSUES
+  "Did not complete; the task returned an error." FAILED
+  """
+    Ran but had nothing to do; the reason is in the summary. Distinct from
+    Success because some tasks, restore testing in particular, can return
+    without having verified anything.
+  """ SKIPPED
+}
+
 "In combination with DayOfWeek, selects the particular week."
 enum WeekOfMonth {
   "First such weekday of the month." FIRST
@@ -371,6 +386,11 @@ type Query {
   capturedErrors(limit: Int): [CapturedError!]!
   "Return the number of currently stored captured errors."
   capturedErrorCount: BigInt!
+  """
+    Return the state of every periodic background task, including those
+    that have never run.
+  """
+  taskStatus: [TaskStatus!]!
 }
 
 "Number of database records for each entity type."
@@ -488,6 +508,43 @@ type Store {
   properties: [Property!]!
   "Pack retention policy."
   retention: PackRetention!
+}
+
+"The most recent run of a background task."
+type TaskRun {
+  """
+    Identifier of the dataset this run applies to, for the operations that
+    process one dataset per run.
+  """
+  datasetId: String
+  "When the run began, in UTC."
+  startedAt: DateTime!
+  "When the run ended, in UTC."
+  finishedAt: DateTime!
+  "Elapsed wall-clock time of the run, in milliseconds."
+  durationMillis: BigInt!
+  "How the run turned out."
+  outcome: TaskOutcome!
+  """
+    Number of issues recorded during this run, each of which also appears
+    in the captured errors.
+  """
+  issueCount: Int!
+  "Human-readable description of what the run did."
+  summary: String!
+}
+
+"The state of one background task."
+type TaskStatus {
+  "The operation this status describes."
+  operation: BackgroundOperation!
+  """
+    Most recent runs of this operation, one per dataset for the operations
+    that work a dataset at a time. Empty when the task has never run, which
+    is itself worth knowing: a task whose interval exceeds the server
+    uptime may never have had the chance.
+  """
+  runs: [TaskRun!]!
 }
 
 "Range of time in which to run backup. If stopTime is less than startTime, the times span the midnight hour."

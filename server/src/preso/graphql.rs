@@ -28,7 +28,7 @@ use std::sync::Arc;
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     leader: Arc<dyn RingLeader>,
-    errors: Arc<dyn StatusRepository>,
+    status: Arc<dyn StatusRepository>,
     // Caller's remote address, for audit logging of destructive/policy-
     // weakening mutations. There is no per-user identity behind the shared
     // bearer token, so this is the only "who" signal available.
@@ -39,13 +39,13 @@ impl GraphContext {
     pub fn new(
         datasource: Arc<dyn EntityDataSource>,
         leader: Arc<dyn RingLeader>,
-        errors: Arc<dyn StatusRepository>,
+        status: Arc<dyn StatusRepository>,
         remote_addr: Option<String>,
     ) -> Self {
         Self {
             datasource,
             leader,
-            errors,
+            status,
             remote_addr,
         }
     }
@@ -413,6 +413,80 @@ impl From<entities::CapturedError> for CapturedError {
             message: err.message,
         }
     }
+}
+
+/// How a background task run turned out.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum TaskOutcome {
+    /// Ran to completion with no problems.
+    Success,
+    /// Ran to completion but recorded one or more issues, each of which also
+    /// appears in the captured errors.
+    Issues,
+    /// Did not complete; the task returned an error.
+    Failed,
+    /// Ran but had nothing to do; the reason is in the summary. Distinct from
+    /// Success because some tasks, restore testing in particular, can return
+    /// without having verified anything.
+    Skipped,
+}
+
+impl From<entities::TaskOutcome> for TaskOutcome {
+    fn from(outcome: entities::TaskOutcome) -> Self {
+        match outcome {
+            entities::TaskOutcome::Success => TaskOutcome::Success,
+            entities::TaskOutcome::Issues => TaskOutcome::Issues,
+            entities::TaskOutcome::Failed => TaskOutcome::Failed,
+            entities::TaskOutcome::Skipped => TaskOutcome::Skipped,
+        }
+    }
+}
+
+/// The most recent run of a background task.
+#[derive(Clone, GraphQLObject)]
+struct TaskRun {
+    /// Identifier of the dataset this run applies to, for the operations that
+    /// process one dataset per run.
+    dataset_id: Option<String>,
+    /// When the run began, in UTC.
+    started_at: DateTime<Utc>,
+    /// When the run ended, in UTC.
+    finished_at: DateTime<Utc>,
+    /// Elapsed wall-clock time of the run, in milliseconds.
+    duration_millis: BigInt,
+    /// How the run turned out.
+    outcome: TaskOutcome,
+    /// Number of issues recorded during this run, each of which also appears
+    /// in the captured errors.
+    issue_count: i32,
+    /// Human-readable description of what the run did.
+    summary: String,
+}
+
+impl From<entities::TaskRun> for TaskRun {
+    fn from(run: entities::TaskRun) -> Self {
+        Self {
+            duration_millis: BigInt(run.duration_millis()),
+            dataset_id: run.dataset_id,
+            started_at: run.started_at,
+            finished_at: run.finished_at,
+            outcome: run.outcome.into(),
+            issue_count: run.issue_count as i32,
+            summary: run.summary,
+        }
+    }
+}
+
+/// The state of one background task.
+#[derive(Clone, GraphQLObject)]
+struct TaskStatus {
+    /// The operation this status describes.
+    operation: BackgroundOperation,
+    /// Most recent runs of this operation, one per dataset for the operations
+    /// that work a dataset at a time. Empty when the task has never run, which
+    /// is itself worth knowing: a task whose interval exceeds the server
+    /// uptime may never have had the chance.
+    runs: Vec<TaskRun>,
 }
 
 /// Specifies the policy for retaining snapshots.
@@ -1269,14 +1343,37 @@ impl Query {
         limit: Option<i32>,
     ) -> FieldResult<Vec<CapturedError>> {
         let limit = limit.and_then(|n| if n > 0 { Some(n as u32) } else { None });
-        let rows = ctx.errors.list_errors(limit)?;
+        let rows = ctx.status.list_errors(limit)?;
         Ok(rows.into_iter().map(CapturedError::from).collect())
     }
 
     /// Return the number of currently stored captured errors.
     fn captured_error_count(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<BigInt> {
-        let count = ctx.errors.count_errors()?;
+        let count = ctx.status.count_errors()?;
         Ok(BigInt(count as i64))
+    }
+
+    /// Return the state of every periodic background task, including those
+    /// that have never run.
+    fn task_status(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<Vec<TaskStatus>> {
+        let mut by_operation: HashMap<String, Vec<TaskRun>> = HashMap::new();
+        for run in ctx.status.list_runs()? {
+            by_operation
+                .entry(run.operation.to_string())
+                .or_default()
+                .push(TaskRun::from(run));
+        }
+        // Build one entry per known operation so the caller can show a task
+        // that has never run, rather than being left to infer its absence.
+        Ok(entities::BackgroundOperation::PERIODIC
+            .iter()
+            .map(|operation| TaskStatus {
+                operation: (*operation).into(),
+                runs: by_operation
+                    .remove(&operation.to_string())
+                    .unwrap_or_default(),
+            })
+            .collect())
     }
 }
 
@@ -1685,13 +1782,13 @@ impl Mutation {
 
     /// Delete a single captured error by identifier.
     fn delete_captured_error(#[graphql(ctx)] ctx: &GraphContext, id: BigInt) -> FieldResult<bool> {
-        let removed = ctx.errors.delete_error(id.0)?;
+        let removed = ctx.status.delete_error(id.0)?;
         Ok(removed)
     }
 
     /// Delete every captured error. Returns the number of rows removed.
     fn clear_captured_errors(#[graphql(ctx)] ctx: &GraphContext) -> FieldResult<BigInt> {
-        let removed = ctx.errors.clear_all()?;
+        let removed = ctx.status.clear_all()?;
         Ok(BigInt(removed as i64))
     }
 }
