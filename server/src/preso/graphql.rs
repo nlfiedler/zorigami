@@ -6,7 +6,7 @@
 
 use crate::data::repositories::RecordRepositoryImpl;
 use crate::domain::entities::{self, Checksum, TreeReference};
-use crate::domain::repositories::{ErrorRepository, RecordRepository};
+use crate::domain::repositories::{RecordRepository, StatusRepository};
 use crate::domain::services::buckets::BucketNamingPolicy as DomainBucketNamingPolicy;
 use crate::domain::sources::EntityDataSource;
 use crate::shared::packs;
@@ -28,7 +28,7 @@ use std::sync::Arc;
 pub struct GraphContext {
     datasource: Arc<dyn EntityDataSource>,
     leader: Arc<dyn RingLeader>,
-    errors: Arc<dyn ErrorRepository>,
+    errors: Arc<dyn StatusRepository>,
     // Caller's remote address, for audit logging of destructive/policy-
     // weakening mutations. There is no per-user identity behind the shared
     // bearer token, so this is the only "who" signal available.
@@ -39,7 +39,7 @@ impl GraphContext {
     pub fn new(
         datasource: Arc<dyn EntityDataSource>,
         leader: Arc<dyn RingLeader>,
-        errors: Arc<dyn ErrorRepository>,
+        errors: Arc<dyn StatusRepository>,
         remote_addr: Option<String>,
     ) -> Self {
         Self {
@@ -358,7 +358,7 @@ impl backup::Request {
 
 /// The background operation that produced a captured error.
 #[derive(Copy, Clone, GraphQLEnum)]
-enum CapturedErrorOperation {
+enum BackgroundOperation {
     /// Error recorded while running a backup.
     Backup,
     /// Error recorded while pruning snapshots.
@@ -373,15 +373,17 @@ enum CapturedErrorOperation {
     WorkspaceCleanup,
 }
 
-impl From<entities::ErrorOperation> for CapturedErrorOperation {
-    fn from(op: entities::ErrorOperation) -> Self {
+impl From<entities::BackgroundOperation> for BackgroundOperation {
+    fn from(op: entities::BackgroundOperation) -> Self {
         match op {
-            entities::ErrorOperation::Backup => CapturedErrorOperation::Backup,
-            entities::ErrorOperation::Prune => CapturedErrorOperation::Prune,
-            entities::ErrorOperation::RestoreTest => CapturedErrorOperation::RestoreTest,
-            entities::ErrorOperation::DatabaseScrub => CapturedErrorOperation::DatabaseScrub,
-            entities::ErrorOperation::PackPrune => CapturedErrorOperation::PackPrune,
-            entities::ErrorOperation::WorkspaceCleanup => CapturedErrorOperation::WorkspaceCleanup,
+            entities::BackgroundOperation::Backup => BackgroundOperation::Backup,
+            entities::BackgroundOperation::Prune => BackgroundOperation::Prune,
+            entities::BackgroundOperation::RestoreTest => BackgroundOperation::RestoreTest,
+            entities::BackgroundOperation::DatabaseScrub => BackgroundOperation::DatabaseScrub,
+            entities::BackgroundOperation::PackPrune => BackgroundOperation::PackPrune,
+            entities::BackgroundOperation::WorkspaceCleanup => {
+                BackgroundOperation::WorkspaceCleanup
+            }
         }
     }
 }
@@ -394,7 +396,7 @@ struct CapturedError {
     /// When the error was recorded, in UTC.
     timestamp: DateTime<Utc>,
     /// The kind of operation that produced this error.
-    operation: CapturedErrorOperation,
+    operation: BackgroundOperation,
     /// Identifier of the dataset associated with the error, if any.
     dataset_id: Option<String>,
     /// The error message.

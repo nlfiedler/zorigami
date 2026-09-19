@@ -12,9 +12,9 @@ use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use log::{error, info};
 use server::data::repositories::RecordRepositoryImpl;
-use server::data::repositories::errors::ErrorRepositoryImpl;
+use server::data::repositories::status::StatusRepositoryImpl;
 use server::data::sources::{build_entity_data_source, verify_schema_version};
-use server::domain::repositories::{ErrorRepository, RecordRepository};
+use server::domain::repositories::{RecordRepository, StatusRepository};
 use server::domain::sources::EntityDataSource;
 use server::preso::graphql;
 use server::shared::state::{self, StateStore, StateStoreImpl};
@@ -40,10 +40,10 @@ static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
     PathBuf::from(path)
 });
 
-// Path to the SQLite error-capture database. Can be overridden via
-// `ERROR_DB_PATH`.
-static ERROR_DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-    let path = std::env::var("ERROR_DB_PATH").unwrap_or_else(|_| "./tmp/errors.db".to_owned());
+// Path to the SQLite database holding captured errors and background task
+// status. Can be overridden via `STATUS_DB_PATH`.
+static STATUS_DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
+    let path = std::env::var("STATUS_DB_PATH").unwrap_or_else(|_| "./tmp/status.db".to_owned());
     PathBuf::from(path)
 });
 
@@ -83,12 +83,12 @@ static CORS_ALLOWED_ORIGINS: LazyLock<Vec<String>> = LazyLock::new(|| {
         .unwrap_or_default()
 });
 
-// Shared error repository, constructed once at startup. Opening a new SQLite
+// Shared status repository, constructed once at startup. Opening a new SQLite
 // connection per request is wasteful; share a single connection guarded by a
-// mutex (see `ErrorRepositoryImpl`).
-static ERROR_REPO: LazyLock<Arc<dyn ErrorRepository>> = LazyLock::new(|| {
-    let repo = ErrorRepositoryImpl::new(ERROR_DB_PATH.as_path(), *ERROR_RETENTION_DAYS)
-        .expect("failed to open error database");
+// mutex (see `StatusRepositoryImpl`).
+static STATUS_REPO: LazyLock<Arc<dyn StatusRepository>> = LazyLock::new(|| {
+    let repo = StatusRepositoryImpl::new(STATUS_DB_PATH.as_path(), *ERROR_RETENTION_DAYS)
+        .expect("failed to open status database");
     if let Err(err) = repo.prune_older_than(*ERROR_RETENTION_DAYS) {
         error!("startup error-log prune failed: {}", err);
     }
@@ -159,7 +159,7 @@ async fn graphql(
     }
     let datasource = ENTITY_DATA_SOURCE.clone();
     let leader = RING_LEADER.clone();
-    let errors = ERROR_REPO.clone();
+    let errors = STATUS_REPO.clone();
     let remote_addr = req.peer_addr().map(|a| a.ip().to_string());
     let ctx = Arc::new(graphql::GraphContext::new(
         datasource,
@@ -198,7 +198,7 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
     } else if state.leader == state::LeaderState::Starting {
         let repo = RecordRepositoryImpl::new(ENTITY_DATA_SOURCE.clone());
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-        let errors = ERROR_REPO.clone();
+        let errors = STATUS_REPO.clone();
         if let Err(err) = RING_LEADER.start(dbase, errors) {
             error!("error starting file restorer: {}", err);
         }

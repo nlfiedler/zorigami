@@ -78,8 +78,8 @@ An example launch agent plist file for macOS that goes in `~/Library/LaunchAgent
         <dict>
             <key>DB_PATH</key>
             <string>/Users/USERNAME/Library/Application Support/Zorigami/dbase</string>
-            <key>ERROR_DB_PATH</key>
-            <string>/Users/USERNAME/Library/Application Support/Zorigami/errors.db</string>
+            <key>STATUS_DB_PATH</key>
+            <string>/Users/USERNAME/Library/Application Support/Zorigami/status.db</string>
             <key>HOST</key>
             <string>0.0.0.0</string>
             <key>PORT</key>
@@ -107,8 +107,8 @@ Configuration of the application is partly accomplished using environment variab
   - Either `rocksdb` (the default) or `sqlite` to choose between RocksDB and SQLite
 - **DB_PATH**
   - Path for the database files; defaults to `./tmp/database`
-- **ERROR_DB_PATH**
-  - Path for the SQLite database that records errors; defaults to `./tmp/errors.db`
+- **STATUS_DB_PATH**
+  - Path for the SQLite database that records captured errors and the status of the most recent background task runs; defaults to `./tmp/status.db`. Formerly named `ERROR_DB_PATH`; pointing this at an existing `errors.db` file preserves the captured errors, as the new tables are created on open.
 - **HOST**
   - Host address on which to listen for incoming HTTP connections; defaults to `127.0.0.1`
 - **PORT**

@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use crate::domain::entities::{
-    CapturedError, Checksum, Chunk, Configuration, Dataset, ErrorOperation, File, Pack,
+    BackgroundOperation, CapturedError, Checksum, Chunk, Configuration, Dataset, File, Pack,
     PackLocation, RecordCounts, Snapshot, Store, Tree,
 };
 use crate::domain::services::buckets::BucketNameGenerator;
@@ -245,13 +245,13 @@ pub trait PackRepository: Send + Sync {
 /// user via the web interface so they are not limited to the log file.
 ///
 #[cfg_attr(test, automock)]
-pub trait ErrorRepository: Send + Sync {
+pub trait StatusRepository: Send + Sync {
     /// Persist an error. Must not fail loudly to the caller in a way that
     /// masks the original error; record-site callers should log and continue
     /// if this returns an error.
     fn record_error(
         &self,
-        operation: ErrorOperation,
+        operation: BackgroundOperation,
         dataset_id: Option<String>,
         message: &str,
     ) -> Result<(), Error>;

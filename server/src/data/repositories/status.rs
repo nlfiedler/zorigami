@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Nathan Fiedler
 //
 
-//! SQLite-backed implementation of `ErrorRepository`.
+//! SQLite-backed implementation of `StatusRepository`.
 //!
 //! Errors from background operations (pruning, test restore, backup, future
 //! database scrub) are recorded here so they can be surfaced in the web
@@ -10,8 +10,8 @@
 //! database: this data is structured, low volume, and orthogonal to the core
 //! backup/restore workflow.
 
-use crate::domain::entities::{CapturedError, ErrorOperation};
-use crate::domain::repositories::ErrorRepository;
+use crate::domain::entities::{BackgroundOperation, CapturedError};
+use crate::domain::repositories::StatusRepository;
 use anyhow::{Context, Error, anyhow};
 use chrono::{DateTime, Utc};
 use log::warn;
@@ -36,13 +36,13 @@ CREATE INDEX IF NOT EXISTS idx_errors_timestamp ON errors(timestamp);
 /// `record_error`. Chosen to amortize the delete cost across many inserts.
 const OPPORTUNISTIC_PRUNE_INTERVAL: Duration = Duration::from_secs(60 * 60);
 
-pub struct ErrorRepositoryImpl {
+pub struct StatusRepositoryImpl {
     conn: Mutex<Connection>,
     retention_days: u32,
     last_pruned: Mutex<Option<Instant>>,
 }
 
-impl ErrorRepositoryImpl {
+impl StatusRepositoryImpl {
     /// Open (or create) the SQLite database at the given path and apply the
     /// schema.
     pub fn new<P: AsRef<Path>>(db_path: P, retention_days: u32) -> Result<Self, Error> {
@@ -51,7 +51,7 @@ impl ErrorRepositoryImpl {
         {
             std::fs::create_dir_all(parent).with_context(|| {
                 format!(
-                    "ErrorRepositoryImpl::new create_dir_all({})",
+                    "StatusRepositoryImpl::new create_dir_all({})",
                     parent.display()
                 )
             })?;
@@ -90,10 +90,10 @@ impl ErrorRepositoryImpl {
     }
 }
 
-impl ErrorRepository for ErrorRepositoryImpl {
+impl StatusRepository for StatusRepositoryImpl {
     fn record_error(
         &self,
-        operation: ErrorOperation,
+        operation: BackgroundOperation,
         dataset_id: Option<String>,
         message: &str,
     ) -> Result<(), Error> {
@@ -141,7 +141,7 @@ impl ErrorRepository for ErrorRepositoryImpl {
                     )
                 })?
                 .with_timezone(&Utc);
-            let operation = ErrorOperation::from_str(&operation).map_err(|e| {
+            let operation = BackgroundOperation::from_str(&operation).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, e.into())
             })?;
             Ok(CapturedError {
@@ -202,29 +202,29 @@ mod tests {
 
     #[test]
     fn test_record_and_list() {
-        let repo = ErrorRepositoryImpl::in_memory(90).unwrap();
-        repo.record_error(ErrorOperation::Prune, Some("ds1".into()), "boom")
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
+        repo.record_error(BackgroundOperation::Prune, Some("ds1".into()), "boom")
             .unwrap();
-        repo.record_error(ErrorOperation::RestoreTest, None, "nope")
+        repo.record_error(BackgroundOperation::RestoreTest, None, "nope")
             .unwrap();
         let all = repo.list_errors(None).unwrap();
         assert_eq!(all.len(), 2);
         // Newest first (id DESC tiebreaker since timestamps may be identical
         // in a fast test)
-        assert_eq!(all[0].operation, ErrorOperation::RestoreTest);
+        assert_eq!(all[0].operation, BackgroundOperation::RestoreTest);
         assert_eq!(all[0].dataset_id, None);
         assert_eq!(all[0].message, "nope");
-        assert_eq!(all[1].operation, ErrorOperation::Prune);
+        assert_eq!(all[1].operation, BackgroundOperation::Prune);
         assert_eq!(all[1].dataset_id.as_deref(), Some("ds1"));
         assert_eq!(repo.count_errors().unwrap(), 2);
     }
 
     #[test]
     fn test_list_limit() {
-        let repo = ErrorRepositoryImpl::in_memory(90).unwrap();
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
         for i in 0..5 {
             repo.record_error(
-                ErrorOperation::Backup,
+                BackgroundOperation::Backup,
                 Some("ds".into()),
                 &format!("err {}", i),
             )
@@ -236,10 +236,13 @@ mod tests {
 
     #[test]
     fn test_delete_and_clear() {
-        let repo = ErrorRepositoryImpl::in_memory(90).unwrap();
-        repo.record_error(ErrorOperation::Prune, None, "a").unwrap();
-        repo.record_error(ErrorOperation::Prune, None, "b").unwrap();
-        repo.record_error(ErrorOperation::Prune, None, "c").unwrap();
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
+        repo.record_error(BackgroundOperation::Prune, None, "a")
+            .unwrap();
+        repo.record_error(BackgroundOperation::Prune, None, "b")
+            .unwrap();
+        repo.record_error(BackgroundOperation::Prune, None, "c")
+            .unwrap();
         let all = repo.list_errors(None).unwrap();
         let doomed = all[0].id;
         assert!(repo.delete_error(doomed).unwrap());
@@ -251,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_prune_older_than() {
-        let repo = ErrorRepositoryImpl::in_memory(90).unwrap();
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
         // Insert a row with an artificially old timestamp by bypassing the
         // repo API.
         {
@@ -263,7 +266,7 @@ mod tests {
             )
             .unwrap();
         }
-        repo.record_error(ErrorOperation::Prune, None, "fresh")
+        repo.record_error(BackgroundOperation::Prune, None, "fresh")
             .unwrap();
         assert_eq!(repo.count_errors().unwrap(), 2);
         let removed = repo.prune_older_than(5).unwrap();

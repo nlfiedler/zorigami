@@ -1247,7 +1247,7 @@ impl fmt::Display for RecordCounts {
 
 /// Categorizes the background operation that produced a captured error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ErrorOperation {
+pub enum BackgroundOperation {
     Backup,
     Prune,
     RestoreTest,
@@ -1256,32 +1256,32 @@ pub enum ErrorOperation {
     WorkspaceCleanup,
 }
 
-impl fmt::Display for ErrorOperation {
+impl fmt::Display for BackgroundOperation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            ErrorOperation::Backup => "Backup",
-            ErrorOperation::Prune => "Prune",
-            ErrorOperation::RestoreTest => "RestoreTest",
-            ErrorOperation::DatabaseScrub => "DatabaseScrub",
-            ErrorOperation::PackPrune => "PackPrune",
-            ErrorOperation::WorkspaceCleanup => "WorkspaceCleanup",
+            BackgroundOperation::Backup => "Backup",
+            BackgroundOperation::Prune => "Prune",
+            BackgroundOperation::RestoreTest => "RestoreTest",
+            BackgroundOperation::DatabaseScrub => "DatabaseScrub",
+            BackgroundOperation::PackPrune => "PackPrune",
+            BackgroundOperation::WorkspaceCleanup => "WorkspaceCleanup",
         };
         f.write_str(s)
     }
 }
 
-impl FromStr for ErrorOperation {
+impl FromStr for BackgroundOperation {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "Backup" => Ok(ErrorOperation::Backup),
-            "Prune" => Ok(ErrorOperation::Prune),
-            "RestoreTest" => Ok(ErrorOperation::RestoreTest),
-            "DatabaseScrub" => Ok(ErrorOperation::DatabaseScrub),
-            "PackPrune" => Ok(ErrorOperation::PackPrune),
-            "WorkspaceCleanup" => Ok(ErrorOperation::WorkspaceCleanup),
-            _ => Err(anyhow!(format!("unknown ErrorOperation: {}", s))),
+            "Backup" => Ok(BackgroundOperation::Backup),
+            "Prune" => Ok(BackgroundOperation::Prune),
+            "RestoreTest" => Ok(BackgroundOperation::RestoreTest),
+            "DatabaseScrub" => Ok(BackgroundOperation::DatabaseScrub),
+            "PackPrune" => Ok(BackgroundOperation::PackPrune),
+            "WorkspaceCleanup" => Ok(BackgroundOperation::WorkspaceCleanup),
+            _ => Err(anyhow!(format!("unknown BackgroundOperation: {}", s))),
         }
     }
 }
@@ -1291,7 +1291,7 @@ impl FromStr for ErrorOperation {
 pub struct CapturedError {
     pub id: i64,
     pub timestamp: DateTime<Utc>,
-    pub operation: ErrorOperation,
+    pub operation: BackgroundOperation,
     pub dataset_id: Option<String>,
     pub message: String,
 }

@@ -4,11 +4,11 @@
 use anyhow::Error;
 use dotenvy::dotenv;
 use server::data::repositories::RecordRepositoryImpl;
-use server::data::repositories::errors::ErrorRepositoryImpl;
+use server::data::repositories::status::StatusRepositoryImpl;
 use server::data::sources::RocksDBEntityDataSource;
 use server::domain::entities::schedule::Schedule;
 use server::domain::entities::{self, Checksum, PackRetention};
-use server::domain::repositories::{ErrorRepository, RecordRepository};
+use server::domain::repositories::{RecordRepository, StatusRepository};
 use server::shared::state::{StateStore, StateStoreImpl};
 use server::tasks::backup;
 use server::tasks::leader::{RingLeader, RingLeaderImpl};
@@ -76,7 +76,7 @@ async fn test_backup_restore_async_store() -> Result<(), Error> {
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let leader = Arc::new(RingLeaderImpl::new(state.clone()));
     let error_db = db_path.path().join("errors.db");
-    let errors: Arc<dyn ErrorRepository> = Arc::new(ErrorRepositoryImpl::new(&error_db, 90)?);
+    let errors: Arc<dyn StatusRepository> = Arc::new(StatusRepositoryImpl::new(&error_db, 90)?);
     assert!(leader.start(dbase.clone(), errors).is_ok());
     leader.reset_backups();
     let request = backup::Request::new(dataset_id.clone(), "keyboard cat", None);
