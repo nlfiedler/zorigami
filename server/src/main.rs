@@ -58,16 +58,28 @@ static ERROR_RETENTION_DAYS: LazyLock<u32> = LazyLock::new(|| {
 // Shared secret required on every /graphql request, as `Authorization: Bearer
 // <token>`. Absent means auth is disabled, preserving the previous
 // unauthenticated behavior for local/dev use; any network-exposed deployment
-// must set this (see doc/DEPLOY.md).
-static API_TOKEN: LazyLock<Option<String>> =
-    LazyLock::new(|| std::env::var("API_TOKEN").ok().filter(|s| !s.is_empty()));
+// must set this (see doc/DEPLOY.md). Surrounding whitespace is trimmed, as
+// the frontend does with the token it sends, so a stray space in an env file
+// does not lock out the UI.
+static API_TOKEN: LazyLock<Option<String>> = LazyLock::new(|| {
+    std::env::var("API_TOKEN")
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+});
 
 // Extra origins (beyond same-origin) allowed to make cross-origin requests,
-// e.g. a Vite dev server running on a different port. Comma-separated.
+// e.g. a Vite dev server running on a different port. Comma-separated; empty
+// entries are ignored since actix-cors fails startup on an invalid origin.
 static CORS_ALLOWED_ORIGINS: LazyLock<Vec<String>> = LazyLock::new(|| {
     std::env::var("CORS_ALLOWED_ORIGINS")
         .ok()
-        .map(|s| s.split(',').map(|o| o.trim().to_owned()).collect())
+        .map(|s| {
+            s.split(',')
+                .map(|o| o.trim().to_owned())
+                .filter(|o| !o.is_empty())
+                .collect()
+        })
         .unwrap_or_default()
 });
 
