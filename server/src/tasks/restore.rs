@@ -4,6 +4,7 @@
 use crate::domain::entities::{Checksum, Dataset, TreeReference};
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use crate::shared::packs;
+use crate::tasks::TaskReport;
 use anyhow::{Error, anyhow};
 use chrono::prelude::*;
 use log::{debug, error, info, warn};
@@ -138,7 +139,11 @@ pub trait Restorer: Send + Sync {
     /// Run a self-test of the restore path by selecting a random dataset and a
     /// random small file within its latest snapshot, fetching it from its pack
     /// store, verifying the BLAKE3 digest, and removing the temporary file.
-    fn restore_test(&self, passphrase: &str) -> Result<(), Error>;
+    ///
+    /// Returns a skipped report when there is nothing to test, which is not
+    /// the same as a successful test: no dataset may have a snapshot yet, or
+    /// every file may be larger than the configured limit.
+    fn restore_test(&self, passphrase: &str) -> Result<TaskReport, Error>;
 }
 
 ///
@@ -409,7 +414,7 @@ impl Restorer for RestorerImpl {
         Ok(())
     }
 
-    fn restore_test(&self, passphrase: &str) -> Result<(), Error> {
+    fn restore_test(&self, passphrase: &str) -> Result<TaskReport, Error> {
         use rand::RngExt;
         // pick a random dataset that has a latest snapshot
         let datasets: Vec<Dataset> = self
@@ -420,7 +425,7 @@ impl Restorer for RestorerImpl {
             .collect();
         if datasets.is_empty() {
             info!("restore test: no datasets with snapshots; skipping");
-            return Ok(());
+            return Ok(TaskReport::skipped("no datasets have a snapshot to test"));
         }
         let dataset = &datasets[rand::rng().random_range(0..datasets.len())];
 
@@ -445,7 +450,11 @@ impl Restorer for RestorerImpl {
                     "restore test: no eligible file in dataset {}; skipping",
                     dataset.id
                 );
-                return Ok(());
+                return Ok(TaskReport::skipped(format!(
+                    "no file in dataset {} is small enough to test (limit {} MB)",
+                    dataset.id,
+                    max_bytes / 1024 / 1024
+                )));
             }
         };
 
@@ -479,7 +488,11 @@ impl Restorer for RestorerImpl {
                     rel_filepath.display(),
                     dataset.id
                 );
-                Ok(())
+                Ok(TaskReport::done(format!(
+                    "verified {} from dataset {}",
+                    rel_filepath.display(),
+                    dataset.id
+                )))
             }
             Err(err) => {
                 error!(
@@ -1149,8 +1162,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
-        let result = sut.restore_test("password");
-        assert!(result.is_ok());
+        let report = sut.restore_test("password").unwrap();
+        // Nothing was verified, so this must not read as a successful test.
+        assert!(report.skipped);
+        assert!(report.summary.contains("no datasets"));
         Ok(())
     }
 
@@ -1186,8 +1201,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
-        let result = sut.restore_test("password");
-        assert!(result.is_ok());
+        let report = sut.restore_test("password").unwrap();
+        // No file was small enough to test, which is not a passing test.
+        assert!(report.skipped);
+        assert!(report.summary.contains("small enough"));
         Ok(())
     }
 
@@ -1252,6 +1269,10 @@ mod tests {
         let sut = RestorerImpl::with_factory(repo, factory, Arc::new(submock), stopper);
         let result = sut.restore_test("password");
         assert!(result.is_ok(), "{:?}", result.err());
+        let report = result.unwrap();
+        // a real verification, as distinct from the skip cases above
+        assert!(!report.skipped);
+        assert!(report.summary.starts_with("verified"));
 
         // confirm the temp file was cleaned up
         let leftover: Vec<_> = fs::read_dir(tmp.path())?

@@ -1,15 +1,16 @@
 //
 // Copyright (c) 2026 Nathan Fiedler
 //
-use crate::domain::entities::BackgroundOperation;
+use crate::domain::entities::{BackgroundOperation, TaskOutcome, TaskRun};
 use crate::domain::repositories::{RecordRepository, StatusRepository};
 use crate::shared::state;
+use crate::tasks::TaskReport;
 use crate::tasks::backup;
 use crate::tasks::prune;
 use crate::tasks::restore;
 use actix::prelude::*;
 use anyhow::{Error, anyhow};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 #[cfg(test)]
 use mockall::{automock, predicate::*};
@@ -602,15 +603,19 @@ impl LeaderSupervisor {
                 ))
             };
             let dataset_id = request.dataset.clone();
+            let started_at = Utc::now();
             self.context.push_started_prune(request.clone());
-            if let Err(err) = pruner.prune_snapshots(request) {
-                error!("leader supervisor prune error: {}", err);
-                self.context.capture_error(
-                    BackgroundOperation::Prune,
-                    Some(dataset_id),
-                    &err.to_string(),
-                );
-            }
+            // Snapshot pruning already returns the number pruned, so the
+            // report is built here rather than in the pruner.
+            let result = pruner
+                .prune_snapshots(request)
+                .map(|count| TaskReport::done(format!("pruned {} snapshot(s)", count)));
+            self.context.record_run(
+                BackgroundOperation::Prune,
+                Some(dataset_id),
+                started_at,
+                result,
+            );
             true
         } else {
             false
@@ -664,6 +669,7 @@ impl LeaderSupervisor {
     /// the other queues; the single-threaded arbiter serializes this handler
     /// with the normal `Process` handling so user work is preserved.
     fn restore_test(&self, passphrase: String) -> Result<(), Error> {
+        let started_at = Utc::now();
         let mut stopper = self.context.restore_stopper.write().unwrap();
         *stopper = false;
         drop(stopper);
@@ -680,11 +686,12 @@ impl LeaderSupervisor {
                 self.context.restore_stopper.clone(),
             ))
         };
-        if let Err(err) = restorer.restore_test(&passphrase) {
-            error!("leader supervisor restore test error: {}", err);
-            self.context
-                .capture_error(BackgroundOperation::RestoreTest, None, &err.to_string());
-        }
+        self.context.record_run(
+            BackgroundOperation::RestoreTest,
+            None,
+            started_at,
+            restorer.restore_test(&passphrase),
+        );
         Ok(())
     }
 
@@ -692,6 +699,7 @@ impl LeaderSupervisor {
     /// pruner's stop flag; the Actix arbiter serializes this handler with the
     /// regular `Process` loop, so scrub runs without stepping on backups.
     fn database_scrub(&self) -> Result<(), Error> {
+        let started_at = Utc::now();
         let mut stopper = self.context.prune_stopper.write().unwrap();
         *stopper = false;
         drop(stopper);
@@ -708,25 +716,12 @@ impl LeaderSupervisor {
                 self.context.prune_stopper.clone(),
             ))
         };
-        match pruner.database_scrub() {
-            Ok(issues) => {
-                for issue in issues {
-                    self.context.capture_error(
-                        BackgroundOperation::DatabaseScrub,
-                        issue.dataset_id,
-                        &issue.message,
-                    );
-                }
-            }
-            Err(err) => {
-                error!("leader supervisor database scrub error: {}", err);
-                self.context.capture_error(
-                    BackgroundOperation::DatabaseScrub,
-                    None,
-                    &err.to_string(),
-                );
-            }
-        }
+        self.context.record_run(
+            BackgroundOperation::DatabaseScrub,
+            None,
+            started_at,
+            pruner.database_scrub(),
+        );
         Ok(())
     }
 
@@ -734,6 +729,7 @@ impl LeaderSupervisor {
     /// pruner's stop flag; the Actix arbiter serializes this handler with the
     /// regular `Process` loop, so the prune runs without stepping on backups.
     fn prune_packs(&self) -> Result<(), Error> {
+        let started_at = Utc::now();
         let mut stopper = self.context.prune_stopper.write().unwrap();
         *stopper = false;
         drop(stopper);
@@ -750,22 +746,12 @@ impl LeaderSupervisor {
                 self.context.prune_stopper.clone(),
             ))
         };
-        match pruner.prune_packs() {
-            Ok(issues) => {
-                for issue in issues {
-                    self.context.capture_error(
-                        BackgroundOperation::PackPrune,
-                        issue.dataset_id,
-                        &issue.message,
-                    );
-                }
-            }
-            Err(err) => {
-                error!("leader supervisor pack prune error: {}", err);
-                self.context
-                    .capture_error(BackgroundOperation::PackPrune, None, &err.to_string());
-            }
-        }
+        self.context.record_run(
+            BackgroundOperation::PackPrune,
+            None,
+            started_at,
+            pruner.prune_packs(),
+        );
         Ok(())
     }
 
@@ -774,6 +760,7 @@ impl LeaderSupervisor {
     /// regular `Process` loop, so the cleanup runs without stepping on backups
     /// or restores that might still be using the workspace.
     fn cleanup_workspaces(&self) -> Result<(), Error> {
+        let started_at = Utc::now();
         let mut stopper = self.context.prune_stopper.write().unwrap();
         *stopper = false;
         drop(stopper);
@@ -790,25 +777,12 @@ impl LeaderSupervisor {
                 self.context.prune_stopper.clone(),
             ))
         };
-        match pruner.cleanup_workspaces() {
-            Ok(issues) => {
-                for issue in issues {
-                    self.context.capture_error(
-                        BackgroundOperation::WorkspaceCleanup,
-                        issue.dataset_id,
-                        &issue.message,
-                    );
-                }
-            }
-            Err(err) => {
-                error!("leader supervisor workspace cleanup error: {}", err);
-                self.context.capture_error(
-                    BackgroundOperation::WorkspaceCleanup,
-                    None,
-                    &err.to_string(),
-                );
-            }
-        }
+        self.context.record_run(
+            BackgroundOperation::WorkspaceCleanup,
+            None,
+            started_at,
+            pruner.cleanup_workspaces(),
+        );
         Ok(())
     }
 }
@@ -1020,6 +994,56 @@ impl LeaderContext {
             && let Err(err) = repo.record_error(operation, dataset_id, message)
         {
             warn!("failed to record captured error: {}", err);
+        }
+    }
+
+    /// Record the outcome of a background task run, and capture each of its
+    /// issues as an error.
+    ///
+    /// Like `capture_error` this never propagates a failure: the run already
+    /// happened, and being unable to describe it afterwards is not a reason to
+    /// fail the task.
+    fn record_run(
+        &self,
+        operation: BackgroundOperation,
+        dataset_id: Option<String>,
+        started_at: DateTime<Utc>,
+        result: Result<TaskReport, Error>,
+    ) {
+        let (outcome, issue_count, summary) = match result {
+            Ok(report) => {
+                for issue in &report.issues {
+                    self.capture_error(operation, issue.dataset_id.clone(), &issue.message);
+                }
+                let outcome = if report.skipped {
+                    TaskOutcome::Skipped
+                } else if report.issues.is_empty() {
+                    TaskOutcome::Success
+                } else {
+                    TaskOutcome::Issues
+                };
+                (outcome, report.issues.len() as u32, report.summary)
+            }
+            Err(err) => {
+                error!("leader supervisor {} error: {}", operation, err);
+                self.capture_error(operation, dataset_id.clone(), &err.to_string());
+                (TaskOutcome::Failed, 0, err.to_string())
+            }
+        };
+        let run = TaskRun {
+            operation,
+            dataset_id,
+            started_at,
+            finished_at: Utc::now(),
+            outcome,
+            issue_count,
+            summary,
+        };
+        let guard = self.status_repo.read().unwrap();
+        if let Some(repo) = guard.as_ref()
+            && let Err(err) = repo.record_run(&run)
+        {
+            warn!("failed to record task run: {}", err);
         }
     }
 
@@ -1315,12 +1339,28 @@ mod tests {
     use std::path::PathBuf;
 
     /// Build a fresh `MockStatusRepository` wrapped as `Arc<dyn StatusRepository>`,
-    /// permissive of any number of `record_error` calls so tests that trigger
-    /// failures don't have to over-specify expectations.
+    /// permissive of any number of `record_error` and `record_run` calls so
+    /// tests that trigger failures don't have to over-specify expectations.
     fn mock_status_repo() -> Arc<dyn StatusRepository> {
         let mut mock = MockStatusRepository::new();
         mock.expect_record_error().returning(|_, _, _| Ok(()));
+        mock.expect_record_run().returning(|_| Ok(()));
         Arc::new(mock)
+    }
+
+    /// A `MockStatusRepository` that records every `TaskRun` it is given, so
+    /// tests can assert on what the supervisor reported. The runs are written
+    /// from the actor thread, hence the shared mutex.
+    fn recording_status_repo() -> (Arc<dyn StatusRepository>, Arc<Mutex<Vec<TaskRun>>>) {
+        let runs: Arc<Mutex<Vec<TaskRun>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = runs.clone();
+        let mut mock = MockStatusRepository::new();
+        mock.expect_record_error().returning(|_, _, _| Ok(()));
+        mock.expect_record_run().returning(move |run| {
+            sink.lock().unwrap().push(run.clone());
+            Ok(())
+        });
+        (Arc::new(mock), runs)
     }
 
     #[actix_rt::test]
@@ -1864,7 +1904,9 @@ mod tests {
             _stop_requested: Arc<RwLock<bool>>,
         ) -> Box<dyn restore::Restorer> {
             let mut restorer = restore::MockRestorer::new();
-            restorer.expect_restore_test().return_once(|_| Ok(()));
+            restorer
+                .expect_restore_test()
+                .return_once(|_| Ok(TaskReport::done("verified")));
             Box::new(restorer)
         }
 
@@ -1887,5 +1929,118 @@ mod tests {
 
         let queue = sut.context.incoming_backups.lock().unwrap();
         assert_eq!(queue.len(), 1, "backup queue was cleared by restore_test");
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_leader_records_skipped_restore_test() {
+        // A restore test that verified nothing must be recorded as Skipped,
+        // not Success; an empty error log would otherwise imply the restore
+        // path had been exercised when it had not.
+        fn r_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            _subscriber: Arc<dyn restore::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn restore::Restorer> {
+            let mut restorer = restore::MockRestorer::new();
+            restorer
+                .expect_restore_test()
+                .return_once(|_| Ok(TaskReport::skipped("no datasets have a snapshot to test")));
+            Box::new(restorer)
+        }
+
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
+        let (repo, runs) = recording_status_repo();
+        assert!(
+            sut.start(Arc::new(MockRecordRepository::new()), repo)
+                .is_ok()
+        );
+        assert!(sut.restore_test("passphrase".into()).is_ok());
+        actix_rt::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let runs = runs.lock().unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].operation, BackgroundOperation::RestoreTest);
+        assert_eq!(runs[0].outcome, TaskOutcome::Skipped);
+        assert_eq!(runs[0].issue_count, 0);
+        assert!(runs[0].summary.contains("no datasets"));
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_leader_records_failed_restore_test() {
+        // A task that returns Err is recorded as Failed, with the error text
+        // as the summary, and is still captured in the error log.
+        fn r_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            _subscriber: Arc<dyn restore::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn restore::Restorer> {
+            let mut restorer = restore::MockRestorer::new();
+            restorer
+                .expect_restore_test()
+                .return_once(|_| Err(anyhow!("digest mismatch")));
+            Box::new(restorer)
+        }
+
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, Some(r_factory), None, None);
+        let (repo, runs) = recording_status_repo();
+        assert!(
+            sut.start(Arc::new(MockRecordRepository::new()), repo)
+                .is_ok()
+        );
+        assert!(sut.restore_test("passphrase".into()).is_ok());
+        actix_rt::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let runs = runs.lock().unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].outcome, TaskOutcome::Failed);
+        assert!(runs[0].summary.contains("digest mismatch"));
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_leader_records_scrub_issues() {
+        // Issues reported by a task that ran to completion yield the Issues
+        // outcome and a count, and each issue is also captured as an error.
+        fn p_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            _subscriber: Arc<dyn prune::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn prune::Pruner> {
+            let mut pruner = prune::MockPruner::new();
+            pruner.expect_database_scrub().return_once(|| {
+                Ok(TaskReport::done("checked 2 dataset(s)").with_issues(vec![
+                    crate::tasks::ScrubIssue {
+                        dataset_id: Some("ds1".into()),
+                        message: "missing tree record: abc".into(),
+                    },
+                    crate::tasks::ScrubIssue {
+                        dataset_id: None,
+                        message: "missing store record: xyz".into(),
+                    },
+                ]))
+            });
+            Box::new(pruner)
+        }
+
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, None, None, Some(p_factory));
+        let (repo, runs) = recording_status_repo();
+        assert!(
+            sut.start(Arc::new(MockRecordRepository::new()), repo)
+                .is_ok()
+        );
+        assert!(sut.database_scrub().is_ok());
+        actix_rt::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let runs = runs.lock().unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].operation, BackgroundOperation::DatabaseScrub);
+        assert_eq!(runs[0].outcome, TaskOutcome::Issues);
+        assert_eq!(runs[0].issue_count, 2);
+        assert_eq!(runs[0].summary, "checked 2 dataset(s)");
     }
 }

@@ -5,6 +5,7 @@ use crate::domain::entities::{
     Checksum, Pack, PackRetention, Snapshot, SnapshotRetention, Store, TreeReference,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
+use crate::tasks::{ScrubIssue, TaskReport};
 use anyhow::{Error, anyhow};
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
 use log::{info, warn};
@@ -86,15 +87,6 @@ pub trait Subscriber: Send + Sync {
     fn finished(&self, request_id: &str) -> bool;
 }
 
-/// A single problem discovered during a database scrub.
-#[derive(Clone, Debug)]
-pub struct ScrubIssue {
-    /// Identifier of the dataset this issue relates to, if any.
-    pub dataset_id: Option<String>,
-    /// Human-readable description of the problem.
-    pub message: String,
-}
-
 ///
 /// `Pruner` processes requests to prune snapshots and packs for a data set.
 ///
@@ -111,7 +103,7 @@ pub trait Pruner: Send + Sync {
     /// stores. Records that are referenced but missing or unreadable yield a
     /// `ScrubIssue`. Returns `Err` only for unrecoverable failures such as
     /// being unable to load the dataset or store listings.
-    fn database_scrub(&self) -> Result<Vec<ScrubIssue>, Error>;
+    fn database_scrub(&self) -> Result<TaskReport, Error>;
 
     /// Delete unreachable pack files and aged-out database archives.
     ///
@@ -122,7 +114,7 @@ pub trait Pruner: Send + Sync {
     /// the most recent archive is always preserved. Per-item failures are
     /// returned as `ScrubIssue`s so the run continues; `Err` is returned only
     /// for unrecoverable failures such as being unable to enumerate stores.
-    fn prune_packs(&self) -> Result<Vec<ScrubIssue>, Error>;
+    fn prune_packs(&self) -> Result<TaskReport, Error>;
 
     /// Remove leftover temporary pack files from every dataset workspace.
     ///
@@ -132,7 +124,7 @@ pub trait Pruner: Send + Sync {
     /// returned as `ScrubIssue`s so the run continues; `Err` is returned only
     /// for unrecoverable failures such as being unable to load the dataset
     /// list. A workspace that does not yet exist is treated as success.
-    fn cleanup_workspaces(&self) -> Result<Vec<ScrubIssue>, Error>;
+    fn cleanup_workspaces(&self) -> Result<TaskReport, Error>;
 }
 
 ///
@@ -740,17 +732,19 @@ impl PrunerImpl {
     //
     // The tuple in `store_map` carries that flag, derived once when the map was
     // built, so the properties are not re-read per pack or per location.
+    /// Returns the number of pack objects actually deleted from stores; zero
+    /// means nothing changed and the pack record need not be rewritten.
     fn prune_pack_locations(
         &self,
         pack: &mut Pack,
         store_map: &HashMap<String, (Store, bool, Box<dyn PackRepository>)>,
         unknown_stores_reported: &mut HashSet<String>,
         issues: &mut Vec<ScrubIssue>,
-    ) -> bool {
+    ) -> usize {
         let now = Utc::now();
         let mut retained: Vec<crate::domain::entities::PackLocation> =
             Vec::with_capacity(pack.locations.len());
-        let mut changed = false;
+        let mut deleted = 0usize;
         for location in pack.locations.drain(..) {
             let Some((store, no_deletes, repo)) = store_map.get(&location.store) else {
                 if unknown_stores_reported.insert(location.store.clone()) {
@@ -788,7 +782,7 @@ impl PrunerImpl {
                         "pack-prune: deleted pack {} from store {}",
                         pack.digest, location.store
                     );
-                    changed = true;
+                    deleted += 1;
                 }
                 Err(err) => {
                     let msg = format!(
@@ -805,7 +799,7 @@ impl PrunerImpl {
             }
         }
         pack.locations = retained;
-        changed
+        deleted
     }
 }
 
@@ -869,7 +863,7 @@ impl Pruner for PrunerImpl {
         Ok(pruned_count)
     }
 
-    fn database_scrub(&self) -> Result<Vec<ScrubIssue>, Error> {
+    fn database_scrub(&self) -> Result<TaskReport, Error> {
         info!("database scrub starting");
         let mut issues: Vec<ScrubIssue> = Vec::new();
 
@@ -892,7 +886,7 @@ impl Pruner for PrunerImpl {
         for dataset in &datasets {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             for store_id in &dataset.stores {
                 if !known_store_ids.contains(store_id) {
@@ -914,13 +908,13 @@ impl Pruner for PrunerImpl {
         for dataset in &datasets {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             let mut maybe_digest = dataset.snapshot.clone();
             while let Some(digest) = maybe_digest.take() {
                 if *self.stop_requested.read().unwrap() {
                     info!("database scrub stopped");
-                    return Ok(issues);
+                    return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
                 }
                 match self.repo.get_snapshot(&digest) {
                     Ok(Some(snapshot)) => {
@@ -962,7 +956,7 @@ impl Pruner for PrunerImpl {
         for (digest, dataset_id) in file_queue.iter() {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             match self.repo.get_file(digest) {
                 Ok(Some(file)) => {
@@ -998,7 +992,7 @@ impl Pruner for PrunerImpl {
         for digest in chunk_queue.iter() {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             match self.repo.get_chunk(digest) {
                 Ok(Some(chunk)) => {
@@ -1037,7 +1031,7 @@ impl Pruner for PrunerImpl {
         for digest in pack_queue.iter() {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             match self.repo.get_pack(digest) {
                 Ok(Some(pack)) => {
@@ -1078,7 +1072,7 @@ impl Pruner for PrunerImpl {
         for (digest, dataset_id) in xattr_queue.iter() {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             match self.repo.get_xattr(digest) {
                 Ok(Some(_)) => {}
@@ -1105,7 +1099,7 @@ impl Pruner for PrunerImpl {
         for store in &stores {
             if *self.stop_requested.read().unwrap() {
                 info!("database scrub stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             match self.repo.get_store(&store.id) {
                 Ok(Some(_)) => {}
@@ -1128,13 +1122,36 @@ impl Pruner for PrunerImpl {
             }
         }
 
-        info!("database scrub finished with {} issue(s)", issues.len());
-        Ok(issues)
+        // Every phase drains a dedup queue, so the queue lengths are the
+        // count of distinct records verified.
+        let summary = format!(
+            "checked {} dataset(s), {} tree(s), {} file(s), {} chunk(s), {} pack(s), \
+             {} xattr(s), {} store(s)",
+            datasets.len(),
+            visited_trees.len(),
+            file_queue.len(),
+            chunk_queue.len(),
+            pack_queue.len(),
+            xattr_queue.len(),
+            stores.len()
+        );
+        info!(
+            "database scrub finished: {}, {} issue(s)",
+            summary,
+            issues.len()
+        );
+        Ok(TaskReport::done(summary).with_issues(issues))
     }
 
-    fn prune_packs(&self) -> Result<Vec<ScrubIssue>, Error> {
+    fn prune_packs(&self) -> Result<TaskReport, Error> {
         info!("pack prune starting");
         let mut issues: Vec<ScrubIssue> = Vec::new();
+        // Pack objects removed from stores, pack records removed from the
+        // database, and database-archive records removed. A pack may have
+        // several locations, so the object count can exceed the record count.
+        let mut pack_objects_deleted = 0usize;
+        let mut pack_records_deleted = 0usize;
+        let mut archive_records_deleted = 0usize;
 
         // Build a map from store id to its (Store, no_deletes, PackRepository).
         // Each pack repo is built once per store so Phase A and Phase B can
@@ -1172,13 +1189,13 @@ impl Pruner for PrunerImpl {
         for dataset in &datasets {
             if *self.stop_requested.read().unwrap() {
                 info!("pack prune stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             let mut maybe_digest = dataset.snapshot.clone();
             while let Some(digest) = maybe_digest.take() {
                 if *self.stop_requested.read().unwrap() {
                     info!("pack prune stopped");
-                    return Ok(issues);
+                    return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
                 }
                 match self.repo.get_snapshot(&digest) {
                     Ok(Some(snapshot)) => {
@@ -1231,7 +1248,7 @@ impl Pruner for PrunerImpl {
             for digest_str in all_pack_digests.into_iter() {
                 if *self.stop_requested.read().unwrap() {
                     info!("pack prune stopped");
-                    return Ok(issues);
+                    return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
                 }
                 if reachable_packs.contains(&digest_str) {
                     continue;
@@ -1261,12 +1278,13 @@ impl Pruner for PrunerImpl {
                         continue;
                     }
                 };
-                let changed = self.prune_pack_locations(
+                let deleted = self.prune_pack_locations(
                     &mut pack,
                     &store_map,
                     &mut unknown_stores_reported,
                     &mut issues,
                 );
+                pack_objects_deleted += deleted;
                 if pack.locations.is_empty() {
                     if let Err(err) = self.repo.delete_pack(&digest_str) {
                         let msg = format!("failed to delete pack record {}: {}", digest_str, err);
@@ -1275,8 +1293,10 @@ impl Pruner for PrunerImpl {
                             dataset_id: None,
                             message: msg,
                         });
+                    } else {
+                        pack_records_deleted += 1;
                     }
-                } else if changed {
+                } else if deleted > 0 {
                     #[allow(clippy::collapsible_if)]
                     if let Err(err) = self.repo.put_pack(&pack) {
                         let msg = format!("failed to update pack record {}: {}", digest_str, err);
@@ -1302,18 +1322,19 @@ impl Pruner for PrunerImpl {
         for mut pack in archives {
             if *self.stop_requested.read().unwrap() {
                 info!("pack prune stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             if Some(&pack.digest) == newest_digest.as_ref() {
                 continue;
             }
             let digest_str = pack.digest.to_string();
-            let changed = self.prune_pack_locations(
+            let deleted = self.prune_pack_locations(
                 &mut pack,
                 &store_map,
                 &mut unknown_stores_reported,
                 &mut issues,
             );
+            pack_objects_deleted += deleted;
             if pack.locations.is_empty() {
                 if let Err(err) = self.repo.delete_database(&digest_str) {
                     let msg = format!(
@@ -1325,8 +1346,10 @@ impl Pruner for PrunerImpl {
                         dataset_id: None,
                         message: msg,
                     });
+                } else {
+                    archive_records_deleted += 1;
                 }
-            } else if changed {
+            } else if deleted > 0 {
                 #[allow(clippy::collapsible_if)]
                 if let Err(err) = self.repo.put_database(&pack) {
                     let msg = format!(
@@ -1342,18 +1365,32 @@ impl Pruner for PrunerImpl {
             }
         }
 
-        info!("pack prune finished with {} issue(s)", issues.len());
-        Ok(issues)
+        let summary = format!(
+            "deleted {} pack object(s) and {} pack record(s), {} database archive record(s)",
+            pack_objects_deleted, pack_records_deleted, archive_records_deleted
+        );
+        info!(
+            "pack prune finished: {}, {} issue(s)",
+            summary,
+            issues.len()
+        );
+        Ok(TaskReport::done(summary).with_issues(issues))
     }
 
-    fn cleanup_workspaces(&self) -> Result<Vec<ScrubIssue>, Error> {
+    fn cleanup_workspaces(&self) -> Result<TaskReport, Error> {
         info!("workspace cleanup starting");
         let mut issues: Vec<ScrubIssue> = Vec::new();
+        // Bytes are counted for leftover pack files only. Sizing a restore
+        // temp directory would mean walking it, which is not worth the I/O
+        // for a status line.
+        let mut files_removed = 0usize;
+        let mut dirs_removed = 0usize;
+        let mut bytes_freed = 0u64;
         let datasets = self.repo.get_datasets()?;
         for dataset in &datasets {
             if *self.stop_requested.read().unwrap() {
                 info!("workspace cleanup stopped");
-                return Ok(issues);
+                return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
             }
             let workspace = &dataset.workspace;
             let entries = match std::fs::read_dir(workspace) {
@@ -1372,7 +1409,7 @@ impl Pruner for PrunerImpl {
             for entry in entries {
                 if *self.stop_requested.read().unwrap() {
                     info!("workspace cleanup stopped");
-                    return Ok(issues);
+                    return Ok(TaskReport::skipped("stopped before completion").with_issues(issues));
                 }
                 let entry = match entry {
                     Ok(e) => e,
@@ -1425,6 +1462,12 @@ impl Pruner for PrunerImpl {
                     });
                     continue;
                 }
+                // Size the file before removing it; afterwards it is gone.
+                let file_size = if file_type.is_dir() {
+                    0
+                } else {
+                    entry.metadata().map(|m| m.len()).unwrap_or(0)
+                };
                 let removed = if file_type.is_dir() {
                     std::fs::remove_dir_all(&path)
                 } else {
@@ -1441,11 +1484,27 @@ impl Pruner for PrunerImpl {
                         dataset_id: Some(dataset.id.clone()),
                         message: msg,
                     });
+                } else if file_type.is_dir() {
+                    dirs_removed += 1;
+                } else {
+                    files_removed += 1;
+                    bytes_freed += file_size;
                 }
             }
         }
-        info!("workspace cleanup finished with {} issue(s)", issues.len());
-        Ok(issues)
+        let summary = format!(
+            "removed {} file(s) and {} directory(ies), freeing {} byte(s), from {} workspace(s)",
+            files_removed,
+            dirs_removed,
+            bytes_freed,
+            datasets.len()
+        );
+        info!(
+            "workspace cleanup finished: {}, {} issue(s)",
+            summary,
+            issues.len()
+        );
+        Ok(TaskReport::done(summary).with_issues(issues))
     }
 }
 
@@ -2698,7 +2757,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().expect("scrub should succeed");
+        let issues = pruner
+            .database_scrub()
+            .expect("scrub should succeed")
+            .issues;
         assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
     }
 
@@ -2731,7 +2793,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
         assert!(
@@ -2781,7 +2843,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
         assert!(issues[0].message.starts_with("missing file record:"));
@@ -2855,7 +2917,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert!(issues[0].dataset_id.is_none());
         assert!(
@@ -2913,7 +2975,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert!(issues[0].dataset_id.is_none());
         assert!(issues[0].message.starts_with("missing pack record:"));
@@ -2961,7 +3023,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
         assert!(issues[0].message.starts_with("missing xattr record:"));
@@ -2982,7 +3044,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].dataset_id.as_deref(), Some(dataset_id.as_str()));
         assert!(
@@ -3033,7 +3095,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert!(issues.is_empty());
     }
 
@@ -3053,7 +3115,7 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(true));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.database_scrub().unwrap();
+        let issues = pruner.database_scrub().unwrap().issues;
         assert!(issues.is_empty());
     }
 
@@ -3139,7 +3201,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3205,7 +3270,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3261,7 +3329,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3305,7 +3376,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3356,7 +3430,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3407,7 +3484,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3462,7 +3542,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3512,7 +3595,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert_eq!(issues.len(), 1);
         assert!(
             issues[0].message.contains("network down"),
@@ -3577,7 +3663,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty(), "unexpected issues: {:?}", issues);
     }
 
@@ -3657,7 +3746,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         // One issue for the missing file record.
         assert_eq!(issues.len(), 1, "issues: {:?}", issues);
         assert!(
@@ -3717,7 +3809,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert_eq!(issues.len(), 1, "issues: {:?}", issues);
         assert!(
             issues[0].message.contains("unknown store gone"),
@@ -3741,7 +3836,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(true));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.prune_packs().expect("prune_packs should succeed");
+        let issues = pruner
+            .prune_packs()
+            .expect("prune_packs should succeed")
+            .issues;
         assert!(issues.is_empty());
     }
 
@@ -3775,7 +3873,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed")
+            .issues;
         assert!(issues.is_empty(), "expected no issues, got: {:?}", issues);
         assert!(workspace.exists(), "workspace itself should remain");
         let remaining: Vec<_> = std::fs::read_dir(&workspace).unwrap().collect();
@@ -3812,7 +3913,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed")
+            .issues;
         assert_eq!(issues.len(), 3, "expected 3 issues, got: {:?}", issues);
         assert!(workspace.join("important.txt").exists());
         assert!(workspace.join(".tmpAbCdEf.log").exists());
@@ -3835,7 +3939,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(false));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed")
+            .issues;
         assert!(issues.is_empty(), "got: {:?}", issues);
     }
 
@@ -3856,7 +3963,10 @@ mod tests {
         let submock = MockSubscriber::new();
         let stopper = Arc::new(RwLock::new(true));
         let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
-        let issues = pruner.cleanup_workspaces().expect("cleanup should succeed");
+        let issues = pruner
+            .cleanup_workspaces()
+            .expect("cleanup should succeed")
+            .issues;
         assert!(issues.is_empty());
         assert!(workspace.join(".tmpAbCdEf.pack").exists());
     }
