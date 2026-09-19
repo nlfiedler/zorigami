@@ -1245,7 +1245,8 @@ impl fmt::Display for RecordCounts {
     }
 }
 
-/// Categorizes the background operation that produced a captured error.
+/// Categorizes the background operation that produced a captured error or a
+/// recorded task run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackgroundOperation {
     Backup,
@@ -1286,6 +1287,23 @@ impl FromStr for BackgroundOperation {
     }
 }
 
+impl BackgroundOperation {
+    /// The operations that run on a timer and whose most recent run is
+    /// recorded as a `TaskRun`.
+    ///
+    /// `Backup` is deliberately absent: backups already carry a richer,
+    /// per-dataset status in `tasks::backup::Request`, which the web interface
+    /// shows on the dataset cards. Recording them here as well would create a
+    /// second source of truth that could disagree with the first.
+    pub const PERIODIC: [BackgroundOperation; 5] = [
+        BackgroundOperation::Prune,
+        BackgroundOperation::RestoreTest,
+        BackgroundOperation::DatabaseScrub,
+        BackgroundOperation::PackPrune,
+        BackgroundOperation::WorkspaceCleanup,
+    ];
+}
+
 /// A single error captured from a background operation.
 #[derive(Clone, Debug)]
 pub struct CapturedError {
@@ -1294,6 +1312,79 @@ pub struct CapturedError {
     pub operation: BackgroundOperation,
     pub dataset_id: Option<String>,
     pub message: String,
+}
+
+/// How a background task run turned out.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TaskOutcome {
+    /// Ran to completion with no problems.
+    Success,
+    /// Ran to completion but recorded one or more issues, each of which is
+    /// also a `CapturedError`.
+    Issues,
+    /// Did not complete; the task returned an error.
+    Failed,
+    /// Ran but had nothing to do. The reason is in the run summary. This is
+    /// distinct from `Success` because some tasks, restore testing in
+    /// particular, can return without having verified anything.
+    Skipped,
+}
+
+impl fmt::Display for TaskOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            TaskOutcome::Success => "Success",
+            TaskOutcome::Issues => "Issues",
+            TaskOutcome::Failed => "Failed",
+            TaskOutcome::Skipped => "Skipped",
+        };
+        f.write_str(s)
+    }
+}
+
+impl FromStr for TaskOutcome {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Success" => Ok(TaskOutcome::Success),
+            "Issues" => Ok(TaskOutcome::Issues),
+            "Failed" => Ok(TaskOutcome::Failed),
+            "Skipped" => Ok(TaskOutcome::Skipped),
+            _ => Err(anyhow!(format!("unknown TaskOutcome: {}", s))),
+        }
+    }
+}
+
+/// The most recent run of a background task.
+///
+/// One record is kept per operation, or per operation and dataset for those
+/// operations that work a dataset at a time, and is replaced on each run.
+#[derive(Clone, Debug)]
+pub struct TaskRun {
+    pub operation: BackgroundOperation,
+    /// Identifier of the dataset this run applies to, for the operations that
+    /// process one dataset per run.
+    pub dataset_id: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub finished_at: DateTime<Utc>,
+    pub outcome: TaskOutcome,
+    /// Number of issues recorded during this run, each also captured as an
+    /// error.
+    pub issue_count: u32,
+    /// Human-readable description of what the run did.
+    pub summary: String,
+}
+
+impl TaskRun {
+    /// Elapsed wall-clock time of the run, in milliseconds. Clamped at zero;
+    /// the timestamps come from the system clock and could in principle run
+    /// backwards.
+    pub fn duration_millis(&self) -> i64 {
+        (self.finished_at - self.started_at)
+            .num_milliseconds()
+            .max(0)
+    }
 }
 
 #[cfg(test)]

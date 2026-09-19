@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{
     BackgroundOperation, CapturedError, Checksum, Chunk, Configuration, Dataset, File, Pack,
-    PackLocation, RecordCounts, Snapshot, Store, Tree,
+    PackLocation, RecordCounts, Snapshot, Store, TaskRun, Tree,
 };
 use crate::domain::services::buckets::BucketNameGenerator;
 use anyhow::Error;
@@ -240,9 +240,13 @@ pub trait PackRepository: Send + Sync {
 }
 
 ///
-/// Repository for errors captured from background operations (prune, test
-/// restore, backup, future database scrub). Surfaces those failures to the
-/// user via the web interface so they are not limited to the log file.
+/// Repository for the operational record of the background tasks: the errors
+/// they capture, and the outcome of their most recent run. Surfaces both to
+/// the user via the web interface so neither is limited to the log file.
+///
+/// An empty error log is ambiguous on its own — it means either that every
+/// task ran cleanly or that no task has ever run — which is why the run
+/// records live alongside the errors rather than somewhere else.
 ///
 #[cfg_attr(test, automock)]
 pub trait StatusRepository: Send + Sync {
@@ -273,4 +277,14 @@ pub trait StatusRepository: Send + Sync {
     /// Delete captured errors older than the given number of days. Returns the
     /// number of rows removed.
     fn prune_older_than(&self, days: u32) -> Result<u64, Error>;
+
+    /// Persist the outcome of a background task run, replacing any previous
+    /// run of the same operation and dataset. As with `record_error`, callers
+    /// should log and continue if this fails; a failed recording must not
+    /// disturb the task whose result it describes.
+    fn record_run(&self, run: &TaskRun) -> Result<(), Error>;
+
+    /// Return the most recent run of every operation that has one, in no
+    /// particular order. Operations that have never run are simply absent.
+    fn list_runs(&self) -> Result<Vec<TaskRun>, Error>;
 }
