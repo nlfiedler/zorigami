@@ -949,11 +949,11 @@ mod tests {
         properties.insert("region".to_owned(), region);
         let source = GoogleStore::new("google1", &properties)?;
 
-        // attempt to store an object in a bucket that exists but does not
-        // belong to this project (yes, need to change this value whenever the
-        // bucket suddenly becomes available again); the store should recover
-        // by generating a new bucket name and retrying
-        let bucket = "caefd289-4314-4ff3-bd0a-5be30c4fb8c2".to_owned();
+        // Attempt to store an object in a bucket that exists but does not
+        // belong to this project; when the bucket becomes available again just
+        // look for a bucket name in the "production" deployment; the store
+        // should recover by generating a new bucket name and retrying
+        let bucket = "0d2b8d8d-9827-4698-bf84-7c86c72dd420".to_owned();
         let object = "b14c4909c3fce2483cd54b328ada88f5ef5e8f96".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let result = source.store_pack_sync(packfile, &bucket, &object);
@@ -992,10 +992,11 @@ mod tests {
         properties.insert("region".to_owned(), region);
         let source = GoogleStore::new("google1", &properties)?;
 
-        // attempt to store an object in a bucket that exists but does not
-        // belong to this project (yes, need to change this value whenever the
-        // bucket suddenly becomes available again)
-        let bucket = "caefd289-4314-4ff3-bd0a-5be30c4fb8c2".to_owned();
+        // Attempt to store an object in a bucket that exists but does not
+        // belong to this project; when the bucket becomes available again just
+        // look for a bucket name in the "production" deployment; the store
+        // should recover by generating a new bucket name and retrying
+        let bucket = "0d2b8d8d-9827-4698-bf84-7c86c72dd420".to_owned();
         let object = "39c6061a56b7711f92c6ccd2047d47fdcc1609c1".to_owned();
         let packfile = Path::new("../../test/fixtures/lorem-ipsum.txt");
         let location = source.store_database_sync(packfile, &bucket, &object)?;
