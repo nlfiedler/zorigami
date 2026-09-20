@@ -959,6 +959,20 @@ mod tests {
         (supervisor, fired)
     }
 
+    /// Fixed intervals matching the shipped defaults: daily prune and
+    /// workspace cleanup, weekly for the rest. Stated explicitly rather than
+    /// read from the environment, so an exported PRUNE_INTERVAL_HOURS or
+    /// DATABASE_SCRUB_INTERVAL_DAYS cannot change what these tests assert.
+    fn test_intervals() -> TaskIntervals {
+        TaskIntervals {
+            prune: Duration::from_hours(24),
+            restore_test: Duration::from_hours(7 * 24),
+            database_scrub: Duration::from_hours(7 * 24),
+            pack_prune: Duration::from_hours(7 * 24),
+            workspace_cleanup: Duration::from_hours(24),
+        }
+    }
+
     fn run_finished_ago(operation: BackgroundOperation, hours: i64) -> TaskRun {
         let finished_at = Utc::now() - chrono::Duration::hours(hours);
         TaskRun {
@@ -979,7 +993,7 @@ mod tests {
         // often than the interval never reaches the armed timer, so with no
         // recorded run every task must be treated as due.
         let (supervisor, fired) = overdue_fixture(vec![]);
-        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        supervisor.run_overdue_tasks(&test_intervals());
         let fired = fired.lock().unwrap();
         assert!(fired.contains(&"prune"));
         assert!(fired.contains(&"restore_test"));
@@ -991,8 +1005,8 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_overdue_skips_recently_run_tasks() {
-        // Defaults: prune and workspace cleanup every 24 hours, the rest
-        // every 7 days. Everything here ran an hour ago, so nothing is due.
+        // Prune and workspace cleanup every 24 hours, the rest every 7 days.
+        // Everything here ran an hour ago, so nothing is due.
         let runs = vec![
             run_finished_ago(BackgroundOperation::Prune, 1),
             run_finished_ago(BackgroundOperation::RestoreTest, 1),
@@ -1001,7 +1015,7 @@ mod tests {
             run_finished_ago(BackgroundOperation::WorkspaceCleanup, 1),
         ];
         let (supervisor, fired) = overdue_fixture(runs);
-        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        supervisor.run_overdue_tasks(&test_intervals());
         assert!(fired.lock().unwrap().is_empty());
     }
 
@@ -1018,7 +1032,7 @@ mod tests {
             run_finished_ago(BackgroundOperation::WorkspaceCleanup, 48),
         ];
         let (supervisor, fired) = overdue_fixture(runs);
-        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        supervisor.run_overdue_tasks(&test_intervals());
         let fired = fired.lock().unwrap();
         assert!(fired.contains(&"prune"));
         assert!(fired.contains(&"workspace_cleanup"));
@@ -1037,7 +1051,7 @@ mod tests {
         let mut recent = run_finished_ago(BackgroundOperation::Prune, 1);
         recent.dataset_id = Some("ds2".into());
         let (supervisor, fired) = overdue_fixture(vec![old, recent]);
-        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        supervisor.run_overdue_tasks(&test_intervals());
         assert!(!fired.lock().unwrap().contains(&"prune"));
     }
 }

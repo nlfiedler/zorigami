@@ -1015,12 +1015,15 @@ impl LeaderContext {
                 for issue in &report.issues {
                     self.capture_error(operation, issue.dataset_id.clone(), &issue.message);
                 }
-                let outcome = if report.skipped {
-                    TaskOutcome::Skipped
-                } else if report.issues.is_empty() {
-                    TaskOutcome::Success
-                } else {
+                // Issues outrank skipped: a run that was interrupted after
+                // finding real problems must not be filed away as having had
+                // nothing to do.
+                let outcome = if !report.issues.is_empty() {
                     TaskOutcome::Issues
+                } else if report.skipped {
+                    TaskOutcome::Skipped
+                } else {
+                    TaskOutcome::Success
                 };
                 (outcome, report.issues.len() as u32, report.summary)
             }
@@ -1998,6 +2001,47 @@ mod tests {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].outcome, TaskOutcome::Failed);
         assert!(runs[0].summary.contains("digest mismatch"));
+    }
+
+    #[actix_rt::test]
+    #[serial_test::serial]
+    async fn test_leader_records_interrupted_run_with_issues_as_issues() {
+        // The stop paths return a skipped report that still carries whatever
+        // issues were found before the interruption. Filing that as Skipped
+        // would bury real problems behind a tag that reads as "nothing to do".
+        fn p_factory(
+            _dbase: Arc<dyn RecordRepository>,
+            _subscriber: Arc<dyn prune::Subscriber>,
+            _stop_requested: Arc<RwLock<bool>>,
+        ) -> Box<dyn prune::Pruner> {
+            let mut pruner = prune::MockPruner::new();
+            pruner.expect_database_scrub().return_once(|| {
+                Ok(
+                    TaskReport::skipped("stopped before completion").with_issues(vec![
+                        crate::tasks::ScrubIssue {
+                            dataset_id: None,
+                            message: "missing tree record: abc".into(),
+                        },
+                    ]),
+                )
+            });
+            Box::new(pruner)
+        }
+
+        let state = Arc::new(state::StateStoreImpl::new());
+        let sut = RingLeaderImpl::with_factories(state, None, None, Some(p_factory));
+        let (repo, runs) = recording_status_repo();
+        assert!(
+            sut.start(Arc::new(MockRecordRepository::new()), repo)
+                .is_ok()
+        );
+        assert!(sut.database_scrub().is_ok());
+        actix_rt::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        let runs = runs.lock().unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].outcome, TaskOutcome::Issues);
+        assert_eq!(runs[0].issue_count, 1);
     }
 
     #[actix_rt::test]

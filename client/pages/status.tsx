@@ -84,21 +84,22 @@ const OUTCOME_TAGS: Record<TaskOutcome, { label: string; css: string }> = {
   [TaskOutcome.Skipped]: { label: 'Skipped', css: 'is-info is-light' }
 };
 
+// Each unit is floored rather than rounded: rounding the remainder up to 60
+// renders "1m 60s", and rounding the seconds up renders "60.0 s".
 function formatDuration(millis: number): string {
   if (millis < 1000) {
     return `${millis} ms`;
   }
-  const seconds = millis / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)} s`;
+  const totalSeconds = Math.floor(millis / 1000);
+  if (totalSeconds < 60) {
+    // floored to tenths; toFixed would round 59.96 back up to "60.0"
+    return `${(Math.floor(millis / 100) / 10).toFixed(1)} s`;
   }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = Math.round(seconds % 60);
-  if (minutes < 60) {
-    return `${minutes}m ${remainder}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m ${totalSeconds % 60}s`;
   }
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
 export function Status() {
