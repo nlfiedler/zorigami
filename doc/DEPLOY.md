@@ -537,6 +537,29 @@ from outside `127.0.0.1`.**
   dev server (Vite) on a different port than the backend, add that origin to
   `CORS_ALLOWED_ORIGINS`.
 
+### Store credentials are never read back
+
+A token that could retrieve the pack store credentials would be worth far more
+than the mutations it guards: with the credentials in hand an attacker talks to
+the bucket directly, and none of the Tiers above are in the way. So the secret
+half of each store's configuration is write-only over the API.
+
+- `secret_key`, `client_secret`, and `password` come back from `stores` and
+  `store` as the literal string `<redacted>`. These are exactly the fields the
+  web UI renders as password inputs, including behind its reveal toggle.
+- Identifiers — `access_key`, `account`, `client_id`, `tenant_id`, `username`,
+  and the `credentials` file path — are returned as stored. They are of no use
+  without the matching secret, and hiding them would make the store forms
+  unreadable.
+- The forms round-trip the whole property map on save, so sending `<redacted>`
+  back unchanged is how you keep the stored value. To rotate a credential,
+  overwrite the field with the new value; to clear one, blank it. A never-set
+  secret reads back as an empty string, not as `<redacted>`.
+- This only narrows what the *API* discloses. The credentials are still stored
+  in the entity database in the clear, so anyone with read access to `DB_PATH`
+  has them regardless — which is the whole reason Tiers 1 and 2 put the real
+  defense in the bucket rather than on this host.
+
 ### What it does not do
 
 - There is a single shared secret, not per-user accounts, so an audit log entry

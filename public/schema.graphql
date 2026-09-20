@@ -356,6 +356,7 @@ type PackRetention {
 "Property defines a name/value pair."
 type Property {
   name: String!
+  "Value for this property; secrets read back as `<redacted>`."
   value: String!
 }
 
@@ -504,7 +505,11 @@ type Store {
   storeType: String!
   "User-defined label for this store."
   label: String!
-  "Name/value pairs that make up this store configuration."
+  """
+    Name/value pairs that make up this store configuration. Credentials
+    read back as `<redacted>`; send the placeholder back unchanged to keep
+    the stored value.
+  """
   properties: [Property!]!
   "Pack retention policy."
   retention: PackRetention!

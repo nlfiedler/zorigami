@@ -796,7 +796,58 @@ impl entities::schedule::Schedule {
 #[derive(GraphQLObject)]
 struct Property {
     name: String,
+    /// Value for this property; secrets read back as `<redacted>`.
     value: String,
+}
+
+/// Substituted for secret store property values on the way out.
+///
+/// A stolen `API_TOKEN` should not also hand over the pack store credentials:
+/// with those an attacker deletes the buckets directly and none of the Tier 1-3
+/// guards in doc/specs/0009-Ransomware-Protection.md ever come into play.
+const REDACTED: &str = "<redacted>";
+
+/// True for the store properties that are credentials rather than identifiers.
+///
+/// This is exactly the set the client renders with `RequiredHiddenInput`, so
+/// what the UI already treats as secret is what the API now withholds.
+/// Identifiers (`access_key`, `account`, `client_id`, `username`, and the
+/// `credentials` file path) stay visible: they are useless without the matching
+/// secret, and masking them would leave the forms unreadable.
+fn is_secret_property(name: &str) -> bool {
+    matches!(name, "secret_key" | "client_secret" | "password")
+}
+
+/// Put back the secret values that the client echoed to us as [`REDACTED`].
+///
+/// Every store form round-trips the whole property map, so without this an
+/// ordinary relabel would overwrite the credentials with the placeholder.
+fn unmask_properties(ctx: &GraphContext, store: &mut entities::Store) -> Result<(), FieldError> {
+    if !store.properties.values().any(|value| value == REDACTED) {
+        return Ok(());
+    }
+    let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+    let existing = repo.get_store(&store.id)?.ok_or_else(|| {
+        FieldError::new(
+            "cannot resolve redacted properties for an unknown store; \
+             supply the secret values directly",
+            Value::null(),
+        )
+    })?;
+    for (name, value) in store.properties.iter_mut() {
+        if value == REDACTED {
+            match existing.properties.get(name) {
+                Some(prior) => *value = prior.to_owned(),
+                None => {
+                    return Err(FieldError::new(
+                        format!("no stored value for redacted property `{name}`"),
+                        Value::null(),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Specifies how many pack files the pack store will retain.
@@ -849,7 +900,9 @@ struct Store {
     store_type: String,
     /// User-defined label for this store.
     label: String,
-    /// Name/value pairs that make up this store configuration.
+    /// Name/value pairs that make up this store configuration. Credentials
+    /// read back as `<redacted>`; send the placeholder back unchanged to keep
+    /// the stored value.
     properties: Vec<Property>,
     /// Pack retention policy.
     retention: PackRetention,
@@ -859,9 +912,17 @@ impl From<entities::Store> for Store {
     fn from(store: entities::Store) -> Self {
         let mut properties: Vec<Property> = Vec::new();
         for (key, val) in store.properties.iter() {
+            // an unset secret reads back as empty rather than as the
+            // placeholder, so the forms can still tell "not configured" apart
+            // from "configured but withheld"
+            let value = if is_secret_property(key) && !val.is_empty() {
+                REDACTED.to_owned()
+            } else {
+                val.to_owned()
+            };
             properties.push(Property {
                 name: key.to_owned(),
-                value: val.to_owned(),
+                value,
             });
         }
         let retention: PackRetention = store.retention.into();
@@ -1606,7 +1667,8 @@ impl Mutation {
         use crate::domain::usecases::update_store::{Params, UpdateStore};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = UpdateStore::new(Box::new(repo));
-        let estore: entities::Store = store.into();
+        let mut estore: entities::Store = store.into();
+        unmask_properties(ctx, &mut estore)?;
         let params: Params = Params::from(estore).with_caller(ctx.caller().to_owned());
         let result: entities::Store = usecase.call(params)?;
         Ok(result.into())
@@ -1620,7 +1682,8 @@ impl Mutation {
         use crate::domain::usecases::test_store::{Params, TestStore};
         let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
         let usecase = TestStore::new(Box::new(repo));
-        let estore: entities::Store = store.into();
+        let mut estore: entities::Store = store.into();
+        unmask_properties(ctx, &mut estore)?;
         let params: Params = estore.into();
         match usecase.call(params) {
             Ok(()) => Ok(String::from("OK")),
@@ -1815,4 +1878,109 @@ pub fn write_schema<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
     file.write_all(b"#\n# GENERATED FILE, DO NOT EDIT\n#\n\n")?;
     file.write_all(schema.as_sdl().as_bytes())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::repositories::MockStatusRepository;
+    use crate::domain::sources::MockEntityDataSource;
+    use crate::tasks::leader::MockRingLeader;
+
+    fn make_store(properties: HashMap<String, String>) -> entities::Store {
+        entities::Store {
+            id: "cafebabe".to_owned(),
+            store_type: entities::StoreType::MINIO,
+            label: "pretend S3".to_owned(),
+            properties,
+            retention: entities::PackRetention::ALL,
+        }
+    }
+
+    /// A context whose data source answers `get_store` with the given store.
+    fn make_context(stored: Option<entities::Store>) -> GraphContext {
+        let mut source = MockEntityDataSource::new();
+        source
+            .expect_get_store()
+            .returning(move |_| Ok(stored.clone()));
+        GraphContext::new(
+            Arc::new(source),
+            Arc::new(MockRingLeader::new()),
+            Arc::new(MockStatusRepository::new()),
+            None,
+        )
+    }
+
+    fn property_value(store: &Store, name: &str) -> String {
+        store
+            .properties
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| p.value.to_owned())
+            .expect("missing property")
+    }
+
+    #[test]
+    fn test_secrets_masked_on_the_way_out() {
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("region".to_owned(), "us-west-1".to_owned());
+        properties.insert("access_key".to_owned(), "AKIAEXAMPLE".to_owned());
+        properties.insert("secret_key".to_owned(), "s3kr1t".to_owned());
+        let actual: Store = make_store(properties).into();
+        // the secret never leaves the server
+        assert_eq!(property_value(&actual, "secret_key"), REDACTED);
+        // identifiers stay legible so the forms remain editable
+        assert_eq!(property_value(&actual, "region"), "us-west-1");
+        assert_eq!(property_value(&actual, "access_key"), "AKIAEXAMPLE");
+    }
+
+    #[test]
+    fn test_unset_secret_reads_back_empty() {
+        // an empty secret must not masquerade as a configured one, or the UI
+        // cannot tell "not set up yet" from "set up but withheld"
+        let mut properties: HashMap<String, String> = HashMap::new();
+        properties.insert("client_secret".to_owned(), String::new());
+        let actual: Store = make_store(properties).into();
+        assert_eq!(property_value(&actual, "client_secret"), "");
+    }
+
+    #[test]
+    fn test_unmask_restores_the_stored_secret() {
+        // the round trip every ordinary edit makes: the form echoes back the
+        // placeholder it was given, and the save must not write it through
+        let mut stored: HashMap<String, String> = HashMap::new();
+        stored.insert("secret_key".to_owned(), "s3kr1t".to_owned());
+        let ctx = make_context(Some(make_store(stored)));
+
+        let mut incoming: HashMap<String, String> = HashMap::new();
+        incoming.insert("secret_key".to_owned(), REDACTED.to_owned());
+        let mut store = make_store(incoming);
+        unmask_properties(&ctx, &mut store).expect("unmask failed");
+        assert_eq!(store.properties.get("secret_key").unwrap(), "s3kr1t");
+    }
+
+    #[test]
+    fn test_unmask_keeps_a_deliberate_change() {
+        let mut stored: HashMap<String, String> = HashMap::new();
+        stored.insert("secret_key".to_owned(), "s3kr1t".to_owned());
+        let ctx = make_context(Some(make_store(stored)));
+
+        let mut incoming: HashMap<String, String> = HashMap::new();
+        incoming.insert("secret_key".to_owned(), "rotated".to_owned());
+        let mut store = make_store(incoming);
+        unmask_properties(&ctx, &mut store).expect("unmask failed");
+        assert_eq!(store.properties.get("secret_key").unwrap(), "rotated");
+    }
+
+    #[test]
+    fn test_unmask_rejects_placeholder_for_unknown_store() {
+        // nothing to restore from, so the placeholder must not be persisted as
+        // if it were the credential
+        let ctx = make_context(None);
+        let mut incoming: HashMap<String, String> = HashMap::new();
+        incoming.insert("secret_key".to_owned(), REDACTED.to_owned());
+        let mut store = make_store(incoming);
+        let result = unmask_properties(&ctx, &mut store);
+        assert!(result.is_err());
+    }
 }
