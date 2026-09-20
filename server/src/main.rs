@@ -187,7 +187,7 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
     } else if state.scheduler == state::SchedulerState::Starting {
         let repo = RecordRepositoryImpl::new(ENTITY_DATA_SOURCE.clone());
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-        if let Err(err) = SCHEDULER.start(dbase) {
+        if let Err(err) = SCHEDULER.start(dbase, STATUS_REPO.clone()) {
             error!("error starting supervisor: {}", err);
         }
     }
@@ -198,8 +198,7 @@ fn manage_supervisors(state: &state::State, _previous: Option<&state::State>) {
     } else if state.leader == state::LeaderState::Starting {
         let repo = RecordRepositoryImpl::new(ENTITY_DATA_SOURCE.clone());
         let dbase: Arc<dyn RecordRepository> = Arc::new(repo);
-        let errors = STATUS_REPO.clone();
-        if let Err(err) = RING_LEADER.start(dbase, errors) {
+        if let Err(err) = RING_LEADER.start(dbase, STATUS_REPO.clone()) {
             error!("error starting file restorer: {}", err);
         }
     }

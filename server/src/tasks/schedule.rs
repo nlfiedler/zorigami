@@ -1,9 +1,10 @@
 //
 // Copyright (c) 2024 Nathan Fiedler
 //
+use crate::domain::entities::BackgroundOperation;
 use crate::domain::entities::Dataset;
 use crate::domain::entities::schedule::Schedule;
-use crate::domain::repositories::RecordRepository;
+use crate::domain::repositories::{RecordRepository, StatusRepository};
 use crate::shared::packs;
 use crate::shared::state::{SchedulerAction, StateStore};
 use crate::tasks::backup;
@@ -26,7 +27,14 @@ use std::time::Duration;
 #[cfg_attr(test, automock)]
 pub trait Scheduler: Send + Sync {
     /// Start a supervisor that will manage an interval timer to run backups.
-    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error>;
+    ///
+    /// The status repository supplies the last-run times used to decide which
+    /// periodic tasks are overdue at startup.
+    fn start(
+        &self,
+        repo: Arc<dyn RecordRepository>,
+        status: Arc<dyn StatusRepository>,
+    ) -> Result<(), Error>;
 
     /// Signal the supervisor to stop and release the database reference.
     fn stop(&self) -> Result<(), Error>;
@@ -72,7 +80,11 @@ impl SchedulerImpl {
 }
 
 impl Scheduler for SchedulerImpl {
-    fn start(&self, repo: Arc<dyn RecordRepository>) -> Result<(), Error> {
+    fn start(
+        &self,
+        repo: Arc<dyn RecordRepository>,
+        status: Arc<dyn StatusRepository>,
+    ) -> Result<(), Error> {
         let mut su_addr = self.super_addr.lock().unwrap();
         if su_addr.is_none() {
             // start supervisor within the arbiter created earlier
@@ -80,7 +92,7 @@ impl Scheduler for SchedulerImpl {
             let leader = self.leader.clone();
             let interval = self.interval;
             let addr = actix::Supervisor::start_in_arbiter(&self.runner.handle(), move |_| {
-                ScheduleSupervisor::new(repo, state, leader, interval)
+                ScheduleSupervisor::new(repo, state, leader, status, interval)
             });
             *su_addr = Some(addr);
         }
@@ -106,6 +118,50 @@ impl Scheduler for SchedulerImpl {
 #[rtype(result = "()")]
 struct Stop();
 
+/// Delay between the supervisor starting and the catch-up pass that runs
+/// overdue tasks, so the catch-up does not compete with the rest of the server
+/// coming up.
+const STARTUP_CATCHUP_DELAY: Duration = Duration::from_secs(60);
+
+/// How often each periodic task should run, from the environment.
+#[derive(Clone, Copy)]
+struct TaskIntervals {
+    prune: Duration,
+    restore_test: Duration,
+    database_scrub: Duration,
+    pack_prune: Duration,
+    workspace_cleanup: Duration,
+}
+
+impl TaskIntervals {
+    fn from_env() -> Self {
+        // Every interval is clamped to at least one unit; a zero-length
+        // actix interval would spin.
+        fn clamped(name: &str, default: u64, lo: u64, hi: u64) -> u64 {
+            std::env::var(name)
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .map(|n| n.clamp(lo, hi))
+                .unwrap_or(default)
+        }
+        fn days(name: &str, default: u64, lo: u64, hi: u64) -> Duration {
+            Duration::from_hours(clamped(name, default, lo, hi) * 24)
+        }
+        Self {
+            prune: Duration::from_hours(clamped("PRUNE_INTERVAL_HOURS", 24, 1, 8760)),
+            restore_test: days("RESTORE_TEST_INTERVAL_DAYS", 7, 1, 30),
+            database_scrub: days("DATABASE_SCRUB_INTERVAL_DAYS", 7, 1, 30),
+            pack_prune: days("PACK_PRUNE_INTERVAL_DAYS", 7, 1, 180),
+            workspace_cleanup: Duration::from_hours(clamped(
+                "WORKSPACE_CLEANUP_INTERVAL_HOURS",
+                24,
+                1,
+                720,
+            )),
+        }
+    }
+}
+
 //
 // Supervised actor that enqueues requests to perform backups according to the
 // schedules defined in the dataset. Uses an interval timer to wake up
@@ -118,6 +174,8 @@ struct ScheduleSupervisor {
     state: Arc<dyn StateStore>,
     // Backup requests are sent to the leader.
     leader: Arc<dyn RingLeader>,
+    // Source of the last-run times for the periodic tasks.
+    status: Arc<dyn StatusRepository>,
     // Sleep interval (milliseconds) between checks for datasets ready to run.
     interval: u64,
 }
@@ -127,12 +185,14 @@ impl ScheduleSupervisor {
         repo: Arc<dyn RecordRepository>,
         state: Arc<dyn StateStore>,
         leader: Arc<dyn RingLeader>,
+        status: Arc<dyn StatusRepository>,
         interval: u64,
     ) -> Self {
         Self {
             dbase: repo,
             state,
             leader,
+            status,
             interval,
         }
     }
@@ -150,6 +210,81 @@ impl ScheduleSupervisor {
             }
         }
         Ok(())
+    }
+
+    /// Run the restore self-test, which needs the passphrase.
+    fn run_restore_test(&self) {
+        let passphrase = packs::get_passphrase();
+        if let Err(err) = self.leader.restore_test(passphrase) {
+            error!("failed to schedule restore test: {}", err);
+        }
+    }
+
+    /// Start every periodic task whose interval has already elapsed since its
+    /// last recorded run, or that has never run at all.
+    ///
+    /// The leader serializes these, so triggering several at once queues them
+    /// rather than running them concurrently.
+    fn run_overdue_tasks(&self, intervals: &TaskIntervals) {
+        let runs = match self.status.list_runs() {
+            Ok(runs) => runs,
+            Err(err) => {
+                // Without the run records there is no way to tell what is
+                // overdue. The armed intervals still apply.
+                warn!("cannot determine overdue tasks: {}", err);
+                return;
+            }
+        };
+        // A task may have several rows, one per dataset, so the last run of
+        // the task as a whole is the most recent of them.
+        let last_run = |operation: BackgroundOperation| -> Option<DateTime<Utc>> {
+            runs.iter()
+                .filter(|r| r.operation == operation)
+                .map(|r| r.finished_at)
+                .max()
+        };
+        let overdue = |operation: BackgroundOperation, interval: Duration| -> bool {
+            match last_run(operation) {
+                Some(finished) => match chrono::Duration::from_std(interval) {
+                    Ok(interval) => Utc::now() - finished >= interval,
+                    Err(_) => false,
+                },
+                // never run, which is exactly the case this exists to fix
+                None => true,
+            }
+        };
+
+        if overdue(BackgroundOperation::Prune, intervals.prune) {
+            debug!("startup catch-up: pruning snapshots");
+            if let Err(err) = self.prune_all_datasets() {
+                error!("failed to prune datasets: {}", err);
+            }
+        }
+        if overdue(BackgroundOperation::RestoreTest, intervals.restore_test) {
+            debug!("startup catch-up: restore test");
+            self.run_restore_test();
+        }
+        if overdue(BackgroundOperation::DatabaseScrub, intervals.database_scrub) {
+            debug!("startup catch-up: database scrub");
+            if let Err(err) = self.leader.database_scrub() {
+                error!("failed to schedule database scrub: {}", err);
+            }
+        }
+        if overdue(BackgroundOperation::PackPrune, intervals.pack_prune) {
+            debug!("startup catch-up: pack prune");
+            if let Err(err) = self.leader.prune_packs() {
+                error!("failed to schedule pack prune: {}", err);
+            }
+        }
+        if overdue(
+            BackgroundOperation::WorkspaceCleanup,
+            intervals.workspace_cleanup,
+        ) {
+            debug!("startup catch-up: workspace cleanup");
+            if let Err(err) = self.leader.cleanup_workspaces() {
+                error!("failed to schedule workspace cleanup: {}", err);
+            }
+        }
     }
 
     /// Begin the prune process for all datasets.
@@ -178,11 +313,10 @@ impl Actor for ScheduleSupervisor {
             }
         });
 
+        let intervals = TaskIntervals::from_env();
+
         // every day have all datasets prune old snapshots
-        let prune_interval_hours = std::env::var("PRUNE_INTERVAL_HOURS")
-            .map(|s| s.parse::<u64>().unwrap_or(24))
-            .unwrap_or(24);
-        ctx.run_interval(Duration::from_hours(prune_interval_hours), |this, _ctx| {
+        ctx.run_interval(intervals.prune, |this, _ctx| {
             trace!("schedule prune interval fired");
             if let Err(err) = this.prune_all_datasets() {
                 error!("failed to prune datasets: {}", err);
@@ -191,70 +325,44 @@ impl Actor for ScheduleSupervisor {
 
         // periodically exercise the restore path on a random file to catch
         // store or encryption regressions before a user actually needs them
-        let restore_test_days = std::env::var("RESTORE_TEST_INTERVAL_DAYS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(|n| n.clamp(1, 30))
-            .unwrap_or(7);
-        ctx.run_interval(
-            Duration::from_hours(restore_test_days * 24),
-            |this, _ctx| {
-                trace!("schedule restore-test interval fired");
-                let passphrase = packs::get_passphrase();
-                if let Err(err) = this.leader.restore_test(passphrase) {
-                    error!("failed to schedule restore test: {}", err);
-                }
-            },
-        );
+        ctx.run_interval(intervals.restore_test, |this, _ctx| {
+            trace!("schedule restore-test interval fired");
+            this.run_restore_test();
+        });
 
         // periodically scan the database for unreachable or unreadable records
-        let scrub_interval_days = std::env::var("DATABASE_SCRUB_INTERVAL_DAYS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(|n| n.clamp(1, 30))
-            .unwrap_or(7);
-        ctx.run_interval(
-            Duration::from_hours(scrub_interval_days * 24),
-            |this, _ctx| {
-                trace!("schedule database-scrub interval fired");
-                if let Err(err) = this.leader.database_scrub() {
-                    error!("failed to schedule database scrub: {}", err);
-                }
-            },
-        );
+        ctx.run_interval(intervals.database_scrub, |this, _ctx| {
+            trace!("schedule database-scrub interval fired");
+            if let Err(err) = this.leader.database_scrub() {
+                error!("failed to schedule database scrub: {}", err);
+            }
+        });
 
         // periodically delete unreachable pack files and old database archives
-        let pack_prune_interval_days = std::env::var("PACK_PRUNE_INTERVAL_DAYS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(|n| n.clamp(1, 180))
-            .unwrap_or(7);
-        ctx.run_interval(
-            Duration::from_hours(pack_prune_interval_days * 24),
-            |this, _ctx| {
-                trace!("schedule pack-prune interval fired");
-                if let Err(err) = this.leader.prune_packs() {
-                    error!("failed to schedule pack prune: {}", err);
-                }
-            },
-        );
+        ctx.run_interval(intervals.pack_prune, |this, _ctx| {
+            trace!("schedule pack-prune interval fired");
+            if let Err(err) = this.leader.prune_packs() {
+                error!("failed to schedule pack prune: {}", err);
+            }
+        });
 
         // periodically wipe leftover temporary pack files from each dataset's
         // workspace; killed backups/restores can leave files behind otherwise
-        let workspace_cleanup_hours = std::env::var("WORKSPACE_CLEANUP_INTERVAL_HOURS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(|n| n.clamp(1, 720))
-            .unwrap_or(24);
-        ctx.run_interval(
-            Duration::from_hours(workspace_cleanup_hours),
-            |this, _ctx| {
-                trace!("schedule workspace-cleanup interval fired");
-                if let Err(err) = this.leader.cleanup_workspaces() {
-                    error!("failed to schedule workspace cleanup: {}", err);
-                }
-            },
-        );
+        ctx.run_interval(intervals.workspace_cleanup, |this, _ctx| {
+            trace!("schedule workspace-cleanup interval fired");
+            if let Err(err) = this.leader.cleanup_workspaces() {
+                error!("failed to schedule workspace cleanup: {}", err);
+            }
+        });
+
+        // The intervals above are armed from zero and fire only after a full
+        // period has elapsed, so a server restarted more often than the
+        // interval would never run these tasks at all. Consult the recorded
+        // run times and start anything already overdue. Delayed a little so
+        // the catch-up does not compete with the rest of the server coming up.
+        ctx.run_later(STARTUP_CATCHUP_DELAY, move |this, _ctx| {
+            this.run_overdue_tasks(&intervals);
+        });
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
@@ -345,12 +453,21 @@ fn should_run(
 mod tests {
     use super::*;
     use crate::domain::entities::schedule::{Schedule, TimeRange};
-    use crate::domain::entities::{Checksum, Snapshot};
-    use crate::domain::repositories::MockRecordRepository;
+    use crate::domain::entities::{Checksum, Snapshot, TaskRun};
+    use crate::domain::repositories::{MockRecordRepository, MockStatusRepository};
     use crate::shared::state::{StateStore, StateStoreImpl};
     use crate::tasks::leader::MockRingLeader;
     use std::io;
     use std::path::Path;
+
+    /// A status repository reporting no recorded runs, so the startup
+    /// catch-up would consider everything overdue. The tests below never wait
+    /// long enough for that pass to fire.
+    fn mock_status_repo() -> Arc<dyn StatusRepository> {
+        let mut mock = MockStatusRepository::new();
+        mock.expect_list_runs().returning(|| Ok(vec![]));
+        Arc::new(mock)
+    }
 
     #[actix_rt::test]
     #[serial_test::serial]
@@ -367,7 +484,7 @@ mod tests {
         let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
         let leader: Arc<dyn RingLeader> = Arc::new(MockRingLeader::new());
         let sut = SchedulerImpl::new(state.clone(), leader.clone(), 60000);
-        let result = sut.start(repo.clone());
+        let result = sut.start(repo.clone(), mock_status_repo());
         assert!(result.is_ok());
         state.wait_for_scheduler(SchedulerAction::Started);
         // stop
@@ -375,7 +492,7 @@ mod tests {
         assert!(result.is_ok());
         state.wait_for_scheduler(SchedulerAction::Stopped);
         // restart
-        let result = sut.start(repo);
+        let result = sut.start(repo, mock_status_repo());
         assert!(result.is_ok());
         state.wait_for_scheduler(SchedulerAction::Started);
         Ok(())
@@ -400,7 +517,7 @@ mod tests {
         leader.expect_get_backup_by_dataset().returning(|_| None);
         leader.expect_backup().returning(|_| Ok(()));
         let sut = SchedulerImpl::new(state.clone(), Arc::new(leader), 5);
-        let result = sut.start(repo.clone());
+        let result = sut.start(repo.clone(), mock_status_repo());
         assert!(result.is_ok());
         state.wait_for_scheduler(SchedulerAction::Started);
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -791,5 +908,136 @@ mod tests {
         // assert
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    /// Build a supervisor whose leader records which tasks were triggered.
+    fn overdue_fixture(runs: Vec<TaskRun>) -> (ScheduleSupervisor, Arc<Mutex<Vec<&'static str>>>) {
+        let fired: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut leader = MockRingLeader::new();
+        let sink = fired.clone();
+        leader.expect_restore_test().returning(move |_| {
+            sink.lock().unwrap().push("restore_test");
+            Ok(())
+        });
+        let sink = fired.clone();
+        leader.expect_database_scrub().returning(move || {
+            sink.lock().unwrap().push("database_scrub");
+            Ok(())
+        });
+        let sink = fired.clone();
+        leader.expect_prune_packs().returning(move || {
+            sink.lock().unwrap().push("pack_prune");
+            Ok(())
+        });
+        let sink = fired.clone();
+        leader.expect_cleanup_workspaces().returning(move || {
+            sink.lock().unwrap().push("workspace_cleanup");
+            Ok(())
+        });
+
+        let mut dbase = MockRecordRepository::new();
+        // prune_all_datasets walks the datasets; an empty list is enough to
+        // tell that it was invoked without needing a real prune
+        let sink = fired.clone();
+        dbase.expect_get_datasets().returning(move || {
+            sink.lock().unwrap().push("prune");
+            Ok(vec![])
+        });
+
+        let mut status = MockStatusRepository::new();
+        status
+            .expect_list_runs()
+            .returning(move || Ok(runs.clone()));
+
+        let supervisor = ScheduleSupervisor::new(
+            Arc::new(dbase),
+            Arc::new(StateStoreImpl::new()),
+            Arc::new(leader),
+            Arc::new(status),
+            60000,
+        );
+        (supervisor, fired)
+    }
+
+    fn run_finished_ago(operation: BackgroundOperation, hours: i64) -> TaskRun {
+        let finished_at = Utc::now() - chrono::Duration::hours(hours);
+        TaskRun {
+            operation,
+            dataset_id: None,
+            started_at: finished_at - chrono::Duration::seconds(1),
+            finished_at,
+            outcome: crate::domain::entities::TaskOutcome::Success,
+            issue_count: 0,
+            summary: "done".into(),
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_overdue_runs_everything_when_never_run() {
+        // This is the case the catch-up exists for: a server restarted more
+        // often than the interval never reaches the armed timer, so with no
+        // recorded run every task must be treated as due.
+        let (supervisor, fired) = overdue_fixture(vec![]);
+        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        let fired = fired.lock().unwrap();
+        assert!(fired.contains(&"prune"));
+        assert!(fired.contains(&"restore_test"));
+        assert!(fired.contains(&"database_scrub"));
+        assert!(fired.contains(&"pack_prune"));
+        assert!(fired.contains(&"workspace_cleanup"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_overdue_skips_recently_run_tasks() {
+        // Defaults: prune and workspace cleanup every 24 hours, the rest
+        // every 7 days. Everything here ran an hour ago, so nothing is due.
+        let runs = vec![
+            run_finished_ago(BackgroundOperation::Prune, 1),
+            run_finished_ago(BackgroundOperation::RestoreTest, 1),
+            run_finished_ago(BackgroundOperation::DatabaseScrub, 1),
+            run_finished_ago(BackgroundOperation::PackPrune, 1),
+            run_finished_ago(BackgroundOperation::WorkspaceCleanup, 1),
+        ];
+        let (supervisor, fired) = overdue_fixture(runs);
+        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        assert!(fired.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_overdue_runs_only_elapsed_tasks() {
+        // Two days since each ran: the daily tasks are due, the weekly ones
+        // are not.
+        let runs = vec![
+            run_finished_ago(BackgroundOperation::Prune, 48),
+            run_finished_ago(BackgroundOperation::RestoreTest, 48),
+            run_finished_ago(BackgroundOperation::DatabaseScrub, 48),
+            run_finished_ago(BackgroundOperation::PackPrune, 48),
+            run_finished_ago(BackgroundOperation::WorkspaceCleanup, 48),
+        ];
+        let (supervisor, fired) = overdue_fixture(runs);
+        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        let fired = fired.lock().unwrap();
+        assert!(fired.contains(&"prune"));
+        assert!(fired.contains(&"workspace_cleanup"));
+        assert!(!fired.contains(&"restore_test"));
+        assert!(!fired.contains(&"database_scrub"));
+        assert!(!fired.contains(&"pack_prune"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_overdue_uses_most_recent_run_of_a_task() {
+        // Snapshot pruning records a row per dataset. The task as a whole is
+        // only overdue if even the most recent of them has aged out.
+        let mut old = run_finished_ago(BackgroundOperation::Prune, 100);
+        old.dataset_id = Some("ds1".into());
+        let mut recent = run_finished_ago(BackgroundOperation::Prune, 1);
+        recent.dataset_id = Some("ds2".into());
+        let (supervisor, fired) = overdue_fixture(vec![old, recent]);
+        supervisor.run_overdue_tasks(&TaskIntervals::from_env());
+        assert!(!fired.lock().unwrap().contains(&"prune"));
     }
 }
