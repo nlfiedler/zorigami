@@ -116,15 +116,19 @@ last prune" properly, widen those returns to carry the counts alongside the
 issues:
 
 - `database_scrub` — records checked, by kind.
-- `prune_packs` — packs deleted, bytes reclaimed, database archives removed.
+- `prune_packs` — packs deleted, database archives removed.
 - `cleanup_workspaces` — files removed, bytes freed.
 - `prune_snapshots` already returns the count pruned; it only needs the caller
   to stop discarding it.
 
 This touches the `Pruner` trait, its implementation, the four leader handlers,
-and the `MockPruner` expectations in the existing tests. It is worth doing: the
-reclaimed-bytes figure for pack pruning is the single most interesting number
-this feature can display.
+and the `MockPruner` expectations in the existing tests.
+
+Bytes reclaimed by pack pruning would be the most interesting number here, but
+it is not available: `Pack` records a digest, locations, and an upload time, not
+a size, and there is no reverse index from a pack to the chunks it holds.
+Totalling it would mean asking each store. Counts of objects and records
+deleted are cheap and honest, so those are what the summary reports.
 
 ### Recording sites
 
@@ -208,3 +212,89 @@ entry for something consulted occasionally.
   it holds more than errors. Renaming the variable breaks existing deployments
   for no functional gain; leaving it is mildly confusing. Leaning toward leaving
   it and noting it in the deployment docs.
+
+---
+
+## Implementation
+
+### Design decisions
+
+- **Storage**: a `task_runs` table in the existing status database, one row per
+  operation and dataset, replaced on each run via `INSERT ... ON CONFLICT`. At
+  most six rows, so no retention sweep. The `dataset_id` column stores the empty
+  string rather than `NULL` for the global tasks, because SQLite treats `NULL`s
+  as distinct in a primary key and the upsert needs them to collide.
+- **Reporting shape**: one `TaskReport { issues, summary, skipped }` in the
+  `tasks` module root rather than a typed counts struct per operation. The
+  display is a sentence, so the task composes its own summary; only the task
+  knows what is worth counting. `ScrubIssue` moved there too, since the restorer
+  now returns a report as well.
+- **Outcome**: four values. `Skipped` was added after finding that
+  `restore_test` returns `Ok` when no dataset has a snapshot or no file is under
+  `RESTORE_TEST_MAX_FILE_MB`; recording that as success would be a false
+  assurance from the one task whose purpose is to prove restores work.
+- **Backups excluded**: they already carry a richer per-dataset `BackupState`
+  shown on the dataset cards. A second record of the same thing could disagree
+  with the first. `BackgroundOperation::PERIODIC` names the five that are
+  recorded.
+- **Renames**: `ErrorRepository` became `StatusRepository`, `ErrorOperation`
+  became `BackgroundOperation`, and `ERROR_DB_PATH` became `STATUS_DB_PATH`
+  (default `./tmp/status.db`). Pointing the new variable at an existing
+  `errors.db` keeps the captured errors, since the schema is applied with
+  `CREATE TABLE IF NOT EXISTS` on open.
+- **Startup catch-up**: `ScheduleSupervisor` consults the recorded run times 60
+  seconds after starting and triggers anything overdue or never run. This fixes
+  a real gap rather than merely displaying one — see below.
+
+### The scheduling bug this uncovered
+
+`ctx.run_interval` fires only after a full period has elapsed and keeps its
+state in memory. A server restarted more often than the interval never ran the
+affected task at all: at the 7-day defaults, a machine rebooted weekly would
+never scrub the database, prune packs, or test a restore. Nothing reported this,
+and from the outside it was indistinguishable from those tasks running cleanly.
+Persisting the run times is what makes the fix possible, so the catch-up landed
+with this feature rather than separately.
+
+### Backend
+
+- `server/src/domain/entities.rs`: `TaskOutcome`, `TaskRun` with
+  `duration_millis()`, and `BackgroundOperation::PERIODIC`.
+- `server/src/domain/repositories.rs`: `record_run` and `list_runs` on
+  `StatusRepository`.
+- `server/src/data/repositories/status.rs`: the `task_runs` table and its two
+  methods, plus five unit tests covering replacement, per-dataset keying, and
+  survival across a reopen.
+- `server/src/tasks.rs`: `ScrubIssue` and `TaskReport`.
+- `server/src/tasks/prune.rs`: the three scan operations return `TaskReport`;
+  `prune_pack_locations` returns a count of deleted objects instead of a
+  changed flag.
+- `server/src/tasks/restore.rs`: `restore_test` returns `TaskReport`, skipped
+  when it verified nothing.
+- `server/src/tasks/leader.rs`: `LeaderContext::record_run` derives the outcome
+  and captures each issue as an error. A unit test caught this recording a
+  failed run as `Success` on the first pass, since the error path produced a
+  report with no issues.
+- `server/src/tasks/schedule.rs`: `TaskIntervals::from_env` shared by the armed
+  timers and the catch-up pass; `run_overdue_tasks` with four unit tests.
+  `PRUNE_INTERVAL_HOURS` is now clamped to at least 1 like the others.
+- `server/src/preso/graphql.rs`: `TaskOutcome`, `TaskRun` and `TaskStatus`
+  types, the `taskStatus` query, and `GraphContext.errors` renamed to `status`.
+
+### Frontend
+
+- `client/pages/errors.tsx` became `client/pages/status.tsx`, route `/status`:
+  a Recent Activity table above the existing error log, with a row per task and
+  an explicit "Never run" for those with no recorded run.
+- `client/pages/home.tsx`: the button is now always present. Its absence
+  previously carried the same ambiguity as the empty errors page.
+- `Skipped` is tagged blue rather than green, so a task that verified nothing
+  does not read as a pass.
+
+### Still open
+
+- Backups are not recorded; the open question above was resolved by excluding
+  them.
+- No "Run now" control yet. `RingLeader` already exposes the four operations, so
+  these would be thin mutations.
+- Run history is still one row per operation.

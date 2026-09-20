@@ -83,6 +83,7 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 | `CORS_ALLOWED_ORIGINS` | Comma-separated extra origins allowed to call `/graphql` cross-origin |
 | `DB_PATH` | Override entity database path |
 | `DATABASE_TYPE` | Selects entity-store backend: `rocksdb` (default) or `sqlite` |
+| `STATUS_DB_PATH` | SQLite database holding captured errors and background task run status (default `./tmp/status.db`) |
 | `HOST` / `PORT` | Server bind address/port |
 | `PRUNE_INTERVAL_HOURS` | Pruning check interval |
 | `DATABASE_SCRUB_INTERVAL_DAYS` | Interval between database integrity scrubs (default 7, clamped 1-30) |
