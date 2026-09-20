@@ -231,12 +231,24 @@ impl ScheduleSupervisor {
     /// startup, so a task that has since run under its own interval, or was
     /// started by hand, is left alone.
     fn run_if_overdue(&self, operation: BackgroundOperation, intervals: &TaskIntervals) {
-        let interval = match operation {
-            BackgroundOperation::Prune => intervals.prune,
-            BackgroundOperation::RestoreTest => intervals.restore_test,
-            BackgroundOperation::DatabaseScrub => intervals.database_scrub,
-            BackgroundOperation::PackPrune => intervals.pack_prune,
-            BackgroundOperation::WorkspaceCleanup => intervals.workspace_cleanup,
+        // Interval and action are chosen together, so that the one arm which
+        // does not belong here can bow out in a single place.
+        type Start = fn(&ScheduleSupervisor) -> Result<(), Error>;
+        let (interval, start): (Duration, Start) = match operation {
+            BackgroundOperation::Prune => (intervals.prune, |this| this.prune_all_datasets()),
+            BackgroundOperation::RestoreTest => (intervals.restore_test, |this| {
+                this.run_restore_test();
+                Ok(())
+            }),
+            BackgroundOperation::DatabaseScrub => (intervals.database_scrub, |this| {
+                this.leader.database_scrub()
+            }),
+            BackgroundOperation::PackPrune => {
+                (intervals.pack_prune, |this| this.leader.prune_packs())
+            }
+            BackgroundOperation::WorkspaceCleanup => (intervals.workspace_cleanup, |this| {
+                this.leader.cleanup_workspaces()
+            }),
             // not a periodic task; backups run from the dataset schedules
             BackgroundOperation::Backup => return,
         };
@@ -268,18 +280,7 @@ impl ScheduleSupervisor {
             return;
         }
         debug!("startup catch-up: {}", operation);
-        let result = match operation {
-            BackgroundOperation::Prune => self.prune_all_datasets(),
-            BackgroundOperation::RestoreTest => {
-                self.run_restore_test();
-                Ok(())
-            }
-            BackgroundOperation::DatabaseScrub => self.leader.database_scrub(),
-            BackgroundOperation::PackPrune => self.leader.prune_packs(),
-            BackgroundOperation::WorkspaceCleanup => self.leader.cleanup_workspaces(),
-            BackgroundOperation::Backup => Ok(()),
-        };
-        if let Err(err) = result {
+        if let Err(err) = start(self) {
             error!("failed to start overdue {}: {}", operation, err);
         }
     }
