@@ -118,10 +118,14 @@ impl Scheduler for SchedulerImpl {
 #[rtype(result = "()")]
 struct Stop();
 
-/// Delay between the supervisor starting and the catch-up pass that runs
-/// overdue tasks, so the catch-up does not compete with the rest of the server
-/// coming up.
+/// Delay between the supervisor starting and the first catch-up slot, so the
+/// catch-up does not compete with the rest of the server coming up.
 const STARTUP_CATCHUP_DELAY: Duration = Duration::from_secs(60);
+
+/// Lower bound on the gap between consecutive catch-up slots, in case the
+/// scheduler is configured with a very short interval (the tests use
+/// milliseconds), which would collapse the stagger.
+const STARTUP_CATCHUP_MIN_GAP: Duration = Duration::from_secs(60);
 
 /// How often each periodic task should run, from the environment.
 #[derive(Clone, Copy)]
@@ -220,70 +224,63 @@ impl ScheduleSupervisor {
         }
     }
 
-    /// Start every periodic task whose interval has already elapsed since its
-    /// last recorded run, or that has never run at all.
+    /// Start the given task if its interval has already elapsed since its
+    /// last recorded run, or if it has never run at all.
     ///
-    /// The leader serializes these, so triggering several at once queues them
-    /// rather than running them concurrently.
-    fn run_overdue_tasks(&self, intervals: &TaskIntervals) {
+    /// The run records are read afresh on each call rather than once at
+    /// startup, so a task that has since run under its own interval, or was
+    /// started by hand, is left alone.
+    fn run_if_overdue(&self, operation: BackgroundOperation, intervals: &TaskIntervals) {
+        let interval = match operation {
+            BackgroundOperation::Prune => intervals.prune,
+            BackgroundOperation::RestoreTest => intervals.restore_test,
+            BackgroundOperation::DatabaseScrub => intervals.database_scrub,
+            BackgroundOperation::PackPrune => intervals.pack_prune,
+            BackgroundOperation::WorkspaceCleanup => intervals.workspace_cleanup,
+            // not a periodic task; backups run from the dataset schedules
+            BackgroundOperation::Backup => return,
+        };
         let runs = match self.status.list_runs() {
             Ok(runs) => runs,
             Err(err) => {
                 // Without the run records there is no way to tell what is
                 // overdue. The armed intervals still apply.
-                warn!("cannot determine overdue tasks: {}", err);
+                warn!("cannot determine whether {} is overdue: {}", operation, err);
                 return;
             }
         };
         // A task may have several rows, one per dataset, so the last run of
         // the task as a whole is the most recent of them.
-        let last_run = |operation: BackgroundOperation| -> Option<DateTime<Utc>> {
-            runs.iter()
-                .filter(|r| r.operation == operation)
-                .map(|r| r.finished_at)
-                .max()
+        let last_run = runs
+            .iter()
+            .filter(|r| r.operation == operation)
+            .map(|r| r.finished_at)
+            .max();
+        let overdue = match last_run {
+            Some(finished) => match chrono::Duration::from_std(interval) {
+                Ok(interval) => Utc::now() - finished >= interval,
+                Err(_) => false,
+            },
+            // never run, which is exactly the case this exists to fix
+            None => true,
         };
-        let overdue = |operation: BackgroundOperation, interval: Duration| -> bool {
-            match last_run(operation) {
-                Some(finished) => match chrono::Duration::from_std(interval) {
-                    Ok(interval) => Utc::now() - finished >= interval,
-                    Err(_) => false,
-                },
-                // never run, which is exactly the case this exists to fix
-                None => true,
+        if !overdue {
+            return;
+        }
+        debug!("startup catch-up: {}", operation);
+        let result = match operation {
+            BackgroundOperation::Prune => self.prune_all_datasets(),
+            BackgroundOperation::RestoreTest => {
+                self.run_restore_test();
+                Ok(())
             }
+            BackgroundOperation::DatabaseScrub => self.leader.database_scrub(),
+            BackgroundOperation::PackPrune => self.leader.prune_packs(),
+            BackgroundOperation::WorkspaceCleanup => self.leader.cleanup_workspaces(),
+            BackgroundOperation::Backup => Ok(()),
         };
-
-        if overdue(BackgroundOperation::Prune, intervals.prune) {
-            debug!("startup catch-up: pruning snapshots");
-            if let Err(err) = self.prune_all_datasets() {
-                error!("failed to prune datasets: {}", err);
-            }
-        }
-        if overdue(BackgroundOperation::RestoreTest, intervals.restore_test) {
-            debug!("startup catch-up: restore test");
-            self.run_restore_test();
-        }
-        if overdue(BackgroundOperation::DatabaseScrub, intervals.database_scrub) {
-            debug!("startup catch-up: database scrub");
-            if let Err(err) = self.leader.database_scrub() {
-                error!("failed to schedule database scrub: {}", err);
-            }
-        }
-        if overdue(BackgroundOperation::PackPrune, intervals.pack_prune) {
-            debug!("startup catch-up: pack prune");
-            if let Err(err) = self.leader.prune_packs() {
-                error!("failed to schedule pack prune: {}", err);
-            }
-        }
-        if overdue(
-            BackgroundOperation::WorkspaceCleanup,
-            intervals.workspace_cleanup,
-        ) {
-            debug!("startup catch-up: workspace cleanup");
-            if let Err(err) = self.leader.cleanup_workspaces() {
-                error!("failed to schedule workspace cleanup: {}", err);
-            }
+        if let Err(err) = result {
+            error!("failed to start overdue {}: {}", operation, err);
         }
     }
 
@@ -358,11 +355,26 @@ impl Actor for ScheduleSupervisor {
         // The intervals above are armed from zero and fire only after a full
         // period has elapsed, so a server restarted more often than the
         // interval would never run these tasks at all. Consult the recorded
-        // run times and start anything already overdue. Delayed a little so
-        // the catch-up does not compete with the rest of the server coming up.
-        ctx.run_later(STARTUP_CATCHUP_DELAY, move |this, _ctx| {
-            this.run_overdue_tasks(&intervals);
-        });
+        // run times and start anything already overdue, one task per slot.
+        //
+        // The slots matter because the database scrub, pack prune, and
+        // workspace cleanup are delivered as their own messages to the leader,
+        // handled directly rather than through its request queues, so the
+        // backup-before-prune priority in `process_queues` cannot reorder a
+        // backup ahead of them. Enqueuing them together would put all three in
+        // front of any backup that came due afterwards; spreading them leaves
+        // room for one to be queued and picked up in between.
+        //
+        // The gap is one backup-check interval, so a dataset falling due is
+        // noticed and queued between any two slots.
+        let gap = Duration::from_millis(self.interval).max(STARTUP_CATCHUP_MIN_GAP);
+        for (slot, operation) in BackgroundOperation::PERIODIC.iter().enumerate() {
+            let operation = *operation;
+            let delay = STARTUP_CATCHUP_DELAY + gap * slot as u32;
+            ctx.run_later(delay, move |this, _ctx| {
+                this.run_if_overdue(operation, &intervals);
+            });
+        }
     }
 
     fn stopping(&mut self, _ctx: &mut Context<Self>) -> Running {
@@ -912,6 +924,20 @@ mod tests {
 
     /// Build a supervisor whose leader records which tasks were triggered.
     fn overdue_fixture(runs: Vec<TaskRun>) -> (ScheduleSupervisor, Arc<Mutex<Vec<&'static str>>>) {
+        let (supervisor, fired, _) = overdue_fixture_shared(Arc::new(Mutex::new(runs)));
+        (supervisor, fired)
+    }
+
+    /// As above, but reading the run records from a cell the test can change
+    /// between calls, so a slot can be shown to re-read them.
+    #[allow(clippy::type_complexity)]
+    fn overdue_fixture_shared(
+        runs: Arc<Mutex<Vec<TaskRun>>>,
+    ) -> (
+        ScheduleSupervisor,
+        Arc<Mutex<Vec<&'static str>>>,
+        Arc<Mutex<Vec<TaskRun>>>,
+    ) {
         let fired: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
         let mut leader = MockRingLeader::new();
         let sink = fired.clone();
@@ -945,9 +971,10 @@ mod tests {
         });
 
         let mut status = MockStatusRepository::new();
+        let source = runs.clone();
         status
             .expect_list_runs()
-            .returning(move || Ok(runs.clone()));
+            .returning(move || Ok(source.lock().unwrap().clone()));
 
         let supervisor = ScheduleSupervisor::new(
             Arc::new(dbase),
@@ -956,7 +983,7 @@ mod tests {
             Arc::new(status),
             60000,
         );
-        (supervisor, fired)
+        (supervisor, fired, runs)
     }
 
     /// Fixed intervals matching the shipped defaults: daily prune and
@@ -970,6 +997,13 @@ mod tests {
             database_scrub: Duration::from_hours(7 * 24),
             pack_prune: Duration::from_hours(7 * 24),
             workspace_cleanup: Duration::from_hours(24),
+        }
+    }
+
+    /// Fire every catch-up slot, as `started` does but without the delays.
+    fn fire_all_slots(supervisor: &ScheduleSupervisor) {
+        for operation in BackgroundOperation::PERIODIC {
+            supervisor.run_if_overdue(operation, &test_intervals());
         }
     }
 
@@ -993,7 +1027,7 @@ mod tests {
         // often than the interval never reaches the armed timer, so with no
         // recorded run every task must be treated as due.
         let (supervisor, fired) = overdue_fixture(vec![]);
-        supervisor.run_overdue_tasks(&test_intervals());
+        fire_all_slots(&supervisor);
         let fired = fired.lock().unwrap();
         assert!(fired.contains(&"prune"));
         assert!(fired.contains(&"restore_test"));
@@ -1015,7 +1049,7 @@ mod tests {
             run_finished_ago(BackgroundOperation::WorkspaceCleanup, 1),
         ];
         let (supervisor, fired) = overdue_fixture(runs);
-        supervisor.run_overdue_tasks(&test_intervals());
+        fire_all_slots(&supervisor);
         assert!(fired.lock().unwrap().is_empty());
     }
 
@@ -1032,13 +1066,37 @@ mod tests {
             run_finished_ago(BackgroundOperation::WorkspaceCleanup, 48),
         ];
         let (supervisor, fired) = overdue_fixture(runs);
-        supervisor.run_overdue_tasks(&test_intervals());
+        fire_all_slots(&supervisor);
         let fired = fired.lock().unwrap();
         assert!(fired.contains(&"prune"));
         assert!(fired.contains(&"workspace_cleanup"));
         assert!(!fired.contains(&"restore_test"));
         assert!(!fired.contains(&"database_scrub"));
         assert!(!fired.contains(&"pack_prune"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_overdue_rechecks_the_records_at_every_slot() {
+        // Slots are spread over many minutes, so each one reads the run
+        // records again. A task that ran in the meantime, under its own
+        // interval or started by hand, must not be started a second time from
+        // a decision made back at startup.
+        let (supervisor, fired, runs) = overdue_fixture_shared(Arc::new(Mutex::new(Vec::new())));
+
+        // nothing recorded yet, so the scrub is overdue and starts
+        supervisor.run_if_overdue(BackgroundOperation::DatabaseScrub, &test_intervals());
+        assert!(fired.lock().unwrap().contains(&"database_scrub"));
+
+        // it completes, recording a run
+        runs.lock()
+            .unwrap()
+            .push(run_finished_ago(BackgroundOperation::DatabaseScrub, 0));
+        fired.lock().unwrap().clear();
+
+        // a later slot sees the fresh record and leaves it alone
+        supervisor.run_if_overdue(BackgroundOperation::DatabaseScrub, &test_intervals());
+        assert!(fired.lock().unwrap().is_empty());
     }
 
     #[test]
@@ -1051,7 +1109,7 @@ mod tests {
         let mut recent = run_finished_ago(BackgroundOperation::Prune, 1);
         recent.dataset_id = Some("ds2".into());
         let (supervisor, fired) = overdue_fixture(vec![old, recent]);
-        supervisor.run_overdue_tasks(&test_intervals());
+        fire_all_slots(&supervisor);
         assert!(!fired.lock().unwrap().contains(&"prune"));
     }
 }

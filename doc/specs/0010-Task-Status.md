@@ -252,9 +252,26 @@ entry for something consulted occasionally.
   live ones in the overdue calculation. The failure is logged rather than
   returned, since the dataset is already gone. An empty dataset id is rejected,
   because that is how the global operations are keyed.
-- **Startup catch-up**: `ScheduleSupervisor` consults the recorded run times 60
-  seconds after starting and triggers anything overdue or never run. This fixes
-  a real gap rather than merely displaying one — see below.
+- **Startup catch-up**: `ScheduleSupervisor` consults the recorded run times
+  after starting and triggers anything overdue or never run, one task per slot,
+  the first at 60 seconds and the rest spaced a backup-check interval apart.
+  This fixes a real gap rather than merely displaying one — see below.
+- **Why the slots are spread**: the database scrub, pack prune, and workspace
+  cleanup are delivered to the leader as their own messages, whose handlers do
+  the work directly instead of going through the request queues. The
+  backup-before-prune priority in `process_queues` therefore cannot reorder a
+  backup ahead of them, and enqueuing all three at once would put them in front
+  of any backup coming due afterwards. Snapshot pruning is unaffected, since it
+  goes through the queue where that priority does apply. Spreading the slots
+  does not shorten the catch-up or make anything concurrent — the arbiter is
+  single-threaded either way — it only keeps the mailbox short enough for a
+  backup to be picked up in between.
+- **Re-checking per slot**: each slot re-reads the run records rather than
+  acting on one decision made at startup, so a task that has since run under
+  its own interval is left alone. This also rules out the tempting alternative
+  of a single re-arming timer that picks the most overdue task each tick: the
+  run record is written on completion, so a task still sitting in the mailbox
+  would keep reading as overdue and be enqueued repeatedly.
 
 ### The scheduling bug this uncovered
 
@@ -303,11 +320,12 @@ with this feature rather than separately.
 
 ### Still open
 
-- The startup catch-up fires every overdue task at once. On the first start
-  after this change nothing has ever run, so all five are triggered together
-  and queue behind one another on the leader's single-threaded arbiter, which
-  can delay a scheduled backup. Staggering them across several `run_later`
-  slots would address it.
+- Interleaving backups with the periodic tasks rests on spacing the catch-up
+  slots rather than on priority. The structural fix would be for the scan
+  handlers to drain the pending queues before returning, which would also
+  apply to the ordinary weekly runs rather than only to startup; it trades
+  this queue-ordering question for another, since a long backup would then
+  delay the scan.
 - Captured errors for a deleted dataset are not removed the way its run records
   now are; they age out under `ERROR_RETENTION_DAYS` instead.
 - Backups are not recorded; the open question above was resolved by excluding
