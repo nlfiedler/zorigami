@@ -75,9 +75,9 @@ async fn test_backup_restore_async_store() -> Result<(), Error> {
     assert!(fs::copy("../test/fixtures/lorem-ipsum.txt", dest).is_ok());
     let state: Arc<dyn StateStore> = Arc::new(StateStoreImpl::new());
     let leader = Arc::new(RingLeaderImpl::new(state.clone()));
-    let error_db = db_path.path().join("errors.db");
-    let errors: Arc<dyn StatusRepository> = Arc::new(StatusRepositoryImpl::new(&error_db, 90)?);
-    assert!(leader.start(dbase.clone(), errors).is_ok());
+    let status_db = db_path.path().join("status.db");
+    let status: Arc<dyn StatusRepository> = Arc::new(StatusRepositoryImpl::new(&status_db, 90)?);
+    assert!(leader.start(dbase.clone(), status).is_ok());
     leader.reset_backups();
     let request = backup::Request::new(dataset_id.clone(), "keyboard cat", None);
     assert!(leader.backup(request).is_ok());
