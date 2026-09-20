@@ -10,7 +10,7 @@ use actix_files::{Files, NamedFile};
 use actix_web::{App, HttpResponse, HttpServer, Result, http, middleware, web};
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
-use log::{error, info};
+use log::{error, info, warn};
 use server::data::repositories::RecordRepositoryImpl;
 use server::data::repositories::status::StatusRepositoryImpl;
 use server::data::sources::{build_entity_data_source, verify_schema_version};
@@ -42,9 +42,20 @@ static DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
 
 // Path to the SQLite database holding captured errors and background task
 // status. Can be overridden via `STATUS_DB_PATH`.
+//
+// Falls back to the former `ERROR_DB_PATH` so an existing deployment that has
+// not been updated keeps using its database instead of silently starting a new
+// one: the default path is relative, and a service manager that sets no working
+// directory would resolve it somewhere unintended.
 static STATUS_DB_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
-    let path = std::env::var("STATUS_DB_PATH").unwrap_or_else(|_| "./tmp/status.db".to_owned());
-    PathBuf::from(path)
+    if let Ok(path) = std::env::var("STATUS_DB_PATH") {
+        return PathBuf::from(path);
+    }
+    if let Ok(path) = std::env::var("ERROR_DB_PATH") {
+        warn!("ERROR_DB_PATH is deprecated, rename it to STATUS_DB_PATH");
+        return PathBuf::from(path);
+    }
+    PathBuf::from("./tmp/status.db")
 });
 
 // How long to keep captured errors before they are pruned.

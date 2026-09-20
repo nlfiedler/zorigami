@@ -278,6 +278,20 @@ impl StatusRepository for StatusRepositoryImpl {
             .collect::<Result<_, _>>()?;
         Ok(rows)
     }
+
+    fn delete_runs_for_dataset(&self, dataset_id: &str) -> Result<u64, Error> {
+        if dataset_id.is_empty() {
+            // The empty string is how the global operations are stored, so
+            // treating it as a dataset id would wipe all of their records.
+            return Err(anyhow!("dataset id must not be empty"));
+        }
+        let conn = self.conn.lock().unwrap();
+        let affected = conn.execute(
+            "DELETE FROM task_runs WHERE dataset_id = ?1",
+            params![dataset_id],
+        )?;
+        Ok(affected as u64)
+    }
 }
 
 /// Parse an RFC 3339 timestamp from the given column into UTC.
@@ -474,6 +488,51 @@ mod tests {
             .find(|r| r.dataset_id.as_deref() == Some("ds2"))
             .unwrap();
         assert_eq!(ds2.outcome, TaskOutcome::Success);
+    }
+
+    #[test]
+    fn test_delete_runs_for_dataset() {
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
+        for dataset in ["ds1", "ds2"] {
+            let mut run = make_run(BackgroundOperation::Prune, TaskOutcome::Success, dataset);
+            run.dataset_id = Some(dataset.into());
+            repo.record_run(&run).unwrap();
+        }
+        // a global operation, which must survive the per-dataset delete
+        repo.record_run(&make_run(
+            BackgroundOperation::PackPrune,
+            TaskOutcome::Success,
+            "global",
+        ))
+        .unwrap();
+
+        assert_eq!(repo.delete_runs_for_dataset("ds1").unwrap(), 1);
+        let runs = repo.list_runs().unwrap();
+        assert_eq!(runs.len(), 2);
+        assert!(runs.iter().all(|r| r.dataset_id.as_deref() != Some("ds1")));
+        assert!(runs.iter().any(|r| r.dataset_id.as_deref() == Some("ds2")));
+        assert!(
+            runs.iter()
+                .any(|r| r.operation == BackgroundOperation::PackPrune)
+        );
+
+        // deleting a dataset with no runs is not an error
+        assert_eq!(repo.delete_runs_for_dataset("nonesuch").unwrap(), 0);
+    }
+
+    #[test]
+    fn test_delete_runs_rejects_empty_dataset_id() {
+        // The empty string is how the global operations are keyed, so an
+        // empty id must not be taken for a dataset and wipe them all.
+        let repo = StatusRepositoryImpl::in_memory(90).unwrap();
+        repo.record_run(&make_run(
+            BackgroundOperation::DatabaseScrub,
+            TaskOutcome::Success,
+            "global",
+        ))
+        .unwrap();
+        assert!(repo.delete_runs_for_dataset("").is_err());
+        assert_eq!(repo.list_runs().unwrap().len(), 1);
     }
 
     #[test]

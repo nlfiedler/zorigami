@@ -108,7 +108,7 @@ Configuration of the application is partly accomplished using environment variab
 - **DB_PATH**
   - Path for the database files; defaults to `./tmp/database`
 - **STATUS_DB_PATH**
-  - Path for the SQLite database that records captured errors and the status of the most recent background task runs; defaults to `./tmp/status.db`. Formerly named `ERROR_DB_PATH`; pointing this at an existing `errors.db` file preserves the captured errors, as the new tables are created on open.
+  - Path for the SQLite database that records captured errors and the status of the most recent background task runs; defaults to `./tmp/status.db`. Formerly named `ERROR_DB_PATH`, which is still honored with a warning; pointing either at an existing `errors.db` file preserves the captured errors, as the new tables are created on open.
 - **HOST**
   - Host address on which to listen for incoming HTTP connections; defaults to `127.0.0.1`
 - **PORT**

@@ -287,4 +287,13 @@ pub trait StatusRepository: Send + Sync {
     /// Return the most recent run of every operation that has one, in no
     /// particular order. Operations that have never run are simply absent.
     fn list_runs(&self) -> Result<Vec<TaskRun>, Error>;
+
+    /// Delete the run records belonging to a dataset. Returns the number of
+    /// rows removed.
+    ///
+    /// Rows for the per-dataset operations would otherwise outlive the dataset
+    /// itself, leaving a row on the status page for something that no longer
+    /// exists and letting a dead dataset's timestamp answer for the live ones
+    /// when deciding what is overdue.
+    fn delete_runs_for_dataset(&self, dataset_id: &str) -> Result<u64, Error>;
 }

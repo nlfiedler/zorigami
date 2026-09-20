@@ -241,7 +241,17 @@ entry for something consulted occasionally.
   became `BackgroundOperation`, and `ERROR_DB_PATH` became `STATUS_DB_PATH`
   (default `./tmp/status.db`). Pointing the new variable at an existing
   `errors.db` keeps the captured errors, since the schema is applied with
-  `CREATE TABLE IF NOT EXISTS` on open.
+  `CREATE TABLE IF NOT EXISTS` on open. `ERROR_DB_PATH` is still honored, with
+  a deprecation warning: the default path is relative, so a deployment that
+  kept the old variable would otherwise have silently opened a new database
+  whose location depends on the service manager's working directory.
+- **Dataset deletion**: `delete_runs_for_dataset` is called from the
+  `deleteDataset` resolver, after the use case succeeds. Per-dataset rows would
+  otherwise outlive the dataset, leaving a row on the status page for something
+  that no longer exists and letting a dead dataset's timestamp answer for the
+  live ones in the overdue calculation. The failure is logged rather than
+  returned, since the dataset is already gone. An empty dataset id is rejected,
+  because that is how the global operations are keyed.
 - **Startup catch-up**: `ScheduleSupervisor` consults the recorded run times 60
   seconds after starting and triggers anything overdue or never run. This fixes
   a real gap rather than merely displaying one — see below.
@@ -293,6 +303,13 @@ with this feature rather than separately.
 
 ### Still open
 
+- The startup catch-up fires every overdue task at once. On the first start
+  after this change nothing has ever run, so all five are triggered together
+  and queue behind one another on the leader's single-threaded arbiter, which
+  can delay a scheduled backup. Staggering them across several `run_later`
+  slots would address it.
+- Captured errors for a deleted dataset are not removed the way its run records
+  now are; they age out under `ERROR_RETENTION_DAYS` instead.
 - Backups are not recorded; the open question above was resolved by excluding
   them.
 - No "Run now" control yet. `RingLeader` already exposes the four operations, so

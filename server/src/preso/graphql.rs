@@ -18,6 +18,7 @@ use juniper::{
     EmptySubscription, FieldError, FieldResult, GraphQLEnum, GraphQLInputObject, GraphQLObject,
     GraphQLScalar, ParseScalarResult, ParseScalarValue, RootNode, ScalarToken, ScalarValue, Value,
 };
+use log::warn;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -1715,6 +1716,13 @@ impl Mutation {
         let usecase = DeleteDataset::new(Box::new(repo));
         let params: Params = Params::new(id.clone()).with_caller(ctx.caller().to_owned());
         usecase.call(params)?;
+        // Drop the task run records belonging to this dataset; they would
+        // otherwise linger on the status page and keep answering for the
+        // remaining datasets when deciding what is overdue. The dataset is
+        // already gone, so a failure here is logged rather than returned.
+        if let Err(err) = ctx.status.delete_runs_for_dataset(&id) {
+            warn!("failed to delete task runs for dataset {}: {}", id, err);
+        }
         Ok(id)
     }
 
