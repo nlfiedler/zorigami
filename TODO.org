@@ -1,6 +1,18 @@
 * Tasks
-** Visibility into background task status
-*** what was the result of the last prune, etc
+** Add options to control ECC level per dataset
+*** offer several pre-defined levels
+| label  | data | parity | overhead % |
+|--------+------+--------+------------|
+| none   |    - |      - |          0 |
+| low    |   10 |      2 |         20 |
+| medium |   10 |      4 |         40 |
+| high   |   10 |      6 |         60 |
+*** Backblaze uses k=17 and m=3
+*** AWS S3 uses k=9 and m=4
+*** GCS uses k=6 and m=3
+** Add support for additional cloud storage services
+- Backblaze B2
+- Wasabi
 ** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern
