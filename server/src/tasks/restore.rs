@@ -605,8 +605,29 @@ impl FileRestorerImpl {
             debug!("fetching pack {}", pack_digest);
             stores.retrieve_pack(&saved_pack.locations, &archive)?;
             // unpack the contents
-            verify_pack_digest(pack_digest, &archive)?;
-            packs::extract_pack(&archive, workspace, Some(passphrase))?;
+            let repaired = match verify_pack_digest(pack_digest, &archive) {
+                Ok(()) => false,
+                Err(err) => {
+                    // A pack built with erasure coding can repair itself while
+                    // being read, so a digest mismatch is not fatal for one;
+                    // let EXAF try, and it will report EccUnrecoverable if the
+                    // damage exceeds the parity budget.
+                    if pack_has_ecc(&archive) {
+                        warn!("{}; attempting to repair via erasure coding", err);
+                        true
+                    } else {
+                        return Err(err);
+                    }
+                }
+            };
+            let entries = packs::extract_pack(&archive, workspace, Some(passphrase))?;
+            if repaired {
+                // Waiving the digest check above gave up the only guarantee
+                // that this archive is the one the database recorded, and
+                // nothing downstream re-checks the restored bytes, so verify
+                // the content that was actually extracted.
+                verify_extracted_chunks(workspace, &entries)?;
+            }
             debug!("pack extracted");
             fs::remove_file(archive)?;
             // remember this pack as being downloaded
@@ -781,6 +802,37 @@ impl Drop for FileRestorerImpl {
     }
 }
 
+// Determine if the pack file was built with erasure coding, and hence is able
+// to repair itself while being read.
+//
+// Returns `false` when the archive cannot be opened at all. EXAF protects each
+// manifest/content pair but not the archive header that declares the shard
+// counts, so damage there is beyond repair either way, and reporting the
+// original digest mismatch is more useful than a parse error.
+fn pack_has_ecc(path: &Path) -> bool {
+    exaf_rs::reader::Entries::new(path).is_ok_and(|entries| entries.is_ecc_enabled())
+}
+
+// Confirm that every chunk extracted from a pack hashes to the digest it is
+// named for. Each entry in a pack is named for the BLAKE3 digest of its
+// contents, so this stands in for the whole-file pack digest when that check
+// was waived for a self-healing pack: a repaired, stale, or substituted archive
+// still cannot feed bad data into a restore.
+fn verify_extracted_chunks(workspace: &Path, entries: &[String]) -> Result<(), Error> {
+    for entry in entries.iter() {
+        let path = workspace.join(entry);
+        let actual = Checksum::blake3_from_file(&path)?;
+        if actual.to_string() != *entry {
+            return Err(anyhow!(
+                "extracted chunk does not match its digest: {} != {}",
+                actual,
+                entry
+            ));
+        }
+    }
+    Ok(())
+}
+
 // Verify the retrieved pack file digest matches the database record.
 fn verify_pack_digest(digest: &Checksum, path: &Path) -> Result<(), Error> {
     let actual = Checksum::blake3_from_file(path)?;
@@ -837,6 +889,78 @@ mod tests {
         let chunk = Path::new("../test/fixtures/lorem-ipsum.txt");
         assemble_chunks(&[chunk], &outfile)?;
         assert!(outfile.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_has_ecc() -> Result<(), Error> {
+        use crate::domain::entities::Chunk;
+        let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
+        let chunks: Vec<Chunk> = packs::find_file_chunks(infile, 16384)?;
+        let outdir = tempfile::tempdir()?;
+
+        let build = |name: &str, ecc: bool, encrypt: bool| -> Result<PathBuf, Error> {
+            let mut builder = packs::PackBuilder::new(4194304);
+            if ecc {
+                builder = builder.ecc(4, 2);
+            }
+            if encrypt {
+                builder = builder.password("secret123");
+            }
+            let packfile = outdir.path().join(name);
+            builder.initialize(&packfile)?;
+            for chunk in chunks.iter() {
+                builder.add_chunk(chunk)?;
+            }
+            builder.finalize()?;
+            Ok(packfile)
+        };
+
+        assert!(pack_has_ecc(&build("with.pack", true, false)?));
+        assert!(!pack_has_ecc(&build("without.pack", false, false)?));
+        // every pack this application writes is encrypted, and the flag must
+        // still be readable without the passphrase or the repair path is dead
+        assert!(pack_has_ecc(&build("with-enc.pack", true, true)?));
+        assert!(!pack_has_ecc(&build("without-enc.pack", false, true)?));
+        // a file that is not a pack at all cannot repair anything
+        assert!(!pack_has_ecc(infile));
+        assert!(!pack_has_ecc(&outdir.path().join("nonesuch.pack")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_verify_extracted_chunks() -> Result<(), Error> {
+        use crate::domain::entities::Chunk;
+        use std::io::Write;
+        let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
+        let chunks: Vec<Chunk> = packs::find_file_chunks(infile, 16384)?;
+        let outdir = tempfile::tempdir()?;
+        let mut builder = packs::PackBuilder::new(4194304).ecc(4, 2);
+        let packfile = outdir.path().join("good.pack");
+        builder.initialize(&packfile)?;
+        for chunk in chunks.iter() {
+            builder.add_chunk(chunk)?;
+        }
+        builder.finalize()?;
+        let entries = packs::extract_pack(&packfile, outdir.path(), None)?;
+
+        // an intact extraction passes
+        assert!(verify_extracted_chunks(outdir.path(), &entries).is_ok());
+
+        // content that does not match the digest it is named for is rejected,
+        // which is what stands in for the waived pack digest check
+        let mut victim = fs::OpenOptions::new()
+            .write(true)
+            .open(outdir.path().join(&entries[0]))?;
+        victim.write_all(b"not the chunk you are looking for")?;
+        victim.sync_all()?;
+        drop(victim);
+        let err = verify_extracted_chunks(outdir.path(), &entries).unwrap_err();
+        assert!(err.to_string().contains("does not match its digest"));
+
+        // a missing entry is an error rather than a silent pass
+        fs::remove_file(outdir.path().join(&entries[1]))?;
+        assert!(verify_extracted_chunks(outdir.path(), &entries[1..2]).is_err());
         Ok(())
     }
 

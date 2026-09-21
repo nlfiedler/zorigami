@@ -445,6 +445,10 @@ pub struct Dataset {
     pub chunk_size: usize,
     /// Target size in bytes for pack files.
     pub pack_size: u64,
+    /// Number of Reed-Solomon data shards; zero disables erasure coding.
+    pub data_shards: u8,
+    /// Number of Reed-Solomon parity shards; zero disables erasure coding.
+    pub parity_shards: u8,
     /// Identifiers of the stores to contain pack files.
     pub stores: Vec<String>,
     /// List of file/directory exclusion patterns.
@@ -477,6 +481,8 @@ impl Dataset {
             workspace,
             chunk_size: DEFAULT_CHUNK_SIZE,
             pack_size: DEFAULT_PACK_SIZE,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec![],
             excludes: vec![],
             retention: Default::default(),
@@ -491,6 +497,25 @@ impl Dataset {
     /// Set the pack size for this dataset.
     pub fn set_pack_size(&mut self, pack_size: u64) {
         self.pack_size = pack_size;
+    }
+
+    /// Set the number of Reed-Solomon data shards for this dataset.
+    pub fn set_data_shards(&mut self, data_shards: u8) {
+        self.data_shards = data_shards;
+    }
+
+    /// Set the number of Reed-Solomon parity shards for this dataset.
+    pub fn set_parity_shards(&mut self, parity_shards: u8) {
+        self.parity_shards = parity_shards;
+    }
+
+    /// Shard counts to use for erasure coding, or `None` when disabled.
+    ///
+    /// Erasure coding is only applied when both counts are non-zero, as neither
+    /// half of the pair is meaningful on its own.
+    pub fn ecc_shards(&self) -> Option<(u8, u8)> {
+        (self.data_shards > 0 && self.parity_shards > 0)
+            .then_some((self.data_shards, self.parity_shards))
     }
 
     /// Add the given store identifier to the dataset.
@@ -514,6 +539,8 @@ impl Default for Dataset {
             workspace: PathBuf::new(),
             chunk_size: DEFAULT_CHUNK_SIZE,
             pack_size: DEFAULT_PACK_SIZE,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec![],
             excludes: vec![],
             retention: Default::default(),

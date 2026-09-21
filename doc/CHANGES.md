@@ -91,3 +91,11 @@ The Azure pack store now authenticates with the Microsoft identity platform (Ent
 ### September
 
 The SQLite database that records errors from background tasks now also holds the outcome of the most recent run of each periodic task, in a new `task_runs` table, and is named `status.db` by default. The `ERROR_DB_PATH` environment variable became `STATUS_DB_PATH`; the old name is still honored, with a deprecation warning. Pointing either at an existing `errors.db` preserves the captured errors, as the new table is created on open.
+
+Added `data_shards` and `parity_shards` fields to `dataset` records, both defaulting to zero, which disables erasure coding. When both are non-zero, the pack files for that dataset are written with Reed-Solomon erasure coding and can repair themselves while being read, which matters for stores that provide no redundancy of their own (local disk, SFTP, and MinIO). In the SQLite backend these arrive as two columns added to the `datasets` table; an existing database gains them automatically on startup, so the schema version is unchanged and no database needs to be recreated.
+
+The database archive uploaded to the pack stores is now always written with erasure coding, using a fixed 10 data and 2 parity shards. It is small next to the packs it describes and must be readable to recover anything at all, so the roughly 20% size increase is not configurable.
+
+Pack files and database archives written with erasure coding use EXAF major version 2 and **cannot be read by earlier releases of this application**. Packs written without it are unaffected and remain readable by any release.
+
+The GraphQL `DatasetInput` type gained required `dataShards` and `parityShards` fields, which is a breaking change for any API client other than the bundled web interface: an `updateDataset` mutation that omits them is now rejected during input validation. Send zero for both to keep erasure coding disabled.

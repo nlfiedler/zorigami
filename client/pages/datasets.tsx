@@ -235,6 +235,8 @@ const GET_DATASET: TypedDocumentNode<Query, QueryDatasetArgs> = gql`
       }
       chunkSize
       packSize
+      dataShards
+      parityShards
       stores
       excludes
       retention {
@@ -323,6 +325,10 @@ function DatasetForm(props: DatasetFormProps) {
   const [packsize, setPacksize] = createSignal(
     Math.floor(props.dataset.packSize / 1_048_576)
   );
+  const [datashards, setDatashards] = createSignal(props.dataset.dataShards);
+  const [parityshards, setParityshards] = createSignal(
+    props.dataset.parityShards
+  );
   const [selectedStores, setSelectedStores] = createSignal<Set<string>>(
     new Set(props.dataset.stores),
     {
@@ -341,6 +347,8 @@ function DatasetForm(props: DatasetFormProps) {
       schedules: schedules(),
       chunkSize: (chunksize() * 1_048_576).toString(),
       packSize: (packsize() * 1_048_576).toString(),
+      dataShards: datashards(),
+      parityShards: parityshards(),
       stores: Array.from(selectedStores()),
       excludes: excludes()
         .split(',')
@@ -356,12 +364,14 @@ function DatasetForm(props: DatasetFormProps) {
   const [basepathError, setBasepathError] = createSignal('');
   const [chunksizeError, setChunksizeError] = createSignal('');
   const [packsizeError, setPacksizeError] = createSignal('');
+  const [shardsError, setShardsError] = createSignal('');
   const [storesError, setStoresError] = createSignal('');
   const [invalid, setInvalid] = createSignal(false);
   const validate = () => {
     setBasepathError('');
     setChunksizeError('');
     setPacksizeError('');
+    setShardsError('');
     setStoresError('');
     setInvalid(false);
     if (basepath().length === 0) {
@@ -374,6 +384,21 @@ function DatasetForm(props: DatasetFormProps) {
     }
     if (packsize() < 16 || packsize() > 256) {
       setPacksizeError('Pack size must be between 16 and 256.');
+      setInvalid(true);
+    }
+    // erasure coding is off when both are zero; neither half means anything
+    // on its own, and the sum is bounded by the GF(2^8) field
+    if (!Number.isInteger(datashards()) || !Number.isInteger(parityshards())) {
+      // an emptied number input reads back as NaN
+      setShardsError('Data and parity shards must both be whole numbers.');
+      setInvalid(true);
+    } else if ((datashards() === 0) !== (parityshards() === 0)) {
+      setShardsError(
+        'Data and parity shards must both be zero or both be non-zero.'
+      );
+      setInvalid(true);
+    } else if (datashards() + parityshards() > 255) {
+      setShardsError('Data and parity shards must sum to 255 or less.');
       setInvalid(true);
     }
     if (selectedStores().size === 0) {
@@ -521,6 +546,89 @@ function DatasetForm(props: DatasetFormProps) {
               </p>
               <Show when={packsizeError().length > 0}>
                 <p class="help is-danger">{packsizeError()}</p>
+              </Show>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-2 field is-horizontal">
+          <div class="field-label is-normal">
+            <label class="label" for="datashards-input">
+              Erasure Coding
+            </label>
+          </div>
+          <div class="field-body">
+            <div class="field">
+              <p class="control is-expanded has-icons-left">
+                <input
+                  class="input"
+                  type="number"
+                  id="datashards-input"
+                  aria-label="Data shards"
+                  placeholder="Data shards"
+                  min="0"
+                  max="255"
+                  value={datashards()}
+                  on:blur={(ev) => {
+                    setDatashards(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                  on:change={(ev) => {
+                    setDatashards(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                />
+                <span class="icon is-small is-left">
+                  <i class="fa-solid fa-shield-halved"></i>
+                </span>
+              </p>
+              <p class="help">Data shards</p>
+            </div>
+            <div class="field">
+              <p class="control is-expanded has-icons-left">
+                <input
+                  class="input"
+                  type="number"
+                  id="parityshards-input"
+                  aria-label="Parity shards"
+                  placeholder="Parity shards"
+                  min="0"
+                  max="255"
+                  value={parityshards()}
+                  on:blur={(ev) => {
+                    setParityshards(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                  on:change={(ev) => {
+                    setParityshards(ev.currentTarget.valueAsNumber);
+                    validate();
+                  }}
+                />
+                <span class="icon is-small is-left">
+                  <i class="fa-solid fa-shield-halved"></i>
+                </span>
+              </p>
+              <p class="help">Parity shards</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-2 field is-horizontal">
+          <div class="field-label" />
+          <div class="field-body">
+            <div class="field">
+              <Show
+                when={shardsError().length > 0}
+                fallback={
+                  <p class="help">
+                    Leave both at zero to disable. Otherwise packs can repair
+                    themselves as long as no more than the parity shard count is
+                    damaged, at a size cost of parity divided by data (10 and 2
+                    adds about 20%).
+                  </p>
+                }
+              >
+                <p class="help is-danger">{shardsError()}</p>
               </Show>
             </div>
           </div>

@@ -144,6 +144,8 @@ CREATE TABLE IF NOT EXISTS datasets (
     snapshot TEXT,
     chunk_size INTEGER NOT NULL,
     pack_size INTEGER NOT NULL,
+    data_shards INTEGER NOT NULL DEFAULT 0,
+    parity_shards INTEGER NOT NULL DEFAULT 0,
     retention_kind TEXT NOT NULL,
     retention_param INTEGER
 );
@@ -211,6 +213,7 @@ impl SQLiteEntityDataSource {
             .with_context(|| format!("SQLite::open({})", db_file.display()))?;
         configure_connection(&conn)?;
         conn.execute_batch(SCHEMA_DDL)?;
+        apply_additive_migrations(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             dir_path: dir.to_path_buf(),
@@ -235,6 +238,49 @@ fn configure_connection(conn: &Connection) -> Result<(), Error> {
          PRAGMA foreign_keys = ON;\n\
          PRAGMA busy_timeout = 5000;",
     )?;
+    Ok(())
+}
+
+/// Add columns that were introduced after a database was first created.
+///
+/// Every table in `SCHEMA_DDL` is created with `IF NOT EXISTS`, which leaves an
+/// existing table exactly as it was, so columns added later must be applied
+/// explicitly. Each addition must carry a `DEFAULT` so that existing rows
+/// remain valid, which in turn keeps `CURRENT_SCHEMA_VERSION` unchanged and
+/// spares the user from wiping the database. Idempotent.
+fn apply_additive_migrations(conn: &Connection) -> Result<(), Error> {
+    ensure_column(
+        conn,
+        "datasets",
+        "data_shards",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        conn,
+        "datasets",
+        "parity_shards",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    Ok(())
+}
+
+/// Add the named column to the table if it is not already present.
+fn ensure_column(conn: &Connection, table: &str, column: &str, decl: &str) -> Result<(), Error> {
+    // neither table nor column names can be bound as parameters
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(());
+        }
+    }
+    drop(rows);
+    drop(stmt);
+    conn.execute_batch(&format!(
+        "ALTER TABLE {} ADD COLUMN {} {};",
+        table, column, decl
+    ))?;
     Ok(())
 }
 
@@ -1009,8 +1055,8 @@ impl EntityDataSource for SQLiteEntityDataSource {
         let (kind, param) = snapshot_retention_to_columns(&dataset.retention);
         tx.execute(
             "INSERT INTO datasets \
-             (id, basepath, workspace, snapshot, chunk_size, pack_size, retention_kind, retention_param) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (id, basepath, workspace, snapshot, chunk_size, pack_size, data_shards, parity_shards, retention_kind, retention_param) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 dataset.id,
                 dataset.basepath.to_string_lossy(),
@@ -1018,6 +1064,8 @@ impl EntityDataSource for SQLiteEntityDataSource {
                 dataset.snapshot.as_ref().map(|c| c.to_string()),
                 dataset.chunk_size as i64,
                 dataset.pack_size as i64,
+                dataset.data_shards as i64,
+                dataset.parity_shards as i64,
                 kind,
                 param,
             ],
@@ -1212,6 +1260,7 @@ impl EntityDataSource for SQLiteEntityDataSource {
         let new_conn = Connection::open(&live_file)?;
         configure_connection(&new_conn)?;
         new_conn.execute_batch(SCHEMA_DDL)?;
+        apply_additive_migrations(&new_conn)?;
         *conn_guard = new_conn;
         Ok(())
     }
@@ -1289,32 +1338,47 @@ impl EntityDataSource for SQLiteEntityDataSource {
     }
 }
 
+/// The scalar columns of a `datasets` row, before the ordered child tables are
+/// gathered and the whole is assembled into a `Dataset`.
+struct DatasetRow {
+    basepath: String,
+    workspace: String,
+    snapshot: Option<String>,
+    chunk_size: i64,
+    pack_size: i64,
+    data_shards: i64,
+    parity_shards: i64,
+    retention_kind: String,
+    retention_param: Option<i64>,
+}
+
 fn read_dataset(conn: &Connection, id: &str) -> Result<Option<Dataset>, Error> {
     let row = conn
         .query_row(
-            "SELECT basepath, workspace, snapshot, chunk_size, pack_size, retention_kind, retention_param \
+            "SELECT basepath, workspace, snapshot, chunk_size, pack_size, data_shards, parity_shards, retention_kind, retention_param \
              FROM datasets WHERE id = ?1",
             params![id],
             |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, Option<i64>>(6)?,
-                ))
+                Ok(DatasetRow {
+                    basepath: row.get(0)?,
+                    workspace: row.get(1)?,
+                    snapshot: row.get(2)?,
+                    chunk_size: row.get(3)?,
+                    pack_size: row.get(4)?,
+                    data_shards: row.get(5)?,
+                    parity_shards: row.get(6)?,
+                    retention_kind: row.get(7)?,
+                    retention_param: row.get(8)?,
+                })
             },
         )
         .optional()?;
-    let (basepath, workspace, snapshot, chunk_size, pack_size, retention_kind, retention_param) =
-        match row {
-            None => return Ok(None),
-            Some(v) => v,
-        };
-    let snapshot = match snapshot {
-        Some(s) => Some(parse_checksum(&s)?),
+    let row = match row {
+        None => return Ok(None),
+        Some(v) => v,
+    };
+    let snapshot = match row.snapshot {
+        Some(ref s) => Some(parse_checksum(s)?),
         None => None,
     };
     let mut stores_stmt =
@@ -1339,14 +1403,92 @@ fn read_dataset(conn: &Connection, id: &str) -> Result<Option<Dataset>, Error> {
     }
     Ok(Some(Dataset {
         id: id.to_owned(),
-        basepath: PathBuf::from(basepath),
+        basepath: PathBuf::from(row.basepath),
         schedules,
         snapshot,
-        workspace: PathBuf::from(workspace),
-        chunk_size: chunk_size as usize,
-        pack_size: pack_size as u64,
+        workspace: PathBuf::from(row.workspace),
+        chunk_size: row.chunk_size as usize,
+        pack_size: row.pack_size as u64,
+        data_shards: row.data_shards as u8,
+        parity_shards: row.parity_shards as u8,
         stores,
         excludes,
-        retention: snapshot_retention_from_columns(&retention_kind, retention_param)?,
+        retention: snapshot_retention_from_columns(&row.retention_kind, row.retention_param)?,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The datasets table exactly as it was before the erasure coding columns
+    // were introduced, used to prove the additive migration works on a
+    // database created by an earlier build.
+    const LEGACY_DATASETS_DDL: &str = r#"
+CREATE TABLE datasets (
+    id TEXT PRIMARY KEY,
+    basepath TEXT NOT NULL,
+    workspace TEXT NOT NULL,
+    snapshot TEXT,
+    chunk_size INTEGER NOT NULL,
+    pack_size INTEGER NOT NULL,
+    retention_kind TEXT NOT NULL,
+    retention_param INTEGER
+);
+"#;
+
+    #[test]
+    fn test_migrate_adds_shard_columns() -> Result<(), Error> {
+        let tmp = tempfile::tempdir()?;
+        let db_file = tmp.path().join(DB_FILENAME);
+
+        // stand up a database with the pre-migration datasets table holding a
+        // row, then let the data source open it
+        {
+            let conn = Connection::open(&db_file)?;
+            conn.execute_batch(LEGACY_DATASETS_DDL)?;
+            conn.execute(
+                "INSERT INTO datasets \
+                 (id, basepath, workspace, snapshot, chunk_size, pack_size, retention_kind, retention_param) \
+                 VALUES ('legacy', '/home/planet', '/home/planet/.tmp', NULL, 1048576, 67108864, 'ALL', NULL)",
+                [],
+            )?;
+        }
+
+        let source = SQLiteEntityDataSource::new(tmp.path())?;
+        let dataset = source.get_dataset("legacy")?.expect("row survived");
+        assert_eq!(dataset.basepath, PathBuf::from("/home/planet"));
+        assert_eq!(dataset.pack_size, 67_108_864);
+        // the existing row picks up the column default, meaning disabled
+        assert_eq!(dataset.data_shards, 0);
+        assert_eq!(dataset.parity_shards, 0);
+        assert_eq!(dataset.ecc_shards(), None);
+
+        // and the migrated database accepts the new values
+        let mut updated = dataset;
+        updated.data_shards = 10;
+        updated.parity_shards = 2;
+        source.put_dataset(&updated)?;
+        let actual = source.get_dataset("legacy")?.expect("row still there");
+        assert_eq!(actual.ecc_shards(), Some((10, 2)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_migrate_is_idempotent() -> Result<(), Error> {
+        let tmp = tempfile::tempdir()?;
+        // opening twice must not fail with "duplicate column name"
+        let _first = SQLiteEntityDataSource::new(tmp.path())?;
+        drop(_first);
+        let second = SQLiteEntityDataSource::new(tmp.path())?;
+        let conn = Connection::open(tmp.path().join(DB_FILENAME))?;
+        ensure_column(
+            &conn,
+            "datasets",
+            "data_shards",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        assert!(second.get_dataset("nonesuch")?.is_none());
+        Ok(())
+    }
 }

@@ -1118,12 +1118,23 @@ impl BackupDriver {
         // desired pack size.
         let target_size = (dataset.pack_size / 10) * 9;
         let passphrase = request.passphrase.clone();
+        let mut builder = packs::PackBuilder::new(target_size).password(passphrase);
+        if let Some((data_shards, parity_shards)) = dataset.ecc_shards() {
+            builder = builder.ecc(data_shards, parity_shards);
+        } else if dataset.data_shards > 0 || dataset.parity_shards > 0 {
+            // Only updateDataset rejects a half-configured pair, so a record
+            // written by any other path could silently back up unprotected.
+            warn!(
+                "dataset {} has data_shards {} and parity_shards {}; erasure coding needs both to be non-zero and is disabled",
+                dataset.id, dataset.data_shards, dataset.parity_shards
+            );
+        }
         Ok(Self {
             request,
             dataset,
             dbase,
             stores,
-            builder: packs::PackBuilder::new(target_size).password(passphrase),
+            builder,
             record: Default::default(),
             file_chunks: BTreeMap::new(),
             packed_chunks: HashSet::new(),

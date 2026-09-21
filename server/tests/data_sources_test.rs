@@ -243,10 +243,24 @@ fn test_put_get_delete_store_sqlite() -> Result<(), Error> {
 }
 
 fn run_put_get_delete_datasets(datasource: &dyn EntityDataSource) -> Result<(), Error> {
-    let dataset = entities::Dataset::new(Path::new("/home/planet"));
+    let mut dataset = entities::Dataset::new(Path::new("/home/planet"));
+    dataset.data_shards = 10;
+    dataset.parity_shards = 2;
+    let shards_id = dataset.id.clone();
     datasource.put_dataset(&dataset).unwrap();
     let dataset = entities::Dataset::new(Path::new("/home/town"));
     datasource.put_dataset(&dataset).unwrap();
+
+    // erasure coding settings survive the round trip, and a dataset that never
+    // set them reads back as disabled
+    let saved = datasource.get_dataset(&shards_id).unwrap().unwrap();
+    assert_eq!(saved.data_shards, 10);
+    assert_eq!(saved.parity_shards, 2);
+    assert_eq!(saved.ecc_shards(), Some((10, 2)));
+    let plain = datasource.get_dataset(&dataset.id).unwrap().unwrap();
+    assert_eq!(plain.data_shards, 0);
+    assert_eq!(plain.parity_shards, 0);
+    assert_eq!(plain.ecc_shards(), None);
 
     let datasets = datasource.get_datasets().unwrap();
     assert_eq!(datasets.len(), 2);

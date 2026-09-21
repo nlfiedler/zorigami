@@ -595,6 +595,16 @@ impl entities::Dataset {
         BigInt(self.pack_size as i64)
     }
 
+    /// Number of Reed-Solomon data shards; zero disables erasure coding.
+    fn data_shards(&self) -> i32 {
+        self.data_shards as i32
+    }
+
+    /// Number of Reed-Solomon parity shards; zero disables erasure coding.
+    fn parity_shards(&self) -> i32 {
+        self.parity_shards as i32
+    }
+
     /// Identifiers of stores used for saving packs.
     fn stores(&self) -> Vec<String> {
         self.stores.clone()
@@ -1609,6 +1619,10 @@ struct DatasetInput {
     chunk_size: BigInt,
     /// Desired byte length of pack files.
     pack_size: BigInt,
+    /// Number of Reed-Solomon data shards; zero disables erasure coding.
+    data_shards: i32,
+    /// Number of Reed-Solomon parity shards; zero disables erasure coding.
+    parity_shards: i32,
     /// Identifiers of stores used for saving packs.
     stores: Vec<String>,
     /// List of paths to be excluded from backups. Can include * and ** wildcards.
@@ -1617,12 +1631,39 @@ struct DatasetInput {
     retention: SnapshotRetentionInput,
 }
 
+impl DatasetInput {
+    /// Confirm the shard counts fit in the range the entity can hold.
+    ///
+    /// The conversion to `entities::Dataset` is infallible and would otherwise
+    /// have to coerce an out-of-range value, turning `-1` into "erasure coding
+    /// disabled" and reporting success for a dataset the caller believes is
+    /// protected.
+    fn validate(&self) -> Result<(), FieldError> {
+        for (name, value) in [
+            ("dataShards", self.data_shards),
+            ("parityShards", self.parity_shards),
+        ] {
+            if !(0..=255).contains(&value) {
+                return Err(FieldError::new(
+                    format!("{} must be between 0 and 255", name),
+                    Value::null(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl From<DatasetInput> for entities::Dataset {
     fn from(val: DatasetInput) -> Self {
         let basepath = std::path::Path::new(&val.basepath);
         let mut ds = entities::Dataset::new(basepath);
         ds.set_chunk_size(val.chunk_size.into());
         ds.set_pack_size(val.pack_size.into());
+        // callers reach this through validate(), which rejects out-of-range
+        // values; the clamp only keeps this infallible conversion total
+        ds.set_data_shards(val.data_shards.clamp(0, u8::MAX as i32) as u8);
+        ds.set_parity_shards(val.parity_shards.clamp(0, u8::MAX as i32) as u8);
         ds.id = val.id.unwrap_or(String::from("default"));
         for sched in val.schedules.into_iter() {
             ds.add_schedule(sched.into());
@@ -1723,6 +1764,7 @@ impl Mutation {
                 Value::null(),
             ));
         }
+        dataset.validate()?;
         use crate::domain::usecases::UseCase;
         use crate::domain::usecases::update_dataset::{Params, UpdateDataset};
         let datasource = ctx.datasource.clone();
@@ -1886,6 +1928,53 @@ mod tests {
     use crate::domain::repositories::MockStatusRepository;
     use crate::domain::sources::MockEntityDataSource;
     use crate::tasks::leader::MockRingLeader;
+
+    fn dataset_input(data_shards: i32, parity_shards: i32) -> DatasetInput {
+        DatasetInput {
+            id: Some("cafebabe".to_owned()),
+            basepath: "/home/planet".to_owned(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: BigInt(1_048_576),
+            pack_size: BigInt(33_554_432),
+            data_shards,
+            parity_shards,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetentionInput {
+                policy: SnapshotRetentionPolicy::All,
+                value: 0,
+            },
+        }
+    }
+
+    #[test]
+    fn test_shard_counts_within_range_are_accepted() {
+        assert!(dataset_input(0, 0).validate().is_ok());
+        assert!(dataset_input(10, 2).validate().is_ok());
+        assert!(dataset_input(255, 0).validate().is_ok());
+    }
+
+    #[test]
+    fn test_shard_counts_out_of_range_are_rejected() {
+        // a negative value would otherwise clamp to zero and be reported as a
+        // successful update with erasure coding quietly disabled
+        let err = dataset_input(-1, -1).validate().unwrap_err();
+        assert!(
+            err.message()
+                .contains("dataShards must be between 0 and 255")
+        );
+        let err = dataset_input(10, -1).validate().unwrap_err();
+        assert!(
+            err.message()
+                .contains("parityShards must be between 0 and 255")
+        );
+        let err = dataset_input(256, 2).validate().unwrap_err();
+        assert!(
+            err.message()
+                .contains("dataShards must be between 0 and 255")
+        );
+    }
 
     fn make_store(properties: HashMap<String, String>) -> entities::Store {
         entities::Store {

@@ -91,6 +91,10 @@ fn test_continue_backup() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
+    // packs written with erasure coding are verified after upload like any
+    // other, which is the part of the backup path that reads them back
+    dataset.data_shards = 4;
+    dataset.parity_shards = 2;
     let dataset_id = dataset.id.clone();
     dbase.put_dataset(&dataset)?;
 

@@ -118,6 +118,10 @@ Configuration of the application is partly accomplished using environment variab
 - **RUST_LOG**
   - Logging level as defined by the [env_logger](https://crates.io/crates/env_logger) crate. For example, `RUST_LOG=info` logs everything at the `info`, `warn`, or `error` logging levels, while excluding anything that is `debug` or `trace` level.
 
+## Erasure Coding
+
+Datasets have two parameters related to Reed-Solomon erasure coding, _data shards_ and _parity shards_. If both are non-zero, then ECC protection will be enabled when creating pack files. The higher the _parity shards_ value, the greater the protection, at the expense of increased storage consumption. The database archive uses `10` and `2` for _data_ and _parity_ which amounts to less than 20% overhead. The value for _data shards_ should be less than 16 to reduce the computational cost of repairing a corrupted pack.
+
 ## Cloud Storage
 
 ### Amazon S3 Setup

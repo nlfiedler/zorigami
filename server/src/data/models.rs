@@ -564,6 +564,20 @@ impl Model for Dataset {
                         .map_err(|_| anyhow!("packsize: cbor into_integer() error"))?;
                     let ii: i128 = ciborium::value::Integer::into(iv);
                     dataset.pack_size = ii as u64;
+                } else if name == "datashards" {
+                    // data_shards
+                    let iv: ciborium::value::Integer = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("datashards: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    dataset.data_shards = ii as u8;
+                } else if name == "parityshards" {
+                    // parity_shards
+                    let iv: ciborium::value::Integer = value
+                        .into_integer()
+                        .map_err(|_| anyhow!("parityshards: cbor into_integer() error"))?;
+                    let ii: i128 = ciborium::value::Integer::into(iv);
+                    dataset.parity_shards = ii as u8;
                 } else if name == "stores" {
                     // stores
                     let stores: Vec<Value> = value
@@ -658,6 +672,18 @@ impl Model for Dataset {
         fields.push((
             Value::Text("packsize".into()),
             Value::Integer(self.pack_size.into()),
+        ));
+
+        // data_shards
+        fields.push((
+            Value::Text("datashards".into()),
+            Value::Integer(self.data_shards.into()),
+        ));
+
+        // parity_shards
+        fields.push((
+            Value::Text("parityshards".into()),
+            Value::Integer(self.parity_shards.into()),
         ));
 
         // stores
@@ -1604,7 +1630,7 @@ mod tests {
         // bare minimum
         let original = Dataset::new(Path::new("/home/planet"));
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 131);
+        assert_eq!(as_bytes.len(), 157);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);
@@ -1627,8 +1653,10 @@ mod tests {
         original.excludes.push(".DS_Store".into());
         original.excludes.push("target".into());
         original.retention = SnapshotRetention::COUNT(10);
+        original.data_shards = 10;
+        original.parity_shards = 2;
         let as_bytes = original.to_bytes()?;
-        assert_eq!(as_bytes.len(), 204);
+        assert_eq!(as_bytes.len(), 230);
         let key = original.id.as_bytes();
         let actual = Dataset::from_bytes(key, &as_bytes)?;
         assert_eq!(original, actual);

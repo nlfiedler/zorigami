@@ -54,6 +54,8 @@ pub struct PackBuilder {
     target_size: u64,
     /// Optional password to enable encryption of the archive.
     password: Option<String>,
+    /// Optional data and parity shard counts to enable erasure coding.
+    ecc: Option<(u8, u8)>,
     /// Compressed bytes written to the pack so far.
     bytes_packed: u64,
     /// Archive writer.
@@ -71,6 +73,7 @@ impl PackBuilder {
         Self {
             target_size,
             password: None,
+            ecc: None,
             bytes_packed: 0,
             builder: None,
             filepath: None,
@@ -81,6 +84,13 @@ impl PackBuilder {
     /// Set the password which will enable encryption of the archive.
     pub fn password<S: Into<String>>(mut self, password: S) -> Self {
         self.password = Some(password.into());
+        self
+    }
+
+    /// Set the shard counts which will enable Reed-Solomon erasure coding,
+    /// allowing the archive to repair itself in the event of corruption.
+    pub fn ecc(mut self, data_shards: u8, parity_shards: u8) -> Self {
+        self.ecc = Some((data_shards, parity_shards));
         self
     }
 
@@ -113,6 +123,11 @@ impl PackBuilder {
                 exaf_rs::Encryption::AES256GCM,
                 passwd,
             )?;
+        }
+        // Both encryption and erasure coding must be enabled before any content
+        // is added; the order relative to each other does not matter.
+        if let Some((data_shards, parity_shards)) = self.ecc {
+            builder.enable_ecc(data_shards, parity_shards)?;
         }
         self.builder = Some(builder);
         Ok(())
@@ -399,6 +414,82 @@ mod tests {
             part3sum.to_string(),
             "blake3-01e5305fb8f54d214ed2946843ea360fb9bb3f5df66ef3e34fb024d32ebcaee1"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_builder_ecc() -> Result<(), Error> {
+        // a pack built with erasure coding reads back like any other
+        let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
+        let chunks = super::find_file_chunks(infile, 16384)?;
+        let mut builder = PackBuilder::new(4194304).ecc(4, 2);
+        let outdir = tempdir()?;
+        let packfile = outdir.path().join("ecc.pack");
+        builder.initialize(&packfile)?;
+        for chunk in chunks.iter() {
+            builder.add_chunk(chunk)?;
+        }
+        builder.finalize()?;
+        let reader = exaf_rs::reader::Entries::new(&packfile)?;
+        assert!(reader.is_ecc_enabled());
+        let entries: Vec<String> = extract_pack(&packfile, outdir.path(), None)?;
+        assert_eq!(entries.len(), chunks.len());
+        for entry in entries.iter() {
+            let actual = Checksum::blake3_from_file(&outdir.path().join(entry))?;
+            assert_eq!(&actual.to_string(), entry);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_pack_builder_ecc_repairs_corruption() -> Result<(), Error> {
+        // the whole point of erasure coding: damage within the parity budget is
+        // repaired transparently while the pack is being read. Covers the
+        // encrypted case too, since that is what this application writes and
+        // the protection is computed over the encrypted bytes.
+        use std::io::{Seek, SeekFrom, Write};
+        let infile = Path::new("../test/fixtures/SekienAkashita.jpg");
+        let chunks = super::find_file_chunks(infile, 16384)?;
+
+        for password in [None, Some("secret123")] {
+            // a fresh directory each time: extract_pack appends to an existing
+            // file rather than truncating it, so a leftover copy of a chunk
+            // would both corrupt this run and mask a failed repair
+            let outdir = tempdir()?;
+            let mut builder = PackBuilder::new(4194304).ecc(4, 2);
+            if let Some(passwd) = password {
+                builder = builder.password(passwd);
+            }
+            let packfile = outdir.path().join("damaged.pack");
+            builder.initialize(&packfile)?;
+            for chunk in chunks.iter() {
+                builder.add_chunk(chunk)?;
+            }
+            builder.finalize()?;
+
+            // flip a byte well past the archive header, within the content
+            let pack_len = fs::metadata(&packfile)?.len();
+            let offset = pack_len / 2;
+            let mut file = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&packfile)?;
+            file.seek(SeekFrom::Start(offset))?;
+            let mut byte = [0u8; 1];
+            io::Read::read_exact(&mut file, &mut byte)?;
+            file.seek(SeekFrom::Start(offset))?;
+            file.write_all(&[byte[0] ^ 0xff])?;
+            file.sync_all()?;
+            drop(file);
+
+            // the chunks still come out intact
+            let entries: Vec<String> = extract_pack(&packfile, outdir.path(), password)?;
+            assert_eq!(entries.len(), chunks.len());
+            for entry in entries.iter() {
+                let actual = Checksum::blake3_from_file(&outdir.path().join(entry))?;
+                assert_eq!(&actual.to_string(), entry);
+            }
+        }
         Ok(())
     }
 

@@ -236,6 +236,9 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     dataset.add_store("local123");
     dataset.chunk_size = 32768;
     dataset.pack_size = 131072;
+    // exercise the full backup and restore cycle with self-healing packs
+    dataset.data_shards = 4;
+    dataset.parity_shards = 2;
     dbase.put_dataset(&dataset)?;
 
     // perform the first backup

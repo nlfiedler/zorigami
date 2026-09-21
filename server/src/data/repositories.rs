@@ -282,6 +282,13 @@ impl RecordRepository for RecordRepositoryImpl {
     }
 }
 
+// Erasure coding for the database archive is not configurable. The archive is
+// tiny next to the packs it describes, and it is the one thing that must be
+// readable to recover anything at all, so the ~20% overhead is always worth
+// paying.
+const DB_ARCHIVE_DATA_SHARDS: u8 = 10;
+const DB_ARCHIVE_PARITY_SHARDS: u8 = 2;
+
 ///
 /// Create a compressed archive from the given directory structure.
 ///
@@ -293,6 +300,7 @@ fn create_archive(basepath: &Path, outfile: &Path, password: &str) -> Result<(),
         exaf_rs::Encryption::AES256GCM,
         password,
     )?;
+    writer.enable_ecc(DB_ARCHIVE_DATA_SHARDS, DB_ARCHIVE_PARITY_SHARDS)?;
     // Simply calling add_dir_all() on basepath will result in the name of the
     // basepath directory being a part of the archive entry paths, so instead
     // examine the entries within basepath and add them individually.

@@ -36,6 +36,16 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
                 params.basepath.display()
             ));
         }
+        // Catch a bad shard configuration here rather than letting it surface
+        // much later, as a failed backup inside a background task.
+        if (params.data_shards == 0) != (params.parity_shards == 0) {
+            return Err(anyhow!(
+                "data and parity shards must both be zero or both be non-zero"
+            ));
+        }
+        if params.data_shards as u16 + params.parity_shards as u16 > 255 {
+            return Err(anyhow!("data and parity shards must sum to 255 or less"));
+        }
         // read the existing dataset and overwrite certain properties, retaining
         // hidden values like the latest snapshot
         let mut dataset = self
@@ -51,6 +61,8 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         dataset.basepath = params.basepath;
         dataset.chunk_size = params.chunk_size;
         dataset.pack_size = params.pack_size;
+        dataset.data_shards = params.data_shards;
+        dataset.parity_shards = params.parity_shards;
         dataset.excludes = params
             .excludes
             .into_iter()
@@ -104,6 +116,10 @@ pub struct Params {
     chunk_size: usize,
     /// Target size in bytes for pack files.
     pack_size: u64,
+    /// Number of Reed-Solomon data shards; zero disables erasure coding.
+    data_shards: u8,
+    /// Number of Reed-Solomon parity shards; zero disables erasure coding.
+    parity_shards: u8,
     /// Identifiers of the stores to contain pack files.
     stores: Vec<String>,
     /// List of file/directory exclusion patterns.
@@ -124,6 +140,8 @@ impl Params {
         workspace: Option<PathBuf>,
         chunk_size: usize,
         pack_size: u64,
+        data_shards: u8,
+        parity_shards: u8,
         stores: Vec<String>,
         excludes: Vec<String>,
         retention: SnapshotRetention,
@@ -135,6 +153,8 @@ impl Params {
             workspace,
             chunk_size,
             pack_size,
+            data_shards,
+            parity_shards,
             stores,
             excludes,
             retention,
@@ -159,6 +179,8 @@ impl From<Dataset> for Params {
             Some(val.workspace),
             val.chunk_size,
             val.pack_size,
+            val.data_shards,
+            val.parity_shards,
             val.stores,
             val.excludes,
             val.retention,
@@ -207,6 +229,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -218,6 +242,94 @@ mod tests {
         let actual = result.unwrap();
         assert_eq!(actual.basepath, basepath);
         assert_eq!(actual.workspace, basepath.join(".tmp"));
+    }
+
+    #[test]
+    fn test_update_dataset_shards_ok() {
+        // arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let basepath_copy = basepath.clone();
+        let mut mock = MockRecordRepository::new();
+        mock.expect_get_dataset()
+            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
+        mock.expect_put_dataset().returning(|_| Ok(()));
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: 1_048_576,
+            pack_size: 33_554_432,
+            data_shards: 10,
+            parity_shards: 2,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        // assert
+        let actual = result.unwrap();
+        assert_eq!(actual.ecc_shards(), Some((10, 2)));
+    }
+
+    #[test]
+    fn test_update_dataset_shards_half_configured() {
+        // arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let mock = MockRecordRepository::new();
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: 1_048_576,
+            pack_size: 33_554_432,
+            data_shards: 10,
+            parity_shards: 0,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        // assert
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("both be zero or both be non-zero"));
+    }
+
+    #[test]
+    fn test_update_dataset_shards_too_many() {
+        // arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let basepath = tmp.path().to_path_buf();
+        let mock = MockRecordRepository::new();
+        // act
+        let usecase = UpdateDataset::new(Box::new(mock));
+        let params = Params {
+            id: "cafebabe".to_owned(),
+            basepath: basepath.clone(),
+            schedules: vec![],
+            workspace: None,
+            chunk_size: 1_048_576,
+            pack_size: 33_554_432,
+            data_shards: 200,
+            parity_shards: 100,
+            stores: vec!["cafebabe".to_owned()],
+            excludes: vec![],
+            retention: SnapshotRetention::ALL,
+            caller: "unknown".to_owned(),
+        };
+        let result = usecase.call(params);
+        // assert
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("sum to 255 or less"));
     }
 
     #[test]
@@ -240,6 +352,8 @@ mod tests {
             workspace: Some(workspace.clone()),
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -272,6 +386,8 @@ mod tests {
             schedules: vec![],
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec!["".to_owned()],
             retention: SnapshotRetention::ALL,
@@ -309,6 +425,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -332,6 +450,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -367,6 +487,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -401,6 +523,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
@@ -433,6 +557,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::COUNT(5),
@@ -470,6 +596,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::COUNT(10),
@@ -495,6 +623,8 @@ mod tests {
             workspace: None,
             chunk_size: 1_048_576,
             pack_size: 33_554_432,
+            data_shards: 0,
+            parity_shards: 0,
             stores: vec!["cafebabe".to_owned()],
             excludes: vec![],
             retention: SnapshotRetention::ALL,
