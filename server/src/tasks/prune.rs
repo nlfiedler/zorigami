@@ -275,7 +275,8 @@ impl PrunerImpl {
         now: DateTime<Utc>,
     ) -> Result<usize, Error> {
         // read all snapshots for the given dataset
-        let mut digest = start;
+        let head = start;
+        let mut digest = head.clone();
         let mut snapshots: HashMap<Checksum, Snapshot> = HashMap::new();
         loop {
             let snapshot = self
@@ -296,7 +297,32 @@ impl PrunerImpl {
             .map(|s| (s.digest.clone(), s.start_time))
             .collect();
         let candidates_len = candidates.len();
-        let keepers = auto_prune_snapshots(candidates, now);
+        let mut keepers = auto_prune_snapshots(candidates, now);
+        //
+        // Always keep the dataset head, whatever the convention decided.
+        //
+        // The convention keeps the *oldest* snapshot within each day, week, and
+        // year bucket, so the head is only safe while it falls in the "past 24
+        // hours" bucket, which keeps everything. Once the most recent backup is
+        // more than 24 hours old -- a machine left off for a day, a schedule
+        // that did not fire -- the head competes on age within its bucket and
+        // an earlier snapshot from that same day wins, marking the head for
+        // deletion. Nothing here rewrites `dataset.snapshot`, so deleting the
+        // head leaves that reference dangling and every later backup, prune,
+        // scrub, and restore for the dataset fails looking for a snapshot that
+        // no longer exists.
+        //
+        // Reinstating the head also guarantees a non-empty keeper set for the
+        // `last()` below; the convention can otherwise return nothing at all,
+        // as the week buckets cover only 51 weeks while the year buckets start
+        // at the previous year, leaving snapshots from the tail of the current
+        // year in no bucket.
+        //
+        if !keepers.iter().any(|(digest, _)| digest == &head) {
+            let start_time = snapshots[&head].start_time;
+            keepers.push((head.clone(), start_time));
+            keepers.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+        }
         // update all snapshot records accordingly -- take them in pairs and
         // update the first to point to the next, with the last one having its
         // parent set to none to cut off the remaining snapshots
@@ -2082,6 +2108,69 @@ mod tests {
         assert!(result.is_ok());
         let count = result.unwrap();
         assert_eq!(count, 11); // 11 pruned, 21 retained
+    }
+
+    #[test]
+    fn test_pruner_prune_snapshots_auto_keeps_stale_head() {
+        // arrange
+        //
+        // The head snapshot is 26 hours old, putting it outside the "keep
+        // everything from the past 24 hours" window, and it shares both its
+        // calendar day and its ISO week with an earlier snapshot that wins
+        // those buckets by being older. The convention on its own would delete
+        // the head and leave `dataset.snapshot` pointing at nothing.
+        //
+        let now: DateTime<Utc> = "2026-09-21T00:33:04Z".parse().unwrap();
+        let head = Checksum::SHA1("cb475445".into());
+        let earlier = Checksum::SHA1("03c3ba49".into());
+        let oldest = Checksum::SHA1("2b1b3fa6".into());
+        #[rustfmt::skip]
+        let raw_inputs = [
+            // digest, start time, parent
+            (head.clone(), "2026-09-19T22:01:00Z", Some(earlier.clone())),
+            (earlier.clone(), "2026-09-19T18:27:43Z", Some(oldest.clone())),
+            (oldest.clone(), "2026-08-08T23:41:46Z", None),
+        ];
+        let mut mock = MockRecordRepository::new();
+        for orig in raw_inputs.iter() {
+            let matcher = orig.0.clone();
+            let input = orig.clone();
+            mock.expect_get_snapshot()
+                .withf(move |d| d == &matcher)
+                .returning(move |_| {
+                    let start_time: DateTime<Utc> = input.1.parse().unwrap();
+                    Ok(Some(Snapshot {
+                        digest: input.0.clone(),
+                        parent: input.2.clone(),
+                        start_time,
+                        end_time: Some(start_time + TimeDelta::hours(1)),
+                        file_counts: FileCounts::default(),
+                        tree: Checksum::SHA1("cafebabe".into()),
+                    }))
+                });
+        }
+        // every snapshot in this chain is retained, the head included
+        mock.expect_delete_snapshot().never();
+        let (head_match, parent_match) = (head.clone(), earlier.clone());
+        mock.expect_put_snapshot()
+            .withf(move |s| s.digest == head_match && s.parent.as_ref() == Some(&parent_match))
+            .returning(|_| Ok(()));
+        let (earlier_match, parent_match) = (earlier.clone(), oldest.clone());
+        mock.expect_put_snapshot()
+            .withf(move |s| s.digest == earlier_match && s.parent.as_ref() == Some(&parent_match))
+            .returning(|_| Ok(()));
+        let oldest_match = oldest.clone();
+        mock.expect_put_snapshot()
+            .withf(move |s| s.digest == oldest_match && s.parent.is_none())
+            .returning(|_| Ok(()));
+        let submock = MockSubscriber::new();
+        // act
+        let stopper = Arc::new(RwLock::new(false));
+        let pruner = PrunerImpl::new(Arc::new(mock), Arc::new(submock), stopper);
+        let result = pruner.prune_snapshots_auto_as_of(head, now);
+        // assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
