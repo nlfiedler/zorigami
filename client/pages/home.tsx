@@ -12,6 +12,7 @@ import {
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
 import { AutoRefreshCheckbox } from '../components/refresh-checkbox';
+import { TASK_STATUS, TaskStatusTable } from '../components/task-status';
 import {
   type BackupState,
   type Dataset,
@@ -78,9 +79,17 @@ export function Home() {
       return data;
     }
   );
+  const [statusQuery, { refetch: refetchStatus }] = createResource(async () => {
+    const { data } = await client.query({
+      query: TASK_STATUS,
+      fetchPolicy: 'network-only'
+    });
+    return data;
+  });
   const refetch = () => {
     refetchDatasets();
     refetchErrorCount();
+    refetchStatus();
   };
   const sortedDatasets = () => {
     // the datasets returned from the server are in no particular order
@@ -101,32 +110,18 @@ export function Home() {
             <AutoRefreshCheckbox refetch={refetch} />
           </div>
         </div>
-        <div class="level-right">
-          <div class="level-item">
-            {/* Always present. When it appeared only on errors, an absent
-                button meant either that everything ran cleanly or that
-                nothing had ever run, and those are very different. */}
-            <A
-              class={`button ${errorCount() > 0 ? 'is-danger is-light' : ''}`}
-              href="/status"
-            >
-              <span class="icon">
-                <i
-                  class={`fa-solid ${
-                    errorCount() > 0
-                      ? 'fa-triangle-exclamation'
-                      : 'fa-clipboard-list'
-                  }`}
-                ></i>
-              </span>
-              <span>
-                <Show when={errorCount() > 0} fallback="Status">
-                  Status ({errorCount()} error{errorCount() === 1 ? '' : 's'})
-                </Show>
-              </span>
-            </A>
+        <Show when={errorCount() > 0}>
+          <div class="level-right">
+            <div class="level-item">
+              <A class="button is-danger is-light" href="/errors">
+                <span class="icon">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                </span>
+                <span>Errors ({errorCount()})</span>
+              </A>
+            </div>
           </div>
-        </div>
+        </Show>
       </nav>
       <div class="container mt-4">
         <Suspense fallback={'...'}>
@@ -148,6 +143,16 @@ export function Home() {
               </div>
             </Match>
           </Switch>
+        </Suspense>
+
+        {/* Always shown, even when the error log is empty, since a task that
+            ran cleanly and one that never ran at all look alike there. */}
+        <h2 class="title is-5 mt-6">Background Tasks</h2>
+        <Suspense fallback={'...'}>
+          <TaskStatusTable
+            statuses={statusQuery()?.taskStatus ?? []}
+            onStarted={refetchStatus}
+          />
         </Suspense>
       </div>
     </>

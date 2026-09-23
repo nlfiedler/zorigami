@@ -330,6 +330,21 @@ with this feature rather than separately.
   now are; they age out under `ERROR_RETENTION_DAYS` instead.
 - Backups are not recorded; the open question above was resolved by excluding
   them.
-- No "Run now" control yet. `RingLeader` already exposes the four operations, so
-  these would be thin mutations.
 - Run history is still one row per operation.
+
+## Follow-up: status on the home page
+
+Consulting the status meant a trip to a separate page, so the recent-activity
+table moved to the home page, below the dataset cards, and the errors went back
+to their own page.
+
+- `client/components/task-status.tsx`: the task table, now with a Dataset column
+  and a "Run Now" button per task. Each task's label and button span its rows.
+- `client/pages/errors.tsx` restored at `/errors`; `client/pages/status.tsx`
+  removed. The home page button is once again "Errors", shown only when there
+  are uncleared errors. The ambiguity that made it permanent is gone because the
+  task table is always on the home page.
+- `startTask(operation)` mutation, via the `StartTask` use case
+  (`server/src/domain/usecases/start_task.rs`). Snapshot pruning enqueues one
+  request per dataset, as the scheduler does. `BACKUP` is rejected; backups are
+  started per dataset with `startBackup`.

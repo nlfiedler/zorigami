@@ -21,6 +21,7 @@ pub mod query_restores;
 pub mod restore_database;
 pub mod restore_files;
 pub mod start_backup;
+pub mod start_task;
 pub mod stop_backup;
 pub mod test_store;
 pub mod update_configuration;

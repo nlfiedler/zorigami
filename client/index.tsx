@@ -21,7 +21,7 @@ import { DatasetsPage, Datasets, DatasetDetails } from './pages/datasets.tsx';
 import { StoresPage, Stores, StoreDetails } from './pages/stores.tsx';
 import { Restore } from './pages/restore.tsx';
 import { Settings } from './pages/settings.tsx';
-import { Status } from './pages/status.tsx';
+import { Errors } from './pages/errors.tsx';
 
 function App(props: any) {
   return (
@@ -65,7 +65,7 @@ render(
         </Route>
         <Route path="/restore" component={Restore} />
         <Route path="/settings" component={Settings} />
-        <Route path="/status" component={Status} />
+        <Route path="/errors" component={Errors} />
         <Route path="*paramName" component={NotFound} />
       </Router>
     </ApolloProvider>

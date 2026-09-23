@@ -7,7 +7,7 @@ schema {
   mutation: Mutation
 }
 
-"The background operation that produced a captured error."
+"A background operation, as recorded with captured errors and task runs."
 enum BackgroundOperation {
   "Error recorded while running a backup." BACKUP
   "Error recorded while pruning snapshots." PRUNE
@@ -340,6 +340,11 @@ type Mutation {
   startBackup(id: String!): Boolean!
   "Signal the running backup for the given dataset to stop prematurely."
   stopBackup(id: String!): Boolean!
+  """
+    Start the given periodic background task now, instead of waiting for
+    its interval to elapse. Backups are started with `startBackup`.
+  """
+  startTask(operation: BackgroundOperation!): Boolean!
   "Restore the database from the most recent snapshot."
   restoreDatabase(storeId: String!): String!
   "Enqueue a request to restore the given file or directory tree."

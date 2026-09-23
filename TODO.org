@@ -1,13 +1,15 @@
 * Tasks
-** Add support for additional cloud storage services
-- Backblaze B2
-- Wasabi
 ** Snapshot browsing improvements
 *** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
 **** e.g. search for all =.avi= files
+** Preliminary scan of datasets on startup and whenever basepath changes
+*** on startup, server should scan every dataset's directory tree
+*** forces macOS to ask permission immediately rather than waiting until the backup starts
+*** identifies any file access issues immediately rather than when the backup starts
+*** problem is that defining/updating dataset is synchronous but scan is asynchronous, where to show error message(s)
 ** File changes during backup (point-in-time)
 *** Backup procedure is file-by-file, which may yield broken snapshots for database files
 *** if a file changes between snapshot and packing, it will get backed up again the next time
@@ -38,11 +40,3 @@ Deleted local snapshot '2021-04-05-162416'
 ** Support ~archive~ storage classes
 *** Azure, Amazon, and Google all support very slow response time storage
 *** requires subscribing to notifications (?) to facilitate file retrieval
-* Documentation
-** Automatic snapshot pruning
-*** Retention policy applies to the snapshots for a dataset
-*** Any schedule will work, but ~hourly~ makes the most sense
-*** Policy: hourly for 24 hours, daily for 30 days, weekly for 52 weeks, annually for 10 years
-** Duplicati has a fun description of how the backup works
-*** files are broken into "bricks" which go in "bags" and stored in big "boxes" (the pack store)
-*** c.f. https://duplicati.readthedocs.io/en/latest/01-introduction/

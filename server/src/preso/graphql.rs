@@ -357,7 +357,7 @@ impl backup::Request {
     }
 }
 
-/// The background operation that produced a captured error.
+/// A background operation, as recorded with captured errors and task runs.
 #[derive(Copy, Clone, GraphQLEnum)]
 enum BackgroundOperation {
     /// Error recorded while running a backup.
@@ -372,6 +372,21 @@ enum BackgroundOperation {
     PackPrune,
     /// Error recorded while cleaning up dataset workspace directories.
     WorkspaceCleanup,
+}
+
+impl From<BackgroundOperation> for entities::BackgroundOperation {
+    fn from(op: BackgroundOperation) -> Self {
+        match op {
+            BackgroundOperation::Backup => entities::BackgroundOperation::Backup,
+            BackgroundOperation::Prune => entities::BackgroundOperation::Prune,
+            BackgroundOperation::RestoreTest => entities::BackgroundOperation::RestoreTest,
+            BackgroundOperation::DatabaseScrub => entities::BackgroundOperation::DatabaseScrub,
+            BackgroundOperation::PackPrune => entities::BackgroundOperation::PackPrune,
+            BackgroundOperation::WorkspaceCleanup => {
+                entities::BackgroundOperation::WorkspaceCleanup
+            }
+        }
+    }
 }
 
 impl From<entities::BackgroundOperation> for BackgroundOperation {
@@ -1848,6 +1863,21 @@ impl Mutation {
         use crate::domain::usecases::stop_backup::{Params, StopBackup};
         let usecase = StopBackup::new(ctx.leader.clone());
         let params: Params = Params::new(id);
+        usecase.call(params)?;
+        Ok(true)
+    }
+
+    /// Start the given periodic background task now, instead of waiting for
+    /// its interval to elapse. Backups are started with `startBackup`.
+    fn start_task(
+        #[graphql(ctx)] ctx: &GraphContext,
+        operation: BackgroundOperation,
+    ) -> FieldResult<bool> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::start_task::{Params, StartTask};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = StartTask::new(Box::new(repo), ctx.leader.clone());
+        let params: Params = Params::new(operation.into());
         usecase.call(params)?;
         Ok(true)
     }
