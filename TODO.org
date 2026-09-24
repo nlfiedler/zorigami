@@ -1,10 +1,9 @@
 * Tasks
 ** Snapshot browsing improvements
-*** would be helpful to see all snapshots in which a file or directory changed
 *** search snapshots to find a file/directory by a given pattern
 **** the file/dir is not in the latest snapshot but some older one, go find it
 **** might not even know the full path of the file/dir in question
-**** e.g. search for all =.avi= files
+**** support basic wildcard matching (*), e.g. find all =*.avi= files
 ** Preliminary scan of datasets on startup and whenever basepath changes
 *** on startup, server should scan every dataset's directory tree
 *** forces macOS to ask permission immediately rather than waiting until the backup starts

@@ -23,6 +23,7 @@ import {
 } from '@solidjs/router';
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
+import { decodePath, encodePath } from '../paths.ts';
 import {
   type Mutation,
   type MutationRestoreFilesArgs,
@@ -75,6 +76,7 @@ const RESTORE_FILES: TypedDocumentNode<Mutation, MutationRestoreFilesArgs> =
 
 export function SnapshotCompare() {
   const params = useParams();
+  const navigate = useNavigate();
   const client = useApolloClient();
   const [snapshotA] = createResource(
     () => params.digestA,
@@ -110,15 +112,11 @@ export function SnapshotCompare() {
               <p class="title is-4 mb-1">Comparing Snapshots</p>
               <p class="subtitle is-6">
                 <strong>A (older):</strong>{' '}
-                {new Date(
-                  snapshotA()!.snapshot!.startTime
-                ).toLocaleString()}{' '}
+                {new Date(snapshotA()!.snapshot!.startTime).toLocaleString()}{' '}
                 <code>{snapshotA()!.snapshot!.checksum}</code>
                 <br />
                 <strong>B (newer):</strong>{' '}
-                {new Date(
-                  snapshotB()!.snapshot!.startTime
-                ).toLocaleString()}{' '}
+                {new Date(snapshotB()!.snapshot!.startTime).toLocaleString()}{' '}
                 <code>{snapshotB()!.snapshot!.checksum}</code>
               </p>
             </div>
@@ -129,12 +127,19 @@ export function SnapshotCompare() {
         dataset={params.id!}
         rootA={snapshotA()!.snapshot!.tree}
         rootB={snapshotB()!.snapshot!.tree}
+        names={decodePath(params.path)}
+        onNavigate={(names: string[], replace?: boolean) =>
+          navigate(
+            `/snapshots/${params.id}/compare/${params.digestA}/${params.digestB}${encodePath(names)}`,
+            { replace }
+          )
+        }
       />
     </Show>
   );
 }
 
-type Status = 'added' | 'removed' | 'changed';
+export type Status = 'added' | 'removed' | 'changed';
 
 interface DiffRow {
   name: string;
@@ -151,7 +156,7 @@ interface PathSegment {
   digestB: string | null;
 }
 
-const isTreeRef = (ref: string | undefined | null): boolean =>
+export const isTreeRef = (ref: string | undefined | null): boolean =>
   !!ref && ref.startsWith('tree-');
 
 const isSelectable = (row: DiffRow): boolean =>
@@ -171,13 +176,13 @@ const canDrillIn = (row: DiffRow): boolean => {
   return false;
 };
 
-const statusIconClass = (status: Status): string => {
+export const statusIconClass = (status: Status): string => {
   if (status === 'added') return 'fa-solid fa-plus';
   if (status === 'removed') return 'fa-solid fa-minus';
   return 'fa-solid fa-not-equal';
 };
 
-const referenceIconClass = (ref: string | undefined | null): string => {
+export const referenceIconClass = (ref: string | undefined | null): string => {
   if (!ref) return '';
   if (ref.startsWith('tree-')) return 'fa-regular fa-folder';
   if (ref.startsWith('file-')) return 'fa-regular fa-file';
@@ -190,6 +195,11 @@ interface TreeDiffViewerProps {
   dataset: string;
   rootA: string;
   rootB: string;
+  // names of the directories leading to the one being compared
+  names: string[];
+  // invoked with the directory names when the user changes directory, or to
+  // replace the location when the names do not exist in either snapshot
+  onNavigate: (names: string[], replace?: boolean) => void;
 }
 
 function TreeDiffViewer(props: TreeDiffViewerProps) {
@@ -201,52 +211,98 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
     ] as PathSegment[],
     selections: [] as string[]
   });
+  // the trees are not shown until the directory names have been resolved
+  const [walked, setWalked] = createSignal(false);
 
-  // reset path stack if root pair changes (e.g. URL params change)
+  const fetchTree = async (digest: string | null) => {
+    if (digest === null) return null;
+    const { data } = await client.query({
+      query: GET_TREE,
+      variables: { digest }
+    });
+    return data?.tree ?? null;
+  };
+
+  // resolve the directory names to pairs of tree digests whenever the roots or
+  // the names change, reusing whatever prefix of the current path still applies
+  let walkGen = 0;
   createEffect(
     on(
-      () => [props.rootA, props.rootB] as const,
-      ([a, b]) => {
-        setStore('paths', [{ name: '/', digestA: a, digestB: b }]);
-        setStore('selections', []);
-      },
-      { defer: true }
+      () => [props.rootA, props.rootB, props.names.join('/')] as const,
+      async ([rootA, rootB]) => {
+        const gen = ++walkGen;
+        const names = props.names;
+        const resolved: PathSegment[] = [
+          { name: '/', digestA: rootA, digestB: rootB }
+        ];
+        let reuse =
+          store.paths[0]!.digestA === rootA &&
+          store.paths[0]!.digestB === rootB;
+        for (const name of names) {
+          const known = store.paths[resolved.length];
+          if (reuse && known && known.name === name) {
+            resolved.push({ ...known });
+            continue;
+          }
+          reuse = false;
+          const current = resolved.at(-1)!;
+          const [a, b] = await Promise.all([
+            fetchTree(current.digestA),
+            fetchTree(current.digestB)
+          ]);
+          if (gen !== walkGen) return;
+          const refA = a?.entries.find((e) => e.name === name)?.reference;
+          const refB = b?.entries.find((e) => e.name === name)?.reference;
+          const digestA = isTreeRef(refA) ? refA!.slice(5) : null;
+          const digestB = isTreeRef(refB) ? refB!.slice(5) : null;
+          if (digestA === null && digestB === null) break;
+          resolved.push({ name, digestA, digestB });
+        }
+        if (gen === walkGen) {
+          setStore('paths', resolved);
+          setStore('selections', []);
+          setWalked(true);
+          if (resolved.length - 1 < names.length) {
+            // path does not exist in either snapshot, show the deepest match
+            props.onNavigate(
+              resolved.slice(1).map((p) => p.name),
+              true
+            );
+          }
+        }
+      }
     )
   );
 
   const currentSegment = () => store.paths.at(-1)!;
+  const currentNames = () => store.paths.slice(1).map((p) => p.name);
+  const changeDirectory = (names: string[]) => {
+    setStore('selections', []);
+    props.onNavigate(names);
+  };
 
   const [treeA] = createResource(
-    () => currentSegment().digestA,
-    async (digest: string | null) => {
-      if (digest === null) return null;
-      const { data } = await client.query({
-        query: GET_TREE,
-        variables: { digest }
-      });
-      return data?.tree ?? null;
-    }
+    () => walked() && currentSegment().digestA,
+    fetchTree
   );
   const [treeB] = createResource(
-    () => currentSegment().digestB,
-    async (digest: string | null) => {
-      if (digest === null) return null;
-      const { data } = await client.query({
-        query: GET_TREE,
-        variables: { digest }
-      });
-      return data?.tree ?? null;
-    }
+    () => walked() && currentSegment().digestB,
+    fetchTree
   );
 
   const ready = () =>
+    walked() &&
     (currentSegment().digestA === null || treeA() !== undefined) &&
     (currentSegment().digestB === null || treeB() !== undefined);
 
   const rows = (): DiffRow[] => {
     if (!ready()) return [];
-    const aEntries = treeA()?.entries ?? [];
-    const bEntries = treeB()?.entries ?? [];
+    // a resource keeps its previous value when its source becomes null, so
+    // check the digests rather than trusting the resource values
+    const aEntries =
+      currentSegment().digestA === null ? [] : (treeA()?.entries ?? []);
+    const bEntries =
+      currentSegment().digestB === null ? [] : (treeB()?.entries ?? []);
     const aByName = new Map(aEntries.map((e) => [e.name, e]));
     const bByName = new Map(bEntries.map((e) => [e.name, e]));
     const result: DiffRow[] = [];
@@ -285,18 +341,7 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
 
   const drillInto = (row: DiffRow) => {
     if (!canDrillIn(row)) return;
-    const nextA = isTreeRef(row.a?.reference)
-      ? row.a!.reference.slice(5)
-      : null;
-    const nextB = isTreeRef(row.b?.reference)
-      ? row.b!.reference.slice(5)
-      : null;
-    setStore('selections', []);
-    setStore('paths', store.paths.length, {
-      name: row.name,
-      digestA: nextA,
-      digestB: nextB
-    });
+    changeDirectory([...currentNames(), row.name]);
   };
 
   const selectableRows = () => rows().filter((r) => isSelectable(r));
@@ -353,7 +398,7 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
               on:click={() => startRestore()}
             >
               <span class="icon">
-                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i>
               </span>
               <span>Restore</span>
             </button>
@@ -362,10 +407,7 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
             <button
               class="button"
               disabled={store.paths.length == 1}
-              on:click={() => {
-                setStore('selections', []);
-                setStore('paths', (paths) => paths.slice(0, -1));
-              }}
+              on:click={() => changeDirectory(currentNames().slice(0, -1))}
             >
               <span class="icon">
                 <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
@@ -384,12 +426,9 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
                       }}
                     >
                       <a
-                        on:click={() => {
-                          setStore('selections', []);
-                          setStore('paths', (paths) =>
-                            paths.slice(0, index() + 1)
-                          );
-                        }}
+                        on:click={() =>
+                          changeDirectory(currentNames().slice(0, index()))
+                        }
                       >
                         {item.name}
                       </a>
@@ -452,9 +491,7 @@ function TreeDiffViewer(props: TreeDiffViewerProps) {
                     // changed/added rows; fall back to A-side for removed.
                     const display = () => row.b ?? row.a!;
                     return (
-                      <tr
-                        style={canDrillIn(row) ? 'cursor: pointer;' : ''}
-                      >
+                      <tr style={canDrillIn(row) ? 'cursor: pointer;' : ''}>
                         <td on:click={(ev) => ev.stopPropagation()}>
                           <input
                             type="checkbox"

@@ -60,6 +60,13 @@ enum PackRetentionPolicy {
   "Keep only pack files uploaded in the last N days." DAYS
 }
 
+"The manner in which a path changed from one snapshot to the next."
+enum PathChange {
+  "Path is present now but was absent in the previous snapshot." ADDED
+  "Path is present in both snapshots but the reference differs." CHANGED
+  "Path was present in the previous snapshot but is absent now." REMOVED
+}
+
 "Status of a restore request."
 enum RestoreStatus {
   "Request is waiting to be processed." PENDING
@@ -364,6 +371,18 @@ type PackRetention {
   value: Int!
 }
 
+"A snapshot in which a particular path was added, changed, or removed."
+type PathVersion {
+  "Snapshot in which the change was observed."
+  snapshot: Snapshot!
+  "Manner in which the path changed."
+  change: PathChange!
+  "Tree entry for the path, null if the path was removed."
+  entry: TreeEntry
+  "Digest of the tree containing the entry, null if the path was removed."
+  parent: Checksum
+}
+
 "Property defines a name/value pair."
 type Property {
   name: String!
@@ -394,6 +413,12 @@ type Query {
   store(id: String!): Store
   "Retrieve a specific tree."
   tree(digest: Checksum!): Tree
+  """
+    Retrieve the snapshots in which the given path was added, changed, or
+    removed, newest first. The path is relative to the dataset base path,
+    with components separated by a forward slash.
+  """
+  pathHistory(dataset: String!, path: String!): [PathVersion!]!
   "Return captured errors from background operations, most recent first."
   capturedErrors(limit: Int): [CapturedError!]!
   "Return the number of currently stored captured errors."

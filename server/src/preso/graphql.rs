@@ -182,6 +182,52 @@ impl entities::Tree {
     }
 }
 
+/// The manner in which a path changed from one snapshot to the next.
+#[derive(Copy, Clone, GraphQLEnum)]
+enum PathChange {
+    /// Path is present now but was absent in the previous snapshot.
+    Added,
+    /// Path is present in both snapshots but the reference differs.
+    Changed,
+    /// Path was present in the previous snapshot but is absent now.
+    Removed,
+}
+
+impl From<entities::PathChange> for PathChange {
+    fn from(change: entities::PathChange) -> Self {
+        match change {
+            entities::PathChange::Added => PathChange::Added,
+            entities::PathChange::Changed => PathChange::Changed,
+            entities::PathChange::Removed => PathChange::Removed,
+        }
+    }
+}
+
+#[juniper::graphql_object(
+    description = "A snapshot in which a particular path was added, changed, or removed."
+)]
+impl entities::PathVersion {
+    /// Snapshot in which the change was observed.
+    fn snapshot(&self) -> entities::Snapshot {
+        self.snapshot.clone()
+    }
+
+    /// Manner in which the path changed.
+    fn change(&self) -> PathChange {
+        self.change.into()
+    }
+
+    /// Tree entry for the path, null if the path was removed.
+    fn entry(&self) -> Option<entities::TreeEntry> {
+        self.entry.clone()
+    }
+
+    /// Digest of the tree containing the entry, null if the path was removed.
+    fn parent(&self) -> Option<ChecksumGQL> {
+        self.parent.clone().map(ChecksumGQL)
+    }
+}
+
 #[derive(GraphQLObject)]
 /// Number of files whose size is close to the given power of 2.
 struct FileSize {
@@ -1421,6 +1467,23 @@ impl Query {
         let usecase = GetTree::new(Box::new(repo));
         let params: Params = Params::new(digest.0);
         let result: Option<entities::Tree> = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Retrieve the snapshots in which the given path was added, changed, or
+    /// removed, newest first. The path is relative to the dataset base path,
+    /// with components separated by a forward slash.
+    fn path_history(
+        #[graphql(ctx)] ctx: &GraphContext,
+        dataset: String,
+        path: String,
+    ) -> FieldResult<Vec<entities::PathVersion>> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::get_path_history::{GetPathHistory, Params};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetPathHistory::new(Box::new(repo));
+        let params: Params = Params::new(dataset, path);
+        let result: Vec<entities::PathVersion> = usecase.call(params)?;
         Ok(result)
     }
 

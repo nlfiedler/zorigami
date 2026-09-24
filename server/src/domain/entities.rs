@@ -1051,6 +1051,34 @@ pub struct SnapshotCount {
 }
 
 ///
+/// The manner in which a path changed from one snapshot to the next.
+///
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum PathChange {
+    /// Path is present now but was absent in the previous snapshot.
+    Added,
+    /// Path is present in both snapshots but the reference differs.
+    Changed,
+    /// Path was present in the previous snapshot but is absent now.
+    Removed,
+}
+
+///
+/// A snapshot in which a particular path was added, changed, or removed.
+///
+#[derive(Clone, Debug)]
+pub struct PathVersion {
+    /// Snapshot in which the change was observed.
+    pub snapshot: Snapshot,
+    /// Manner in which the path changed.
+    pub change: PathChange,
+    /// Tree entry for the path, `None` if the path was removed.
+    pub entry: Option<TreeEntry>,
+    /// Digest of the tree containing the entry, `None` if the path was removed.
+    pub parent: Option<Checksum>,
+}
+
+///
 /// Location for a pack file, naming the store, bucket, and object by which the
 /// pack file can be retrieved.
 ///

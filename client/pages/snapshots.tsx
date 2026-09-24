@@ -25,6 +25,7 @@ import {
 import { type TypedDocumentNode, gql } from '@apollo/client';
 import { useApolloClient } from '../apollo-provider';
 import useClickOutside from '../hooks/use-click-outside.ts';
+import { decodePath, encodePath } from '../paths.ts';
 import {
   type Mutation,
   type MutationRestoreFilesArgs,
@@ -72,10 +73,15 @@ export function SnapshotsPage(props: any) {
       navigate(`/snapshots/${sortedDatasets()[0]!.id}`, { replace: true });
     }
   });
-  // listen for path changes and cause the dataset to refresh
-  const location = useLocation();
-  // the pathname is not actually used, just listening for route changes
-  createEffect(() => refetch(location.pathname));
+  // refresh the datasets when the route changes, but not when merely moving
+  // between directories within a snapshot or comparison
+  createEffect(
+    on(
+      () => [params.id, params.sid, params.digestA, params.digestB],
+      () => refetch(),
+      { defer: true }
+    )
+  );
 
   return (
     <div class="m-4 columns">
@@ -352,7 +358,7 @@ export function SnapshotBrowse() {
   const client = useApolloClient();
   // BUG: useParams() and createResource() fail to refresh when the id path
   // parameter changes, but createEffect() will show that a change occurs;
-  // work-around with useLocation() and refetch() to force the data refresh
+  // work-around with createEffect() and refetch() to force the data refresh
   // (https://github.com/solidjs/solid/discussions/1745)
   const [snapshotQuery, { refetch }] = createResource(
     () => params.sid,
@@ -374,10 +380,28 @@ export function SnapshotBrowse() {
       return data;
     }
   );
-  const location = useLocation();
-  // the pathname is not actually used, just listening for route changes
-  createEffect(() => refetch(location.pathname));
-  createEffect(() => refetchSnapshots(location.pathname));
+  // the path within the snapshot is also in the URL, so listen for changes
+  // to the snapshot and dataset rather than the pathname, otherwise every
+  // change of directory would refetch the snapshots
+  createEffect(
+    on(
+      () => params.sid,
+      () => refetch(),
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      () => params.id,
+      () => refetchSnapshots(),
+      { defer: true }
+    )
+  );
+  const names = () => decodePath(params.path);
+  const browse = (sid: string, names: string[], replace = false) =>
+    navigate(`/snapshots/${params.id}/browse/${sid}${encodePath(names)}`, {
+      replace
+    });
 
   const orderedSnapshots = () => {
     const snaps = snapshotsQuery()?.snapshots ?? [];
@@ -405,9 +429,7 @@ export function SnapshotBrowse() {
           <div class="level-item">
             <SnapshotSelector
               dataset={params.id!}
-              changed={(id: string) =>
-                navigate(`/snapshots/${params.id}/browse/${id}`)
-              }
+              changed={(id: string) => browse(id, names())}
             />
           </div>
           <div class="level-item">
@@ -418,8 +440,7 @@ export function SnapshotBrowse() {
                 disabled={!olderSnapshot()}
                 on:click={() => {
                   const s = olderSnapshot();
-                  if (s)
-                    navigate(`/snapshots/${params.id}/browse/${s.checksum}`);
+                  if (s) browse(s.checksum, names());
                 }}
               >
                 <span class="icon">
@@ -433,8 +454,7 @@ export function SnapshotBrowse() {
                 disabled={!newerSnapshot()}
                 on:click={() => {
                   const s = newerSnapshot();
-                  if (s)
-                    navigate(`/snapshots/${params.id}/browse/${s.checksum}`);
+                  if (s) browse(s.checksum, names());
                 }}
               >
                 <span>Next</span>
@@ -454,6 +474,13 @@ export function SnapshotBrowse() {
       <TreeViewer
         dataset={params.id!}
         digest={snapshotQuery()?.snapshot?.tree!}
+        names={names()}
+        onNavigate={(names: string[], replace?: boolean) =>
+          browse(params.sid!, names, replace)
+        }
+        onHistory={(names: string[]) =>
+          navigate(`/snapshots/${params.id}/history${encodePath(names)}`)
+        }
       />
     </Show>
   );
@@ -580,6 +607,13 @@ const RESTORE_FILES: TypedDocumentNode<Mutation, MutationRestoreFilesArgs> =
 interface TreeViewerProps {
   dataset: string;
   digest: string;
+  // names of the directories leading to the one being viewed
+  names: string[];
+  // invoked with the directory names when the user changes directory, or to
+  // replace the location when the names do not all exist in this snapshot
+  onNavigate: (names: string[], replace?: boolean) => void;
+  // invoked with the full path of the entry whose history is wanted
+  onHistory: (names: string[]) => void;
 }
 
 function TreeViewer(props: TreeViewerProps) {
@@ -588,9 +622,11 @@ function TreeViewer(props: TreeViewerProps) {
     paths: [['/', props.digest]],
     selections: [] as string[]
   });
+  // the tree is not shown until the directory names have been resolved
+  const [walked, setWalked] = createSignal(false);
   const client = useApolloClient();
   const [treeQuery] = createResource(
-    () => store.paths.at(-1)![1],
+    () => walked() && store.paths.at(-1)![1],
     async (digest: string) => {
       const { data } = await client.query({
         query: GET_TREE,
@@ -599,36 +635,66 @@ function TreeViewer(props: TreeViewerProps) {
       return data;
     }
   );
+  // resolve the directory names to tree digests whenever the snapshot or the
+  // names change, reusing whatever prefix of the current path still applies
   let walkGen = 0;
   createEffect(
     on(
-      () => props.digest,
-      async (rootDigest) => {
+      () => [props.digest, props.names.join('/')] as const,
+      async ([rootDigest]) => {
         const gen = ++walkGen;
-        const names = store.paths.slice(1).map(([name]) => name);
+        const names = props.names;
         const resolved: [string, string][] = [['/', rootDigest]];
+        let reuse = store.paths[0]![1] === rootDigest;
         let cursor = rootDigest;
         for (const name of names) {
-          const { data } = await client.query({
-            query: GET_TREE,
-            variables: { digest: cursor }
-          });
-          if (gen !== walkGen) return;
+          const known = store.paths[resolved.length];
+          if (reuse && known && known[0] === name) {
+            cursor = known[1]!;
+            resolved.push([name, cursor]);
+            continue;
+          }
+          reuse = false;
+          // descending one level uses the tree already being displayed
+          let data =
+            treeQuery.state === 'ready' && cursor === store.paths.at(-1)![1]
+              ? treeQuery.latest
+              : undefined;
+          if (!data) {
+            const result = await client.query({
+              query: GET_TREE,
+              variables: { digest: cursor }
+            });
+            if (gen !== walkGen) return;
+            data = result.data;
+          }
           const entry = data?.tree?.entries.find(
             (e) => e.name === name && e.reference.startsWith('tree-')
           );
           if (!entry) break;
           cursor = entry.reference.slice(5);
-          resolved.push([name!, cursor]);
+          resolved.push([name, cursor]);
         }
         if (gen === walkGen) {
           setStore('paths', resolved);
           setStore('selections', []);
+          setWalked(true);
+          if (resolved.length - 1 < names.length) {
+            // path does not exist in this snapshot, show the deepest match
+            props.onNavigate(
+              resolved.slice(1).map(([name]) => name!),
+              true
+            );
+          }
         }
-      },
-      { defer: true }
+      }
     )
   );
+  const changeDirectory = (names: string[]) => {
+    setStore('selections', []);
+    props.onNavigate(names);
+  };
+  const currentNames = () => store.paths.slice(1).map(([name]) => name!);
   const restoreAction = action(
     async (): Promise<{ ok: boolean }> => {
       const tree = store.paths.at(-1)![1];
@@ -680,7 +746,7 @@ function TreeViewer(props: TreeViewerProps) {
               on:click={() => startRestore()}
             >
               <span class="icon">
-                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                <i class="fa-solid fa-trash-arrow-up" aria-hidden="true"></i>
               </span>
               <span>Restore</span>
             </button>
@@ -688,13 +754,23 @@ function TreeViewer(props: TreeViewerProps) {
           <div class="level-item">
             <button
               class="button"
+              title="Show the snapshots in which the selected entry changed"
+              disabled={store.selections.length !== 1}
+              on:click={() =>
+                props.onHistory([...currentNames(), store.selections[0]!])
+              }
+            >
+              <span class="icon">
+                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+              </span>
+              <span>History</span>
+            </button>
+          </div>
+          <div class="level-item">
+            <button
+              class="button"
               disabled={store.paths.length == 1}
-              on:click={(_) => {
-                setStore('selections', []);
-                setStore('paths', (paths) => {
-                  return paths.slice(0, -1);
-                });
-              }}
+              on:click={(_) => changeDirectory(currentNames().slice(0, -1))}
             >
               <span class="icon">
                 <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
@@ -713,12 +789,9 @@ function TreeViewer(props: TreeViewerProps) {
                       }}
                     >
                       <a
-                        on:click={() => {
-                          setStore('selections', []);
-                          setStore('paths', (paths) =>
-                            paths.slice(0, index() + 1)
-                          );
-                        }}
+                        on:click={() =>
+                          changeDirectory(currentNames().slice(0, index()))
+                        }
                       >
                         {item[0]}
                       </a>
@@ -794,11 +867,7 @@ function TreeViewer(props: TreeViewerProps) {
                 <td
                   on:click={(_) => {
                     if (item.reference.startsWith('tree-')) {
-                      setStore('selections', []);
-                      setStore('paths', store.paths.length, [
-                        item.name,
-                        item.reference.slice(5)
-                      ]);
+                      changeDirectory([...currentNames(), item.name]);
                     }
                   }}
                 >
@@ -830,7 +899,7 @@ function TreeViewer(props: TreeViewerProps) {
   );
 }
 
-function itemName(reference: string): string {
+export function itemName(reference: string): string {
   if (reference.startsWith('file-')) {
     return reference.slice(5);
   }
