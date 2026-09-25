@@ -282,6 +282,20 @@ export function Snapshots() {
                   <span>Compare</span>
                 </button>
               </div>
+              <div class="level-item">
+                <button
+                  class="button"
+                  on:click={() => navigate(`/snapshots/${params.id}/search`)}
+                >
+                  <span class="icon">
+                    <i
+                      class="fa-solid fa-magnifying-glass"
+                      aria-hidden="true"
+                    ></i>
+                  </span>
+                  <span>Search</span>
+                </button>
+              </div>
             </div>
           </nav>
           <table class="table is-striped is-hoverable is-fullwidth has-text-left">

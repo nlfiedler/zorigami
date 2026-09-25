@@ -228,6 +228,49 @@ impl entities::PathVersion {
     }
 }
 
+#[juniper::graphql_object(
+    description = "An entry found by searching snapshots, as it appears in the newest snapshot containing its path."
+)]
+impl entities::PathMatch {
+    /// Slash-separated path of the entry relative to the dataset base path.
+    fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// Newest snapshot containing the path.
+    fn snapshot(&self) -> entities::Snapshot {
+        self.snapshot.clone()
+    }
+
+    /// Tree entry for the path in that snapshot.
+    fn entry(&self) -> entities::TreeEntry {
+        self.entry.clone()
+    }
+
+    /// Digest of the tree containing the entry.
+    fn parent(&self) -> ChecksumGQL {
+        ChecksumGQL(self.parent.clone())
+    }
+
+    /// True if the path exists in the latest finished snapshot.
+    fn current(&self) -> bool {
+        self.current
+    }
+}
+
+#[juniper::graphql_object(description = "Results of searching the snapshots of a dataset.")]
+impl entities::PathSearch {
+    /// Matching entries, sorted by path.
+    fn matches(&self) -> Vec<entities::PathMatch> {
+        self.matches.clone()
+    }
+
+    /// True if the search stopped upon reaching the result limit.
+    fn truncated(&self) -> bool {
+        self.truncated
+    }
+}
+
 #[derive(GraphQLObject)]
 /// Number of files whose size is close to the given power of 2.
 struct FileSize {
@@ -1484,6 +1527,26 @@ impl Query {
         let usecase = GetPathHistory::new(Box::new(repo));
         let params: Params = Params::new(dataset, path);
         let result: Vec<entities::PathVersion> = usecase.call(params)?;
+        Ok(result)
+    }
+
+    /// Search every finished snapshot of the dataset for entries whose name
+    /// matches the wildcard pattern, or whose path matches if the pattern
+    /// contains a slash. Matching is case-insensitive. The limit defaults to
+    /// 500 and is clamped to 1-5000.
+    fn search_snapshots(
+        #[graphql(ctx)] ctx: &GraphContext,
+        dataset: String,
+        pattern: String,
+        limit: Option<i32>,
+    ) -> FieldResult<entities::PathSearch> {
+        use crate::domain::usecases::UseCase;
+        use crate::domain::usecases::search_snapshots::{Params, SearchSnapshots};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = SearchSnapshots::new(Box::new(repo));
+        let limit = limit.unwrap_or(500).clamp(1, 5000) as usize;
+        let params: Params = Params::new(dataset, pattern, limit);
+        let result: entities::PathSearch = usecase.call(params)?;
         Ok(result)
     }
 

@@ -371,6 +371,28 @@ type PackRetention {
   value: Int!
 }
 
+"An entry found by searching snapshots, as it appears in the newest snapshot containing its path."
+type PathMatch {
+  "Slash-separated path of the entry relative to the dataset base path."
+  path: String!
+  "Newest snapshot containing the path."
+  snapshot: Snapshot!
+  "Tree entry for the path in that snapshot."
+  entry: TreeEntry!
+  "Digest of the tree containing the entry."
+  parent: Checksum!
+  "True if the path exists in the latest finished snapshot."
+  current: Boolean!
+}
+
+"Results of searching the snapshots of a dataset."
+type PathSearch {
+  "Matching entries, sorted by path."
+  matches: [PathMatch!]!
+  "True if the search stopped upon reaching the result limit."
+  truncated: Boolean!
+}
+
 "A snapshot in which a particular path was added, changed, or removed."
 type PathVersion {
   "Snapshot in which the change was observed."
@@ -419,6 +441,13 @@ type Query {
     with components separated by a forward slash.
   """
   pathHistory(dataset: String!, path: String!): [PathVersion!]!
+  """
+    Search every finished snapshot of the dataset for entries whose name
+    matches the wildcard pattern, or whose path matches if the pattern
+    contains a slash. Matching is case-insensitive. The limit defaults to
+    500 and is clamped to 1-5000.
+  """
+  searchSnapshots(dataset: String!, pattern: String!, limit: Int): PathSearch!
   "Return captured errors from background operations, most recent first."
   capturedErrors(limit: Int): [CapturedError!]!
   "Return the number of currently stored captured errors."

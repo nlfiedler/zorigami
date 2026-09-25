@@ -14,6 +14,8 @@ A backup and restore application written in [Rust](https://www.rust-lang.org) an
 * Backups can be run manually, hourly, or daily at a set time of day
 * Snapshots can be pruned automatically by count, by days, or Time Machine style
   - Time Machine-like retention policy keeps all (hourly) snapshots for the last 24 hours, the oldest snapshot from each day for the last 30 days, the oldest snapshot from each week for the last 52 weeks, and the oldest snapshot from each year for the last 10 years.
+* Browse snapshots and search for files by pattern, including full file path.
+* View the change history of a particular file or directory.
 * Support for Reed-Solomon erasure coding within pack files to enable automatic repair of partially corrupted archives.
   - Database archives now always have RS(10,2) protection which adds less than 20% overhead and can tolerate two bad shards out of 12.
 * Ransomware protection in the form of storage-side WORM, see [DEPLOY.md](./doc/DEPLOY.md) for details.

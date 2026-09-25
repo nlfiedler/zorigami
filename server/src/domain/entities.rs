@@ -1079,6 +1079,35 @@ pub struct PathVersion {
 }
 
 ///
+/// An entry found by searching the snapshots of a dataset, as it appears in
+/// the newest snapshot that contains its path.
+///
+#[derive(Clone, Debug)]
+pub struct PathMatch {
+    /// Slash-separated path of the entry relative to the dataset base path.
+    pub path: String,
+    /// Newest snapshot containing the path.
+    pub snapshot: Snapshot,
+    /// Tree entry for the path in that snapshot.
+    pub entry: TreeEntry,
+    /// Digest of the tree containing the entry.
+    pub parent: Checksum,
+    /// True if the path exists in the latest finished snapshot.
+    pub current: bool,
+}
+
+///
+/// Results of searching the snapshots of a dataset.
+///
+#[derive(Clone, Debug, Default)]
+pub struct PathSearch {
+    /// Matching entries, sorted by path.
+    pub matches: Vec<PathMatch>,
+    /// True if the search stopped upon reaching the result limit.
+    pub truncated: bool,
+}
+
+///
 /// Location for a pack file, naming the store, bucket, and object by which the
 /// pack file can be retrieved.
 ///
