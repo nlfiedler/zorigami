@@ -1406,8 +1406,8 @@ impl PackRecord {
         self.chunks.push(chunk);
     }
 
-    /// Return true if the given (unencrypted) pack file contains everything
-    /// this record expects to be in the pack file, false otherwise.
+    /// Return true if the given pack file contains everything this record
+    /// expects to be in the pack file, false otherwise.
     fn verify_pack(&self, pack_path: &Path, password: &str) -> Result<bool, Error> {
         use std::str::FromStr;
         // This is an n^2 search which is fine because the number of chunks in a
