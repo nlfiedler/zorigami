@@ -69,7 +69,7 @@ SolidJS pages communicate via Apollo Client (GraphQL). Pages: Home, Datasets, Sn
 
 ## Testing Notes
 
-- Integration tests for stores require Docker Compose services: `containers/docker-compose.yml` (Azurite, sftp, MinIO/RustFS).
+- Integration tests for stores require Docker Compose services: `containers/docker-compose.yml` (sftp, MinIO/RustFS).
 - Tests that must not run in parallel use the `serial_test` crate.
 - Test database path defaults to `../tmp/test/database`.
 - Environment variables for forcing task states in tests: `RESTORE_ALWAYS_PENDING=1`, `RESTORE_ALWAYS_PROCESSING=1`.
