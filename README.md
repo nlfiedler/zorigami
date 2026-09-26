@@ -17,7 +17,7 @@ A backup and restore application written in [Rust](https://www.rust-lang.org) an
 * Browse snapshots and search for files by pattern, including full file path.
 * View the change history of a particular file or directory.
 * Support for Reed-Solomon erasure coding within pack files to enable automatic repair of partially corrupted archives.
-  - Database archives now always have RS(10,2) protection which adds less than 20% overhead and can tolerate two bad shards out of 12.
+  - Database archives always use RS(10,2) protection which adds less than 20% overhead and can tolerate two bad shards out of 12.
 * Ransomware protection in the form of storage-side WORM, see [DEPLOY.md](./doc/DEPLOY.md) for details.
 * Background tasks that prune snapshots, test restoring a random file, scrub the database to find problems, and prune unused pack files.
 * Cross Platform: Linux, macOS, Windows

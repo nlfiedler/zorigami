@@ -2,7 +2,7 @@
 
 ## Architecture
 
-* GraphQL and REST backend
+* GraphQL-enabled backend
 * Browser-based frontend
 * Key/Value store for metadata
 * Local/Remote storage for pack files
@@ -11,7 +11,7 @@
 
 ### Clean Architecture
 
-Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The **domain** layer defines the policy or business logic of the application, consisting of entities, use cases, and repositories. The **data** layer is the interface to the underlying system, defining the data models that are ultimately stored in a database. The presentation (or **preso**) layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface. An additional **tasks** component defines various long running background tasks that are not necessarily invoked by the domain or presentation layers. See [What is this architecture called?](https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80) for additional background.
+Within the `server` crate the general design of the application conforms to the [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) in which the application is divided into three layers: domain, data, and presentation. The **domain** layer defines the policy or business logic of the application, consisting of entities, use cases, and repository interfaces. The **data** layer is the interface to the underlying system, defining the repository implementations that interact with the database. The presentation (or **preso**) layer is what the user generally sees, the web interface, and to some extent, the GraphQL interface. An additional **tasks** component defines various long running background tasks that are not necessarily invoked by the domain or presentation layers. See [What is this architecture called?](https://gist.github.com/quad/bc2351e2df4a4a815f8e0d19f36cfa80) for additional background.
 
 ### Workspace and Packages
 
@@ -27,10 +27,10 @@ The overall application is broken into several crates, or packages as they are s
     - Trees are nested, a la git
 * File content is stored in pack files
     - Large files are split across multiple pack files
-    - Small files are combined into pack files
-* Pack files are stored remotely
+    - Small files are combined to reduce overhead
+* Pack files may be stored remotely
 * Database is used to store metadata
-    - Database is saved in special bucket
+    - Database is saved in a special bucket
 
 ### Definitions
 
@@ -64,7 +64,7 @@ The names are well suited to all supported cloud storage providers:
 - [Azure](https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata)
 - [MinIO](https://github.com/minio/minio/blob/master/docs/minio-limits.md)
 
-Database snapshots ared saved to the bucket whose name is the computer UUID, which also conforms to the requirements of all supported cloud-storage poviders. The cloud-based pack stores will handle any bucket collision using a remote database: Amazon pack store uses DynamoDB and Google pack store uses Firestore.
+Database snapshots are saved to the bucket whose name is the computer UUID, which also conforms to the requirements of all supported cloud-storage poviders. The cloud-based pack stores will handle any bucket collision using a remote database: Amazon pack store uses DynamoDB and Google pack store uses Firestore.
 
 ### Pack Files
 
@@ -73,6 +73,7 @@ Database snapshots ared saved to the bucket whose name is the computer UUID, whi
 * Pack file format is [EXAF](https://github.com/nlfiedler/exaf-rs)
     - entry names are the chunk hash digest plus algorithm prefix
     - encrypted with key derived from passphrase and random salt
+    - optional Reed-Solomon erasure coding
 * File metadata and extended attributes are _not_ stored in pack files because of chunking
 
 ### Database Schema
@@ -83,16 +84,21 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - key: `configuration`
     - host name
     - user name
-    - computer UUID
+    - computer ID
+    - timezone
+    - bucket naming policy
 * dataset records:
     - key: `dataset/` + XID
     - base path
-    - schedule
-    - excludes
-    - pack size
-    - chunk size
-    - stores
+    - schedules
     - latest snapshot
+    - workspace path
+    - chunk size
+    - pack size
+    - data shards
+    - parity shards
+    - stores
+    - excludes
     - retention policy
 * store records:
     - key: `store/` + XID
@@ -104,11 +110,11 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - retention policy
 * snapshot records
     - key: `snapshot/` + SHA1
-    - digest of previous snapshot
-    - date/time when started
-    - date/time when finished
+    - parent digest
+    - started date-time
+    - finished date-time
     - file counts
-    - base tree reference
+    - base tree
 * tree records
     - key: `tree/` + SHA1
     - entries: (sorted by name)
@@ -127,7 +133,7 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
             - xattr digest
 * file records
     - key: `file/` + BLAKE3
-    - file size
+    - length
     - chunks:
         + offset
         + digest
@@ -136,7 +142,6 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
     - value: raw attribute data
 * chunk records
     - key: `chunk/` + BLAKE3
-    - chunk size
     - pack digest
 * pack records
     - key: `pack/` + BLAKE3
@@ -144,14 +149,14 @@ The database is a key/value store provided by [RocksDB](https://rocksdb.org). Th
         + store
         + bucket
         + object
-    - upload date/time
+    - upload date-time
 * database snapshots
     - key: `dbase/` + BLAKE3
     - coordinates:
         + store
         + bucket
         + object
-    - upload date/time
+    - upload date-time
 
 ## Further Details
 
