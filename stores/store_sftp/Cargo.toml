@@ -5,15 +5,11 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-ssh2 = "0.9.4"
+russh = { version = "0.63.3", default-features = false, features = ["flate2", "ring", "rsa"] }
+russh-sftp = "3.0.0"
 store_core = { path = "../store_core" }
+tokio = { workspace = true, features = ["fs", "io-util", "net", "rt", "time"] }
 
 [dev-dependencies]
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
-
-[target.'cfg(windows)'.dependencies]
-openssl = { workspace = true }
-
-[target.'cfg(unix)'.dependencies]
-openssl = { workspace = true, features = ["vendored"] }

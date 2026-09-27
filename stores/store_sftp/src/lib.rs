@@ -2,36 +2,65 @@
 // Copyright (c) 2020 Nathan Fiedler
 //
 use anyhow::{Error, anyhow};
-use ssh2::{FileStat, Session};
+use russh::client::{self, Handle};
+use russh::keys::PublicKeyOrCertificate;
+use russh_sftp::client::SftpSession;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io;
-use std::net::{TcpStream, ToSocketAddrs};
-use std::path::{Path, PathBuf};
+use std::future::Future;
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use store_core::Coordinates;
+use tokio::io::AsyncWriteExt;
 
-// TCP connect deadline so a blackholed remote (e.g. firewall drop) fails
-// fast rather than hanging the backup task. Note: this does not cover DNS
-// resolution by `to_socket_addrs()`, which uses the OS resolver and
-// inherits its timeout (typically 5–30s per nameserver). A misconfigured
-// /etc/resolv.conf can still stall `connect()` for that period before this
-// constant takes effect.
+// TCP connect and SSH handshake deadline so a blackholed remote (e.g. firewall
+// drop) fails fast rather than hanging the backup task. This also covers DNS
+// resolution, which happens inside the connect future.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
-// Per-syscall read/write deadline on the underlying TCP socket. Any single
-// blocking read/write that makes no progress within this window aborts and
-// surfaces as an error. This is the *primary* defense against a half-open
-// connection silently stalling `io::copy` during a pack transfer: it is
-// applied at the libc socket layer and so is honored by every blocking
-// recv/send libssh2 issues internally.
-const TCP_IO_TIMEOUT: Duration = Duration::from_secs(120);
-// Upper bound passed to `Session::set_timeout` (milliseconds). libssh2's
-// session timeout primarily affects non-blocking I/O paths; with the
-// blocking `TcpStream` we hand it via `set_tcp_stream`, this is largely
-// cosmetic — the TCP_IO_TIMEOUT above does the real work. Kept as a
-// belt-and-suspenders value in case libssh2 ever waits internally without
-// dispatching a blocking syscall.
-const SSH_SESSION_TIMEOUT_MS: u32 = 5 * 60 * 1000;
+// If nothing at all is received from the server for this long, russh closes
+// the connection. This is the primary defense against a half-open connection
+// silently stalling a pack transfer.
+const INACTIVITY_TIMEOUT: Duration = Duration::from_secs(120);
+// Send an SSH keepalive after this much quiet time, so that an idle but
+// healthy connection is not mistaken for a dead one.
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+// Maximum time to wait for the response to any single SFTP request.
+const SFTP_REQUEST_TIMEOUT_SECS: u64 = 120;
+
+/// SSH client event handler; the only event of interest is host key checking.
+struct Client;
+
+impl client::Handler for Client {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        _server_public_key: &PublicKeyOrCertificate,
+    ) -> Result<bool, Self::Error> {
+        // Host keys are not verified, matching the behavior of the previous
+        // libssh2 implementation which never consulted known_hosts.
+        Ok(true)
+    }
+}
+
+/// An open SFTP session along with the SSH connection that carries it. The
+/// connection handle must outlive the SFTP session.
+struct Connection {
+    ssh: Handle<Client>,
+    sftp: SftpSession,
+}
+
+impl Connection {
+    /// Close the SFTP channel and disconnect the SSH session. Errors are
+    /// ignored since the operation of interest has already completed.
+    async fn close(self) {
+        let _ = self.sftp.close().await;
+        let _ = self
+            .ssh
+            .disconnect(russh::Disconnect::ByApplication, "", "")
+            .await;
+    }
+}
 
 ///
 /// A `PackDataSource` implementation that operates over SSH2/SFTP to store pack
@@ -68,31 +97,44 @@ impl SftpStore {
         })
     }
 
-    /// Connect to the SFTP server using an SSH connection. The caller must
-    /// instantiate the Sftp instance using the Session in connection.
-    fn connect(&self) -> Result<Session, Error> {
+    /// Connect to the SFTP server using an SSH connection.
+    async fn connect(&self) -> Result<Connection, Error> {
         // Simply build a new session and connection every time. Trying to reuse
-        // the session though a combination of Rc and RefCell does not improve
-        // the run time in the slightest.
-        //
-        // Resolve the address and apply a connect deadline so a blackholed
-        // remote does not block forever; then apply read/write timeouts on
-        // the underlying socket so any subsequent stalled SFTP operation
-        // fails rather than hanging.
-        let addr = self
-            .address
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| anyhow!("could not resolve address: {}", self.address))?;
-        let tcp = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
-        tcp.set_read_timeout(Some(TCP_IO_TIMEOUT))?;
-        tcp.set_write_timeout(Some(TCP_IO_TIMEOUT))?;
-        let mut sess = Session::new()?;
-        sess.set_tcp_stream(tcp);
-        sess.set_timeout(SSH_SESSION_TIMEOUT_MS);
-        sess.handshake()?;
-        sess.userauth_password(&self.username, self.password.as_ref().unwrap())?;
-        Ok(sess)
+        // the session does not improve the run time in the slightest.
+        let config = client::Config {
+            inactivity_timeout: Some(INACTIVITY_TIMEOUT),
+            keepalive_interval: Some(KEEPALIVE_INTERVAL),
+            ..Default::default()
+        };
+        let mut ssh = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            client::connect(Arc::new(config), self.address.as_str(), Client),
+        )
+        .await
+        .map_err(|_| anyhow!("timed out connecting to {}", self.address))??;
+        let password = self.password.clone().unwrap_or_default();
+        let auth = ssh.authenticate_password(&self.username, password).await?;
+        if !auth.success() {
+            return Err(anyhow!("Authentication failed for user {}", self.username));
+        }
+        let channel = ssh.channel_open_session().await?;
+        channel.request_subsystem(true, "sftp").await?;
+        let sftp = SftpSession::new(channel.into_stream()).await?;
+        sftp.set_timeout(SFTP_REQUEST_TIMEOUT_SECS);
+        Ok(Connection { ssh, sftp })
+    }
+
+    /// Join the base path (if any) with the given components. SFTP paths
+    /// always use forward slashes, regardless of the local platform.
+    fn remote_path(&self, parts: &[&str]) -> String {
+        let mut path = self.basepath.clone().unwrap_or_default();
+        for part in parts {
+            if !path.is_empty() && !path.ends_with('/') {
+                path.push('/');
+            }
+            path.push_str(part);
+        }
+        path
     }
 
     pub fn store_pack(
@@ -101,99 +143,97 @@ impl SftpStore {
         bucket: &str,
         object: &str,
     ) -> Result<Coordinates, Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        let mut path: PathBuf = match &self.basepath {
-            Some(bp) => [bp, bucket].iter().collect(),
-            None => PathBuf::from(bucket),
-        };
+        block_on(self.store_pack_async(packfile, bucket, object))?
+    }
+
+    async fn store_pack_async(
+        &self,
+        packfile: &Path,
+        bucket: &str,
+        object: &str,
+    ) -> Result<Coordinates, Error> {
+        let conn = self.connect().await?;
         // mkdir will fail if directory already exists, let's just ignore all
         // errors for mkdir and hope that it was not a real issue
-        let _ = sftp.mkdir(&path, 0o755);
-        path.push(object);
-        let mut remote = sftp.create(&path)?;
-        let mut local = File::open(packfile)?;
-        io::copy(&mut local, &mut remote)?;
-        let loc = Coordinates::new(&self.store_id, bucket, object);
-        Ok(loc)
+        let _ = conn.sftp.create_dir(self.remote_path(&[bucket])).await;
+        let mut remote = conn
+            .sftp
+            .create(self.remote_path(&[bucket, object]))
+            .await?;
+        let mut local = tokio::fs::File::open(packfile).await?;
+        tokio::io::copy(&mut local, &mut remote).await?;
+        remote.shutdown().await?;
+        conn.close().await;
+        Ok(Coordinates::new(&self.store_id, bucket, object))
     }
 
     pub fn retrieve_pack(&self, location: &Coordinates, outfile: &Path) -> Result<(), Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        let object_path: PathBuf = match &self.basepath {
-            Some(bp) => [bp, &location.bucket, &location.object].iter().collect(),
-            None => [&location.bucket, &location.object].iter().collect(),
-        };
-        let mut remote = sftp.open(&object_path)?;
-        let mut local = File::create(outfile)?;
-        io::copy(&mut remote, &mut local)?;
+        block_on(self.retrieve_pack_async(location, outfile))?
+    }
+
+    async fn retrieve_pack_async(
+        &self,
+        location: &Coordinates,
+        outfile: &Path,
+    ) -> Result<(), Error> {
+        let conn = self.connect().await?;
+        let object_path = self.remote_path(&[&location.bucket, &location.object]);
+        let mut remote = conn.sftp.open(object_path).await?;
+        let mut local = tokio::fs::File::create(outfile).await?;
+        tokio::io::copy(&mut remote, &mut local).await?;
+        local.flush().await?;
+        remote.shutdown().await?;
+        conn.close().await;
         Ok(())
     }
 
     pub fn list_buckets(&self) -> Result<Vec<String>, Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        // Default the directory to something, it cannot be blank or ~ as that
-        // results in a "no such file" error. Regardless, it is discarded when
-        // we produce the results so it matters not.
-        let dirname: &Path = match &self.basepath {
-            Some(bp) => Path::new(bp),
-            None => Path::new("."),
-        };
-        let listing: Vec<(PathBuf, FileStat)> = sftp.readdir(dirname)?;
-        let mut results = Vec::new();
-        for (path, stat) in listing {
-            #[allow(clippy::collapsible_if)]
-            if stat.is_dir() {
-                if let Some(name) = store_core::get_file_name(&path) {
-                    results.push(name);
-                }
-            }
-        }
-        Ok(results)
+        block_on(async {
+            let conn = self.connect().await?;
+            // Default the directory to something, it cannot be blank or ~ as
+            // that results in a "no such file" error.
+            let dirname = self.basepath.clone().unwrap_or_else(|| ".".into());
+            let listing = conn.sftp.read_dir(dirname).await?;
+            let results = listing
+                .filter(|entry| entry.file_type().is_dir())
+                .filter_map(|entry| store_core::get_file_name(Path::new(&entry.file_name())))
+                .collect();
+            conn.close().await;
+            Ok(results)
+        })?
     }
 
     pub fn list_objects(&self, bucket: &str) -> Result<Vec<String>, Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        let bucket_path: PathBuf = match &self.basepath {
-            Some(bp) => [bp, bucket].iter().collect(),
-            None => PathBuf::from(bucket),
-        };
-        let listing: Vec<(PathBuf, FileStat)> = sftp.readdir(&bucket_path)?;
-        let mut results = Vec::new();
-        for (path, stat) in listing {
-            #[allow(clippy::collapsible_if)]
-            if stat.is_file() {
-                if let Some(name) = store_core::get_file_name(&path) {
-                    results.push(name);
-                }
-            }
-        }
-        Ok(results)
+        block_on(async {
+            let conn = self.connect().await?;
+            let listing = conn.sftp.read_dir(self.remote_path(&[bucket])).await?;
+            let results = listing
+                .filter(|entry| entry.file_type().is_file())
+                .filter_map(|entry| store_core::get_file_name(Path::new(&entry.file_name())))
+                .collect();
+            conn.close().await;
+            Ok(results)
+        })?
     }
 
     pub fn delete_object(&self, bucket: &str, object: &str) -> Result<(), Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        let object_path: PathBuf = match &self.basepath {
-            Some(bp) => [bp, bucket, object].iter().collect(),
-            None => [bucket, object].iter().collect(),
-        };
-        sftp.unlink(&object_path)?;
-        Ok(())
+        block_on(async {
+            let conn = self.connect().await?;
+            conn.sftp
+                .remove_file(self.remote_path(&[bucket, object]))
+                .await?;
+            conn.close().await;
+            Ok(())
+        })?
     }
 
     pub fn delete_bucket(&self, bucket: &str) -> Result<(), Error> {
-        let sess = self.connect()?;
-        let sftp = sess.sftp()?;
-        let bucket_path: PathBuf = match &self.basepath {
-            Some(bp) => [bp, bucket].iter().collect(),
-            None => PathBuf::from(bucket),
-        };
-        sftp.rmdir(&bucket_path)?;
-        Ok(())
+        block_on(async {
+            let conn = self.connect().await?;
+            conn.sftp.remove_dir(self.remote_path(&[bucket])).await?;
+            conn.close().await;
+            Ok(())
+        })?
     }
 
     pub fn store_database(
@@ -212,6 +252,17 @@ impl SftpStore {
     pub fn list_databases(&self, bucket: &str) -> Result<Vec<String>, Error> {
         self.list_objects(bucket)
     }
+}
+
+/// Run the future to completion on a new, single-threaded runtime.
+fn block_on<F: Future>(future: F) -> Result<F::Output, Error> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(anyhow!("cannot call block_on inside a runtime"));
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    Ok(runtime.block_on(future))
 }
 
 #[cfg(test)]
