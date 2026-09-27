@@ -1690,6 +1690,9 @@ mod tests {
         assert!(!globset.is_match("/basedir/subdir/file.txt"));
     }
 
+    // On Windows this test fails with "A required privilege is not held by the
+    // client. (os error 1314)" unless Developer Mode is enabled (Settings >
+    // System > For developers), as creating symlinks otherwise requires admin.
     #[test]
     fn test_read_link() -> Result<(), Error> {
         let outdir = tempdir()?;
@@ -1913,6 +1916,9 @@ mod tests {
         Ok(())
     }
 
+    // On Windows this test fails with "A required privilege is not held by the
+    // client. (os error 1314)" unless Developer Mode is enabled (Settings >
+    // System > For developers), as creating symlinks otherwise requires admin.
     #[test]
     fn test_snapshot_symlinks() -> Result<(), Error> {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
@@ -2098,6 +2104,9 @@ mod tests {
         Ok(())
     }
 
+    // On Windows this test fails with "A required privilege is not held by the
+    // client. (os error 1314)" unless Developer Mode is enabled (Settings >
+    // System > For developers), as creating symlinks otherwise requires admin.
     #[test]
     fn test_snapshot_ignore_links() -> Result<(), Error> {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
@@ -2162,6 +2171,9 @@ mod tests {
         Ok(())
     }
 
+    // On Windows this test fails with "A required privilege is not held by the
+    // client. (os error 1314)" unless Developer Mode is enabled (Settings >
+    // System > For developers), as creating symlinks otherwise requires admin.
     #[test]
     fn test_snapshot_was_links() -> Result<(), Error> {
         let db_base: PathBuf = ["tmp", "test", "database"].iter().collect();
