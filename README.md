@@ -68,10 +68,26 @@ Set the appropriate environment variable to any value before running the corresp
 
 ### Building the Frontend, Starting Everything
 
+Install the client dependencies once, and any time the `package.json` file is changed:
+
 ```shell
+bun install
+```
+
+Build the client and start the server:
+
+```shell
+bun install
 bun run codegen
 bunx vite build
 RUST_LOG=info cargo run
+```
+
+On Windows, the last line becomes two lines:
+
+```shell
+$env:RUST_LOG="info"
+cargo run
 ```
 
 By default the web interface will be accessible at [http://localhost:3000](http://localhost:3000)
