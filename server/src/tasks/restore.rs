@@ -1339,8 +1339,13 @@ mod tests {
         let tmp = tempfile::tempdir()?;
         TEST_BASEPATH.with(|b| *b.borrow_mut() = Some(tmp.path().to_path_buf()));
         let payload = std::fs::read("../test/fixtures/lorem-ipsum.txt")?;
+        #[cfg(target_family = "unix")]
         let file_digest = Checksum::BLAKE3(String::from(
             "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128",
+        ));
+        #[cfg(target_family = "windows")]
+        let file_digest = Checksum::BLAKE3(String::from(
+            "2720a91db93dae2a92ed9f74b0f7a135cfdf4d32dd069477cda457002ffc9e7a",
         ));
         TEST_PAYLOAD.with(|p| *p.borrow_mut() = payload.clone());
 

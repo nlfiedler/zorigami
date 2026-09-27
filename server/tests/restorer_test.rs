@@ -261,7 +261,10 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     assert_eq!(subscriber.get_files_changed(), 1);
     assert_eq!(subscriber.get_packs_uploaded(), 1);
     assert_eq!(subscriber.get_files_uploaded(), 1);
+    #[cfg(target_family = "unix")]
     assert_eq!(subscriber.get_bytes_uploaded(), 3129);
+    #[cfg(target_family = "windows")]
+    assert_eq!(subscriber.get_bytes_uploaded(), 3138);
     assert!(!subscriber.get_had_error());
     assert!(subscriber.get_finished());
 
@@ -299,7 +302,10 @@ fn test_restorer_full_cycle() -> Result<(), Error> {
     assert_eq!(subscriber.get_files_changed(), 1);
     assert_eq!(subscriber.get_packs_uploaded(), 1);
     assert_eq!(subscriber.get_files_uploaded(), 1);
+    #[cfg(target_family = "unix")]
     assert_eq!(subscriber.get_bytes_uploaded(), 3375);
+    #[cfg(target_family = "windows")]
+    assert_eq!(subscriber.get_bytes_uploaded(), 3428);
     assert!(!subscriber.get_had_error());
     assert!(subscriber.get_finished());
 
