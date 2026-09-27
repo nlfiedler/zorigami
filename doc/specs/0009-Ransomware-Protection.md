@@ -269,6 +269,13 @@ reject on weakening" shape already used for `lock_days`/`append_only` in
   `PackRetention::is_weaker_than(&self, other: &PackRetention) -> bool` helper
   in `server/src/domain/entities.rs` next to the enum (line 242) to keep the
   comparison out of the use case.
+
+  **Revised:** as with datasets (below), new stores are created with the
+  default `ALL`, so `ALL → DAYS(n)` being a reduction froze every store's
+  retention permanently. The store guard now only rejects `DAYS(0)` via
+  `PackRetention::retains_nothing()`, checked on every `updateStore` call;
+  `ALL` and any non-zero `DAYS` are accepted. The `lock_days` and
+  `append_only` downgrade guards are unchanged.
 - **`update_dataset.rs`** — currently has *no* old-vs-new comparison at all
   before overwriting `retention` (`dataset.retention = params.retention` at
   line 64), unlike its sibling basepath-change guard (lines 44-49). Add the
@@ -282,6 +289,13 @@ reject on weakening" shape already used for `lock_days`/`append_only` in
   and "hard reject, no override" means ambiguous cases fail closed rather than
   being guessed at. Add the mirroring `SnapshotRetention::is_weaker_than(...)`
   helper next to that enum (line 370).
+
+  **Revised:** the reduction guard above made every new dataset's retention
+  permanently frozen, because datasets are created with the default `ALL`
+  before the user ever picks a policy, and `ALL → anything` was a reduction.
+  The dataset guard now only rejects policies that retain nothing —
+  `COUNT(0)` and `DAYS(0)` — via `SnapshotRetention::retains_nothing()`.
+  `ALL` and `AUTO` are always accepted, as is any non-zero `COUNT`/`DAYS`.
 - Both use cases currently have **zero logging** in `call()` — add the audit
   logging described next as part of this same change, not as a follow-up.
 
@@ -366,13 +380,15 @@ policy that makes Tier 1 work.
 - **Auth scheme choice.** ~~Tier 3 needs a decision on the credential
   model~~ Decided: a static bearer token (`API_TOKEN`). See Tier 3 above for
   the rationale and the rejected alternatives (session-based auth, mTLS).
-- **Retention-guard false positives.** The `SnapshotRetention` "policy type
+- **Retention-guard false positives.** ~~The `SnapshotRetention` "policy type
   switch is always a reduction" rule in Tier 3 is deliberately conservative
-  and will reject some legitimate changes (e.g. `COUNT(1000) → DAYS(365)`
-  that a user genuinely intends to be equivalent or stronger). Since there is
-  no override by design, the only path forward for those is
-  delete-and-recreate the dataset. Revisit if this proves too blunt in
-  practice.
+  and will reject some legitimate changes.~~ Revisited: it proved too blunt
+  (new datasets and stores start at `ALL` and could never be changed), so the
+  dataset guard now only rejects `COUNT(0)` / `DAYS(0)` and the store guard
+  only rejects `DAYS(0)`. The trade-off is that an authenticated caller can
+  shrink retention to e.g. `COUNT(1)` or `DAYS(1)`; the audit log line still
+  records every retention change, and `lock_days` still bounds how early a
+  locked pack can actually be deleted.
 - **Single shared token has no per-user attribution.** Audit log lines can
   only say "an authenticated caller from `<remote addr>`," not who. Acceptable
   for a single-operator tool; would need revisiting if zorigami ever grows

@@ -74,19 +74,17 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
         if let Some(workspace) = params.workspace {
             dataset.workspace = workspace;
         }
-        // Silent retention reduction is the cleanest way to weaponize the
-        // pruner against its own backups (see
-        // doc/specs/0009-Ransomware-Protection.md, Tier 3) — refuse it
-        // unconditionally, with no override.
-        if params.retention.is_weaker_than(&dataset.retention) {
+        // A zero count or zero days would let the pruner delete every
+        // snapshot (see doc/specs/0009-Ransomware-Protection.md, Tier 3) —
+        // refuse it unconditionally, with no override.
+        if params.retention.retains_nothing() {
             warn!(
-                "audit: rejected updateDataset id={} caller={} reason=retention_reduction old={:?} new={:?}",
+                "audit: rejected updateDataset id={} caller={} reason=retention_zero old={:?} new={:?}",
                 dataset.id, params.caller, dataset.retention, params.retention
             );
             return Err(anyhow!(
-                "cannot reduce snapshot retention from {:?} to {:?}; \
-                 delete and recreate the dataset if this is truly intended",
-                dataset.retention,
+                "snapshot retention {:?} would retain no snapshots; \
+                 count and days must be greater than zero",
                 params.retention
             ));
         }
@@ -538,73 +536,80 @@ mod tests {
     }
 
     #[test]
-    fn test_update_dataset_retention_reduction_rejected() {
-        // Weakening snapshot retention (ALL -> COUNT) must be refused
-        // outright, with no override, per Tier 3 of the ransomware-
+    fn test_update_dataset_retention_zero_rejected() {
+        // A zero count or zero days would retain no snapshots and must be
+        // refused outright, with no override, per Tier 3 of the ransomware-
         // protection spec.
-        let tmp = tempfile::tempdir().unwrap();
-        let basepath = tmp.path().to_path_buf();
-        let basepath_copy = basepath.clone();
-        let mut mock = MockRecordRepository::new();
-        mock.expect_get_dataset()
-            .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
-        mock.expect_put_dataset().never();
-        let usecase = UpdateDataset::new(Box::new(mock));
-        let params = Params {
-            id: "cafebabe".to_owned(),
-            basepath: basepath.clone(),
-            schedules: vec![],
-            workspace: None,
-            chunk_size: 1_048_576,
-            pack_size: 33_554_432,
-            data_shards: 0,
-            parity_shards: 0,
-            stores: vec!["cafebabe".to_owned()],
-            excludes: vec![],
-            retention: SnapshotRetention::COUNT(5),
-            caller: "unknown".to_owned(),
-        };
-        let result = usecase.call(params);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("cannot reduce snapshot retention"),
-            "unexpected error: {}",
-            msg
-        );
+        for retention in [SnapshotRetention::COUNT(0), SnapshotRetention::DAYS(0)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let basepath = tmp.path().to_path_buf();
+            let basepath_copy = basepath.clone();
+            let mut mock = MockRecordRepository::new();
+            mock.expect_get_dataset()
+                .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
+            mock.expect_put_dataset().never();
+            let usecase = UpdateDataset::new(Box::new(mock));
+            let params = Params {
+                id: "cafebabe".to_owned(),
+                basepath: basepath.clone(),
+                schedules: vec![],
+                workspace: None,
+                chunk_size: 1_048_576,
+                pack_size: 33_554_432,
+                data_shards: 0,
+                parity_shards: 0,
+                stores: vec!["cafebabe".to_owned()],
+                excludes: vec![],
+                retention,
+                caller: "unknown".to_owned(),
+            };
+            let result = usecase.call(params);
+            assert!(result.is_err());
+            let msg = result.unwrap_err().to_string();
+            assert!(
+                msg.contains("would retain no snapshots"),
+                "unexpected error: {}",
+                msg
+            );
+        }
     }
 
     #[test]
-    fn test_update_dataset_retention_increase_ok() {
-        // Strengthening retention (COUNT -> ALL, or a larger COUNT) must
-        // continue to work; only reductions are guarded.
-        let tmp = tempfile::tempdir().unwrap();
-        let basepath = tmp.path().to_path_buf();
-        let basepath_copy = basepath.clone();
-        let mut mock = MockRecordRepository::new();
-        mock.expect_get_dataset().returning(move |_| {
-            let mut ds = Dataset::new(&basepath_copy);
-            ds.retention = SnapshotRetention::COUNT(5);
-            Ok(Some(ds))
-        });
-        mock.expect_put_dataset().returning(|_| Ok(()));
-        let usecase = UpdateDataset::new(Box::new(mock));
-        let params = Params {
-            id: "cafebabe".to_owned(),
-            basepath: basepath.clone(),
-            schedules: vec![],
-            workspace: None,
-            chunk_size: 1_048_576,
-            pack_size: 33_554_432,
-            data_shards: 0,
-            parity_shards: 0,
-            stores: vec!["cafebabe".to_owned()],
-            excludes: vec![],
-            retention: SnapshotRetention::COUNT(10),
-            caller: "unknown".to_owned(),
-        };
-        let result = usecase.call(params);
-        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+    fn test_update_dataset_retention_change_ok() {
+        // Any non-zero policy may be chosen, including moving away from the
+        // default of ALL on a newly created dataset.
+        for retention in [
+            SnapshotRetention::AUTO,
+            SnapshotRetention::COUNT(5),
+            SnapshotRetention::DAYS(30),
+            SnapshotRetention::ALL,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let basepath = tmp.path().to_path_buf();
+            let basepath_copy = basepath.clone();
+            let mut mock = MockRecordRepository::new();
+            mock.expect_get_dataset()
+                .returning(move |_| Ok(Some(Dataset::new(&basepath_copy))));
+            mock.expect_put_dataset().returning(|_| Ok(()));
+            let usecase = UpdateDataset::new(Box::new(mock));
+            let params = Params {
+                id: "cafebabe".to_owned(),
+                basepath: basepath.clone(),
+                schedules: vec![],
+                workspace: None,
+                chunk_size: 1_048_576,
+                pack_size: 33_554_432,
+                data_shards: 0,
+                parity_shards: 0,
+                stores: vec!["cafebabe".to_owned()],
+                excludes: vec![],
+                retention: retention.clone(),
+                caller: "unknown".to_owned(),
+            };
+            let result = usecase.call(params);
+            assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+            assert_eq!(result.unwrap().retention, retention);
+        }
     }
 
     #[test]

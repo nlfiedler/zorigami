@@ -250,18 +250,13 @@ pub enum PackRetention {
 
 impl PackRetention {
     ///
-    /// Returns true if `self` retains packs for a shorter period than
-    /// `other` (i.e. adopting `self` would weaken retention currently
-    /// enforced by `other`). Used to guard against silently shortening
-    /// retention via `updateStore` (see doc/specs/0009-Ransomware-Protection.md).
+    /// Returns true if this policy would retain packs for zero days, i.e.
+    /// `DAYS(0)`. Used to guard against weaponizing the pruner via
+    /// `updateStore` (see doc/specs/0009-Ransomware-Protection.md). `ALL`
+    /// always retains packs and is never rejected.
     ///
-    pub fn is_weaker_than(&self, other: &PackRetention) -> bool {
-        match (self, other) {
-            (PackRetention::ALL, PackRetention::ALL) => false,
-            (PackRetention::ALL, PackRetention::DAYS(_)) => false,
-            (PackRetention::DAYS(_), PackRetention::ALL) => true,
-            (PackRetention::DAYS(new_days), PackRetention::DAYS(old_days)) => new_days < old_days,
-        }
+    pub fn retains_nothing(&self) -> bool {
+        matches!(self, PackRetention::DAYS(0))
     }
 }
 
@@ -400,30 +395,13 @@ pub enum SnapshotRetention {
 
 impl SnapshotRetention {
     ///
-    /// Returns true if `self` retains snapshots for a shorter/fewer period
-    /// than `other` (i.e. adopting `self` would weaken retention currently
-    /// enforced by `other`). Used to guard against silently shortening
-    /// retention via `updateDataset`
-    /// (see doc/specs/0009-Ransomware-Protection.md).
+    /// Returns true if this policy would retain no snapshots at all, i.e.
+    /// `COUNT(0)` or `DAYS(0)`. Used to guard against weaponizing the pruner
+    /// via `updateDataset` (see doc/specs/0009-Ransomware-Protection.md).
+    /// `ALL` and `AUTO` always retain snapshots and are never rejected.
     ///
-    /// `COUNT`/`DAYS`/`AUTO` are different dimensions and not directly
-    /// comparable, so switching between policy *types* (other than moving
-    /// away from `ALL`) is conservatively treated as a reduction: it is not
-    /// provably safe, and this guard fails closed rather than guessing.
-    ///
-    pub fn is_weaker_than(&self, other: &SnapshotRetention) -> bool {
-        match (self, other) {
-            (SnapshotRetention::ALL, SnapshotRetention::ALL) => false,
-            (SnapshotRetention::ALL, _) => false,
-            (_, SnapshotRetention::ALL) => true,
-            (SnapshotRetention::COUNT(new_n), SnapshotRetention::COUNT(old_n)) => new_n < old_n,
-            (SnapshotRetention::DAYS(new_n), SnapshotRetention::DAYS(old_n)) => new_n < old_n,
-            (SnapshotRetention::AUTO, SnapshotRetention::AUTO) => false,
-            // Any other pairing is a policy-type switch (including any
-            // change to/from AUTO between the other variants), which is not
-            // comparable — treat as weakening.
-            _ => true,
-        }
+    pub fn retains_nothing(&self) -> bool {
+        matches!(self, SnapshotRetention::COUNT(0) | SnapshotRetention::DAYS(0))
     }
 }
 
@@ -1476,28 +1454,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pack_retention_is_weaker_than() {
-        assert!(!PackRetention::ALL.is_weaker_than(&PackRetention::ALL));
-        assert!(!PackRetention::ALL.is_weaker_than(&PackRetention::DAYS(30)));
-        assert!(PackRetention::DAYS(30).is_weaker_than(&PackRetention::ALL));
-        assert!(PackRetention::DAYS(7).is_weaker_than(&PackRetention::DAYS(30)));
-        assert!(!PackRetention::DAYS(30).is_weaker_than(&PackRetention::DAYS(7)));
-        assert!(!PackRetention::DAYS(30).is_weaker_than(&PackRetention::DAYS(30)));
+    fn test_pack_retention_retains_nothing() {
+        assert!(!PackRetention::ALL.retains_nothing());
+        assert!(!PackRetention::DAYS(1).retains_nothing());
+        assert!(!PackRetention::DAYS(30).retains_nothing());
+        assert!(PackRetention::DAYS(0).retains_nothing());
     }
 
     #[test]
-    fn test_snapshot_retention_is_weaker_than() {
-        assert!(!SnapshotRetention::ALL.is_weaker_than(&SnapshotRetention::ALL));
-        assert!(!SnapshotRetention::ALL.is_weaker_than(&SnapshotRetention::COUNT(5)));
-        assert!(SnapshotRetention::COUNT(5).is_weaker_than(&SnapshotRetention::ALL));
-        assert!(SnapshotRetention::COUNT(5).is_weaker_than(&SnapshotRetention::COUNT(10)));
-        assert!(!SnapshotRetention::COUNT(10).is_weaker_than(&SnapshotRetention::COUNT(5)));
-        assert!(!SnapshotRetention::COUNT(10).is_weaker_than(&SnapshotRetention::COUNT(10)));
-        assert!(SnapshotRetention::DAYS(7).is_weaker_than(&SnapshotRetention::DAYS(30)));
-        assert!(!SnapshotRetention::AUTO.is_weaker_than(&SnapshotRetention::AUTO));
-        // Policy-type switches are conservatively treated as weakening.
-        assert!(SnapshotRetention::DAYS(365).is_weaker_than(&SnapshotRetention::COUNT(1)));
-        assert!(SnapshotRetention::AUTO.is_weaker_than(&SnapshotRetention::COUNT(5)));
+    fn test_snapshot_retention_retains_nothing() {
+        assert!(!SnapshotRetention::ALL.retains_nothing());
+        assert!(!SnapshotRetention::AUTO.retains_nothing());
+        assert!(!SnapshotRetention::COUNT(1).retains_nothing());
+        assert!(!SnapshotRetention::DAYS(1).retains_nothing());
+        assert!(SnapshotRetention::COUNT(0).retains_nothing());
+        assert!(SnapshotRetention::DAYS(0).retains_nothing());
     }
 
     #[test]
