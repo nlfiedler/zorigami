@@ -32,7 +32,7 @@ impl super::UseCase<Store, Params> for UpdateStore {
         };
         store.validate()?;
         // Zero days would let the pruner delete every pack as soon as it
-        // becomes unreachable (see doc/specs/0009-Ransomware-Protection.md,
+        // becomes unreachable (see docs/specs/0009-Ransomware-Protection.md,
         // Tier 3) — refuse it unconditionally, with no override.
         if store.retention.retains_nothing() {
             warn!(
@@ -61,7 +61,7 @@ impl super::UseCase<Store, Params> for UpdateStore {
                 );
                 return Err(anyhow!(
                     "cannot reduce lock_days from {} to {} on an object-locked store; \
-                     set lock_days explicitly to keep the existing window (see doc/DEPLOY.md)",
+                     set lock_days explicitly to keep the existing window (see docs/DEPLOY.md)",
                     old_lock,
                     new_lock
                 ));
@@ -78,7 +78,7 @@ impl super::UseCase<Store, Params> for UpdateStore {
                 );
                 return Err(anyhow!(
                     "cannot clear append_only on a store that has it set; \
-                     it must remain true (see doc/DEPLOY.md)"
+                     it must remain true (see docs/DEPLOY.md)"
                 ));
             }
             if existing.retention != store.retention

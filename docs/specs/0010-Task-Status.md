@@ -3,7 +3,7 @@
 The application runs six kinds of work in the background: backups, snapshot
 pruning, restore testing, database scrubbing, pack pruning, and workspace
 cleanup. When any of them fails, the failure is recorded by the
-`ErrorRepository` (see @doc/specs/0003-Error-Capture.md) and surfaced on the
+`ErrorRepository` (see @docs/specs/0003-Error-Capture.md) and surfaced on the
 errors page. When any of them *succeeds*, nothing is recorded anywhere but the
 log file. The user therefore has no way to answer the most basic question about
 the background tasks: did they run, and what did they do?

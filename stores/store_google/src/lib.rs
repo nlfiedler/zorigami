@@ -721,7 +721,7 @@ async fn ensure_object_retention_enabled(
     } else {
         Err(anyhow!(
             "bucket {} does not have object retention enabled; a store with lock_days \
-             requires buckets created with object retention (see doc/DEPLOY.md)",
+             requires buckets created with object retention (see docs/DEPLOY.md)",
             bucket
         ))
     }

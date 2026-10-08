@@ -753,7 +753,7 @@ impl PrunerImpl {
     // `Store::deletes_disabled` for what puts a store in that category. Rather
     // than claim a deletion we did not perform, and drop the pack record for an
     // object that physically remains, reclamation for those stores is delegated
-    // to a storage lifecycle rule (see doc/DEPLOY.md). Their locations are
+    // to a storage lifecycle rule (see docs/DEPLOY.md). Their locations are
     // retained.
     //
     // The tuple in `store_map` carries that flag, derived once when the map was

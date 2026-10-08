@@ -93,7 +93,7 @@ impl PackSourceBuilder for PackSourceBuilderImpl {
 /// Wrapper that strips the delete operations from a pack data source.
 ///
 /// The credentials of an append-only store are not expected to permit deletes
-/// in the first place (see `doc/DEPLOY.md`), and the pruner already declines to
+/// in the first place (see `docs/DEPLOY.md`), and the pruner already declines to
 /// delete from such a store. This wrapper makes that guarantee structural
 /// rather than a property of one call site: no code path can issue a delete
 /// against an append-only store, and an attempt is a loud local error instead

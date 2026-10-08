@@ -918,7 +918,7 @@ struct Property {
 ///
 /// A stolen `API_TOKEN` should not also hand over the pack store credentials:
 /// with those an attacker deletes the buckets directly and none of the Tier 1-3
-/// guards in doc/specs/0009-Ransomware-Protection.md ever come into play.
+/// guards in docs/specs/0009-Ransomware-Protection.md ever come into play.
 const REDACTED: &str = "<redacted>";
 
 /// True for the store properties that are credentials rather than identifiers.

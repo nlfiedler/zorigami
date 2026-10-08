@@ -59,7 +59,7 @@ The original draft of this spec assumed shared-key auth would carry over from th
 - Added: `tenant_id`, `client_id`, `client_secret`
 - Kept: `account`, `access_tier`, `custom_uri`
 
-The web form on the Stores page collects the three new fields. Existing Azure pack stores must be re-entered. See `doc/CHANGES.md` for the user-facing note.
+The web form on the Stores page collects the three new fields. Existing Azure pack stores must be re-entered. See `docs/CHANGES.md` for the user-facing note.
 
 ### Testing — Update
 

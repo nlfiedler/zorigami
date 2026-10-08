@@ -75,7 +75,7 @@ impl super::UseCase<Dataset, Params> for UpdateDataset {
             dataset.workspace = workspace;
         }
         // A zero count or zero days would let the pruner delete every
-        // snapshot (see doc/specs/0009-Ransomware-Protection.md, Tier 3) —
+        // snapshot (see docs/specs/0009-Ransomware-Protection.md, Tier 3) —
         // refuse it unconditionally, with no override.
         if params.retention.retains_nothing() {
             warn!(

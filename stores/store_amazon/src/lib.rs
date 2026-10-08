@@ -533,7 +533,7 @@ async fn ensure_object_lock_enabled(
     let not_enabled = || {
         anyhow!(
             "bucket {} exists without Object Lock enabled; a store with lock_days \
-             requires buckets created with Object Lock (see doc/DEPLOY.md)",
+             requires buckets created with Object Lock (see docs/DEPLOY.md)",
             bucket
         )
     };

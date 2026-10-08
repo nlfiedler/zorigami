@@ -474,7 +474,7 @@ async fn ensure_versioning_immutability_enabled(
         Err(anyhow!(
             "container {} does not have version-level immutability (WORM) enabled; \
              a store with lock_days requires it enabled on the storage account or \
-             container (see doc/DEPLOY.md)",
+             container (see docs/DEPLOY.md)",
             bucket
         ))
     }

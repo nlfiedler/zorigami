@@ -69,7 +69,7 @@ static ERROR_RETENTION_DAYS: LazyLock<u32> = LazyLock::new(|| {
 // Shared secret required on every /graphql request, as `Authorization: Bearer
 // <token>`. Absent means auth is disabled, preserving the previous
 // unauthenticated behavior for local/dev use; any network-exposed deployment
-// must set this (see doc/DEPLOY.md). Surrounding whitespace is trimmed, as
+// must set this (see docs/DEPLOY.md). Surrounding whitespace is trimmed, as
 // the frontend does with the token it sends, so a stray space in an env file
 // does not lock out the UI.
 static API_TOKEN: LazyLock<Option<String>> = LazyLock::new(|| {

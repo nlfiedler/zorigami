@@ -45,7 +45,7 @@ pub fn lock_retain_until(lock_days: u16) -> std::time::SystemTime {
 ///
 /// An append-only store is one whose credentials are expected to carry no
 /// delete permission at all (see the least-privilege policies in
-/// `doc/DEPLOY.md`). zorigami never issues a delete against such a store;
+/// `docs/DEPLOY.md`). zorigami never issues a delete against such a store;
 /// reclaiming space is delegated to a storage lifecycle rule, exactly as it is
 /// for object-locked stores. Absent, empty, or `false` preserves the
 /// pre-Tier-2 behavior. See `append_only_from_props`.

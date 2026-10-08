@@ -96,7 +96,7 @@ change:
    still under retention must be treated as a soft, retryable outcome — the
    location is kept and retried on the next run — not as a hard error that aborts
    the prune pass. This mirrors the existing per-location failure handling
-   introduced for pack pruning (see `doc/specs/0005-Pack-Pruning.md`), which
+   introduced for pack pruning (see `docs/specs/0005-Pack-Pruning.md`), which
    already captures per-object failures via `ErrorOperation::PackPrune` and
    continues. The new case is distinguishing "locked, retry later" from a genuine
    error so it does not spam the error log.
@@ -107,7 +107,7 @@ Object Lock (S3/MinIO) and locked immutability (Azure) generally must be enabled
 at bucket/container **creation** time, or require an explicit one-time enable
 step. The store's ensure-bucket-exists path needs to create the bucket with lock
 enabled when `lock_days > 0`. Document the manual provisioning steps in
-`doc/DEPLOY.md` for stores created out-of-band.
+`docs/DEPLOY.md` for stores created out-of-band.
 
 ---
 
@@ -139,7 +139,7 @@ line of defense.
   second optional credential set (or a flag selecting "upload-only") fits the
   same map. Default behavior (single full-access credential) is preserved when
   the new fields are absent.
-- IAM/role guidance per provider belongs in `doc/DEPLOY.md`: example least-
+- IAM/role guidance per provider belongs in `docs/DEPLOY.md`: example least-
   privilege policies granting `s3:PutObject` without `s3:DeleteObject`, an Azure
   custom role without blob-delete, and a GCS role without `storage.objects.delete`.
 - This tier is independent of Tier 1 and can ship separately, but is far more
@@ -181,7 +181,7 @@ reading it yet.
   project's existing opt-in pattern for security controls (`lock_days`,
   `append_only`) — preserves today's zero-config local dev experience but
   means any network-exposed deployment **must** set it; call this out
-  prominently in `doc/DEPLOY.md` and in the top-level env var table in
+  prominently in `docs/DEPLOY.md` and in the top-level env var table in
   `CLAUDE.md`.
 - **Scope of the gate:** the whole `/graphql` endpoint (queries *and*
   mutations), not just mutations. The spec's "at minimum" bar only requires
@@ -353,7 +353,7 @@ out wrong in practice.
    2. Retention-reduction guards + audit logging in `update_store.rs` /
       `update_dataset.rs` / `delete_dataset.rs` / `delete_store.rs`.
    3. Frontend: token entry UI, Apollo `setContext` link, 401 handling.
-   4. `doc/DEPLOY.md` — new "Authentication" section (same shape as the
+   4. `docs/DEPLOY.md` — new "Authentication" section (same shape as the
       existing Immutable Backups / Append-Only Credentials sections), plus
       the `CLAUDE.md` env var table.
 

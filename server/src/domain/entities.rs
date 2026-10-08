@@ -252,7 +252,7 @@ impl PackRetention {
     ///
     /// Returns true if this policy would retain packs for zero days, i.e.
     /// `DAYS(0)`. Used to guard against weaponizing the pruner via
-    /// `updateStore` (see doc/specs/0009-Ransomware-Protection.md). `ALL`
+    /// `updateStore` (see docs/specs/0009-Ransomware-Protection.md). `ALL`
     /// always retains packs and is never rejected.
     ///
     pub fn retains_nothing(&self) -> bool {
@@ -284,7 +284,7 @@ impl std::hash::Hash for Store {
 impl Store {
     /// Return `true` if this store is append-only, meaning zorigami will never
     /// issue a delete against it because its credentials are not expected to
-    /// carry delete permission. See `doc/specs/0009-Ransomware-Protection.md`.
+    /// carry delete permission. See `docs/specs/0009-Ransomware-Protection.md`.
     pub fn append_only(&self) -> bool {
         store_core::append_only_from_props(&self.properties)
     }
@@ -297,7 +297,7 @@ impl Store {
     /// marker or prior version behind. (Google object retention is not
     /// versioned, so a post-expiry delete would reclaim, but the same rule is
     /// applied uniformly.) Reclaiming space for these stores is the job of a
-    /// storage lifecycle rule; see `doc/DEPLOY.md`.
+    /// storage lifecycle rule; see `docs/DEPLOY.md`.
     pub fn deletes_disabled(&self) -> bool {
         self.append_only() || store_core::lock_days_from_props(&self.properties) > 0
     }
@@ -317,7 +317,7 @@ impl Store {
     ///   so the storage-side lock outlives the point at which a pack ages out
     ///   and reclamation (delegated to a bucket lifecycle rule for locked
     ///   stores) stays aligned with the logical retention. See
-    ///   `doc/specs/0009-Ransomware-Protection.md`.
+    ///   `docs/specs/0009-Ransomware-Protection.md`.
     pub fn validate(&self) -> Result<(), Error> {
         // Unlike lock_days, append-only applies to every backend: it is a
         // statement about what zorigami itself will do, not about a capability
@@ -397,7 +397,7 @@ impl SnapshotRetention {
     ///
     /// Returns true if this policy would retain no snapshots at all, i.e.
     /// `COUNT(0)` or `DAYS(0)`. Used to guard against weaponizing the pruner
-    /// via `updateDataset` (see doc/specs/0009-Ransomware-Protection.md).
+    /// via `updateDataset` (see docs/specs/0009-Ransomware-Protection.md).
     /// `ALL` and `AUTO` always retain snapshots and are never rejected.
     ///
     pub fn retains_nothing(&self) -> bool {
