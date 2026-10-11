@@ -3,7 +3,7 @@
 //
 use crate::domain::entities::{
     BackgroundOperation, CapturedError, Checksum, Chunk, Configuration, Dataset, File, Pack,
-    PackLocation, RecordCounts, Snapshot, Store, TaskRun, Tree,
+    PackLocation, RecordCounts, RecordSizes, Snapshot, Store, TaskRun, Tree,
 };
 use crate::domain::services::buckets::BucketNameGenerator;
 use anyhow::Error;
@@ -169,6 +169,10 @@ pub trait RecordRepository: Send + Sync {
 
     /// Retrieve the counts of the various record types in the data source.
     fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
+
+    /// Retrieve the total size in bytes of the various record types in the
+    /// data source, or `None` if the data source cannot measure its records.
+    fn get_entity_sizes(&self) -> Result<Option<RecordSizes>, Error>;
 
     /// Record a generated bucket name for future lookup.
     fn add_bucket(&self, name: &str) -> Result<(), Error>;

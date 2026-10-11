@@ -2,8 +2,8 @@
 // Copyright (c) 2024 Nathan Fiedler
 //
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
-    Store, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, RecordSizes,
+    Snapshot, Store, Tree,
 };
 use anyhow::Error;
 use hashed_array_tree::HashedArrayTree;
@@ -157,6 +157,10 @@ pub trait EntityDataSource: Send + Sync {
 
     /// Retrieve the counts of the various record types in the data source.
     fn get_entity_counts(&self) -> Result<RecordCounts, Error>;
+
+    /// Retrieve the total size in bytes of the various record types in the
+    /// data source, or `None` if the data source cannot measure its records.
+    fn get_entity_sizes(&self) -> Result<Option<RecordSizes>, Error>;
 
     /// Record a generated bucket name for future lookup.
     fn add_bucket(&self, name: &str) -> Result<(), Error>;

@@ -17,7 +17,8 @@
 use crate::domain::entities::schedule::Schedule;
 use crate::domain::entities::{
     Checksum, Chunk, Configuration, Dataset, File, FileCounts, Pack, PackLocation, PackRetention,
-    RecordCounts, Snapshot, SnapshotRetention, Store, StoreType, Tree, TreeEntry, TreeReference,
+    RecordCounts, RecordSizes, Snapshot, SnapshotRetention, Store, StoreType, Tree, TreeEntry,
+    TreeReference,
 };
 use crate::domain::services::buckets::BucketNamingPolicy;
 use crate::domain::sources::EntityDataSource;
@@ -1283,6 +1284,12 @@ impl EntityDataSource for SQLiteEntityDataSource {
             tree: count("trees")?,
             xattr: count("xattrs")?,
         })
+    }
+
+    fn get_entity_sizes(&self) -> Result<Option<RecordSizes>, Error> {
+        // rows are spread across normalized columns and indices, so there is
+        // no meaningful per-record byte size to report
+        Ok(None)
     }
 
     fn add_bucket(&self, name: &str) -> Result<(), Error> {

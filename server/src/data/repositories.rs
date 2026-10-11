@@ -6,8 +6,8 @@ pub mod status;
 use crate::data::services::buckets::BucketNamingPolicyResolverImpl;
 use crate::data::sources::PackSourceBuilderImpl;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, Snapshot,
-    Store, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, PackLocation, RecordCounts, RecordSizes,
+    Snapshot, Store, Tree,
 };
 use crate::domain::repositories::{PackRepository, RecordRepository};
 use crate::domain::services::buckets::{
@@ -251,6 +251,10 @@ impl RecordRepository for RecordRepositoryImpl {
 
     fn get_entity_counts(&self) -> Result<RecordCounts, Error> {
         self.datasource.get_entity_counts()
+    }
+
+    fn get_entity_sizes(&self) -> Result<Option<RecordSizes>, Error> {
+        self.datasource.get_entity_sizes()
     }
 
     fn add_bucket(&self, name: &str) -> Result<(), Error> {

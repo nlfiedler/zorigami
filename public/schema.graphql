@@ -421,6 +421,12 @@ type Query {
   dataset(id: String!): Dataset
   "Return the number of each type of database record."
   recordCounts: RecordCounts!
+  """
+    Return the total size in bytes of each type of database record, which
+    includes both the keys and the values. Returns `null` if the database
+    is not capable of measuring its records (e.g. SQLite).
+  """
+  recordSizes: RecordSizes
   "Query for any pending and recently completed file restore operations."
   restores: [RestoreRequest!]!
   "Retrieve all snapshots for a given data set in chronological order."
@@ -477,6 +483,26 @@ type RecordCounts {
   trees: Int!
   "Number of extended attributes stored in the repository."
   xattrs: Int!
+}
+
+"Total size in bytes of the database records for each entity type."
+type RecordSizes {
+  "Total size in bytes of the chunk records."
+  chunks: BigInt!
+  "Total size in bytes of the dataset records."
+  datasets: BigInt!
+  "Total size in bytes of the file records."
+  files: BigInt!
+  "Total size in bytes of the pack records."
+  packs: BigInt!
+  "Total size in bytes of the snapshot records."
+  snapshots: BigInt!
+  "Total size in bytes of the store records."
+  stores: BigInt!
+  "Total size in bytes of the tree records."
+  trees: BigInt!
+  "Total size in bytes of the extended attribute records."
+  xattrs: BigInt!
 }
 
 "A request to restore a file or directory."

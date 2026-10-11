@@ -12,6 +12,7 @@ pub mod delete_store;
 pub mod get_counts;
 pub mod get_datasets;
 pub mod get_path_history;
+pub mod get_sizes;
 pub mod get_snapshot;
 pub mod get_snapshots;
 pub mod get_stores;

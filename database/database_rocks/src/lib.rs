@@ -158,6 +158,23 @@ impl database_core::Database for Database {
         Ok(count)
     }
 
+    /// Sum the size in bytes of the keys and values for those keys that start
+    /// with the given prefix.
+    fn size_prefix(&self, prefix: &str) -> Result<u64, Error> {
+        let pre_bytes = prefix.as_bytes();
+        // this only gets us started, we then have to check for the end of the range
+        let iter = self.db.prefix_iterator(pre_bytes);
+        let mut size: u64 = 0;
+        for item in iter {
+            let (key, value) = item?;
+            if key.len() < pre_bytes.len() || &key[..pre_bytes.len()] != pre_bytes {
+                break;
+            }
+            size += (key.len() + value.len()) as u64;
+        }
+        Ok(size)
+    }
+
     /// Fetch the keys that start with the given prefix. The prefix is stripped
     /// before being returned.
     fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error> {
@@ -254,6 +271,26 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let db = Database::new(tmp.path()).unwrap();
         (tmp, db)
+    }
+
+    #[test]
+    fn size_prefix_empty() {
+        let (_tmp, db) = new_db();
+        assert_eq!(db.size_prefix("bucket/").unwrap(), 0);
+    }
+
+    #[test]
+    fn size_prefix_sums_keys_and_values() {
+        let (_tmp, db) = new_db();
+        db.insert_document(b"bucket/aaa", b"val-a").unwrap();
+        db.insert_document(b"bucket/bbb", b"value-b").unwrap();
+        // Unrelated prefixes that sort before and after "bucket/"
+        db.insert_document(b"apple/zzz", b"nope").unwrap();
+        db.insert_document(b"chunk/000", b"nope").unwrap();
+        // two 10-byte keys, a 5-byte value, and a 7-byte value
+        assert_eq!(db.size_prefix("bucket/").unwrap(), 32);
+        assert_eq!(db.size_prefix("apple/").unwrap(), 13);
+        assert_eq!(db.size_prefix("zebra/").unwrap(), 0);
     }
 
     #[test]

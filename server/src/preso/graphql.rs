@@ -1374,6 +1374,51 @@ impl entities::RecordCounts {
     }
 }
 
+#[juniper::graphql_object(
+    description = "Total size in bytes of the database records for each entity type."
+)]
+impl entities::RecordSizes {
+    /// Total size in bytes of the chunk records.
+    fn chunks(&self) -> BigInt {
+        BigInt(self.chunk as i64)
+    }
+
+    /// Total size in bytes of the dataset records.
+    fn datasets(&self) -> BigInt {
+        BigInt(self.dataset as i64)
+    }
+
+    /// Total size in bytes of the file records.
+    fn files(&self) -> BigInt {
+        BigInt(self.file as i64)
+    }
+
+    /// Total size in bytes of the pack records.
+    fn packs(&self) -> BigInt {
+        BigInt(self.pack as i64)
+    }
+
+    /// Total size in bytes of the snapshot records.
+    fn snapshots(&self) -> BigInt {
+        BigInt(self.snapshot as i64)
+    }
+
+    /// Total size in bytes of the store records.
+    fn stores(&self) -> BigInt {
+        BigInt(self.store as i64)
+    }
+
+    /// Total size in bytes of the tree records.
+    fn trees(&self) -> BigInt {
+        BigInt(self.tree as i64)
+    }
+
+    /// Total size in bytes of the extended attribute records.
+    fn xattrs(&self) -> BigInt {
+        BigInt(self.xattr as i64)
+    }
+}
+
 pub struct Query;
 
 #[juniper::graphql_object(Context = GraphContext)]
@@ -1420,6 +1465,21 @@ impl Query {
         let params: NoParams = NoParams {};
         let counts = usecase.call(params)?;
         Ok(counts)
+    }
+
+    /// Return the total size in bytes of each type of database record, which
+    /// includes both the keys and the values. Returns `null` if the database
+    /// is not capable of measuring its records (e.g. SQLite).
+    fn record_sizes(
+        #[graphql(ctx)] ctx: &GraphContext,
+    ) -> FieldResult<Option<entities::RecordSizes>> {
+        use crate::domain::usecases::get_sizes::GetSizes;
+        use crate::domain::usecases::{NoParams, UseCase};
+        let repo = RecordRepositoryImpl::new(ctx.datasource.clone());
+        let usecase = GetSizes::new(Box::new(repo));
+        let params: NoParams = NoParams {};
+        let sizes = usecase.call(params)?;
+        Ok(sizes)
     }
 
     /// Query for any pending and recently completed file restore operations.

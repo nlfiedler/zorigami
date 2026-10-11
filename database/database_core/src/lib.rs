@@ -42,6 +42,10 @@ pub trait Database {
     /// Count those keys that start with the given prefix.
     fn count_prefix(&self, prefix: &str) -> Result<usize, Error>;
 
+    /// Sum the size in bytes of the keys and values for those keys that start
+    /// with the given prefix.
+    fn size_prefix(&self, prefix: &str) -> Result<u64, Error>;
+
     /// Fetch the keys that start with the given prefix. The prefix is stripped
     /// before being returned.
     fn find_prefix(&self, prefix: &str) -> Result<Vec<String>, Error>;

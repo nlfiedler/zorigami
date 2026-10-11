@@ -8,7 +8,8 @@
 
 use crate::data::models::Model;
 use crate::domain::entities::{
-    Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, Snapshot, Store, Tree,
+    Checksum, Chunk, Configuration, Dataset, File, Pack, RecordCounts, RecordSizes, Snapshot,
+    Store, Tree,
 };
 use crate::domain::sources::EntityDataSource;
 use anyhow::Error;
@@ -445,6 +446,20 @@ impl EntityDataSource for RocksDBEntityDataSource {
             tree: trees,
             xattr: xattrs,
         })
+    }
+
+    fn get_entity_sizes(&self) -> Result<Option<RecordSizes>, Error> {
+        let db = self.database.lock().unwrap();
+        Ok(Some(RecordSizes {
+            chunk: db.size_prefix("chunk/")?,
+            dataset: db.size_prefix("dataset/")?,
+            file: db.size_prefix("file/")?,
+            pack: db.size_prefix("pack/")?,
+            snapshot: db.size_prefix("snapshot/")?,
+            store: db.size_prefix("store/")?,
+            tree: db.size_prefix("tree/")?,
+            xattr: db.size_prefix("xattr/")?,
+        }))
     }
 
     fn add_bucket(&self, name: &str) -> Result<(), Error> {

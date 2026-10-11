@@ -526,6 +526,55 @@ fn test_record_counts_sqlite() -> Result<(), Error> {
     run_record_counts(ds.as_ref())
 }
 
+#[test]
+fn test_record_sizes_rocksdb() -> Result<(), Error> {
+    let (_g, ds) = setup_rocksdb()?;
+    let datasource = ds.as_ref();
+    // an empty database has nothing to measure
+    let sizes = datasource.get_entity_sizes()?.unwrap();
+    assert_eq!(sizes.chunk, 0);
+    assert_eq!(sizes.file, 0);
+
+    let digest1 = Checksum::BLAKE3(
+        "ca8a04949bc4f604eb6fc4f2aeb27a0167e959565964b4bb3f3b780da62f6cb1".to_owned(),
+    );
+    let packsum1 = Checksum::SHA1("bc1a3198db79036e56b30f0ab307cee55e845907".to_owned());
+    let chunk1 = entities::Chunk::new(digest1, 0, 40000).packfile(packsum1.clone());
+    datasource.insert_chunk(&chunk1)?;
+    let one_chunk = datasource.get_entity_sizes()?.unwrap().chunk;
+    // at the very least the key is the prefix plus the digest
+    assert!(one_chunk > 64);
+    let digest2 = Checksum::BLAKE3(
+        "eb27a0167e9595659ca8a04949bc4f604eb6fc4f2a64b4bb3f3b780da62f6cb1".to_owned(),
+    );
+    let chunk2 = entities::Chunk::new(digest2, 40000, 64000).packfile(packsum1);
+    datasource.insert_chunk(&chunk2)?;
+
+    let blake3sum = "deb7853b5150885d2f6bda99b252b97104324fe3ecbf737f89d6cd8c781d1128";
+    let file_digest = Checksum::BLAKE3(String::from(blake3sum));
+    let chunks = vec![(0, file_digest.clone())];
+    let file = entities::File::new(file_digest, 3129, chunks);
+    datasource.insert_file(&file)?;
+
+    let sizes = datasource.get_entity_sizes()?.unwrap();
+    assert!(sizes.chunk > one_chunk);
+    assert!(sizes.file > 64);
+    assert_eq!(sizes.tree, 0);
+    assert_eq!(sizes.pack, 0);
+    assert_eq!(sizes.snapshot, 0);
+    assert_eq!(sizes.dataset, 0);
+    assert_eq!(sizes.store, 0);
+    assert_eq!(sizes.xattr, 0);
+    Ok(())
+}
+
+#[test]
+fn test_record_sizes_sqlite() -> Result<(), Error> {
+    let (_g, ds) = setup_sqlite()?;
+    assert!(ds.get_entity_sizes()?.is_none());
+    Ok(())
+}
+
 fn run_database_backup_restore(datasource: &dyn EntityDataSource) -> Result<(), Error> {
     let mut config = entities::Configuration {
         hostname: "localhost".into(),

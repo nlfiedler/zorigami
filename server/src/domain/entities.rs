@@ -401,7 +401,10 @@ impl SnapshotRetention {
     /// `ALL` and `AUTO` always retain snapshots and are never rejected.
     ///
     pub fn retains_nothing(&self) -> bool {
-        matches!(self, SnapshotRetention::COUNT(0) | SnapshotRetention::DAYS(0))
+        matches!(
+            self,
+            SnapshotRetention::COUNT(0) | SnapshotRetention::DAYS(0)
+        )
     }
 }
 
@@ -1295,6 +1298,45 @@ impl fmt::Display for RecordCounts {
         write!(
             f,
             "counts(chunks: {}, datasets: {}, files: {}, packs: {}, snapshots: {}, stores: {}, trees: {}, xattrs: {})",
+            self.chunk,
+            self.dataset,
+            self.file,
+            self.pack,
+            self.snapshot,
+            self.store,
+            self.tree,
+            self.xattr
+        )
+    }
+}
+
+/// Total size in bytes of the records for the various entities stored in the
+/// record repository.
+#[derive(Clone, Debug, Default)]
+pub struct RecordSizes {
+    /// Total size in bytes of the chunk records.
+    pub chunk: u64,
+    /// Total size in bytes of the dataset records.
+    pub dataset: u64,
+    /// Total size in bytes of the file records.
+    pub file: u64,
+    /// Total size in bytes of the pack records.
+    pub pack: u64,
+    /// Total size in bytes of the snapshot records.
+    pub snapshot: u64,
+    /// Total size in bytes of the store records.
+    pub store: u64,
+    /// Total size in bytes of the tree records.
+    pub tree: u64,
+    /// Total size in bytes of the extended attribute records.
+    pub xattr: u64,
+}
+
+impl fmt::Display for RecordSizes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "sizes(chunks: {}, datasets: {}, files: {}, packs: {}, snapshots: {}, stores: {}, trees: {}, xattrs: {})",
             self.chunk,
             self.dataset,
             self.file,
