@@ -529,8 +529,10 @@ from outside `127.0.0.1`.**
   behavior. This is only appropriate for `127.0.0.1`-bound local use.
 - `/graphiql` (the interactive API explorer) and `/liveness` (the health check)
   remain reachable without a token — `/graphiql` is a static page with no data
-  of its own; to actually issue a query from it, open its **Request Headers**
-  panel and add `Authorization: Bearer <token>` there.
+  of its own. Its queries automatically use the token saved on the Settings
+  page of the web UI in the same browser; otherwise, open its **Headers** panel
+  and add `{"Authorization": "Bearer <token>"}` there, which also takes
+  precedence over the saved token.
 - The frontend (the web UI) needs the same header on every request it makes.
   Enter the token on the Settings page; it is stored in the browser's local
   storage and attached automatically from then on. If a request comes back

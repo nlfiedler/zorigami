@@ -135,8 +135,40 @@ static SCHEDULER: LazyLock<Arc<dyn Scheduler>> = LazyLock::new(|| {
     ))
 });
 
+// Marks where the GraphiQL page from juniper configures its fetcher, so that
+// GRAPHIQL_AUTH_FETCH can be spliced in after it.
+const GRAPHIQL_FETCHER_URL: &str = "url: JUNIPER_URL,";
+
+// Custom `fetch` for the GraphiQL fetcher that attaches the API token saved
+// by the web UI's Settings page (local storage key `apiToken`, see
+// client/auth.ts), unless the request already carries an Authorization header
+// from the GraphiQL Headers panel. The token is read on every request so that
+// one saved in another tab takes effect without reloading the page.
+const GRAPHIQL_AUTH_FETCH: &str = r#"
+        fetch: (input, init = {}) => {
+          const headers = new Headers(init.headers);
+          if (!headers.has('Authorization')) {
+            let token = null;
+            try {
+              token = localStorage.getItem('apiToken');
+            } catch {
+              // storage unavailable, proceed without a token
+            }
+            if (token) {
+              headers.set('Authorization', `Bearer ${token}`);
+            }
+          }
+          return fetch(input, { ...init, headers });
+        },"#;
+
+// Returns the GraphiQL page with the saved API token wired into its requests.
+fn graphiql_html() -> String {
+    let fetcher = format!("{GRAPHIQL_FETCHER_URL}{GRAPHIQL_AUTH_FETCH}");
+    graphiql_source("/graphql", None).replacen(GRAPHIQL_FETCHER_URL, &fetcher, 1)
+}
+
 async fn graphiql() -> Result<HttpResponse> {
-    let html = graphiql_source("/graphql", None);
+    let html = graphiql_html();
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(html))
@@ -166,7 +198,20 @@ async fn graphql(
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse> {
     if !check_bearer_token(req.headers().get(http::header::AUTHORIZATION)) {
-        return Ok(HttpResponse::Unauthorized().finish());
+        // A GraphQL-shaped body lets clients that ignore the status code,
+        // GraphiQL in particular, show why the request was rejected. Keep
+        // the content type as application/json: the frontend relies on the
+        // 401 status, which Apollo only surfaces for that content type.
+        let body = serde_json::json!({
+            "errors": [{
+                "message": "Not authorized: this server requires an API token, \
+                            sent as an `Authorization: Bearer <token>` request header.",
+                "extensions": { "code": "UNAUTHENTICATED" }
+            }]
+        });
+        return Ok(HttpResponse::Unauthorized()
+            .content_type("application/json")
+            .body(body.to_string()));
     }
     let datasource = ENTITY_DATA_SOURCE.clone();
     let leader = RING_LEADER.clone();
@@ -299,4 +344,18 @@ async fn main() -> io::Result<()> {
 #[actix_web::get("favicon.svg")]
 async fn favicon() -> actix_web::Result<actix_files::NamedFile> {
     Ok(actix_files::NamedFile::open("./dist/favicon.svg")?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_graphiql_html_attaches_api_token() {
+        // fails if a juniper upgrade changes the page such that the splice
+        // point is no longer found
+        let html = graphiql_html();
+        assert!(html.contains("localStorage.getItem('apiToken')"));
+        assert_eq!(html.matches(GRAPHIQL_FETCHER_URL).count(), 1);
+    }
 }
