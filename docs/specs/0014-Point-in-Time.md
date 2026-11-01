@@ -1,5 +1,9 @@
 # Point-in-Time snapshots
 
+**Status: not yet implemented.** Setting up ZFS access and privileges in docker
+is one thing, but the APFS commands on macOS are flaky, often rejecting the
+command or giving a misleading error message. Hold off on this for now.
+
 ## Problem Statement
 
 The current backup implementation starts by capturing the state of the data set
