@@ -28,8 +28,9 @@ FROM debian:latest AS solidjs
 ENV DEBIAN_FRONTEND="noninteractive"
 # The bun install script itself needs curl to fetch the zip file from
 # github.com; while manually installing Bun is not too difficult, the install
-# script is sure to work regardless of what changes are made in the future. Set
-# BUN_INSTALL so the subsequent stages can find the bun executable.
+# script is sure to work regardless of what changes are made in the future.
+#
+# Set BUN_INSTALL so the subsequent stages can find the bun executable.
 RUN apt-get -q update && \
     apt-get -q -y install curl unzip
 ENV BUN_INSTALL="/usr/local"
@@ -48,11 +49,12 @@ RUN bunx vite build
 #
 # build the final image
 #
-# rustls needs the CA certs which are not installed by default
+# * rustls needs ca-certificates which are not installed by default
 #
 FROM debian:latest
+ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get -q update && \
-    apt-get -q -y install ca-certificates
+    apt-get -q -y install --no-install-recommends ca-certificates
 WORKDIR /zorigami
 COPY --from=builder /build/target/release/zorigami zorigami
 COPY --from=healthy /health/target/release/healthcheck .
