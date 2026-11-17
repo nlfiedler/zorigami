@@ -332,11 +332,11 @@ impl RestorerImpl {
                 TreeReference::LINK(contents) => {
                     if let Err(error) = fetcher.restore_link(contents, &filepath) {
                         error!(
-                            "process_tree: error restoring link {}: {}",
+                            "process_tree: error restoring link {}: {:#}",
                             filepath.display(),
                             error
                         );
-                        self.subscriber.error(&request.id, error.to_string());
+                        self.subscriber.error(&request.id, format!("{:#}", error));
                     }
                 }
                 TreeReference::TREE(digest) => {
@@ -344,11 +344,11 @@ impl RestorerImpl {
                         self.process_tree(request, digest.to_owned(), &filepath, fetcher)
                     {
                         error!(
-                            "process_tree: error processing tree {}: {}",
+                            "process_tree: error processing tree {}: {:#}",
                             filepath.display(),
                             error
                         );
-                        self.subscriber.error(&request.id, error.to_string());
+                        self.subscriber.error(&request.id, format!("{:#}", error));
                     }
                 }
                 TreeReference::FILE(digest) => {
@@ -356,21 +356,21 @@ impl RestorerImpl {
                         self.process_file(request, digest.to_owned(), &filepath, fetcher)
                     {
                         error!(
-                            "process_tree: error processing file {}: {}",
+                            "process_tree: error processing file {}: {:#}",
                             filepath.display(),
                             error
                         );
-                        self.subscriber.error(&request.id, error.to_string());
+                        self.subscriber.error(&request.id, format!("{:#}", error));
                     }
                 }
                 TreeReference::SMALL(contents) => {
                     if let Err(error) = fetcher.restore_small(contents, &filepath) {
                         error!(
-                            "process_tree: error restoring small {}: {}",
+                            "process_tree: error restoring small {}: {:#}",
                             filepath.display(),
                             error
                         );
-                        self.subscriber.error(&request.id, error.to_string());
+                        self.subscriber.error(&request.id, format!("{:#}", error));
                     }
                 }
             }
@@ -398,13 +398,13 @@ impl Restorer for RestorerImpl {
         } else {
             match fetcher.load_dataset(&request.dataset) {
                 Err(error) => {
-                    error!("process_queue: error loading dataset: {}", error);
-                    self.subscriber.error(&request.id, error.to_string());
+                    error!("process_queue: error loading dataset: {:#}", error);
+                    self.subscriber.error(&request.id, format!("{:#}", error));
                 }
                 _ => {
                     if let Err(error) = self.process_entry(&request, &mut fetcher) {
-                        error!("process_queue: error processing entry: {}", error);
-                        self.subscriber.error(&request.id, error.to_string());
+                        error!("process_queue: error processing entry: {:#}", error);
+                        self.subscriber.error(&request.id, format!("{:#}", error));
                     }
                 }
             }

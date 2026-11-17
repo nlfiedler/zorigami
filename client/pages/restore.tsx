@@ -26,6 +26,7 @@ import {
   type Mutation,
   type MutationCancelRestoreArgs,
   type MutationRestoreDatabaseArgs,
+  type MutationRestoreFilesArgs,
   type Query,
   type RestoreRequest,
   RestoreStatus
@@ -51,6 +52,23 @@ const CANCEL_RESTORE: TypedDocumentNode<Mutation, MutationCancelRestoreArgs> =
   gql`
     mutation NoRestore($id: String!) {
       cancelRestore(id: $id)
+    }
+  `;
+
+const RESTORE_FILES: TypedDocumentNode<Mutation, MutationRestoreFilesArgs> =
+  gql`
+    mutation RetryRestore(
+      $tree: Checksum!
+      $entry: String!
+      $filepath: String!
+      $dataset: String!
+    ) {
+      restoreFiles(
+        tree: $tree
+        entry: $entry
+        filepath: $filepath
+        dataset: $dataset
+      )
     }
   `;
 
@@ -85,6 +103,31 @@ export function Restore() {
     }
   );
   const startCancel = useAction(cancelAction);
+  const retryAction = action(
+    async (req: RestoreRequest): Promise<{ ok: boolean }> => {
+      const result = await client.mutate({
+        mutation: RESTORE_FILES,
+        variables: {
+          tree: req.tree,
+          entry: req.entry,
+          filepath: req.filepath,
+          dataset: req.dataset
+        }
+      });
+      return { ok: result.data?.restoreFiles ?? false };
+    },
+    {
+      name: 'retryRestore',
+      onComplete: (s: Submission<any, any>) => {
+        if (s.error) {
+          console.error('restore retry failed:', s.error);
+        } else {
+          refetch();
+        }
+      }
+    }
+  );
+  const startRetry = useAction(retryAction);
 
   return (
     <>
@@ -109,7 +152,11 @@ export function Restore() {
               <div class="list has-hoverable-list-items has-overflow-ellipsis has-visible-pointer-controls">
                 <For each={restoresQuery()?.restores}>
                   {(item) => (
-                    <RestoreRequest request={item} cancel={startCancel} />
+                    <RestoreRequest
+                      request={item}
+                      cancel={startCancel}
+                      retry={startRetry}
+                    />
                   )}
                 </For>
               </div>
@@ -130,6 +177,7 @@ export function Restore() {
 interface RestoreRequestProps {
   request: RestoreRequest;
   cancel: (id: string) => Promise<{ ok: boolean }>;
+  retry: (req: RestoreRequest) => Promise<{ ok: boolean }>;
 }
 
 function RestoreRequest(props: RestoreRequestProps) {
@@ -151,6 +199,15 @@ function RestoreRequest(props: RestoreRequestProps) {
           <Match when={req.status == RestoreStatus.Running}>
             <span>
               <i class="fa-solid fa-spinner"></i>
+            </span>
+          </Match>
+          <Match
+            when={
+              req.status == RestoreStatus.Completed && req.errors.length > 0
+            }
+          >
+            <span class="has-text-danger">
+              <i class="fa-solid fa-triangle-exclamation"></i>
             </span>
           </Match>
           <Match when={req.status == RestoreStatus.Completed}>
@@ -200,6 +257,19 @@ function RestoreRequest(props: RestoreRequestProps) {
               <i class="fa-regular fa-circle-xmark"></i>
             </span>
             <span>Cancel</span>
+          </button>
+          <button
+            class="button"
+            disabled={
+              req.status != RestoreStatus.Completed &&
+              req.status != RestoreStatus.Cancelled
+            }
+            on:click={() => props.retry(req)}
+          >
+            <span class="icon is-small">
+              <i class="fa-solid fa-rotate-right"></i>
+            </span>
+            <span>Retry</span>
           </button>
         </div>
       </div>
